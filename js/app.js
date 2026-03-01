@@ -50,9 +50,18 @@
   const chkBlobTracking = $('#chkBlobTracking');
   const chkFaceDetection = $('#chkFaceDetection');
   const chkBlinkDetection = $('#chkBlinkDetection');
+  const inpBlobQuickColor = $('#inpBlobQuickColor');
+  const blobQuickColorSwatch = $('#blobQuickColorSwatch');
+  const inpFaceQuickColor = $('#inpFaceQuickColor');
+  const faceQuickColorSwatch = $('#faceQuickColorSwatch');
+  const faceQuickControls = $('#faceQuickControls');
+  const inpFaceQuickLabel = $('#inpFaceQuickLabel');
   const colorPickSection = $('#colorPickSection');
   const btnColorPick = $('#btnColorPick');
   const colorPickStatus = $('#colorPickStatus');
+  const btnToggleAdvancedOptions = $('#btnToggleAdvancedOptions');
+  const advancedToggleLabel = $('#advancedToggleLabel');
+  const advancedOptions = $('#advancedOptions');
   const effectConfigContainer = $('#effectConfigContainer');
   const profileSelect = $('#profileSelect');
   const btnSaveProfile = $('#btnSaveProfile');
@@ -101,7 +110,13 @@
     jpegQuality: 92,
     videoFormat: 'auto',
   };
+  const DEFAULT_QUICK_DETECTOR_SETTINGS = {
+    blobBoxColor: '#00ffff',
+    faceBoxColor: '#e53935',
+    faceLabelText: 'CARA',
+  };
   let imageSettings = { ...DEFAULT_IMAGE_SETTINGS };
+  let quickDetectorSettings = { ...DEFAULT_QUICK_DETECTOR_SETTINGS };
 
   // ─── Storage ───
   const STORAGE_KEY = 'hatewebcam_config';
@@ -120,6 +135,74 @@
 
   function clamp(v, min, max) {
     return Math.min(max, Math.max(min, v));
+  }
+
+  function normalizeFaceLabel(value) {
+    const label = String(value || '').trim();
+    return label ? label.slice(0, 28) : 'CARA';
+  }
+
+  function loadQuickDetectorSettings(cfg) {
+    const saved = cfg.quickDetectorSettings || {};
+    quickDetectorSettings = {
+      ...DEFAULT_QUICK_DETECTOR_SETTINGS,
+      ...saved,
+    };
+    quickDetectorSettings.faceLabelText = normalizeFaceLabel(quickDetectorSettings.faceLabelText);
+  }
+
+  function saveQuickDetectorSettings() {
+    const cfg = loadConfig();
+    cfg.quickDetectorSettings = { ...quickDetectorSettings };
+    saveConfig(cfg);
+  }
+
+  function syncAdvancedQuickInputs() {
+    const advBlobColorInput = $('#inpBoxColor');
+    const advBlobColorSwatch = $('#boxColorSwatch');
+    const advFaceColorInput = $('#inpFaceColor');
+    const advFaceColorSwatch = $('#faceColorSwatch');
+    const advFaceLabelInput = $('#inpFaceLabel');
+
+    if (advBlobColorInput) advBlobColorInput.value = quickDetectorSettings.blobBoxColor;
+    if (advBlobColorSwatch) advBlobColorSwatch.style.background = quickDetectorSettings.blobBoxColor;
+    if (advFaceColorInput) advFaceColorInput.value = quickDetectorSettings.faceBoxColor;
+    if (advFaceColorSwatch) advFaceColorSwatch.style.background = quickDetectorSettings.faceBoxColor;
+    if (advFaceLabelInput && document.activeElement !== advFaceLabelInput) {
+      advFaceLabelInput.value = quickDetectorSettings.faceLabelText;
+    }
+  }
+
+  function updateQuickDetectorControlsUI() {
+    if (inpBlobQuickColor) inpBlobQuickColor.value = quickDetectorSettings.blobBoxColor;
+    if (blobQuickColorSwatch) blobQuickColorSwatch.style.background = quickDetectorSettings.blobBoxColor;
+    if (inpFaceQuickColor) inpFaceQuickColor.value = quickDetectorSettings.faceBoxColor;
+    if (faceQuickColorSwatch) faceQuickColorSwatch.style.background = quickDetectorSettings.faceBoxColor;
+    if (inpFaceQuickLabel && document.activeElement !== inpFaceQuickLabel) {
+      inpFaceQuickLabel.value = quickDetectorSettings.faceLabelText;
+    }
+    if (faceQuickControls) {
+      faceQuickControls.classList.toggle('hidden', !chkFaceDetection.checked);
+    }
+    syncAdvancedQuickInputs();
+  }
+
+  function applyQuickDetectorSettingsToEffects() {
+    if (blobTrackingEffect) blobTrackingEffect.boxColor = quickDetectorSettings.blobBoxColor;
+    if (faceDetectionEffect) {
+      faceDetectionEffect.boxColor = quickDetectorSettings.faceBoxColor;
+      faceDetectionEffect.labelText = quickDetectorSettings.faceLabelText;
+    }
+  }
+
+  function syncQuickDetectorSettingsFromEffects() {
+    if (blobTrackingEffect) quickDetectorSettings.blobBoxColor = blobTrackingEffect.boxColor || quickDetectorSettings.blobBoxColor;
+    if (faceDetectionEffect) {
+      quickDetectorSettings.faceBoxColor = faceDetectionEffect.boxColor || quickDetectorSettings.faceBoxColor;
+      quickDetectorSettings.faceLabelText = normalizeFaceLabel(faceDetectionEffect.labelText);
+    }
+    updateQuickDetectorControlsUI();
+    saveQuickDetectorSettings();
   }
 
   function loadImageSettings(cfg) {
@@ -235,6 +318,45 @@
     });
   }
 
+  function bindQuickDetectorEvents() {
+    if (inpBlobQuickColor) {
+      inpBlobQuickColor.addEventListener('input', (e) => {
+        quickDetectorSettings.blobBoxColor = e.target.value;
+        if (blobTrackingEffect) blobTrackingEffect.boxColor = e.target.value;
+        updateQuickDetectorControlsUI();
+        saveQuickDetectorSettings();
+      });
+    }
+
+    if (inpFaceQuickColor) {
+      inpFaceQuickColor.addEventListener('input', (e) => {
+        quickDetectorSettings.faceBoxColor = e.target.value;
+        if (faceDetectionEffect) faceDetectionEffect.boxColor = e.target.value;
+        updateQuickDetectorControlsUI();
+        saveQuickDetectorSettings();
+      });
+    }
+
+    if (inpFaceQuickLabel) {
+      inpFaceQuickLabel.addEventListener('input', (e) => {
+        const value = String(e.target.value || '').slice(0, 28);
+        quickDetectorSettings.faceLabelText = value || 'CARA';
+        if (faceDetectionEffect) faceDetectionEffect.labelText = value;
+        saveQuickDetectorSettings();
+        syncAdvancedQuickInputs();
+      });
+
+      inpFaceQuickLabel.addEventListener('blur', (e) => {
+        const normalized = normalizeFaceLabel(e.target.value);
+        quickDetectorSettings.faceLabelText = normalized;
+        e.target.value = normalized;
+        if (faceDetectionEffect) faceDetectionEffect.labelText = normalized;
+        saveQuickDetectorSettings();
+        syncAdvancedQuickInputs();
+      });
+    }
+  }
+
   function applyImagePreset(name) {
     if (name === 'natural') {
       imageSettings = { ...imageSettings, blackAndWhite: false, exposure: 0, shadows: 0, highlights: 0, contrast: 100, saturation: 100, temperature: 0, detail: 0, sharpness: 0 };
@@ -249,12 +371,40 @@
     saveImageSettings();
   }
 
+  function setAdvancedOptionsVisible(visible) {
+    if (!advancedOptions || !btnToggleAdvancedOptions) return;
+
+    advancedOptions.classList.toggle('hidden', !visible);
+    btnToggleAdvancedOptions.classList.toggle('is-open', visible);
+    btnToggleAdvancedOptions.setAttribute('aria-expanded', String(visible));
+
+    if (advancedToggleLabel) {
+      advancedToggleLabel.textContent = visible
+        ? 'Ocultar opciones avanzadas'
+        : 'Mostrar opciones avanzadas';
+    }
+  }
+
+  function toggleAdvancedOptions() {
+    if (!advancedOptions) return;
+
+    const nextVisible = advancedOptions.classList.contains('hidden');
+    setAdvancedOptionsVisible(nextVisible);
+
+    const cfg = loadConfig();
+    cfg.showAdvancedOptions = nextVisible;
+    saveConfig(cfg);
+  }
+
   // ─── Init ───
   async function init() {
     const cfg = loadConfig();
     if (cfg.flipH) { flipH = true; chkMirror.checked = true; }
     if (cfg.flipV) { flipV = true; chkFlipV.checked = true; }
     if (cfg.rotation != null) { rotation = cfg.rotation; rotationSelect.value = String(cfg.rotation); }
+    setAdvancedOptionsVisible(!!cfg.showAdvancedOptions);
+    loadQuickDetectorSettings(cfg);
+    updateQuickDetectorControlsUI();
     loadImageSettings(cfg);
     updateImageControlsUI();
 
@@ -274,6 +424,7 @@
 
     updateProfilesList();
     bindEvents();
+    bindQuickDetectorEvents();
     bindImageControlEvents();
     updateCaptureButtons();
 
@@ -294,6 +445,7 @@
     chkBlinkDetection.addEventListener('change', () => toggleEffect('blink'));
 
     btnColorPick.addEventListener('click', enableColorPick);
+    if (btnToggleAdvancedOptions) btnToggleAdvancedOptions.addEventListener('click', toggleAdvancedOptions);
     canvas.addEventListener('click', onCanvasClick);
 
     if (btnTakePhoto) btnTakePhoto.addEventListener('click', takePhoto);
@@ -384,6 +536,7 @@
     if (type === 'blob') {
       if (chkBlobTracking.checked) {
         blobTrackingEffect = new BlobTracking();
+        blobTrackingEffect.boxColor = quickDetectorSettings.blobBoxColor;
         effectManager.addEffect(blobTrackingEffect);
         if (blinkDetectionEffect) {
           blinkDetectionEffect.setBlinkCallback((eye) => blobTrackingEffect.triggerConnection(eye));
@@ -397,6 +550,8 @@
     } else if (type === 'face') {
       if (chkFaceDetection.checked) {
         faceDetectionEffect = new FaceDetection();
+        faceDetectionEffect.boxColor = quickDetectorSettings.faceBoxColor;
+        faceDetectionEffect.labelText = quickDetectorSettings.faceLabelText;
         effectManager.addEffect(faceDetectionEffect);
       } else {
         if (faceDetectionEffect) effectManager.removeEffect(faceDetectionEffect);
@@ -414,6 +569,7 @@
         blinkDetectionEffect = null;
       }
     }
+    syncQuickDetectorSettingsFromEffects();
     renderEffectConfig();
     updateEffectsInfo();
   }
@@ -734,7 +890,10 @@
       const swatch = el.querySelector('#boxColorSwatch');
       inpColor.addEventListener('input', e => {
         bt.boxColor = e.target.value;
+        quickDetectorSettings.blobBoxColor = e.target.value;
         swatch.style.background = e.target.value;
+        updateQuickDetectorControlsUI();
+        saveQuickDetectorSettings();
       });
 
       el.querySelector('#chkShowCoords').addEventListener('change', e => bt.showCoordinates = e.target.checked);
@@ -778,12 +937,21 @@
       if (inpLabel) {
         inpLabel.value = fd.labelText || 'CARA';
         inpLabel.addEventListener('input', e => {
-          fd.labelText = String(e.target.value || '').slice(0, 28);
+          const value = String(e.target.value || '').slice(0, 28);
+          fd.labelText = value;
+          quickDetectorSettings.faceLabelText = value || 'CARA';
+          if (inpFaceQuickLabel && document.activeElement !== inpFaceQuickLabel) {
+            inpFaceQuickLabel.value = quickDetectorSettings.faceLabelText;
+          }
+          saveQuickDetectorSettings();
         });
         inpLabel.addEventListener('blur', e => {
-          const normalized = String(e.target.value || '').trim();
-          fd.labelText = normalized || 'CARA';
+          const normalized = normalizeFaceLabel(e.target.value);
+          fd.labelText = normalized;
+          quickDetectorSettings.faceLabelText = normalized;
           e.target.value = fd.labelText;
+          updateQuickDetectorControlsUI();
+          saveQuickDetectorSettings();
         });
       }
 
@@ -791,7 +959,10 @@
       const swatch = el.querySelector('#faceColorSwatch');
       inpColor.addEventListener('input', e => {
         fd.boxColor = e.target.value;
+        quickDetectorSettings.faceBoxColor = e.target.value;
         swatch.style.background = e.target.value;
+        updateQuickDetectorControlsUI();
+        saveQuickDetectorSettings();
       });
 
       el.querySelector('#chkShowLandmarks').addEventListener('change', e => fd.showLandmarks = e.target.checked);
@@ -913,9 +1084,19 @@
         saveImageSettings();
       }
     }
-    if (config.blob && blobTrackingEffect) blobTrackingEffect.setConfig(config.blob);
-    if (config.face && faceDetectionEffect) faceDetectionEffect.setConfig(config.face);
+    if (config.blob) {
+      if (config.blob.boxColor) quickDetectorSettings.blobBoxColor = config.blob.boxColor;
+      if (blobTrackingEffect) blobTrackingEffect.setConfig(config.blob);
+    }
+    if (config.face) {
+      if (config.face.boxColor) quickDetectorSettings.faceBoxColor = config.face.boxColor;
+      if (config.face.labelText != null) quickDetectorSettings.faceLabelText = normalizeFaceLabel(config.face.labelText);
+      if (faceDetectionEffect) faceDetectionEffect.setConfig(config.face);
+    }
     if (config.blink && blinkDetectionEffect) blinkDetectionEffect.setConfig(config.blink);
+    applyQuickDetectorSettingsToEffects();
+    updateQuickDetectorControlsUI();
+    saveQuickDetectorSettings();
     renderEffectConfig();
     showStatus(profileStatus, `"${name}" cargado ✓`, 'success');
     setTimeout(() => hideStatus(profileStatus), 2500);

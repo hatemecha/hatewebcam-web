@@ -61,20 +61,7 @@
       <!-- Capture -->
       <div class="panel-section">
         <div class="section-title accent"><i class="fa-solid fa-camera-retro"></i> Captura</div>
-        <div class="help-text">Las fotos se descargan en JPEG. Para video se intenta MP4 y, si no está disponible, se usa WebM.</div>
-        <div class="slider-group">
-          <div class="slider-label"><span>Calidad foto JPEG</span><span class="value" id="valJpegQuality">92%</span></div>
-          <input type="range" id="sldJpegQuality" min="60" max="100" step="1" value="92">
-        </div>
-        <div class="slider-label"><span>Formato de video</span></div>
-        <div class="select-wrapper">
-          <select id="videoFormatSelect">
-            <option value="auto">Automático (MP4 preferido)</option>
-            <option value="mp4">MP4 (si el navegador lo soporta)</option>
-            <option value="webm">WebM</option>
-          </select>
-        </div>
-        <div style="height:8px"></div>
+        <div class="help-text">Controles directos para sacar fotos y grabar sin tocar configuraciones extra.</div>
         <div class="btn-row">
           <button class="btn" id="btnTakePhoto">
             <i class="fa-solid fa-camera"></i> Sacar foto
@@ -86,34 +73,10 @@
         <div class="status-msg hidden" id="captureStatus"></div>
       </div>
 
-      <!-- Transforms -->
+      <!-- Quick Filter -->
       <div class="panel-section">
-        <div class="section-title"><i class="fa-solid fa-sliders"></i> Imagen</div>
-        <div class="help-text">Ajustá cómo se ve tu cámara.</div>
-        <label class="checkbox-group">
-          <input type="checkbox" id="chkMirror">
-          <span>Espejo (invertir horizontalmente)</span>
-        </label>
-        <label class="checkbox-group">
-          <input type="checkbox" id="chkFlipV">
-          <span>Invertir verticalmente</span>
-        </label>
-        <div style="height:6px"></div>
-        <div class="slider-label"><span>Rotación</span></div>
-        <div class="select-wrapper">
-          <select id="rotationSelect">
-            <option value="0">Sin rotación</option>
-            <option value="90">90° (girar derecha)</option>
-            <option value="180">180° (invertir)</option>
-            <option value="270">270° (girar izquierda)</option>
-          </select>
-        </div>
-      </div>
-
-      <!-- Image Tuning -->
-      <div class="panel-section">
-        <div class="section-title accent"><i class="fa-solid fa-wand-magic-sparkles"></i> Ajuste fino</div>
-        <div class="help-text">Personalizá el look en tiempo real. También aplica a foto y grabación.</div>
+        <div class="section-title accent"><i class="fa-solid fa-wand-magic-sparkles"></i> Filtro rápido</div>
+        <div class="help-text">Elegí un look rápido. Si querés ajustar cada detalle, abrí las opciones avanzadas.</div>
         <div class="preset-grid">
           <button class="btn preset-btn" data-preset="natural">Natural</button>
           <button class="btn preset-btn" data-preset="vivid">Vivo</button>
@@ -124,59 +87,53 @@
           <input type="checkbox" id="chkBlackWhite">
           <span>Filtro blanco y negro</span>
         </label>
-        <div class="slider-group">
-          <div class="slider-label"><span>Exposición</span><span class="value" id="valExposure">0</span></div>
-          <input type="range" id="sldExposure" min="-100" max="100" step="1" value="0">
-        </div>
-        <div class="slider-group">
-          <div class="slider-label"><span>Sombras</span><span class="value" id="valShadows">0</span></div>
-          <input type="range" id="sldShadows" min="-100" max="100" step="1" value="0">
-        </div>
-        <div class="slider-group">
-          <div class="slider-label"><span>Luces altas</span><span class="value" id="valHighlights">0</span></div>
-          <input type="range" id="sldHighlights" min="-100" max="100" step="1" value="0">
-        </div>
-        <div class="slider-group">
-          <div class="slider-label"><span>Contraste</span><span class="value" id="valContrast">100%</span></div>
-          <input type="range" id="sldContrast" min="50" max="180" step="1" value="100">
-        </div>
-        <div class="slider-group">
-          <div class="slider-label"><span>Saturación</span><span class="value" id="valSaturation">100%</span></div>
-          <input type="range" id="sldSaturation" min="0" max="200" step="1" value="100">
-        </div>
-        <div class="slider-group">
-          <div class="slider-label"><span>Temperatura</span><span class="value" id="valTemperature">0</span></div>
-          <input type="range" id="sldTemperature" min="-100" max="100" step="1" value="0">
-        </div>
-        <div class="slider-group">
-          <div class="slider-label"><span>Detalle</span><span class="value" id="valDetail">0</span></div>
-          <input type="range" id="sldDetail" min="-100" max="100" step="1" value="0">
-        </div>
-        <div class="slider-group">
-          <div class="slider-label"><span>Nitidez</span><span class="value" id="valSharpness">0</span></div>
-          <input type="range" id="sldSharpness" min="0" max="100" step="1" value="0">
-        </div>
-        <button class="btn" id="btnResetImageAdjustments">
-          <i class="fa-solid fa-rotate-left"></i> Restablecer ajustes de imagen
-        </button>
       </div>
 
-      <!-- Detectors -->
+      <!-- Basic Detectors -->
       <div class="panel-section">
         <div class="section-title accent"><i class="fa-solid fa-crosshairs"></i> Detectores</div>
-        <div class="help-text">Activá los que necesites. Podés usar varios a la vez.</div>
-        <label class="checkbox-group">
-          <input type="checkbox" id="chkBlobTracking">
-          <span><i class="fa-solid fa-palette fa-fw"></i> Detectar objetos por color</span>
-        </label>
-        <label class="checkbox-group">
-          <input type="checkbox" id="chkFaceDetection">
-          <span><i class="fa-solid fa-face-smile fa-fw"></i> Detectar caras</span>
-        </label>
-        <label class="checkbox-group">
-          <input type="checkbox" id="chkBlinkDetection">
-          <span><i class="fa-solid fa-eye fa-fw"></i> Detectar pestañeos</span>
-        </label>
+        <div class="help-text">Activá los detectores que necesites. El color del recuadro y el texto principal quedan accesibles acá mismo.</div>
+
+        <div class="quick-detector">
+          <div class="quick-detector-row">
+            <label class="checkbox-group">
+              <input type="checkbox" id="chkBlobTracking">
+              <span><i class="fa-solid fa-palette fa-fw"></i> Detectar objetos por color</span>
+            </label>
+            <label class="quick-color-chip" title="Color del recuadro del blob">
+              <span class="quick-chip-label">Recuadro</span>
+              <span class="color-swatch" id="blobQuickColorSwatch"></span>
+              <input type="color" id="inpBlobQuickColor" value="#00ffff" aria-label="Color del recuadro del blob">
+            </label>
+          </div>
+        </div>
+
+        <div class="quick-detector">
+          <div class="quick-detector-row">
+            <label class="checkbox-group">
+              <input type="checkbox" id="chkFaceDetection">
+              <span><i class="fa-solid fa-face-smile fa-fw"></i> Detectar caras</span>
+            </label>
+            <label class="quick-color-chip" title="Color del recuadro de caras">
+              <span class="quick-chip-label">Recuadro</span>
+              <span class="color-swatch" id="faceQuickColorSwatch"></span>
+              <input type="color" id="inpFaceQuickColor" value="#e53935" aria-label="Color del recuadro de caras">
+            </label>
+          </div>
+          <div class="quick-detector-extra hidden" id="faceQuickControls">
+            <input type="text" id="inpFaceQuickLabel" class="text-input compact-text-input" maxlength="28"
+              placeholder="Texto del recuadro">
+          </div>
+        </div>
+
+        <div class="quick-detector">
+          <div class="quick-detector-row">
+            <label class="checkbox-group">
+              <input type="checkbox" id="chkBlinkDetection">
+              <span><i class="fa-solid fa-eye fa-fw"></i> Detectar pestañeos</span>
+            </label>
+          </div>
+        </div>
       </div>
 
       <!-- Color Pick -->
@@ -188,25 +145,125 @@
         <div class="status-msg hidden" id="colorPickStatus"></div>
       </div>
 
-      <!-- Effect config (dynamic) -->
-      <div id="effectConfigContainer"></div>
-
-      <!-- Profiles -->
+      <!-- Advanced Toggle -->
       <div class="panel-section">
-        <div class="section-title"><i class="fa-solid fa-bookmark"></i> Ajustes guardados</div>
-        <div class="help-text">Guardá detectores, transforms y ajustes de imagen para reutilizarlos rápido.</div>
-        <div class="profile-row">
-          <div class="select-wrapper" style="flex:1">
-            <select id="profileSelect">
-              <option value="">—</option>
+        <button class="btn toggle-btn" id="btnToggleAdvancedOptions" type="button" aria-expanded="false"
+          aria-controls="advancedOptions">
+          <span class="toggle-btn-leading">
+            <i class="fa-solid fa-sliders"></i>
+            <span id="advancedToggleLabel">Mostrar opciones avanzadas</span>
+          </span>
+          <i class="fa-solid fa-chevron-down toggle-chevron"></i>
+        </button>
+        <div class="help-text section-note">Acá quedan formatos, ajuste fino, configuración detallada y perfiles guardados.</div>
+      </div>
+
+      <div id="advancedOptions" class="advanced-options hidden">
+
+        <!-- Capture Settings -->
+        <div class="panel-section">
+          <div class="section-title"><i class="fa-solid fa-film"></i> Calidad de captura</div>
+          <div class="help-text">Las fotos se descargan en JPEG. Para video se intenta MP4 y, si no está disponible, se usa WebM.</div>
+          <div class="slider-group">
+            <div class="slider-label"><span>Calidad foto JPEG</span><span class="value" id="valJpegQuality">92%</span></div>
+            <input type="range" id="sldJpegQuality" min="60" max="100" step="1" value="92">
+          </div>
+          <div class="slider-label"><span>Formato de video</span></div>
+          <div class="select-wrapper">
+            <select id="videoFormatSelect">
+              <option value="auto">Automático (MP4 preferido)</option>
+              <option value="mp4">MP4 (si el navegador lo soporta)</option>
+              <option value="webm">WebM</option>
             </select>
           </div>
-          <button class="btn btn-icon" id="btnSaveProfile" title="Guardar configuración actual"><i
-              class="fa-solid fa-floppy-disk"></i></button>
-          <button class="btn btn-icon danger" id="btnDeleteProfile" title="Eliminar"><i
-              class="fa-solid fa-trash-can"></i></button>
         </div>
-        <div class="status-msg hidden" id="profileStatus"></div>
+
+        <!-- Transforms -->
+        <div class="panel-section">
+          <div class="section-title"><i class="fa-solid fa-image"></i> Imagen</div>
+          <div class="help-text">Ajustá orientación y encuadre de la cámara.</div>
+          <label class="checkbox-group">
+            <input type="checkbox" id="chkMirror">
+            <span>Espejo (invertir horizontalmente)</span>
+          </label>
+          <label class="checkbox-group">
+            <input type="checkbox" id="chkFlipV">
+            <span>Invertir verticalmente</span>
+          </label>
+          <div style="height:6px"></div>
+          <div class="slider-label"><span>Rotación</span></div>
+          <div class="select-wrapper">
+            <select id="rotationSelect">
+              <option value="0">Sin rotación</option>
+              <option value="90">90° (girar derecha)</option>
+              <option value="180">180° (invertir)</option>
+              <option value="270">270° (girar izquierda)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Image Tuning -->
+        <div class="panel-section">
+          <div class="section-title accent"><i class="fa-solid fa-screwdriver-wrench"></i> Ajuste fino</div>
+          <div class="help-text">Personalizá el look en tiempo real. También aplica a foto y grabación.</div>
+          <div class="slider-group">
+            <div class="slider-label"><span>Exposición</span><span class="value" id="valExposure">0</span></div>
+            <input type="range" id="sldExposure" min="-100" max="100" step="1" value="0">
+          </div>
+          <div class="slider-group">
+            <div class="slider-label"><span>Sombras</span><span class="value" id="valShadows">0</span></div>
+            <input type="range" id="sldShadows" min="-100" max="100" step="1" value="0">
+          </div>
+          <div class="slider-group">
+            <div class="slider-label"><span>Luces altas</span><span class="value" id="valHighlights">0</span></div>
+            <input type="range" id="sldHighlights" min="-100" max="100" step="1" value="0">
+          </div>
+          <div class="slider-group">
+            <div class="slider-label"><span>Contraste</span><span class="value" id="valContrast">100%</span></div>
+            <input type="range" id="sldContrast" min="50" max="180" step="1" value="100">
+          </div>
+          <div class="slider-group">
+            <div class="slider-label"><span>Saturación</span><span class="value" id="valSaturation">100%</span></div>
+            <input type="range" id="sldSaturation" min="0" max="200" step="1" value="100">
+          </div>
+          <div class="slider-group">
+            <div class="slider-label"><span>Temperatura</span><span class="value" id="valTemperature">0</span></div>
+            <input type="range" id="sldTemperature" min="-100" max="100" step="1" value="0">
+          </div>
+          <div class="slider-group">
+            <div class="slider-label"><span>Detalle</span><span class="value" id="valDetail">0</span></div>
+            <input type="range" id="sldDetail" min="-100" max="100" step="1" value="0">
+          </div>
+          <div class="slider-group">
+            <div class="slider-label"><span>Nitidez</span><span class="value" id="valSharpness">0</span></div>
+            <input type="range" id="sldSharpness" min="0" max="100" step="1" value="0">
+          </div>
+          <button class="btn" id="btnResetImageAdjustments">
+            <i class="fa-solid fa-rotate-left"></i> Restablecer ajustes de imagen
+          </button>
+        </div>
+
+        <!-- Effect config (dynamic) -->
+        <div id="effectConfigContainer"></div>
+
+        <!-- Profiles -->
+        <div class="panel-section">
+          <div class="section-title"><i class="fa-solid fa-bookmark"></i> Ajustes guardados</div>
+          <div class="help-text">Guardá detectores, transforms y ajustes de imagen para reutilizarlos rápido.</div>
+          <div class="profile-row">
+            <div class="select-wrapper" style="flex:1">
+              <select id="profileSelect">
+                <option value="">—</option>
+              </select>
+            </div>
+            <button class="btn btn-icon" id="btnSaveProfile" title="Guardar configuración actual"><i
+                class="fa-solid fa-floppy-disk"></i></button>
+            <button class="btn btn-icon danger" id="btnDeleteProfile" title="Eliminar"><i
+                class="fa-solid fa-trash-can"></i></button>
+          </div>
+          <div class="status-msg hidden" id="profileStatus"></div>
+        </div>
+
       </div>
 
     </aside>
