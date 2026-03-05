@@ -731,6 +731,113 @@ input[type="range"]:disabled {
   background: rgba(221, 102, 102, 0.1);
 }
 
+
+/* Preview modal */
+.capture-preview-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(2px);
+}
+
+.capture-preview-card {
+  width: min(960px, 100%);
+  max-height: min(90vh, 760px);
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(260px, 1fr);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-light);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+
+.capture-preview-header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--border);
+  background: #0f0f0f;
+}
+
+.capture-preview-header .section-title {
+  margin-bottom: 0;
+}
+
+.capture-preview-header .btn-icon {
+  width: 30px;
+  min-width: 30px;
+}
+
+.capture-preview-media {
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+}
+
+.capture-preview-media img,
+.capture-preview-media video {
+  width: 100%;
+  height: 100%;
+  max-height: 62vh;
+  object-fit: contain;
+  display: block;
+  background: #000;
+}
+
+.capture-preview-meta {
+  padding: 12px;
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.capture-preview-filename {
+  font-size: 10px;
+  color: var(--gray);
+  word-break: break-all;
+}
+
+.capture-preview-info {
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-card);
+  padding: 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.capture-preview-row {
+  display: grid;
+  grid-template-columns: minmax(88px, 1fr) minmax(0, 1.35fr);
+  gap: 8px;
+  font-size: 11px;
+  align-items: baseline;
+}
+
+.capture-preview-key {
+  color: var(--gray);
+  letter-spacing: 0.2px;
+}
+
+.capture-preview-value {
+  color: var(--white);
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 10px;
+  word-break: break-word;
+}
+
 /* ─── Config Blocks ─── */
 .effect-config {
   margin-top: 2px;
@@ -806,5 +913,35 @@ input[type="range"]:disabled {
 
   .preview-area {
     padding: 48px 8px 6px;
+  }
+
+  .capture-preview-modal {
+    padding: 10px;
+  }
+
+  .capture-preview-card {
+    grid-template-columns: 1fr;
+    max-height: 94vh;
+  }
+
+  .capture-preview-media img,
+  .capture-preview-media video {
+    max-height: 48vh;
+  }
+
+  .capture-preview-meta {
+    border-left: none;
+    border-top: 1px solid var(--border);
+    max-height: 40vh;
+    overflow-y: auto;
+  }
+
+  .capture-preview-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .capture-preview-value {
+    text-align: left;
   }
 }

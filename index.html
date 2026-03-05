@@ -71,6 +71,7 @@
           </button>
         </div>
         <div class="status-msg hidden" id="captureStatus"></div>
+        <div class="help-text section-note">Despues de cada captura se abre una vista previa para decidir si queres descargar o descartar.</div>
       </div>
 
       <!-- Quick Filter -->
@@ -176,6 +177,16 @@
               <option value="webm">WebM</option>
             </select>
           </div>
+          <div style="height:8px"></div>
+          <label class="checkbox-group">
+            <input type="checkbox" id="chkQualityEnhancer">
+            <span>Mejorador de calidad opcional</span>
+          </label>
+          <div class="slider-group hidden" id="qualityEnhancerStrengthGroup">
+            <div class="slider-label"><span>Intensidad del mejorador</span><span class="value" id="valQualityEnhancerStrength">35%</span></div>
+            <input type="range" id="sldQualityEnhancerStrength" min="0" max="100" step="1" value="35">
+          </div>
+          <div class="help-text section-note">Aplica limpieza y nitidez extra al archivo final (foto y video).</div>
         </div>
 
         <!-- Transforms -->
@@ -269,6 +280,32 @@
     </aside>
   </div>
 
+  <div class="capture-preview-modal hidden" id="capturePreviewModal" role="dialog" aria-modal="true" aria-labelledby="capturePreviewTitle">
+    <div class="capture-preview-card">
+      <div class="capture-preview-header">
+        <div class="section-title accent" id="capturePreviewTitle"><i class="fa-solid fa-image"></i> Vista previa de captura</div>
+        <button class="btn btn-icon" id="btnCloseCapturePreview" type="button" aria-label="Cerrar vista previa">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="capture-preview-media">
+        <img id="capturePreviewImage" class="hidden" alt="Vista previa de foto capturada">
+        <video id="capturePreviewVideo" class="hidden" controls playsinline preload="metadata"></video>
+      </div>
+      <div class="capture-preview-meta">
+        <div class="capture-preview-filename mono" id="capturePreviewFilename">-</div>
+        <div class="capture-preview-info" id="capturePreviewInfo"></div>
+        <div class="btn-row">
+          <button class="btn primary" id="btnDownloadCapture" type="button">
+            <i class="fa-solid fa-download"></i> Descargar
+          </button>
+          <button class="btn danger" id="btnDiscardCapture" type="button">
+            <i class="fa-solid fa-trash-can"></i> Descartar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
   <!-- MediaPipe CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>

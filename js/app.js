@@ -23,6 +23,20 @@
   const sldJpegQuality = $('#sldJpegQuality');
   const valJpegQuality = $('#valJpegQuality');
   const videoFormatSelect = $('#videoFormatSelect');
+  const chkQualityEnhancer = $('#chkQualityEnhancer');
+  const sldQualityEnhancerStrength = $('#sldQualityEnhancerStrength');
+  const valQualityEnhancerStrength = $('#valQualityEnhancerStrength');
+  const qualityEnhancerStrengthGroup = $('#qualityEnhancerStrengthGroup');
+
+  const capturePreviewModal = $('#capturePreviewModal');
+  const capturePreviewTitle = $('#capturePreviewTitle');
+  const capturePreviewFilename = $('#capturePreviewFilename');
+  const capturePreviewImage = $('#capturePreviewImage');
+  const capturePreviewVideo = $('#capturePreviewVideo');
+  const capturePreviewInfo = $('#capturePreviewInfo');
+  const btnDownloadCapture = $('#btnDownloadCapture');
+  const btnDiscardCapture = $('#btnDiscardCapture');
+  const btnCloseCapturePreview = $('#btnCloseCapturePreview');
 
   const chkMirror = $('#chkMirror');
   const chkFlipV = $('#chkFlipV');
@@ -94,6 +108,12 @@
   let recordingTimer = null;
   let currentRecordingMimeType = '';
   let currentRecordingExt = 'webm';
+  let currentRecordingBitrate = 6000000;
+  let currentRecordingFps = 30;
+  let pendingCapture = null;
+  let recordingCanvas = null;
+  let recordingCtx = null;
+  let lastRecordingDurationSec = 0;
   let postFxCanvas = null;
   let postFxCtx = null;
 
@@ -109,6 +129,8 @@
     sharpness: 0,
     jpegQuality: 92,
     videoFormat: 'auto',
+    qualityEnhancer: false,
+    qualityEnhancerStrength: 35,
   };
   const DEFAULT_QUICK_DETECTOR_SETTINGS = {
     blobBoxColor: '#00ffff',
@@ -223,6 +245,9 @@
     imageSettings.videoFormat = ['auto', 'mp4', 'webm'].includes(imageSettings.videoFormat)
       ? imageSettings.videoFormat
       : 'auto';
+    imageSettings.qualityEnhancer = !!imageSettings.qualityEnhancer;
+    const enhancerStrength = parseInt(imageSettings.qualityEnhancerStrength, 10);
+    imageSettings.qualityEnhancerStrength = clamp(Number.isFinite(enhancerStrength) ? enhancerStrength : 35, 0, 100);
     imageSettings.blackAndWhite = !!imageSettings.blackAndWhite;
   }
 
@@ -254,6 +279,10 @@
     if (sldJpegQuality) sldJpegQuality.value = String(imageSettings.jpegQuality);
     if (valJpegQuality) valJpegQuality.textContent = `${imageSettings.jpegQuality}%`;
     if (videoFormatSelect) videoFormatSelect.value = imageSettings.videoFormat;
+    if (chkQualityEnhancer) chkQualityEnhancer.checked = !!imageSettings.qualityEnhancer;
+    if (sldQualityEnhancerStrength) sldQualityEnhancerStrength.value = String(imageSettings.qualityEnhancerStrength);
+    if (valQualityEnhancerStrength) valQualityEnhancerStrength.textContent = `${imageSettings.qualityEnhancerStrength}%`;
+    updateQualityEnhancerControls();
     updateBWDependentControls();
   }
 
@@ -266,6 +295,15 @@
     if (!bw) {
       if (valSaturation) valSaturation.textContent = `${imageSettings.saturation}%`;
       if (valTemperature) valTemperature.textContent = `${imageSettings.temperature}`;
+    }
+  }
+
+  function updateQualityEnhancerControls() {
+    if (qualityEnhancerStrengthGroup) {
+      qualityEnhancerStrengthGroup.classList.toggle('hidden', !imageSettings.qualityEnhancer);
+    }
+    if (sldQualityEnhancerStrength) {
+      sldQualityEnhancerStrength.disabled = !imageSettings.qualityEnhancer;
     }
   }
 
@@ -297,6 +335,7 @@
     bindIntSlider(sldDetail, valDetail, 'detail');
     bindIntSlider(sldSharpness, valSharpness, 'sharpness');
     bindIntSlider(sldJpegQuality, valJpegQuality, 'jpegQuality', '%');
+    bindIntSlider(sldQualityEnhancerStrength, valQualityEnhancerStrength, 'qualityEnhancerStrength', '%');
 
     if (videoFormatSelect) {
       videoFormatSelect.addEventListener('change', (e) => {
@@ -305,9 +344,23 @@
       });
     }
 
+    if (chkQualityEnhancer) {
+      chkQualityEnhancer.addEventListener('change', (e) => {
+        imageSettings.qualityEnhancer = e.target.checked;
+        updateQualityEnhancerControls();
+        saveImageSettings();
+      });
+    }
+
     if (btnResetImageAdjustments) {
       btnResetImageAdjustments.addEventListener('click', () => {
-        imageSettings = { ...DEFAULT_IMAGE_SETTINGS, jpegQuality: imageSettings.jpegQuality, videoFormat: imageSettings.videoFormat };
+        imageSettings = {
+          ...DEFAULT_IMAGE_SETTINGS,
+          jpegQuality: imageSettings.jpegQuality,
+          videoFormat: imageSettings.videoFormat,
+          qualityEnhancer: imageSettings.qualityEnhancer,
+          qualityEnhancerStrength: imageSettings.qualityEnhancerStrength,
+        };
         updateImageControlsUI();
         saveImageSettings();
       });
@@ -450,13 +503,23 @@
 
     if (btnTakePhoto) btnTakePhoto.addEventListener('click', takePhoto);
     if (btnRecord) btnRecord.addEventListener('click', toggleRecording);
+    if (btnDownloadCapture) btnDownloadCapture.addEventListener('click', downloadPendingCapture);
+    if (btnDiscardCapture) btnDiscardCapture.addEventListener('click', () => closeCapturePreview(true));
+    if (btnCloseCapturePreview) btnCloseCapturePreview.addEventListener('click', () => closeCapturePreview(true));
+    if (capturePreviewModal) {
+      capturePreviewModal.addEventListener('click', (e) => {
+        if (e.target === capturePreviewModal) closeCapturePreview(true);
+      });
+    }
 
     btnSaveProfile.addEventListener('click', saveCurrentProfile);
     btnDeleteProfile.addEventListener('click', deleteProfile);
     profileSelect.addEventListener('change', loadProfile);
+    window.addEventListener('keydown', onGlobalKeyDown);
 
     window.addEventListener('beforeunload', () => {
       stopRecording(false);
+      clearPendingCapture(true);
       if (isRunning) cameraManager.stop();
     });
   }
@@ -627,6 +690,7 @@
       }
 
       effectManager.processFrame(ctx, canvas, videoEl);
+      syncRecordingCanvasFrame();
 
       // FPS
       frameCount++;
@@ -684,9 +748,9 @@
     const h = canvas.height;
     if (w === 0 || h === 0) return;
 
-    let postFxScale = imageSettings.sharpness > 0 ? 0.5 : 0.58;
-    if (w * h > 1600 * 900) postFxScale *= 0.88;
-    postFxScale = clamp(postFxScale, 0.38, 0.62);
+    let postFxScale = imageSettings.sharpness > 0 ? 0.78 : 0.86;
+    if (w * h > 1920 * 1080) postFxScale *= 0.92;
+    postFxScale = clamp(postFxScale, 0.72, 0.90);
 
     const { pw, ph } = ensurePostFxBuffers(w, h, postFxScale);
     postFxCtx.drawImage(canvas, 0, 0, pw, ph);
@@ -1115,13 +1179,29 @@
   }
 
   // ─── Capture ───
+  function isCapturePreviewOpen() {
+    return !!capturePreviewModal && !capturePreviewModal.classList.contains('hidden');
+  }
+
+  function onGlobalKeyDown(e) {
+    if (e.key === 'Escape' && isCapturePreviewOpen()) {
+      closeCapturePreview(true);
+    }
+  }
+
   function updateCaptureButtons() {
     if (!btnTakePhoto || !btnRecord) return;
+    const previewOpen = isCapturePreviewOpen();
+    const lockCaptureSettings = isRecording || previewOpen;
 
-    btnTakePhoto.disabled = !isRunning || isRecording;
-    btnRecord.disabled = !isRunning && !isRecording;
-    if (videoFormatSelect) videoFormatSelect.disabled = isRecording;
-    if (sldJpegQuality) sldJpegQuality.disabled = isRecording;
+    btnTakePhoto.disabled = !isRunning || isRecording || previewOpen;
+    btnRecord.disabled = (!isRunning && !isRecording) || previewOpen;
+    if (videoFormatSelect) videoFormatSelect.disabled = lockCaptureSettings;
+    if (sldJpegQuality) sldJpegQuality.disabled = lockCaptureSettings;
+    if (chkQualityEnhancer) chkQualityEnhancer.disabled = lockCaptureSettings;
+    if (sldQualityEnhancerStrength) {
+      sldQualityEnhancerStrength.disabled = lockCaptureSettings || !imageSettings.qualityEnhancer;
+    }
 
     if (isRecording) {
       btnRecord.classList.add('recording');
@@ -1132,22 +1212,154 @@
     }
   }
 
-  function takePhoto() {
+  function canvasToBlobAsync(sourceCanvas, mimeType, quality) {
+    return new Promise((resolve) => {
+      sourceCanvas.toBlob((blob) => resolve(blob), mimeType, quality);
+    });
+  }
+
+  function ensureRecordingCanvas() {
+    if (!recordingCanvas) {
+      recordingCanvas = document.createElement('canvas');
+      recordingCtx = recordingCanvas.getContext('2d', { willReadFrequently: false });
+    }
+
+    if (recordingCanvas.width !== canvas.width || recordingCanvas.height !== canvas.height) {
+      recordingCanvas.width = canvas.width;
+      recordingCanvas.height = canvas.height;
+    }
+
+    return recordingCanvas;
+  }
+
+  function getPreferredRecordingFps() {
+    const streamSettings = cameraManager.getStreamSettings();
+    const rawFps = Math.round(streamSettings.frameRate || 30);
+    return clamp(rawFps, 24, 60);
+  }
+
+  function getRecommendedVideoBitrate(width, height, fps) {
+    const safeWidth = Math.max(1, width);
+    const safeHeight = Math.max(1, height);
+    const safeFps = clamp(fps || 30, 24, 60);
+    const bitsPerPixelFrame = imageSettings.qualityEnhancer ? 0.16 : 0.135;
+    const estimate = Math.round(safeWidth * safeHeight * safeFps * bitsPerPixelFrame);
+    return clamp(estimate, 5000000, 26000000);
+  }
+
+  function drawEnhancedFrameToContext(targetCtx, sourceCanvas, width, height, strengthPct, forExport = false) {
+    const amount = clamp((strengthPct || 0) / 100, 0, 1);
+    const brightness = 100 + amount * 4;
+    const contrast = 100 + amount * 14;
+    const saturation = 100 + amount * 12;
+
+    targetCtx.save();
+    targetCtx.clearRect(0, 0, width, height);
+    targetCtx.filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%)`;
+    targetCtx.drawImage(sourceCanvas, 0, 0, width, height);
+    targetCtx.restore();
+
+    if (forExport && amount > 0.05) {
+      const imageData = targetCtx.getImageData(0, 0, width, height);
+      applySharpenFilter(imageData, clamp(0.18 + amount * 0.62, 0, 1));
+      targetCtx.putImageData(imageData, 0, 0);
+    } else if (!forExport && amount >= 0.22) {
+      targetCtx.save();
+      targetCtx.globalCompositeOperation = 'overlay';
+      targetCtx.globalAlpha = 0.05 + amount * 0.10;
+      targetCtx.drawImage(sourceCanvas, 0, 0, width, height);
+      targetCtx.restore();
+    }
+  }
+
+  function copyFrameToRecordingCanvas() {
+    if (!recordingCanvas || !recordingCtx || canvas.width === 0 || canvas.height === 0) return;
+
+    if (recordingCanvas.width !== canvas.width || recordingCanvas.height !== canvas.height) {
+      recordingCanvas.width = canvas.width;
+      recordingCanvas.height = canvas.height;
+    }
+
+    if (imageSettings.qualityEnhancer) {
+      drawEnhancedFrameToContext(
+        recordingCtx,
+        canvas,
+        recordingCanvas.width,
+        recordingCanvas.height,
+        imageSettings.qualityEnhancerStrength,
+        false
+      );
+    } else {
+      recordingCtx.clearRect(0, 0, recordingCanvas.width, recordingCanvas.height);
+      recordingCtx.drawImage(canvas, 0, 0, recordingCanvas.width, recordingCanvas.height);
+    }
+  }
+
+  function syncRecordingCanvasFrame() {
+    if (!isRecording || !recordingCanvas || !recordingCtx) return;
+    copyFrameToRecordingCanvas();
+  }
+
+  async function buildPhotoCaptureBlob() {
+    const exportCanvas = document.createElement('canvas');
+    exportCanvas.width = canvas.width;
+    exportCanvas.height = canvas.height;
+    const exportCtx = exportCanvas.getContext('2d', { willReadFrequently: true });
+
+    if (imageSettings.qualityEnhancer) {
+      drawEnhancedFrameToContext(
+        exportCtx,
+        canvas,
+        exportCanvas.width,
+        exportCanvas.height,
+        imageSettings.qualityEnhancerStrength,
+        true
+      );
+    } else {
+      exportCtx.drawImage(canvas, 0, 0, exportCanvas.width, exportCanvas.height);
+    }
+
+    const blob = await canvasToBlobAsync(exportCanvas, 'image/jpeg', imageSettings.jpegQuality / 100);
+    if (!blob) throw new Error('photo_blob_failed');
+    return { blob, width: exportCanvas.width, height: exportCanvas.height };
+  }
+
+  async function takePhoto() {
     if (!isRunning) {
-      showStatus(captureStatus, 'Primero encendé la cámara', 'warning');
+      showStatus(captureStatus, 'Primero enciende la camara', 'warning');
+      return;
+    }
+    if (isCapturePreviewOpen()) {
+      showStatus(captureStatus, 'Primero cierra la vista previa actual', 'info');
+      return;
+    }
+    if (canvas.width === 0 || canvas.height === 0) {
+      showStatus(captureStatus, 'Espera un momento y vuelve a sacar la foto', 'info');
       return;
     }
 
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        showStatus(captureStatus, 'No se pudo tomar la foto', 'error');
-        return;
-      }
+    try {
+      const { blob, width, height } = await buildPhotoCaptureBlob();
       const filename = `hatewebcam-photo-${timestamp()}.jpg`;
-      downloadBlob(blob, filename);
-      showStatus(captureStatus, `Foto guardada: ${filename}`, 'success');
-      setTimeout(() => hideStatus(captureStatus), 2500);
-    }, 'image/jpeg', imageSettings.jpegQuality / 100);
+      openCapturePreview({
+        kind: 'photo',
+        blob,
+        filename,
+        meta: {
+          width,
+          height,
+          size: blob.size,
+          format: 'JPEG',
+          jpegQuality: imageSettings.jpegQuality,
+          enhanced: !!imageSettings.qualityEnhancer,
+          enhancerStrength: imageSettings.qualityEnhancerStrength,
+        },
+      });
+      showStatus(captureStatus, 'Foto lista en vista previa', 'info');
+    } catch (err) {
+      console.error('Error taking photo:', err);
+      showStatus(captureStatus, 'No se pudo tomar la foto', 'error');
+    }
   }
 
   function toggleRecording() {
@@ -1160,11 +1372,15 @@
 
   function startRecording() {
     if (!isRunning) {
-      showStatus(captureStatus, 'Primero encendé la cámara', 'warning');
+      showStatus(captureStatus, 'Primero enciende la camara', 'warning');
+      return;
+    }
+    if (isCapturePreviewOpen()) {
+      showStatus(captureStatus, 'Primero cierra la vista previa actual', 'info');
       return;
     }
     if (typeof MediaRecorder === 'undefined') {
-      showStatus(captureStatus, 'Tu navegador no soporta grabación', 'error');
+      showStatus(captureStatus, 'Tu navegador no soporta grabacion', 'error');
       return;
     }
 
@@ -1176,12 +1392,26 @@
 
     try {
       recordingChunks = [];
+
+      ensureRecordingCanvas();
+      if (recordingCanvas.width === 0 || recordingCanvas.height === 0) {
+        showStatus(captureStatus, 'Espera un momento y reintenta la grabacion', 'info');
+        return;
+      }
       currentRecordingMimeType = recordingProfile.mimeType;
       currentRecordingExt = recordingProfile.extension;
-      recordingStream = canvas.captureStream(30);
+      copyFrameToRecordingCanvas();
+      currentRecordingFps = getPreferredRecordingFps();
+      currentRecordingBitrate = getRecommendedVideoBitrate(
+        recordingCanvas.width,
+        recordingCanvas.height,
+        currentRecordingFps
+      );
+
+      recordingStream = recordingCanvas.captureStream(currentRecordingFps);
       mediaRecorder = new MediaRecorder(recordingStream, {
         mimeType: recordingProfile.mimeType,
-        videoBitsPerSecond: 6000000,
+        videoBitsPerSecond: currentRecordingBitrate,
       });
 
       mediaRecorder.ondataavailable = (e) => {
@@ -1191,6 +1421,8 @@
       mediaRecorder.onstop = () => {
         const chunks = recordingChunks;
         recordingChunks = [];
+        const recordedWidth = recordingCanvas ? recordingCanvas.width : canvas.width;
+        const recordedHeight = recordingCanvas ? recordingCanvas.height : canvas.height;
 
         if (recordingStream) {
           recordingStream.getTracks().forEach((t) => t.stop());
@@ -1207,10 +1439,28 @@
         if (shouldSave) {
           const blob = new Blob(chunks, { type: savedMimeType || 'video/webm' });
           const filename = `hatewebcam-record-${timestamp()}.${savedExtension}`;
-          downloadBlob(blob, filename);
-          showStatus(captureStatus, `Video guardado: ${filename}`, 'success');
-          setTimeout(() => hideStatus(captureStatus), 3000);
+          openCapturePreview({
+            kind: 'video',
+            blob,
+            filename,
+            meta: {
+              width: recordedWidth,
+              height: recordedHeight,
+              size: blob.size,
+              format: savedExtension.toUpperCase(),
+              durationSec: lastRecordingDurationSec,
+              fps: currentRecordingFps,
+              bitrate: currentRecordingBitrate,
+              enhanced: !!imageSettings.qualityEnhancer,
+              enhancerStrength: imageSettings.qualityEnhancerStrength,
+            },
+          });
+          showStatus(captureStatus, 'Video listo en vista previa', 'info');
         }
+
+        currentRecordingBitrate = 6000000;
+        currentRecordingFps = 30;
+        lastRecordingDurationSec = 0;
       };
 
       if (recordingProfile.fallbackMessage) {
@@ -1230,8 +1480,18 @@
       updateCaptureButtons();
     } catch (err) {
       console.error('Error starting recording:', err);
-      showStatus(captureStatus, 'No se pudo iniciar la grabación', 'error');
+      showStatus(captureStatus, 'No se pudo iniciar la grabacion', 'error');
       isRecording = false;
+      if (recordingStream) {
+        recordingStream.getTracks().forEach((t) => t.stop());
+        recordingStream = null;
+      }
+      mediaRecorder = null;
+      currentRecordingMimeType = '';
+      currentRecordingExt = 'webm';
+      currentRecordingBitrate = 6000000;
+      currentRecordingFps = 30;
+      lastRecordingDurationSec = 0;
       updateCaptureButtons();
     }
   }
@@ -1240,6 +1500,13 @@
     if (!isRecording && !mediaRecorder) return;
 
     isRecording = false;
+    if (saveFile && recordingStartTs > 0) {
+      lastRecordingDurationSec = Math.max(0, (Date.now() - recordingStartTs) / 1000);
+    } else {
+      lastRecordingDurationSec = 0;
+    }
+    recordingStartTs = 0;
+
     if (recordingTimer) {
       clearInterval(recordingTimer);
       recordingTimer = null;
@@ -1260,7 +1527,167 @@
       mediaRecorder = null;
       currentRecordingMimeType = '';
       currentRecordingExt = 'webm';
+      currentRecordingBitrate = 6000000;
+      currentRecordingFps = 30;
+      lastRecordingDurationSec = 0;
     }
+  }
+
+  function openCapturePreview(capture) {
+    if (!capturePreviewModal || !capture) return;
+
+    clearPendingCapture(true);
+    const objectUrl = URL.createObjectURL(capture.blob);
+    pendingCapture = { ...capture, objectUrl };
+
+    if (capturePreviewTitle) {
+      capturePreviewTitle.innerHTML = capture.kind === 'video'
+        ? '<i class="fa-solid fa-film"></i> Vista previa de video'
+        : '<i class="fa-solid fa-image"></i> Vista previa de foto';
+    }
+    if (capturePreviewFilename) {
+      capturePreviewFilename.textContent = capture.filename;
+    }
+    if (btnDownloadCapture) {
+      btnDownloadCapture.innerHTML = capture.kind === 'video'
+        ? '<i class="fa-solid fa-download"></i> Descargar video'
+        : '<i class="fa-solid fa-download"></i> Descargar foto';
+    }
+
+    if (capturePreviewImage) {
+      capturePreviewImage.classList.toggle('hidden', capture.kind !== 'photo');
+      if (capture.kind === 'photo') capturePreviewImage.src = objectUrl;
+      else capturePreviewImage.removeAttribute('src');
+    }
+
+    if (capturePreviewVideo) {
+      capturePreviewVideo.classList.toggle('hidden', capture.kind !== 'video');
+      if (capture.kind === 'video') {
+        capturePreviewVideo.src = objectUrl;
+        capturePreviewVideo.currentTime = 0;
+        capturePreviewVideo.load();
+      } else {
+        capturePreviewVideo.pause();
+        capturePreviewVideo.removeAttribute('src');
+        capturePreviewVideo.load();
+      }
+    }
+
+    renderCapturePreviewInfo(capture.meta || {}, capture.kind);
+    capturePreviewModal.classList.remove('hidden');
+    updateCaptureButtons();
+  }
+
+  function renderCapturePreviewInfo(meta, kind) {
+    if (!capturePreviewInfo) return;
+    capturePreviewInfo.innerHTML = '';
+
+    const rows = [
+      ['Tipo', kind === 'video' ? 'Video' : 'Foto'],
+      ['Resolucion', `${meta.width || 0}x${meta.height || 0}`],
+      ['Formato', meta.format || (kind === 'video' ? 'WEBM/MP4' : 'JPEG')],
+      ['Tamano', formatBytes(meta.size || 0)],
+    ];
+
+    if (meta.durationSec != null) rows.push(['Duracion', formatDurationDetailed(meta.durationSec)]);
+    if (meta.jpegQuality != null) rows.push(['Calidad JPEG', `${meta.jpegQuality}%`]);
+    if (meta.fps != null) rows.push(['FPS', `${meta.fps}`]);
+    if (meta.bitrate != null) rows.push(['Bitrate', `${(meta.bitrate / 1000000).toFixed(1)} Mbps`]);
+
+    const enhancerLabel = meta.enhanced
+      ? `Activo (${meta.enhancerStrength || 0}%)`
+      : 'Desactivado';
+    rows.push(['Mejorador', enhancerLabel]);
+
+    for (const [key, value] of rows) {
+      const row = document.createElement('div');
+      row.className = 'capture-preview-row';
+      const keyEl = document.createElement('div');
+      keyEl.className = 'capture-preview-key';
+      keyEl.textContent = key;
+      const valueEl = document.createElement('div');
+      valueEl.className = 'capture-preview-value';
+      valueEl.textContent = value;
+      row.appendChild(keyEl);
+      row.appendChild(valueEl);
+      capturePreviewInfo.appendChild(row);
+    }
+  }
+
+  function clearPendingCapture(silent = false) {
+    if (!pendingCapture) return;
+
+    if (pendingCapture.objectUrl) {
+      URL.revokeObjectURL(pendingCapture.objectUrl);
+    }
+
+    if (capturePreviewImage) {
+      capturePreviewImage.removeAttribute('src');
+      capturePreviewImage.classList.add('hidden');
+    }
+
+    if (capturePreviewVideo) {
+      capturePreviewVideo.pause();
+      capturePreviewVideo.removeAttribute('src');
+      capturePreviewVideo.load();
+      capturePreviewVideo.classList.add('hidden');
+    }
+
+    pendingCapture = null;
+    if (!silent && capturePreviewFilename) {
+      capturePreviewFilename.textContent = '-';
+    }
+    if (capturePreviewInfo) {
+      capturePreviewInfo.innerHTML = '';
+    }
+    if (btnDownloadCapture) {
+      btnDownloadCapture.innerHTML = '<i class="fa-solid fa-download"></i> Descargar';
+    }
+    if (capturePreviewTitle) {
+      capturePreviewTitle.innerHTML = '<i class="fa-solid fa-image"></i> Vista previa de captura';
+    }
+  }
+
+  function closeCapturePreview(showDiscardStatus) {
+    if (!capturePreviewModal || capturePreviewModal.classList.contains('hidden')) return;
+    capturePreviewModal.classList.add('hidden');
+    clearPendingCapture(false);
+    updateCaptureButtons();
+
+    if (showDiscardStatus) {
+      showStatus(captureStatus, 'Captura descartada', 'warning');
+      setTimeout(() => hideStatus(captureStatus), 1800);
+    }
+  }
+
+  function downloadPendingCapture() {
+    if (!pendingCapture) return;
+
+    downloadBlob(pendingCapture.blob, pendingCapture.filename);
+    const label = pendingCapture.kind === 'video' ? 'Video' : 'Foto';
+    showStatus(captureStatus, `${label} guardado: ${pendingCapture.filename}`, 'success');
+    setTimeout(() => hideStatus(captureStatus), 2600);
+    closeCapturePreview(false);
+  }
+
+  function formatBytes(bytes) {
+    if (!bytes || bytes <= 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    const exp = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+    const value = bytes / (1024 ** exp);
+    const digits = exp === 0 ? 0 : (value >= 100 ? 0 : value >= 10 ? 1 : 2);
+    return `${value.toFixed(digits)} ${units[exp]}`;
+  }
+
+  function formatDurationDetailed(seconds) {
+    const safe = Math.max(0, Math.round(seconds || 0));
+    const h = Math.floor(safe / 3600);
+    const m = Math.floor((safe % 3600) / 60);
+    const s = safe % 60;
+    if (h > 0) {
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   }
 
   function pickSupportedMimeType(list) {

@@ -1,5 +1,5 @@
 /**
- * CameraManager — WebRTC camera capture
+ * CameraManager - WebRTC camera capture
  */
 class CameraManager {
   constructor() {
@@ -39,7 +39,7 @@ class CameraManager {
     this.videoElement = videoElement;
 
     if (!navigator.mediaDevices?.getUserMedia) {
-      this.lastError = new Error('getUserMedia no está disponible en este navegador.');
+      this.lastError = new Error('getUserMedia no esta disponible en este navegador.');
       return false;
     }
 
@@ -74,15 +74,16 @@ class CameraManager {
   }
 
   _buildVideoConstraints(deviceId = null, opts = {}) {
-    const width = opts.width || 1280;
-    const height = opts.height || 720;
+    const width = opts.width || 1920;
+    const height = opts.height || 1080;
     const fps = opts.fps || 30;
 
     const constraints = {
       video: {
-        width: { ideal: width },
-        height: { ideal: height },
-        frameRate: { ideal: fps }
+        width: { ideal: width, max: 3840 },
+        height: { ideal: height, max: 2160 },
+        aspectRatio: { ideal: width / height },
+        frameRate: { ideal: fps, max: 60 }
       },
       audio: false
     };
@@ -124,7 +125,7 @@ class CameraManager {
    */
   async switchCamera(deviceId) {
     if (this.running && this.videoElement) {
-      await this.start(this.videoElement, deviceId);
+      await this.start(this.videoElement, deviceId, { width: 1920, height: 1080, fps: 30 });
     }
   }
 
