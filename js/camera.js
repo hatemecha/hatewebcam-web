@@ -74,16 +74,34 @@ class CameraManager {
   }
 
   _buildVideoConstraints(deviceId = null, opts = {}) {
-    const width = opts.width || 1920;
-    const height = opts.height || 1080;
-    const fps = opts.fps || 30;
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+    const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+    const deviceMemory = typeof navigator !== 'undefined' && typeof navigator.deviceMemory === 'number'
+      ? navigator.deviceMemory
+      : 0;
+    const hardwareConcurrency = typeof navigator !== 'undefined' && typeof navigator.hardwareConcurrency === 'number'
+      ? navigator.hardwareConcurrency
+      : 0;
+    const lowPower = isMobile
+      || (deviceMemory > 0 && deviceMemory <= 4)
+      || (hardwareConcurrency > 0 && hardwareConcurrency <= 4);
+
+    const defaultWidth = lowPower ? 1280 : 1920;
+    const defaultHeight = lowPower ? 720 : 1080;
+    const defaultFps = lowPower ? 24 : 30;
+    const maxWidth = lowPower ? 1920 : 3840;
+    const maxHeight = lowPower ? 1080 : 2160;
+
+    const width = opts.width || defaultWidth;
+    const height = opts.height || defaultHeight;
+    const fps = opts.fps || defaultFps;
 
     const constraints = {
       video: {
-        width: { ideal: width, max: 3840 },
-        height: { ideal: height, max: 2160 },
+        width: { ideal: width, max: maxWidth },
+        height: { ideal: height, max: maxHeight },
         aspectRatio: { ideal: width / height },
-        frameRate: { ideal: fps, max: 60 }
+        frameRate: { ideal: fps, max: lowPower ? 30 : 60 }
       },
       audio: false
     };
@@ -125,7 +143,7 @@ class CameraManager {
    */
   async switchCamera(deviceId) {
     if (this.running && this.videoElement) {
-      await this.start(this.videoElement, deviceId, { width: 1920, height: 1080, fps: 30 });
+      await this.start(this.videoElement, deviceId);
     }
   }
 

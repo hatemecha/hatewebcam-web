@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="HateWebcam Web — Webcam con detección en tiempo real">
+  <meta name="description" content="hatewebcam — webcam">
   <title>HateWebcam</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
     crossorigin="anonymous">
@@ -15,7 +15,7 @@
 
   <!-- Header -->
   <header class="header-bar">
-    <div class="logo">HATEWEBCAM <span>WEB</span></div>
+    <div class="logo">HATEWEBCAM <span>BETA</span></div>
     <div class="status-indicator" id="statusIndicator"><i class="fa-solid fa-circle fa-xs"></i> APAGADO</div>
   </header>
 
@@ -297,7 +297,7 @@
         <div class="capture-preview-info" id="capturePreviewInfo"></div>
         <div class="capture-preview-photo-tools hidden" id="capturePreviewPhotoTools">
           <div class="capture-preview-tools-title"><i class="fa-solid fa-wand-magic-sparkles"></i> Mejorador de foto (en esta vista previa)</div>
-          <div class="help-text section-note">Activalo aca para comparar el resultado antes de descargar. Usa UpscalerJS cuando esta disponible y puede tardar unos segundos.</div>
+          <div class="help-text section-note">Activalo aca para comparar el resultado antes de descargar.</div>
           <label class="checkbox-group">
             <input type="checkbox" id="chkPreviewPhotoEnhancer">
             <span>Mejorar foto antes de descargar</span>
@@ -321,10 +321,6 @@
   <!-- MediaPipe CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@upscalerjs/default-model@latest/dist/umd/index.min.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/upscaler@latest/dist/browser/umd/upscaler.min.js" crossorigin="anonymous"></script>
-
   <!-- App -->
   <script src="js/camera.js"></script>
   <script src="js/effects/blob-tracking.js"></script>

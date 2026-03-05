@@ -100,7 +100,7 @@
   let animFrameId = null;
   let frameCount = 0;
   let lastFpsTime = performance.now();
-  let flipH = false;
+  let flipH = true;
   let flipV = false;
   let rotation = 0;
 
@@ -131,9 +131,24 @@
   let captureFxCtx = null;
   let recordingFxCanvas = null;
   let recordingFxCtx = null;
-  let upscalerInstance = null;
-  let upscalerInitPromise = null;
-  let upscalerDisabled = false;
+
+  const DEVICE_PROFILE = (() => {
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+    const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+    const deviceMemory = typeof navigator !== 'undefined' && typeof navigator.deviceMemory === 'number'
+      ? navigator.deviceMemory
+      : 0;
+    const hardwareConcurrency = typeof navigator !== 'undefined' && typeof navigator.hardwareConcurrency === 'number'
+      ? navigator.hardwareConcurrency
+      : 0;
+    const lowPower = isMobile
+      || (deviceMemory > 0 && deviceMemory <= 4)
+      || (hardwareConcurrency > 0 && hardwareConcurrency <= 4);
+    return {
+      isMobile,
+      lowPower,
+    };
+  })();
 
   const DEFAULT_IMAGE_SETTINGS = {
     blackAndWhite: false,
@@ -150,8 +165,8 @@
     qualityEnhancer: false,
     qualityEnhancerStrength: 35,
   };
-  const PREVIEW_TARGET_FPS = 30;
-  const PREVIEW_MAX_PIXELS = 640 * 360;
+  const PREVIEW_TARGET_FPS = DEVICE_PROFILE.lowPower ? 24 : 30;
+  const PREVIEW_MAX_PIXELS = DEVICE_PROFILE.lowPower ? 480 * 270 : 640 * 360;
   const PREVIEW_MIN_WIDTH = 320;
   const PREVIEW_MIN_HEIGHT = 180;
   const DEFAULT_QUICK_DETECTOR_SETTINGS = {
@@ -474,9 +489,23 @@
   // ─── Init ───
   async function init() {
     const cfg = loadConfig();
-    if (cfg.flipH) { flipH = true; chkMirror.checked = true; }
-    if (cfg.flipV) { flipV = true; chkFlipV.checked = true; }
-    if (cfg.rotation != null) { rotation = cfg.rotation; rotationSelect.value = String(cfg.rotation); }
+    // Migration: default mirror ON once so front webcams open con orientacion natural.
+    if (cfg.forceMirrorDefaultV2 !== true) {
+      cfg.flipH = true;
+      cfg.forceMirrorDefaultV2 = true;
+      saveConfig(cfg);
+    }
+    if (typeof cfg.flipH === 'boolean') flipH = cfg.flipH;
+    else flipH = true;
+    if (chkMirror) chkMirror.checked = flipH;
+
+    if (typeof cfg.flipV === 'boolean') flipV = cfg.flipV;
+    if (chkFlipV) chkFlipV.checked = flipV;
+
+    if (cfg.rotation != null) {
+      rotation = cfg.rotation;
+      if (rotationSelect) rotationSelect.value = String(cfg.rotation);
+    }
     setAdvancedOptionsVisible(!!cfg.showAdvancedOptions);
     loadQuickDetectorSettings(cfg);
     updateQuickDetectorControlsUI();
@@ -1362,8 +1391,11 @@
         blob: nextBlob,
         width: nextWidth,
         height: nextHeight,
-        enhancerEngine,
-      } = await buildPhotoBlobFromCanvas(pendingCapture.baseCanvas, enabled, strength);
+      } = await buildPhotoBlobFromCanvas(
+        pendingCapture.baseCanvas,
+        enabled,
+        strength
+      );
       if (token !== photoPreviewRenderToken || !isPendingPhotoCapture()) return;
 
       if (pendingCapture.objectUrl) {
@@ -1380,7 +1412,6 @@
         size: nextBlob.size,
         enhanced: enabled,
         enhancerStrength: enabled ? strength : 0,
-        enhancerEngine: enabled ? enhancerEngine : 'off',
       };
 
       if (capturePreviewImage) {
@@ -1449,67 +1480,6 @@
     return new Promise((resolve) => {
       sourceCanvas.toBlob((blob) => resolve(blob), mimeType, quality);
     });
-  }
-
-  function isUpscalerRuntimeAvailable() {
-    if (upscalerDisabled) return false;
-    return typeof window !== 'undefined'
-      && typeof window.Upscaler === 'function'
-      && typeof window.DefaultUpscalerJSModel !== 'undefined';
-  }
-
-  async function ensureUpscalerInstance() {
-    if (upscalerDisabled) return null;
-    if (upscalerInstance) return upscalerInstance;
-    if (upscalerInitPromise) return upscalerInitPromise;
-    if (!isUpscalerRuntimeAvailable()) return null;
-
-    upscalerInitPromise = (async () => {
-      try {
-        const instance = new window.Upscaler({
-          model: window.DefaultUpscalerJSModel,
-        });
-        upscalerInstance = instance;
-        return instance;
-      } catch (err) {
-        console.error('No se pudo inicializar UpscalerJS:', err);
-        upscalerDisabled = true;
-        return null;
-      } finally {
-        upscalerInitPromise = null;
-      }
-    })();
-
-    return upscalerInitPromise;
-  }
-
-  function loadImageFromSrc(src) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error('upscaled_image_load_failed'));
-      img.src = src;
-    });
-  }
-
-  async function upscaleCanvasWithUpscaler(sourceCanvas) {
-    const upscaler = await ensureUpscalerInstance();
-    if (!upscaler) return null;
-
-    const upscaledSrc = await upscaler.upscale(sourceCanvas, {
-      patchSize: 64,
-      padding: 2,
-    });
-    if (!upscaledSrc || typeof upscaledSrc !== 'string') return null;
-
-    const upscaledImage = await loadImageFromSrc(upscaledSrc);
-    const upscaledCanvas = document.createElement('canvas');
-    upscaledCanvas.width = Math.max(1, upscaledImage.naturalWidth || upscaledImage.width || sourceCanvas.width);
-    upscaledCanvas.height = Math.max(1, upscaledImage.naturalHeight || upscaledImage.height || sourceCanvas.height);
-    const upscaledCtx = upscaledCanvas.getContext('2d', { willReadFrequently: false });
-    if (!upscaledCtx) return null;
-    upscaledCtx.drawImage(upscaledImage, 0, 0, upscaledCanvas.width, upscaledCanvas.height);
-    return upscaledCanvas;
   }
 
   function ensureRecordingCanvas() {
@@ -1619,32 +1589,16 @@
         blob: rawBlob,
         width: baseCanvas.width,
         height: baseCanvas.height,
-        enhancerEngine: 'off',
       };
     }
 
-    let workingCanvas = baseCanvas;
-    let enhancerEngine = 'classic';
-
-    if (isUpscalerRuntimeAvailable()) {
-      try {
-        const upscaledCanvas = await upscaleCanvasWithUpscaler(baseCanvas);
-        if (upscaledCanvas) {
-          workingCanvas = upscaledCanvas;
-          enhancerEngine = 'upscalerjs';
-        }
-      } catch (err) {
-        console.error('UpscalerJS fallo. Se usa fallback clasico:', err);
-      }
-    }
-
     const exportCanvas = document.createElement('canvas');
-    exportCanvas.width = workingCanvas.width;
-    exportCanvas.height = workingCanvas.height;
+    exportCanvas.width = baseCanvas.width;
+    exportCanvas.height = baseCanvas.height;
     const exportCtx = exportCanvas.getContext('2d', { willReadFrequently: true });
     drawEnhancedFrameToContext(
       exportCtx,
-      workingCanvas,
+      baseCanvas,
       exportCanvas.width,
       exportCanvas.height,
       enhancerStrength,
@@ -1657,7 +1611,6 @@
       blob,
       width: exportCanvas.width,
       height: exportCanvas.height,
-      enhancerEngine,
     };
   }
 
@@ -1677,14 +1630,12 @@
       blob,
       width,
       height,
-      enhancerEngine,
     } = await buildPhotoBlobFromCanvas(baseCanvas, enhancerEnabled, enhancerStrength);
     return {
       blob,
       width,
       height,
       baseCanvas,
-      enhancerEngine,
     };
   }
 
@@ -1707,7 +1658,7 @@
       const initialEnhancerEnabled = !!imageSettings.qualityEnhancer;
       const initialEnhancerStrength = imageSettings.qualityEnhancerStrength;
       const {
-        blob, width, height, baseCanvas, enhancerEngine,
+        blob, width, height, baseCanvas,
       } = await buildPhotoCaptureSnapshot(initialEnhancerEnabled, initialEnhancerStrength);
       const filename = `hatewebcam-photo-${timestamp()}.jpg`;
       openCapturePreview({
@@ -1723,7 +1674,6 @@
           jpegQuality: imageSettings.jpegQuality,
           enhanced: initialEnhancerEnabled,
           enhancerStrength: initialEnhancerStrength,
-          enhancerEngine: initialEnhancerEnabled ? enhancerEngine : 'off',
         },
       });
       showStatus(captureStatus, 'Foto lista en vista previa', 'info');
@@ -1992,14 +1942,6 @@
       ? `Activo (${meta.enhancerStrength || 0}%)`
       : 'Desactivado';
     rows.push(['Mejorador', enhancerLabel]);
-    if (meta.enhanced) {
-      const enhancerEngineLabel = meta.enhancerEngine === 'upscalerjs'
-        ? 'UpscalerJS + ajuste fino'
-        : meta.enhancerEngine === 'classic'
-          ? 'Clasico'
-          : 'Clasico';
-      rows.push(['Motor', enhancerEngineLabel]);
-    }
 
     for (const [key, value] of rows) {
       const row = document.createElement('div');
