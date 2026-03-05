@@ -8,6 +8,7 @@
   const $ = (s) => document.querySelector(s);
   const videoEl = $('#videoElement');
   const canvas = $('#previewCanvas');
+  const previewWrapper = $('#previewWrapper');
   const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true }) || canvas.getContext('2d');
   const placeholder = $('#previewPlaceholder');
   const statusIndicator = $('#statusIndicator');
@@ -65,6 +66,7 @@
   const valSharpness = $('#valSharpness');
   const btnResetImageAdjustments = $('#btnResetImageAdjustments');
   const presetButtons = document.querySelectorAll('.preset-btn');
+  const mobilePresetButtons = document.querySelectorAll('.mobile-preset-chip');
 
   const chkBlobTracking = $('#chkBlobTracking');
   const chkFaceDetection = $('#chkFaceDetection');
@@ -86,6 +88,19 @@
   const btnSaveProfile = $('#btnSaveProfile');
   const btnDeleteProfile = $('#btnDeleteProfile');
   const profileStatus = $('#profileStatus');
+  const btnMobileEffectsDock = $('#btnMobileEffectsDock');
+  const mobileFxBackdrop = $('#mobileFxBackdrop');
+  const mobileFxPanel = $('#mobileFxPanel');
+  const btnMobileFxClose = $('#btnMobileFxClose');
+  const btnMobileTakePhoto = $('#btnMobileTakePhoto');
+  const btnMobileRecord = $('#btnMobileRecord');
+  const btnMobileBlobToggle = $('#btnMobileBlobToggle');
+  const btnMobileFaceToggle = $('#btnMobileFaceToggle');
+  const btnMobileBlinkToggle = $('#btnMobileBlinkToggle');
+  const btnMobileColorPick = $('#btnMobileColorPick');
+  const inpMobileBlobColor = $('#inpMobileBlobColor');
+  const inpMobileFaceColor = $('#inpMobileFaceColor');
+  const inpMobileFaceLabel = $('#inpMobileFaceLabel');
 
   if (!videoEl || !canvas || !ctx || !btnToggleCamera || !cameraSelect || !btnTakePhoto || !btnRecord) {
     console.error('HateWebcam: faltan elementos base del DOM para iniciar la app.');
@@ -108,6 +123,7 @@
   let flipH = false;
   let flipV = false;
   let rotation = 0;
+  let mobileActivePreset = null;
 
   // Capture state
   let mediaRecorder = null;
@@ -138,6 +154,7 @@
   let recordingFxCtx = null;
   let preferredDeviceId = null;
   let faceMeshScriptLoadPromise = null;
+  let mediaPipeConsoleFilterInstalled = false;
   let faceLoadRequestId = 0;
   let blinkLoadRequestId = 0;
   let isPageVisible = document.visibilityState !== 'hidden';
@@ -172,11 +189,19 @@
     qualityEnhancer: false,
     qualityEnhancerStrength: 35,
   };
-  const PREVIEW_TARGET_FPS = DEVICE_PROFILE.lowPower ? 24 : 30;
+  const TARGET_FPS = 24;
+  const PREVIEW_TARGET_FPS = TARGET_FPS;
   const PREVIEW_MAX_PIXELS = DEVICE_PROFILE.lowPower ? 432 * 243 : 640 * 360;
   const PREVIEW_MIN_WIDTH = 320;
   const PREVIEW_MIN_HEIGHT = 180;
   const MEDIAPIPE_FACE_MESH_SRC = 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js';
+  const MEDIAPIPE_CONSOLE_NOISE_PATTERNS = [
+    'gl_context_webgl.cc',
+    'gl_context.cc:351',
+    'gl_context.cc:821',
+    'OpenGL error checking is disabled',
+    'GL version: 3.0 (OpenGL ES 3.0',
+  ];
   const DEFAULT_QUICK_DETECTOR_SETTINGS = {
     blobBoxColor: '#00ffff',
     faceBoxColor: '#e53935',
@@ -211,7 +236,69 @@
     return label ? label.slice(0, 28) : 'CARA';
   }
 
+  function updateMobilePresetButtons(activePreset = null) {
+    mobilePresetButtons.forEach((btn) => {
+      const match = activePreset && btn.dataset.mobilePreset === activePreset;
+      btn.classList.toggle('is-active', !!match);
+    });
+  }
+
+  function isMobileViewport() {
+    return window.matchMedia('(max-width: 900px)').matches;
+  }
+
+  function isMobileFxPanelVisible() {
+    return !!mobileFxPanel && !mobileFxPanel.classList.contains('hidden');
+  }
+
+  function setMobileFxPanelVisible(visible) {
+    if (mobileFxPanel) {
+      mobileFxPanel.classList.toggle('hidden', !visible);
+    }
+    if (mobileFxBackdrop) {
+      mobileFxBackdrop.classList.toggle('hidden', !visible);
+    }
+    if (btnMobileEffectsDock) {
+      btnMobileEffectsDock.classList.toggle('is-active', !!visible);
+      btnMobileEffectsDock.setAttribute('aria-expanded', String(!!visible));
+    }
+  }
+
+  function syncMobileViewportState() {
+    if (!isMobileViewport()) {
+      setMobileFxPanelVisible(false);
+    }
+  }
+
+  function shouldSuppressMediaPipeConsoleNoise(args) {
+    if (!Array.isArray(args) || args.length === 0) return false;
+    const joined = args
+      .filter((arg) => typeof arg === 'string')
+      .join(' ');
+    if (!joined) return false;
+    const isMediaPipeLog = joined.includes('face_mesh_solution')
+      || joined.includes('gl_context');
+    if (!isMediaPipeLog) return false;
+    return MEDIAPIPE_CONSOLE_NOISE_PATTERNS.some((pattern) => joined.includes(pattern));
+  }
+
+  function installMediaPipeConsoleNoiseFilter() {
+    if (mediaPipeConsoleFilterInstalled) return;
+    mediaPipeConsoleFilterInstalled = true;
+
+    ['log', 'info', 'warn'].forEach((method) => {
+      const original = console[method];
+      if (typeof original !== 'function') return;
+      console[method] = function patchedConsoleMethod(...args) {
+        if (shouldSuppressMediaPipeConsoleNoise(args)) return;
+        return original.apply(this, args);
+      };
+    });
+  }
+
   function ensureFaceMeshLoaded() {
+    installMediaPipeConsoleNoiseFilter();
+
     if (typeof FaceMesh !== 'undefined') {
       return Promise.resolve();
     }
@@ -309,7 +396,25 @@
     if (faceQuickControls) {
       faceQuickControls.classList.toggle('hidden', !chkFaceDetection.checked);
     }
+    if (inpMobileBlobColor) inpMobileBlobColor.value = quickDetectorSettings.blobBoxColor;
+    if (inpMobileFaceColor) inpMobileFaceColor.value = quickDetectorSettings.faceBoxColor;
+    if (inpMobileFaceLabel && document.activeElement !== inpMobileFaceLabel) {
+      inpMobileFaceLabel.value = quickDetectorSettings.faceLabelText;
+    }
+    if (btnMobileBlobToggle) {
+      btnMobileBlobToggle.classList.toggle('is-active', !!chkBlobTracking.checked);
+      btnMobileBlobToggle.setAttribute('aria-pressed', String(!!chkBlobTracking.checked));
+    }
+    if (btnMobileFaceToggle) {
+      btnMobileFaceToggle.classList.toggle('is-active', !!chkFaceDetection.checked);
+      btnMobileFaceToggle.setAttribute('aria-pressed', String(!!chkFaceDetection.checked));
+    }
+    if (btnMobileBlinkToggle) {
+      btnMobileBlinkToggle.classList.toggle('is-active', !!chkBlinkDetection.checked);
+      btnMobileBlinkToggle.setAttribute('aria-pressed', String(!!chkBlinkDetection.checked));
+    }
     syncAdvancedQuickInputs();
+    updateCaptureButtons();
   }
 
   function applyQuickDetectorSettingsToEffects() {
@@ -425,6 +530,8 @@
         const value = parseInt(e.target.value, 10);
         imageSettings[key] = value;
         valueEl.textContent = `${value}${suffix}`;
+        mobileActivePreset = null;
+        updateMobilePresetButtons(mobileActivePreset);
         scheduleSaveImageSettings();
       });
     };
@@ -433,6 +540,8 @@
       chkBlackWhite.addEventListener('change', (e) => {
         imageSettings.blackAndWhite = e.target.checked;
         updateBWDependentControls();
+        mobileActivePreset = null;
+        updateMobilePresetButtons(mobileActivePreset);
         saveImageSettings();
       });
     }
@@ -472,6 +581,8 @@
           qualityEnhancer: imageSettings.qualityEnhancer,
           qualityEnhancerStrength: imageSettings.qualityEnhancerStrength,
         };
+        mobileActivePreset = null;
+        updateMobilePresetButtons(mobileActivePreset);
         updateImageControlsUI();
         saveImageSettings();
       });
@@ -479,6 +590,9 @@
 
     presetButtons.forEach((btn) => {
       btn.addEventListener('click', () => applyImagePreset(btn.dataset.preset));
+    });
+    mobilePresetButtons.forEach((btn) => {
+      btn.addEventListener('click', () => applyImagePreset(btn.dataset.mobilePreset));
     });
   }
 
@@ -531,6 +645,8 @@
     } else if (name === 'bw') {
       imageSettings = { ...imageSettings, blackAndWhite: true, exposure: 0, shadows: 12, highlights: -10, contrast: 118, saturation: 0, temperature: 0, detail: 20, sharpness: 10 };
     }
+    mobileActivePreset = name;
+    updateMobilePresetButtons(mobileActivePreset);
     updateImageControlsUI();
     saveImageSettings();
   }
@@ -615,6 +731,8 @@
     updateQuickDetectorControlsUI();
     loadImageSettings(cfg);
     updateImageControlsUI();
+    mobileActivePreset = null;
+    updateMobilePresetButtons(mobileActivePreset);
     preferredDeviceId = typeof cfg.deviceId === 'string' && cfg.deviceId ? cfg.deviceId : null;
     if (cameraSelect) {
       cameraSelect.innerHTML = '<option value="">Cargando camaras...</option>';
@@ -625,6 +743,8 @@
     bindEvents();
     bindQuickDetectorEvents();
     bindImageControlEvents();
+    syncMobileViewportState();
+    setMobileFxPanelVisible(false);
     updateCaptureButtons();
 
     // Auto-start camera on load (if browser allows it) without blocking UI init.
@@ -653,6 +773,85 @@
     if (btnDownloadCapture) btnDownloadCapture.addEventListener('click', downloadPendingCapture);
     if (btnDiscardCapture) btnDiscardCapture.addEventListener('click', () => closeCapturePreview(true));
     if (btnCloseCapturePreview) btnCloseCapturePreview.addEventListener('click', () => closeCapturePreview(true));
+    if (btnMobileEffectsDock) {
+      btnMobileEffectsDock.addEventListener('click', () => {
+        setMobileFxPanelVisible(!isMobileFxPanelVisible());
+      });
+    }
+    if (btnMobileFxClose) {
+      btnMobileFxClose.addEventListener('click', () => setMobileFxPanelVisible(false));
+    }
+    if (mobileFxBackdrop) {
+      mobileFxBackdrop.addEventListener('click', () => setMobileFxPanelVisible(false));
+    }
+    if (btnMobileTakePhoto) {
+      btnMobileTakePhoto.addEventListener('click', () => {
+        setMobileFxPanelVisible(false);
+        takePhoto();
+      });
+    }
+    if (btnMobileRecord) {
+      btnMobileRecord.addEventListener('click', () => {
+        setMobileFxPanelVisible(false);
+        toggleRecording();
+      });
+    }
+    if (btnMobileBlobToggle) {
+      btnMobileBlobToggle.addEventListener('click', () => {
+        chkBlobTracking.checked = !chkBlobTracking.checked;
+        void toggleEffect('blob');
+      });
+    }
+    if (btnMobileFaceToggle) {
+      btnMobileFaceToggle.addEventListener('click', () => {
+        chkFaceDetection.checked = !chkFaceDetection.checked;
+        void toggleEffect('face');
+      });
+    }
+    if (btnMobileBlinkToggle) {
+      btnMobileBlinkToggle.addEventListener('click', () => {
+        chkBlinkDetection.checked = !chkBlinkDetection.checked;
+        void toggleEffect('blink');
+      });
+    }
+    if (btnMobileColorPick) {
+      btnMobileColorPick.addEventListener('click', () => {
+        enableColorPick();
+        setMobileFxPanelVisible(false);
+      });
+    }
+    if (inpMobileBlobColor) {
+      inpMobileBlobColor.addEventListener('input', (e) => {
+        quickDetectorSettings.blobBoxColor = e.target.value;
+        if (blobTrackingEffect) blobTrackingEffect.boxColor = e.target.value;
+        updateQuickDetectorControlsUI();
+        scheduleSaveQuickDetectorSettings();
+      });
+    }
+    if (inpMobileFaceColor) {
+      inpMobileFaceColor.addEventListener('input', (e) => {
+        quickDetectorSettings.faceBoxColor = e.target.value;
+        if (faceDetectionEffect) faceDetectionEffect.boxColor = e.target.value;
+        updateQuickDetectorControlsUI();
+        scheduleSaveQuickDetectorSettings();
+      });
+    }
+    if (inpMobileFaceLabel) {
+      inpMobileFaceLabel.addEventListener('input', (e) => {
+        const value = String(e.target.value || '').slice(0, 28);
+        quickDetectorSettings.faceLabelText = value || 'CARA';
+        if (faceDetectionEffect) faceDetectionEffect.labelText = value;
+        updateQuickDetectorControlsUI();
+        scheduleSaveQuickDetectorSettings();
+      });
+      inpMobileFaceLabel.addEventListener('blur', (e) => {
+        const normalized = normalizeFaceLabel(e.target.value);
+        quickDetectorSettings.faceLabelText = normalized;
+        e.target.value = normalized;
+        if (faceDetectionEffect) faceDetectionEffect.labelText = normalized;
+        saveQuickDetectorSettings();
+      });
+    }
     if (chkPreviewPhotoEnhancer) {
       chkPreviewPhotoEnhancer.addEventListener('change', onPreviewPhotoEnhancerToggle);
     }
@@ -670,6 +869,7 @@
     profileSelect.addEventListener('change', loadProfile);
     window.addEventListener('keydown', onGlobalKeyDown);
     document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('resize', syncMobileViewportState);
 
     window.addEventListener('beforeunload', () => {
       stopRecording(false);
@@ -906,15 +1106,55 @@
     };
   }
 
+  function normalizeRotationDegrees(deg) {
+    const normalized = ((Math.round(deg / 90) * 90) % 360 + 360) % 360;
+    if (normalized === 360) return 0;
+    return normalized;
+  }
+
+  function getMobileAutoRotationDegrees(sourceWidth, sourceHeight) {
+    const shouldAutoRotate = isMobileViewport() && sourceWidth > sourceHeight;
+    return shouldAutoRotate ? 90 : 0;
+  }
+
+  function getEffectiveRotationDegrees(sourceWidth, sourceHeight) {
+    if (isMobileViewport()) {
+      return normalizeRotationDegrees(getMobileAutoRotationDegrees(sourceWidth, sourceHeight));
+    }
+    return normalizeRotationDegrees(rotation);
+  }
+
+  function getEffectiveFrameDimensions(sourceWidth, sourceHeight) {
+    const effectiveRotation = getEffectiveRotationDegrees(sourceWidth, sourceHeight);
+    const rotated = effectiveRotation === 90 || effectiveRotation === 270;
+    return {
+      width: rotated ? sourceHeight : sourceWidth,
+      height: rotated ? sourceWidth : sourceHeight,
+      effectiveRotation,
+    };
+  }
+
   function getPreviewFrameDimensions(sourceWidth, sourceHeight) {
-    const sourcePixels = Math.max(1, sourceWidth * sourceHeight);
-    const scale = sourcePixels > PREVIEW_MAX_PIXELS
+    const { width: effectiveWidth, height: effectiveHeight } = getEffectiveFrameDimensions(sourceWidth, sourceHeight);
+    const sourcePixels = Math.max(1, effectiveWidth * effectiveHeight);
+    const baseScale = sourcePixels > PREVIEW_MAX_PIXELS
       ? Math.sqrt(PREVIEW_MAX_PIXELS / sourcePixels)
       : 1;
 
-    const width = Math.max(PREVIEW_MIN_WIDTH, Math.round(sourceWidth * scale));
-    const height = Math.max(PREVIEW_MIN_HEIGHT, Math.round(sourceHeight * scale));
-    return { width, height, scale };
+    const aspect = Math.max(0.0001, effectiveWidth / effectiveHeight);
+    let width = Math.max(1, Math.round(effectiveWidth * baseScale));
+    let height = Math.max(1, Math.round(effectiveHeight * baseScale));
+
+    if (width < PREVIEW_MIN_WIDTH) {
+      width = PREVIEW_MIN_WIDTH;
+      height = Math.max(1, Math.round(width / aspect));
+    }
+    if (height < PREVIEW_MIN_HEIGHT) {
+      height = PREVIEW_MIN_HEIGHT;
+      width = Math.max(1, Math.round(height * aspect));
+    }
+
+    return { width, height, scale: width / Math.max(1, effectiveWidth) };
   }
 
   function buildResolutionLabel(sourceWidth, sourceHeight, previewWidth, previewHeight) {
@@ -939,7 +1179,21 @@
 
       if (videoEl.readyState >= 2) {
         const { sourceWidth, sourceHeight } = getSourceFrameDimensions();
-        const { width: previewWidth, height: previewHeight, scale } = getPreviewFrameDimensions(sourceWidth, sourceHeight);
+        let previewWidth;
+        let previewHeight;
+        let scale;
+        if (isMobileViewport()) {
+          const wrapperWidth = Math.round((previewWrapper && previewWrapper.clientWidth) || window.innerWidth || sourceWidth);
+          const wrapperHeight = Math.round((previewWrapper && previewWrapper.clientHeight) || window.innerHeight || sourceHeight);
+          previewWidth = Math.max(PREVIEW_MIN_WIDTH, wrapperWidth);
+          previewHeight = Math.max(PREVIEW_MIN_HEIGHT, wrapperHeight);
+          scale = previewWidth / Math.max(1, sourceWidth);
+        } else {
+          const dims = getPreviewFrameDimensions(sourceWidth, sourceHeight);
+          previewWidth = dims.width;
+          previewHeight = dims.height;
+          scale = dims.scale;
+        }
         if (canvas.width !== previewWidth || canvas.height !== previewHeight) {
           canvas.width = previewWidth;
           canvas.height = previewHeight;
@@ -953,7 +1207,7 @@
           renderProcessedFrame(canvas, ctx, 'preview');
         } catch (renderErr) {
           console.error('Render frame fallback error:', renderErr);
-          drawBaseFrame(ctx, canvas);
+          drawBaseFrame(ctx, canvas, 'preview');
         }
         syncRecordingCanvasFrame();
 
@@ -1042,24 +1296,41 @@
     };
   }
 
-  function drawBaseFrame(targetCtx, targetCanvas) {
+  function drawBaseFrame(targetCtx, targetCanvas, mode = 'preview') {
+    const { sourceWidth, sourceHeight } = getSourceFrameDimensions();
+    const effectiveRotation = getEffectiveRotationDegrees(sourceWidth, sourceHeight);
+    const rotated = effectiveRotation === 90 || effectiveRotation === 270;
+    const orientedWidth = rotated ? sourceHeight : sourceWidth;
+    const orientedHeight = rotated ? sourceWidth : sourceHeight;
+    const scaleX = targetCanvas.width / Math.max(1, orientedWidth);
+    const scaleY = targetCanvas.height / Math.max(1, orientedHeight);
+    const useCover = mode === 'preview' && isMobileViewport();
+    const frameScale = useCover ? Math.max(scaleX, scaleY) : Math.min(scaleX, scaleY);
+    const drawWidth = Math.max(1, Math.round(sourceWidth * frameScale));
+    const drawHeight = Math.max(1, Math.round(sourceHeight * frameScale));
+
     targetCtx.save();
     targetCtx.filter = buildCanvasFilter();
-    if (rotation !== 0) {
-      targetCtx.translate(targetCanvas.width / 2, targetCanvas.height / 2);
-      targetCtx.rotate((rotation * Math.PI) / 180);
-      targetCtx.translate(-targetCanvas.width / 2, -targetCanvas.height / 2);
+    targetCtx.translate(targetCanvas.width / 2, targetCanvas.height / 2);
+    if (effectiveRotation !== 0) {
+      targetCtx.rotate((effectiveRotation * Math.PI) / 180);
     }
     let sx = 1;
     let sy = 1;
     if (flipH) sx = -1;
     if (flipV) sy = -1;
     if (sx !== 1 || sy !== 1) {
-      targetCtx.translate(sx === -1 ? targetCanvas.width : 0, sy === -1 ? targetCanvas.height : 0);
       targetCtx.scale(sx, sy);
     }
-    targetCtx.drawImage(videoEl, 0, 0, targetCanvas.width, targetCanvas.height);
+    targetCtx.drawImage(
+      videoEl,
+      -drawWidth / 2,
+      -drawHeight / 2,
+      drawWidth,
+      drawHeight
+    );
     targetCtx.restore();
+    return effectiveRotation;
   }
 
   function applyAdvancedPixelAdjustments(targetCanvas = canvas, targetCtx = ctx, mode = 'preview') {
@@ -1119,7 +1390,7 @@
 
   function renderProcessedFrame(targetCanvas, targetCtx, mode = 'preview') {
     if (!videoEl || videoEl.readyState < 2 || targetCanvas.width === 0 || targetCanvas.height === 0) return;
-    drawBaseFrame(targetCtx, targetCanvas);
+    const frameRotation = drawBaseFrame(targetCtx, targetCanvas, mode);
     if (needsAdvancedPixelAdjustments()) {
       applyAdvancedPixelAdjustments(targetCanvas, targetCtx, mode);
     }
@@ -1127,6 +1398,7 @@
     if (faceDetectionEffect) {
       faceDetectionEffect.flipH = flipH;
       faceDetectionEffect.flipV = flipV;
+      faceDetectionEffect.rotationDeg = frameRotation;
     }
 
     if (blobTrackingEffect && blinkDetectionEffect) {
@@ -1527,6 +1799,10 @@
   function onGlobalKeyDown(e) {
     if (e.key === 'Escape' && isCapturePreviewOpen()) {
       closeCapturePreview(true);
+      return;
+    }
+    if (e.key === 'Escape' && isMobileFxPanelVisible()) {
+      setMobileFxPanelVisible(false);
     }
   }
 
@@ -1649,12 +1925,12 @@
   }
 
   function updateCaptureButtons() {
-    if (!btnTakePhoto || !btnRecord) return;
     const previewOpen = isCapturePreviewOpen();
     const lockCaptureSettings = isRecording || previewOpen;
+    const lockDetectorControls = previewOpen;
 
-    btnTakePhoto.disabled = !isRunning || isRecording || previewOpen;
-    btnRecord.disabled = (!isRunning && !isRecording) || previewOpen;
+    if (btnTakePhoto) btnTakePhoto.disabled = !isRunning || isRecording || previewOpen;
+    if (btnRecord) btnRecord.disabled = (!isRunning && !isRecording) || previewOpen;
     if (videoFormatSelect) videoFormatSelect.disabled = lockCaptureSettings;
     if (sldJpegQuality) sldJpegQuality.disabled = lockCaptureSettings;
     if (chkQualityEnhancer) chkQualityEnhancer.disabled = lockCaptureSettings;
@@ -1662,12 +1938,39 @@
       sldQualityEnhancerStrength.disabled = lockCaptureSettings || !imageSettings.qualityEnhancer;
     }
 
-    if (isRecording) {
-      btnRecord.classList.add('recording');
-      btnRecord.innerHTML = '<i class="fa-solid fa-stop"></i> Detener';
-    } else {
-      btnRecord.classList.remove('recording');
-      btnRecord.innerHTML = '<i class="fa-solid fa-circle-dot"></i> Grabar';
+    if (btnRecord) {
+      if (isRecording) {
+        btnRecord.classList.add('recording');
+        btnRecord.innerHTML = '<i class="fa-solid fa-stop"></i> Detener';
+      } else {
+        btnRecord.classList.remove('recording');
+        btnRecord.innerHTML = '<i class="fa-solid fa-circle-dot"></i> Grabar';
+      }
+    }
+
+    if (btnMobileTakePhoto) {
+      btnMobileTakePhoto.disabled = !isRunning || isRecording || previewOpen;
+    }
+    if (btnMobileEffectsDock) {
+      btnMobileEffectsDock.disabled = previewOpen;
+    }
+    if (btnMobileRecord) {
+      btnMobileRecord.disabled = (!isRunning && !isRecording) || previewOpen;
+      btnMobileRecord.classList.toggle('is-recording', isRecording);
+      btnMobileRecord.innerHTML = isRecording
+        ? '<i class="fa-solid fa-stop"></i>'
+        : '<i class="fa-solid fa-circle-dot"></i>';
+    }
+    if (btnMobileBlobToggle) btnMobileBlobToggle.disabled = lockDetectorControls;
+    if (btnMobileFaceToggle) btnMobileFaceToggle.disabled = lockDetectorControls;
+    if (btnMobileBlinkToggle) btnMobileBlinkToggle.disabled = lockDetectorControls;
+    if (btnMobileColorPick) btnMobileColorPick.disabled = !chkBlobTracking.checked || !isRunning || lockDetectorControls;
+    if (inpMobileBlobColor) inpMobileBlobColor.disabled = !chkBlobTracking.checked || lockDetectorControls;
+    if (inpMobileFaceColor) inpMobileFaceColor.disabled = !chkFaceDetection.checked || lockDetectorControls;
+    if (inpMobileFaceLabel) inpMobileFaceLabel.disabled = !chkFaceDetection.checked || lockDetectorControls;
+
+    if (previewOpen) {
+      setMobileFxPanelVisible(false);
     }
   }
 
@@ -1684,9 +1987,10 @@
     }
 
     const { sourceWidth, sourceHeight } = getSourceFrameDimensions();
-    if (recordingCanvas.width !== sourceWidth || recordingCanvas.height !== sourceHeight) {
-      recordingCanvas.width = sourceWidth;
-      recordingCanvas.height = sourceHeight;
+    const { width: recordingWidth, height: recordingHeight } = getEffectiveFrameDimensions(sourceWidth, sourceHeight);
+    if (recordingCanvas.width !== recordingWidth || recordingCanvas.height !== recordingHeight) {
+      recordingCanvas.width = recordingWidth;
+      recordingCanvas.height = recordingHeight;
     }
 
     return recordingCanvas;
@@ -1705,9 +2009,7 @@
   }
 
   function getPreferredRecordingFps() {
-    const streamSettings = cameraManager.getStreamSettings();
-    const rawFps = Math.round(streamSettings.frameRate || 30);
-    return clamp(rawFps, 24, 60);
+    return TARGET_FPS;
   }
 
   function getRecommendedVideoBitrate(width, height, fps) {
@@ -1815,9 +2117,10 @@
       throw new Error('source_frame_unavailable');
     }
 
+    const { width: captureWidth, height: captureHeight } = getEffectiveFrameDimensions(sourceWidth, sourceHeight);
     const baseCanvas = document.createElement('canvas');
-    baseCanvas.width = sourceWidth;
-    baseCanvas.height = sourceHeight;
+    baseCanvas.width = captureWidth;
+    baseCanvas.height = captureHeight;
     const baseCtx = baseCanvas.getContext('2d', { willReadFrequently: true });
     renderProcessedFrame(baseCanvas, baseCtx, 'capture');
 

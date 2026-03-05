@@ -21,6 +21,7 @@ class FaceDetection {
         // Transform awareness — set by app.js
         this.flipH = false;
         this.flipV = false;
+        this.rotationDeg = 0;
 
         // Latest results
         this._faces = [];
@@ -92,12 +93,24 @@ class FaceDetection {
     }
 
     /**
-     * Transform a normalized coordinate [0..1] accounting for flips.
-     * MediaPipe gives coordinates relative to the raw video. When we
-     * draw on the already-flipped canvas we need to mirror the coords.
+     * Transform normalized coordinates accounting for flips + rotation.
      */
-    _tx(normX) { return this.flipH ? (1 - normX) : normX; }
-    _ty(normY) { return this.flipV ? (1 - normY) : normY; }
+    _mapPoint(normX, normY) {
+        let x = this.flipH ? (1 - normX) : normX;
+        let y = this.flipV ? (1 - normY) : normY;
+        const rot = ((this.rotationDeg % 360) + 360) % 360;
+
+        if (rot === 90) {
+            return { x: 1 - y, y: x };
+        }
+        if (rot === 180) {
+            return { x: 1 - x, y: 1 - y };
+        }
+        if (rot === 270) {
+            return { x: y, y: 1 - x };
+        }
+        return { x, y };
+    }
 
     processFrame(ctx, canvas, video) {
         if (this.ready && !this._processing && video && video.readyState >= 2) {
@@ -116,10 +129,12 @@ class FaceDetection {
 
         for (const face of this._faces) {
             // Transform bounding box corners
-            const x1 = this._tx(face.minX) * w;
-            const y1 = this._ty(face.minY) * h;
-            const x2 = this._tx(face.maxX) * w;
-            const y2 = this._ty(face.maxY) * h;
+            const p1 = this._mapPoint(face.minX, face.minY);
+            const p2 = this._mapPoint(face.maxX, face.maxY);
+            const x1 = p1.x * w;
+            const y1 = p1.y * h;
+            const x2 = p2.x * w;
+            const y2 = p2.y * h;
 
             // Ensure correct order after potential flip
             const fx = Math.max(0, Math.min(x1, x2));
@@ -154,8 +169,9 @@ class FaceDetection {
             if (this.showLandmarks && face.landmarks) {
                 ctx.fillStyle = 'rgba(229,57,53,0.4)';
                 for (const lm of face.landmarks) {
-                    const lx = this._tx(lm.x) * w;
-                    const ly = this._ty(lm.y) * h;
+                    const p = this._mapPoint(lm.x, lm.y);
+                    const lx = p.x * w;
+                    const ly = p.y * h;
                     ctx.fillRect(Math.round(lx), Math.round(ly), 1, 1);
                 }
             }
@@ -171,6 +187,7 @@ class FaceDetection {
             maxFaces: this.maxFaces,
             processIntervalMs: this.processIntervalMs,
             boxSmoothing: this.boxSmoothing,
+            rotationDeg: this.rotationDeg,
         };
     }
 
@@ -185,6 +202,7 @@ class FaceDetection {
         }
         if (config.processIntervalMs != null) this.processIntervalMs = config.processIntervalMs;
         if (config.boxSmoothing != null) this.boxSmoothing = config.boxSmoothing;
+        if (config.rotationDeg != null) this.rotationDeg = config.rotationDeg;
     }
 
     _normalizeLabel(value) {

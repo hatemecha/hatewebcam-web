@@ -41,6 +41,55 @@
           <i class="fa-solid fa-video fa-2x"></i>
           <div>Iniciando cámara automáticamente...</div>
         </div>
+        <div class="mobile-hud" id="mobileHud" aria-label="Controles rapidos para mobile">
+          <div class="mobile-fx-backdrop hidden" id="mobileFxBackdrop"></div>
+          <div class="mobile-fx-panel hidden" id="mobileFxPanel">
+            <div class="mobile-fx-header">
+              <span>Effects</span>
+              <button type="button" class="mobile-fx-close" id="btnMobileFxClose" aria-label="Cerrar panel de efectos">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+            <div class="mobile-preset-row">
+              <button type="button" class="mobile-preset-chip" data-mobile-preset="natural">Natural</button>
+              <button type="button" class="mobile-preset-chip" data-mobile-preset="vivid">Vivo</button>
+              <button type="button" class="mobile-preset-chip" data-mobile-preset="cinema">Cine</button>
+              <button type="button" class="mobile-preset-chip" data-mobile-preset="bw">B/N</button>
+            </div>
+            <div class="mobile-fx-grid">
+              <button type="button" class="mobile-chip-btn" id="btnMobileBlobToggle">Tracking color</button>
+              <button type="button" class="mobile-chip-btn" id="btnMobileFaceToggle">Caras</button>
+              <button type="button" class="mobile-chip-btn" id="btnMobileBlinkToggle">Pestaneos</button>
+              <button type="button" class="mobile-chip-btn" id="btnMobileColorPick">
+                <i class="fa-solid fa-eyedropper"></i>
+                <span>Pick color</span>
+              </button>
+            </div>
+            <div class="mobile-color-row">
+              <label class="mobile-color-chip">
+                <span>Obj</span>
+                <input type="color" id="inpMobileBlobColor" value="#00ffff" aria-label="Color tracking objetos">
+              </label>
+              <label class="mobile-color-chip">
+                <span>Cara</span>
+                <input type="color" id="inpMobileFaceColor" value="#e53935" aria-label="Color tracking caras">
+              </label>
+            </div>
+            <input type="text" id="inpMobileFaceLabel" class="mobile-text-input" maxlength="28" placeholder="Nombre recuadro cara">
+          </div>
+          <div class="mobile-hud-bottom">
+            <button type="button" class="mobile-dock-btn" id="btnMobileEffectsDock" aria-controls="mobileFxPanel" aria-expanded="false">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <span>Effects</span>
+            </button>
+            <button type="button" class="mobile-capture-btn" id="btnMobileTakePhoto" aria-label="Sacar foto">
+              <i class="fa-solid fa-camera"></i>
+            </button>
+            <button type="button" class="mobile-capture-btn record" id="btnMobileRecord" aria-label="Grabar video">
+              <i class="fa-solid fa-circle-dot"></i>
+            </button>
+          </div>
+        </div>
       </div>
       <div class="preview-status-bar">
         <span id="resolutionInfo">—</span>
@@ -50,7 +99,7 @@
     </main>
 
     <!-- Controls -->
-    <aside class="control-panel">
+    <aside class="control-panel" id="controlPanel">
 
       <!-- Camera -->
       <div class="panel-section">
@@ -339,3 +388,4 @@
 </body>
 
 </html>
+
