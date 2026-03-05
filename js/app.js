@@ -87,6 +87,11 @@
   const btnDeleteProfile = $('#btnDeleteProfile');
   const profileStatus = $('#profileStatus');
 
+  if (!videoEl || !canvas || !ctx || !btnToggleCamera || !cameraSelect || !btnTakePhoto || !btnRecord) {
+    console.error('HateWebcam: faltan elementos base del DOM para iniciar la app.');
+    return;
+  }
+
   // ─── Core ───
   const cameraManager = new CameraManager();
   const effectManager = new EffectManager();
@@ -100,7 +105,7 @@
   let animFrameId = null;
   let frameCount = 0;
   let lastFpsTime = performance.now();
-  let flipH = true;
+  let flipH = false;
   let flipV = false;
   let rotation = 0;
 
@@ -131,6 +136,10 @@
   let captureFxCtx = null;
   let recordingFxCanvas = null;
   let recordingFxCtx = null;
+  let faceMeshScriptLoadPromise = null;
+  let faceLoadRequestId = 0;
+  let blinkLoadRequestId = 0;
+  let isPageVisible = document.visibilityState !== 'hidden';
 
   const DEVICE_PROFILE = (() => {
     const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
@@ -144,10 +153,7 @@
     const lowPower = isMobile
       || (deviceMemory > 0 && deviceMemory <= 4)
       || (hardwareConcurrency > 0 && hardwareConcurrency <= 4);
-    return {
-      isMobile,
-      lowPower,
-    };
+    return { lowPower };
   })();
 
   const DEFAULT_IMAGE_SETTINGS = {
@@ -169,6 +175,7 @@
   const PREVIEW_MAX_PIXELS = DEVICE_PROFILE.lowPower ? 480 * 270 : 640 * 360;
   const PREVIEW_MIN_WIDTH = 320;
   const PREVIEW_MIN_HEIGHT = 180;
+  const MEDIAPIPE_FACE_MESH_SRC = 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js';
   const DEFAULT_QUICK_DETECTOR_SETTINGS = {
     blobBoxColor: '#00ffff',
     faceBoxColor: '#e53935',
@@ -176,6 +183,8 @@
   };
   let imageSettings = { ...DEFAULT_IMAGE_SETTINGS };
   let quickDetectorSettings = { ...DEFAULT_QUICK_DETECTOR_SETTINGS };
+  let saveImageSettingsTimer = null;
+  let saveQuickDetectorSettingsTimer = null;
 
   // ─── Storage ───
   const STORAGE_KEY = 'hatewebcam_config';
@@ -201,6 +210,54 @@
     return label ? label.slice(0, 28) : 'CARA';
   }
 
+  function ensureFaceMeshLoaded() {
+    if (typeof FaceMesh !== 'undefined') {
+      return Promise.resolve();
+    }
+
+    if (faceMeshScriptLoadPromise) {
+      return faceMeshScriptLoadPromise;
+    }
+
+    const existing = Array.from(document.scripts).find((s) => {
+      const src = s.getAttribute('src') || '';
+      return src.includes('@mediapipe/face_mesh/face_mesh.js');
+    });
+
+    faceMeshScriptLoadPromise = new Promise((resolve, reject) => {
+      const handleLoaded = () => {
+        if (typeof FaceMesh === 'undefined') {
+          reject(new Error('mediapipe_facemesh_unavailable'));
+          return;
+        }
+        resolve();
+      };
+
+      const handleError = () => {
+        reject(new Error('mediapipe_facemesh_load_failed'));
+      };
+
+      if (existing) {
+        existing.addEventListener('load', handleLoaded, { once: true });
+        existing.addEventListener('error', handleError, { once: true });
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = MEDIAPIPE_FACE_MESH_SRC;
+      script.crossOrigin = 'anonymous';
+      script.async = true;
+      script.addEventListener('load', handleLoaded, { once: true });
+      script.addEventListener('error', handleError, { once: true });
+      document.head.appendChild(script);
+    }).catch((err) => {
+      faceMeshScriptLoadPromise = null;
+      throw err;
+    });
+
+    return faceMeshScriptLoadPromise;
+  }
+
   function loadQuickDetectorSettings(cfg) {
     const saved = cfg.quickDetectorSettings || {};
     quickDetectorSettings = {
@@ -214,6 +271,14 @@
     const cfg = loadConfig();
     cfg.quickDetectorSettings = { ...quickDetectorSettings };
     saveConfig(cfg);
+  }
+
+  function scheduleSaveQuickDetectorSettings() {
+    if (saveQuickDetectorSettingsTimer) clearTimeout(saveQuickDetectorSettingsTimer);
+    saveQuickDetectorSettingsTimer = setTimeout(() => {
+      saveQuickDetectorSettingsTimer = null;
+      saveQuickDetectorSettings();
+    }, 120);
   }
 
   function syncAdvancedQuickInputs() {
@@ -294,6 +359,14 @@
     saveConfig(cfg);
   }
 
+  function scheduleSaveImageSettings() {
+    if (saveImageSettingsTimer) clearTimeout(saveImageSettingsTimer);
+    saveImageSettingsTimer = setTimeout(() => {
+      saveImageSettingsTimer = null;
+      saveImageSettings();
+    }, 100);
+  }
+
   function updateImageControlsUI() {
     if (chkBlackWhite) chkBlackWhite.checked = !!imageSettings.blackAndWhite;
     if (sldExposure) sldExposure.value = String(imageSettings.exposure);
@@ -351,7 +424,7 @@
         const value = parseInt(e.target.value, 10);
         imageSettings[key] = value;
         valueEl.textContent = `${value}${suffix}`;
-        saveImageSettings();
+        scheduleSaveImageSettings();
       });
     };
 
@@ -414,7 +487,7 @@
         quickDetectorSettings.blobBoxColor = e.target.value;
         if (blobTrackingEffect) blobTrackingEffect.boxColor = e.target.value;
         updateQuickDetectorControlsUI();
-        saveQuickDetectorSettings();
+        scheduleSaveQuickDetectorSettings();
       });
     }
 
@@ -423,7 +496,7 @@
         quickDetectorSettings.faceBoxColor = e.target.value;
         if (faceDetectionEffect) faceDetectionEffect.boxColor = e.target.value;
         updateQuickDetectorControlsUI();
-        saveQuickDetectorSettings();
+        scheduleSaveQuickDetectorSettings();
       });
     }
 
@@ -432,7 +505,7 @@
         const value = String(e.target.value || '').slice(0, 28);
         quickDetectorSettings.faceLabelText = value || 'CARA';
         if (faceDetectionEffect) faceDetectionEffect.labelText = value;
-        saveQuickDetectorSettings();
+        scheduleSaveQuickDetectorSettings();
         syncAdvancedQuickInputs();
       });
 
@@ -489,14 +562,14 @@
   // ─── Init ───
   async function init() {
     const cfg = loadConfig();
-    // Migration: default mirror ON once so front webcams open con orientacion natural.
-    if (cfg.forceMirrorDefaultV2 !== true) {
-      cfg.flipH = true;
-      cfg.forceMirrorDefaultV2 = true;
+    // Migration: default mirror OFF to keep natural camera orientation on launch.
+    if (cfg.forceMirrorDefaultV3 !== true) {
+      cfg.flipH = false;
+      cfg.forceMirrorDefaultV3 = true;
       saveConfig(cfg);
     }
     if (typeof cfg.flipH === 'boolean') flipH = cfg.flipH;
-    else flipH = true;
+    else flipH = false;
     if (chkMirror) chkMirror.checked = flipH;
 
     if (typeof cfg.flipV === 'boolean') flipV = cfg.flipV;
@@ -544,9 +617,9 @@
     chkFlipV.addEventListener('change', onTransformChange);
     rotationSelect.addEventListener('change', onTransformChange);
 
-    chkBlobTracking.addEventListener('change', () => toggleEffect('blob'));
-    chkFaceDetection.addEventListener('change', () => toggleEffect('face'));
-    chkBlinkDetection.addEventListener('change', () => toggleEffect('blink'));
+    chkBlobTracking.addEventListener('change', () => { void toggleEffect('blob'); });
+    chkFaceDetection.addEventListener('change', () => { void toggleEffect('face'); });
+    chkBlinkDetection.addEventListener('change', () => { void toggleEffect('blink'); });
 
     btnColorPick.addEventListener('click', enableColorPick);
     if (btnToggleAdvancedOptions) btnToggleAdvancedOptions.addEventListener('click', toggleAdvancedOptions);
@@ -573,12 +646,33 @@
     btnDeleteProfile.addEventListener('click', deleteProfile);
     profileSelect.addEventListener('change', loadProfile);
     window.addEventListener('keydown', onGlobalKeyDown);
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     window.addEventListener('beforeunload', () => {
       stopRecording(false);
       clearPendingCapture(true);
       if (isRunning) cameraManager.stop();
     });
+  }
+
+  function onVisibilityChange() {
+    isPageVisible = document.visibilityState !== 'hidden';
+    if (!isRunning) return;
+
+    if (!isPageVisible) {
+      if (animFrameId) {
+        cancelAnimationFrame(animFrameId);
+        animFrameId = null;
+      }
+      return;
+    }
+
+    if (!animFrameId) {
+      frameCount = 0;
+      lastFpsTime = performance.now();
+      lastPreviewRenderTs = 0;
+      animFrameId = requestAnimationFrame(renderLoop);
+    }
   }
 
   // ─── Camera ───
@@ -623,7 +717,11 @@
         frameCount = 0;
         lastFpsTime = performance.now();
         lastPreviewRenderTs = 0;
-        renderLoop();
+        if (isPageVisible) {
+          animFrameId = requestAnimationFrame(renderLoop);
+        } else {
+          animFrameId = null;
+        }
 
         const cfg = loadConfig();
         cfg.deviceId = cameraSelect.value;
@@ -637,11 +735,22 @@
     }
   }
 
-  function onCameraChange() {
+  async function onCameraChange() {
     const cfg = loadConfig();
     cfg.deviceId = cameraSelect.value;
     saveConfig(cfg);
-    if (isRunning) cameraManager.switchCamera(cameraSelect.value);
+    if (!isRunning) return;
+
+    cameraSelect.disabled = true;
+    try {
+      await cameraManager.switchCamera(cameraSelect.value);
+    } catch (err) {
+      console.error('Error switching camera:', err);
+      showStatus(captureStatus, 'No se pudo cambiar de camara', 'error');
+      setTimeout(() => hideStatus(captureStatus), 2200);
+    } finally {
+      cameraSelect.disabled = false;
+    }
   }
 
   function onTransformChange() {
@@ -656,43 +765,94 @@
   }
 
   // ─── Effects ───
-  function toggleEffect(type) {
+  async function toggleEffect(type) {
     if (type === 'blob') {
       if (chkBlobTracking.checked) {
-        blobTrackingEffect = new BlobTracking();
-        blobTrackingEffect.boxColor = quickDetectorSettings.blobBoxColor;
-        effectManager.addEffect(blobTrackingEffect);
+        if (!blobTrackingEffect) {
+          blobTrackingEffect = new BlobTracking();
+          blobTrackingEffect.boxColor = quickDetectorSettings.blobBoxColor;
+          effectManager.addEffect(blobTrackingEffect);
+        }
         if (blinkDetectionEffect) {
           blinkDetectionEffect.setBlinkCallback((eye) => blobTrackingEffect.triggerConnection(eye));
         }
-        colorPickSection.style.display = '';
+        if (colorPickSection) colorPickSection.classList.remove('hidden');
       } else {
         if (blobTrackingEffect) effectManager.removeEffect(blobTrackingEffect);
         blobTrackingEffect = null;
-        colorPickSection.style.display = 'none';
+        if (colorPickSection) colorPickSection.classList.add('hidden');
       }
-    } else if (type === 'face') {
+      syncQuickDetectorSettingsFromEffects();
+      renderEffectConfig();
+      updateEffectsInfo();
+      return;
+    }
+
+    if (type === 'face') {
+      const requestId = ++faceLoadRequestId;
       if (chkFaceDetection.checked) {
-        faceDetectionEffect = new FaceDetection();
-        faceDetectionEffect.boxColor = quickDetectorSettings.faceBoxColor;
-        faceDetectionEffect.labelText = quickDetectorSettings.faceLabelText;
-        effectManager.addEffect(faceDetectionEffect);
+        showStatus(captureStatus, 'Cargando detector de caras...', 'info');
+        chkFaceDetection.disabled = true;
+        try {
+          await ensureFaceMeshLoaded();
+        } catch (err) {
+          console.error('No se pudo cargar MediaPipe Face Mesh:', err);
+          showStatus(captureStatus, 'No se pudo cargar el detector de caras', 'error');
+          chkFaceDetection.checked = false;
+        } finally {
+          chkFaceDetection.disabled = false;
+        }
+
+        if (requestId !== faceLoadRequestId || !chkFaceDetection.checked) return;
+        if (typeof FaceMesh === 'undefined') return;
+
+        if (!faceDetectionEffect) {
+          faceDetectionEffect = new FaceDetection();
+          faceDetectionEffect.boxColor = quickDetectorSettings.faceBoxColor;
+          faceDetectionEffect.labelText = quickDetectorSettings.faceLabelText;
+          effectManager.addEffect(faceDetectionEffect);
+        }
+        if (!isRecording) {
+          setTimeout(() => hideStatus(captureStatus), 1200);
+        }
       } else {
         if (faceDetectionEffect) effectManager.removeEffect(faceDetectionEffect);
         faceDetectionEffect = null;
       }
     } else if (type === 'blink') {
+      const requestId = ++blinkLoadRequestId;
       if (chkBlinkDetection.checked) {
-        blinkDetectionEffect = new BlinkDetection();
-        effectManager.addEffect(blinkDetectionEffect);
+        showStatus(captureStatus, 'Cargando detector de pestaneos...', 'info');
+        chkBlinkDetection.disabled = true;
+        try {
+          await ensureFaceMeshLoaded();
+        } catch (err) {
+          console.error('No se pudo cargar MediaPipe Face Mesh:', err);
+          showStatus(captureStatus, 'No se pudo cargar el detector de pestaneos', 'error');
+          chkBlinkDetection.checked = false;
+        } finally {
+          chkBlinkDetection.disabled = false;
+        }
+
+        if (requestId !== blinkLoadRequestId || !chkBlinkDetection.checked) return;
+        if (typeof FaceMesh === 'undefined') return;
+
+        if (!blinkDetectionEffect) {
+          blinkDetectionEffect = new BlinkDetection();
+          effectManager.addEffect(blinkDetectionEffect);
+        }
         if (blobTrackingEffect) {
           blinkDetectionEffect.setBlinkCallback((eye) => blobTrackingEffect.triggerConnection(eye));
+        }
+        if (!isRecording) {
+          setTimeout(() => hideStatus(captureStatus), 1200);
         }
       } else {
         if (blinkDetectionEffect) effectManager.removeEffect(blinkDetectionEffect);
         blinkDetectionEffect = null;
       }
     }
+
     syncQuickDetectorSettingsFromEffects();
     renderEffectConfig();
     updateEffectsInfo();
@@ -732,7 +892,10 @@
     return `${sourceWidth}×${sourceHeight} (preview ${previewWidth}×${previewHeight})`;
   }
   function renderLoop(ts = performance.now()) {
-    if (!isRunning) return;
+    if (!isRunning || !isPageVisible) {
+      animFrameId = null;
+      return;
+    }
 
     try {
       const minPreviewFrameInterval = 1000 / PREVIEW_TARGET_FPS;
@@ -1103,7 +1266,7 @@
         quickDetectorSettings.blobBoxColor = e.target.value;
         swatch.style.background = e.target.value;
         updateQuickDetectorControlsUI();
-        saveQuickDetectorSettings();
+        scheduleSaveQuickDetectorSettings();
       });
 
       el.querySelector('#chkShowCoords').addEventListener('change', e => bt.showCoordinates = e.target.checked);
@@ -1153,7 +1316,7 @@
           if (inpFaceQuickLabel && document.activeElement !== inpFaceQuickLabel) {
             inpFaceQuickLabel.value = quickDetectorSettings.faceLabelText;
           }
-          saveQuickDetectorSettings();
+          scheduleSaveQuickDetectorSettings();
         });
         inpLabel.addEventListener('blur', e => {
           const normalized = normalizeFaceLabel(e.target.value);
@@ -1172,7 +1335,7 @@
         quickDetectorSettings.faceBoxColor = e.target.value;
         swatch.style.background = e.target.value;
         updateQuickDetectorControlsUI();
-        saveQuickDetectorSettings();
+        scheduleSaveQuickDetectorSettings();
       });
 
       el.querySelector('#chkShowLandmarks').addEventListener('change', e => fd.showLandmarks = e.target.checked);

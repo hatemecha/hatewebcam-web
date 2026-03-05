@@ -4,8 +4,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="hatewebcam — webcam">
-  <title>HateWebcam</title>
+  <meta name="description" content="HateWebcam Web - Webcam con deteccion en tiempo real">
+  <title>HateWebcam Web</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
     crossorigin="anonymous">
   <link rel="stylesheet" href="index.css">
@@ -15,8 +16,18 @@
 
   <!-- Header -->
   <header class="header-bar">
-    <div class="logo">HATEWEBCAM <span>BETA</span></div>
-    <div class="status-indicator" id="statusIndicator"><i class="fa-solid fa-circle fa-xs"></i> APAGADO</div>
+    <div class="logo">HATEWEBCAM <span class="beta-tag">BETA</span></div>
+    <nav class="header-links" aria-label="Enlaces del proyecto">
+      <a href="https://github.com/hatemecha/hatewebcam-web" target="_blank" rel="noopener noreferrer" title="Repositorio en GitHub">
+        <i class="fa-brands fa-github"></i>
+        <span>Repo</span>
+      </a>
+      <a href="https://instagram.com/hatemecha" target="_blank" rel="noopener noreferrer" title="Instagram @hatemecha">
+        <i class="fa-brands fa-instagram"></i>
+        <span>@hatemecha</span>
+      </a>
+    </nav>
+    <div class="status-indicator" id="statusIndicator" role="status" aria-live="polite"><i class="fa-solid fa-circle fa-xs"></i> APAGADO</div>
   </header>
 
   <div class="app-container">
@@ -24,7 +35,7 @@
     <!-- Preview -->
     <main class="preview-area">
       <div class="preview-wrapper" id="previewWrapper">
-        <video id="videoElement" autoplay playsinline muted style="display:none;"></video>
+        <video id="videoElement" class="hidden" autoplay playsinline muted></video>
         <canvas id="previewCanvas"></canvas>
         <div class="preview-placeholder" id="previewPlaceholder">
           <i class="fa-solid fa-video fa-2x"></i>
@@ -45,10 +56,10 @@
       <div class="panel-section">
         <div class="section-title accent"><i class="fa-solid fa-video"></i> Cámara</div>
         <div class="help-text">La cámara se inicia sola al abrir la página.</div>
-        <button class="btn primary" id="btnToggleCamera">
+        <button type="button" class="btn primary" id="btnToggleCamera">
           <i class="fa-solid fa-play"></i> Encender Cámara
         </button>
-        <div style="height:8px"></div>
+        <div class="spacer-8"></div>
         <div class="slider-label"><span>Elegir cámara</span></div>
         <div class="help-text">Si tenés más de una cámara, elegí cuál usar.</div>
         <div class="select-wrapper">
@@ -63,14 +74,14 @@
         <div class="section-title accent"><i class="fa-solid fa-camera-retro"></i> Captura</div>
         <div class="help-text">Controles directos para sacar fotos y grabar sin tocar configuraciones extra.</div>
         <div class="btn-row">
-          <button class="btn" id="btnTakePhoto">
+          <button type="button" class="btn" id="btnTakePhoto">
             <i class="fa-solid fa-camera"></i> Sacar foto
           </button>
-          <button class="btn" id="btnRecord">
+          <button type="button" class="btn" id="btnRecord">
             <i class="fa-solid fa-circle-dot"></i> Grabar
           </button>
         </div>
-        <div class="status-msg hidden" id="captureStatus"></div>
+        <div class="status-msg hidden" id="captureStatus" role="status" aria-live="polite"></div>
         <div class="help-text section-note">Despues de cada captura se abre una vista previa para decidir si queres descargar o descartar.</div>
       </div>
 
@@ -79,10 +90,10 @@
         <div class="section-title accent"><i class="fa-solid fa-wand-magic-sparkles"></i> Filtro rápido</div>
         <div class="help-text">Elegí un look rápido. Si querés ajustar cada detalle, abrí las opciones avanzadas.</div>
         <div class="preset-grid">
-          <button class="btn preset-btn" data-preset="natural">Natural</button>
-          <button class="btn preset-btn" data-preset="vivid">Vivo</button>
-          <button class="btn preset-btn" data-preset="cinema">Cine</button>
-          <button class="btn preset-btn" data-preset="bw">B/N</button>
+          <button type="button" class="btn preset-btn" data-preset="natural">Natural</button>
+          <button type="button" class="btn preset-btn" data-preset="vivid">Vivo</button>
+          <button type="button" class="btn preset-btn" data-preset="cinema">Cine</button>
+          <button type="button" class="btn preset-btn" data-preset="bw">B/N</button>
         </div>
         <label class="checkbox-group">
           <input type="checkbox" id="chkBlackWhite">
@@ -138,12 +149,12 @@
       </div>
 
       <!-- Color Pick -->
-      <div class="panel-section" id="colorPickSection" style="display:none">
+      <div class="panel-section hidden" id="colorPickSection">
         <div class="help-text">Hacé click en el video para elegir qué color detectar.</div>
-        <button class="btn" id="btnColorPick">
+        <button type="button" class="btn" id="btnColorPick">
           <i class="fa-solid fa-eyedropper"></i> Elegir color del video
         </button>
-        <div class="status-msg hidden" id="colorPickStatus"></div>
+        <div class="status-msg hidden" id="colorPickStatus" role="status" aria-live="polite"></div>
       </div>
 
       <!-- Advanced Toggle -->
@@ -177,7 +188,7 @@
               <option value="webm">WebM</option>
             </select>
           </div>
-          <div style="height:8px"></div>
+          <div class="spacer-8"></div>
           <label class="checkbox-group">
             <input type="checkbox" id="chkQualityEnhancer">
             <span>Mejorador de calidad opcional</span>
@@ -201,7 +212,7 @@
             <input type="checkbox" id="chkFlipV">
             <span>Invertir verticalmente</span>
           </label>
-          <div style="height:6px"></div>
+          <div class="spacer-6"></div>
           <div class="slider-label"><span>Rotación</span></div>
           <div class="select-wrapper">
             <select id="rotationSelect">
@@ -249,7 +260,7 @@
             <div class="slider-label"><span>Nitidez</span><span class="value" id="valSharpness">0</span></div>
             <input type="range" id="sldSharpness" min="0" max="100" step="1" value="0">
           </div>
-          <button class="btn" id="btnResetImageAdjustments">
+          <button type="button" class="btn" id="btnResetImageAdjustments">
             <i class="fa-solid fa-rotate-left"></i> Restablecer ajustes de imagen
           </button>
         </div>
@@ -262,17 +273,17 @@
           <div class="section-title"><i class="fa-solid fa-bookmark"></i> Ajustes guardados</div>
           <div class="help-text">Guardá detectores, transforms y ajustes de imagen para reutilizarlos rápido.</div>
           <div class="profile-row">
-            <div class="select-wrapper" style="flex:1">
+            <div class="select-wrapper flex-1">
               <select id="profileSelect">
                 <option value="">—</option>
               </select>
             </div>
-            <button class="btn btn-icon" id="btnSaveProfile" title="Guardar configuración actual"><i
+            <button type="button" class="btn btn-icon" id="btnSaveProfile" title="Guardar configuración actual"><i
                 class="fa-solid fa-floppy-disk"></i></button>
-            <button class="btn btn-icon danger" id="btnDeleteProfile" title="Eliminar"><i
+            <button type="button" class="btn btn-icon danger" id="btnDeleteProfile" title="Eliminar"><i
                 class="fa-solid fa-trash-can"></i></button>
           </div>
-          <div class="status-msg hidden" id="profileStatus"></div>
+          <div class="status-msg hidden" id="profileStatus" role="status" aria-live="polite"></div>
         </div>
 
       </div>
@@ -318,9 +329,6 @@
       </div>
     </div>
   </div>
-  <!-- MediaPipe CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
   <!-- App -->
   <script src="js/camera.js"></script>
   <script src="js/effects/blob-tracking.js"></script>

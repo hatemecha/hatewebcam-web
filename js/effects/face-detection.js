@@ -53,7 +53,6 @@ class FaceDetection {
 
             this.faceMesh.initialize().then(() => {
                 this.ready = true;
-                console.log('FaceDetection: MediaPipe ready');
             }).catch((e) => console.error('FaceDetection init error:', e));
         } catch (e) {
             console.error('FaceDetection: cannot init', e);

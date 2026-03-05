@@ -25,6 +25,7 @@
   --r: 6px;
   --r-sm: 4px;
   --transition: 0.12s ease;
+  --header-h: 40px;
 
   --sans: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   --mono: 'JetBrains Mono', 'Courier New', Consolas, monospace;
@@ -57,7 +58,8 @@ body {
 /* ─── Layout ─── */
 .app-container {
   display: flex;
-  height: 100vh;
+  height: 100dvh;
+  min-height: 100vh;
 }
 
 /* ─── Header ─── */
@@ -66,7 +68,7 @@ body {
   top: 0;
   left: 0;
   right: 0;
-  height: 40px;
+  height: var(--header-h);
   display: flex;
   align-items: center;
   padding: 0 16px;
@@ -93,11 +95,42 @@ body {
 
 .header-bar .logo .beta-tag {
   color: var(--red);
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.8px;
+  letter-spacing: 1.4px;
   margin-left: 5px;
-  text-transform: none;
+  text-transform: uppercase;
+}
+
+.header-links {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 14px;
+}
+
+.header-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--gray);
+  text-decoration: none;
+  border: 1px solid #262626;
+  border-radius: var(--r-sm);
+  padding: 3px 6px;
+  transition: border-color var(--transition), color var(--transition), background var(--transition);
+}
+
+.header-links a:hover {
+  color: var(--white);
+  border-color: #3a3a3a;
+  background: #171717;
+}
+
+.header-links a i {
+  font-size: 11px;
 }
 
 .status-indicator {
@@ -125,14 +158,14 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 48px 12px 10px;
+  padding: calc(var(--header-h) + 8px) 12px 10px;
   min-width: 0;
 }
 
 .preview-wrapper {
   position: relative;
   width: 100%;
-  max-width: 960px;
+  max-width: 1180px;
   aspect-ratio: 16 / 9;
   background: #000;
   border: 1px solid var(--border);
@@ -168,7 +201,7 @@ body {
   display: flex;
   justify-content: space-between;
   width: 100%;
-  max-width: 960px;
+  max-width: 1180px;
   margin-top: 5px;
   padding: 0 2px;
   font-family: var(--mono);
@@ -179,10 +212,11 @@ body {
 
 /* ─── Control Panel ─── */
 .control-panel {
-  width: 360px;
-  min-width: 360px;
-  height: 100vh;
-  padding: 40px 0 0;
+  width: clamp(320px, 30vw, 390px);
+  min-width: 320px;
+  height: 100dvh;
+  min-height: 100vh;
+  padding: var(--header-h) 0 0;
   background: var(--bg-panel);
   border-left: 1px solid var(--border);
   overflow-y: auto;
@@ -271,6 +305,15 @@ body {
 .btn:hover {
   background: var(--bg-hover);
   border-color: #2d2d2d;
+}
+
+.btn:focus-visible,
+.select-wrapper select:focus-visible,
+.text-input:focus-visible,
+input[type="range"]:focus-visible,
+.checkbox-group input[type="checkbox"]:focus-visible {
+  outline: 1px solid var(--red);
+  outline-offset: 1px;
 }
 
 .btn i {
@@ -913,6 +956,18 @@ input[type="range"]:disabled {
   font-family: var(--mono);
 }
 
+.spacer-8 {
+  height: 8px;
+}
+
+.spacer-6 {
+  height: 6px;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
 .hidden {
   display: none !important;
 }
@@ -937,23 +992,65 @@ input[type="range"]:disabled {
   animation: fadeIn 0.15s ease-out;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* ─── Responsive ─── */
 @media (max-width: 900px) {
   .app-container {
     flex-direction: column;
   }
 
+  .header-bar {
+    padding: 0 10px;
+  }
+
+  .header-bar .logo {
+    letter-spacing: 1.6px;
+    font-size: 10px;
+  }
+
+  .header-links {
+    margin-left: 8px;
+    gap: 4px;
+  }
+
+  .header-links a {
+    padding: 2px 5px;
+    font-size: 9px;
+  }
+
+  .header-links a span {
+    display: none;
+  }
+
+  .status-indicator {
+    font-size: 9px;
+  }
+
   .control-panel {
     width: 100%;
     min-width: unset;
     height: auto;
-    max-height: 50vh;
+    max-height: 52dvh;
     border-left: none;
     border-top: 1px solid var(--border);
   }
 
   .preview-area {
-    padding: 48px 8px 6px;
+    padding: calc(var(--header-h) + 6px) 8px 6px;
+    justify-content: flex-start;
+    min-height: 0;
+  }
+
+  .preview-wrapper {
+    max-width: 100%;
   }
 
   .capture-preview-modal {

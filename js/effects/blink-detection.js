@@ -70,7 +70,6 @@ class BlinkDetection {
             // Send a dummy frame to initialize
             this.initPromise = this.faceMesh.initialize().then(() => {
                 this.ready = true;
-                console.log('MediaPipe FaceMesh initialized');
             }).catch(e => {
                 console.error('FaceMesh init error:', e);
             });
