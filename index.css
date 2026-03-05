@@ -817,6 +817,38 @@ input[type="range"]:disabled {
   gap: 6px;
 }
 
+.capture-preview-photo-tools {
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-card);
+  padding: 8px;
+}
+
+.capture-preview-tools-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--gray);
+  margin-bottom: 5px;
+}
+
+.capture-preview-photo-tools .help-text {
+  margin: 0 0 8px;
+}
+
+.capture-preview-photo-tools .checkbox-group {
+  padding: 0;
+}
+
+.capture-preview-photo-tools .slider-group {
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
 .capture-preview-row {
   display: grid;
   grid-template-columns: minmax(88px, 1fr) minmax(0, 1.35fr);

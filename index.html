@@ -295,6 +295,18 @@
       <div class="capture-preview-meta">
         <div class="capture-preview-filename mono" id="capturePreviewFilename">-</div>
         <div class="capture-preview-info" id="capturePreviewInfo"></div>
+        <div class="capture-preview-photo-tools hidden" id="capturePreviewPhotoTools">
+          <div class="capture-preview-tools-title"><i class="fa-solid fa-wand-magic-sparkles"></i> Mejorador de foto (en esta vista previa)</div>
+          <div class="help-text section-note">Activalo aca para comparar el resultado antes de descargar.</div>
+          <label class="checkbox-group">
+            <input type="checkbox" id="chkPreviewPhotoEnhancer">
+            <span>Mejorar foto antes de descargar</span>
+          </label>
+          <div class="slider-group hidden" id="previewPhotoEnhancerStrengthGroup">
+            <div class="slider-label"><span>Intensidad</span><span class="value" id="valPreviewPhotoEnhancerStrength">35%</span></div>
+            <input type="range" id="sldPreviewPhotoEnhancerStrength" min="0" max="100" step="1" value="35">
+          </div>
+        </div>
         <div class="btn-row">
           <button class="btn primary" id="btnDownloadCapture" type="button">
             <i class="fa-solid fa-download"></i> Descargar

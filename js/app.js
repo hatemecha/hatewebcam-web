@@ -8,7 +8,7 @@
   const $ = (s) => document.querySelector(s);
   const videoEl = $('#videoElement');
   const canvas = $('#previewCanvas');
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true }) || canvas.getContext('2d');
   const placeholder = $('#previewPlaceholder');
   const statusIndicator = $('#statusIndicator');
   const resolutionInfo = $('#resolutionInfo');
@@ -34,6 +34,11 @@
   const capturePreviewImage = $('#capturePreviewImage');
   const capturePreviewVideo = $('#capturePreviewVideo');
   const capturePreviewInfo = $('#capturePreviewInfo');
+  const capturePreviewPhotoTools = $('#capturePreviewPhotoTools');
+  const chkPreviewPhotoEnhancer = $('#chkPreviewPhotoEnhancer');
+  const sldPreviewPhotoEnhancerStrength = $('#sldPreviewPhotoEnhancerStrength');
+  const valPreviewPhotoEnhancerStrength = $('#valPreviewPhotoEnhancerStrength');
+  const previewPhotoEnhancerStrengthGroup = $('#previewPhotoEnhancerStrengthGroup');
   const btnDownloadCapture = $('#btnDownloadCapture');
   const btnDiscardCapture = $('#btnDiscardCapture');
   const btnCloseCapturePreview = $('#btnCloseCapturePreview');
@@ -113,9 +118,17 @@
   let pendingCapture = null;
   let recordingCanvas = null;
   let recordingCtx = null;
+  let recordingEnhancerCanvas = null;
+  let recordingEnhancerCtx = null;
   let lastRecordingDurationSec = 0;
+  let previewScale = 1;
+  let photoPreviewRenderToken = 0;
   let postFxCanvas = null;
   let postFxCtx = null;
+  let captureFxCanvas = null;
+  let captureFxCtx = null;
+  let recordingFxCanvas = null;
+  let recordingFxCtx = null;
 
   const DEFAULT_IMAGE_SETTINGS = {
     blackAndWhite: false,
@@ -132,6 +145,9 @@
     qualityEnhancer: false,
     qualityEnhancerStrength: 35,
   };
+  const PREVIEW_MAX_PIXELS = 960 * 540;
+  const PREVIEW_MIN_WIDTH = 320;
+  const PREVIEW_MIN_HEIGHT = 180;
   const DEFAULT_QUICK_DETECTOR_SETTINGS = {
     blobBoxColor: '#00ffff',
     faceBoxColor: '#e53935',
@@ -506,6 +522,12 @@
     if (btnDownloadCapture) btnDownloadCapture.addEventListener('click', downloadPendingCapture);
     if (btnDiscardCapture) btnDiscardCapture.addEventListener('click', () => closeCapturePreview(true));
     if (btnCloseCapturePreview) btnCloseCapturePreview.addEventListener('click', () => closeCapturePreview(true));
+    if (chkPreviewPhotoEnhancer) {
+      chkPreviewPhotoEnhancer.addEventListener('change', onPreviewPhotoEnhancerToggle);
+    }
+    if (sldPreviewPhotoEnhancerStrength) {
+      sldPreviewPhotoEnhancerStrength.addEventListener('input', onPreviewPhotoEnhancerStrengthInput);
+    }
     if (capturePreviewModal) {
       capturePreviewModal.addEventListener('click', (e) => {
         if (e.target === capturePreviewModal) closeCapturePreview(true);
@@ -555,9 +577,12 @@
         statusIndicator.classList.add('active');
 
         videoEl.addEventListener('loadedmetadata', () => {
-          canvas.width = videoEl.videoWidth;
-          canvas.height = videoEl.videoHeight;
-          resolutionInfo.textContent = `${videoEl.videoWidth}×${videoEl.videoHeight}`;
+          const { sourceWidth, sourceHeight } = getSourceFrameDimensions();
+          const { width: previewWidth, height: previewHeight, scale } = getPreviewFrameDimensions(sourceWidth, sourceHeight);
+          previewScale = scale;
+          canvas.width = previewWidth;
+          canvas.height = previewHeight;
+          resolutionInfo.textContent = buildResolutionLabel(sourceWidth, sourceHeight, previewWidth, previewHeight);
         }, { once: true });
 
         frameCount = 0;
@@ -646,50 +671,46 @@
   }
 
   // ─── Render Loop ───
+  function getSourceFrameDimensions() {
+    return {
+      sourceWidth: Math.max(1, videoEl.videoWidth || canvas.width || 1),
+      sourceHeight: Math.max(1, videoEl.videoHeight || canvas.height || 1),
+    };
+  }
+
+  function getPreviewFrameDimensions(sourceWidth, sourceHeight) {
+    const sourcePixels = Math.max(1, sourceWidth * sourceHeight);
+    const scale = sourcePixels > PREVIEW_MAX_PIXELS
+      ? Math.sqrt(PREVIEW_MAX_PIXELS / sourcePixels)
+      : 1;
+
+    const width = Math.max(PREVIEW_MIN_WIDTH, Math.round(sourceWidth * scale));
+    const height = Math.max(PREVIEW_MIN_HEIGHT, Math.round(sourceHeight * scale));
+    return { width, height, scale };
+  }
+
+  function buildResolutionLabel(sourceWidth, sourceHeight, previewWidth, previewHeight) {
+    if (sourceWidth === previewWidth && sourceHeight === previewHeight) {
+      return `${sourceWidth}×${sourceHeight}`;
+    }
+    return `${sourceWidth}×${sourceHeight} (preview ${previewWidth}×${previewHeight})`;
+  }
   function renderLoop() {
     if (!isRunning) return;
 
     if (videoEl.readyState >= 2) {
-      if (canvas.width !== videoEl.videoWidth || canvas.height !== videoEl.videoHeight) {
-        canvas.width = videoEl.videoWidth;
-        canvas.height = videoEl.videoHeight;
-        resolutionInfo.textContent = `${videoEl.videoWidth}×${videoEl.videoHeight}`;
+      const { sourceWidth, sourceHeight } = getSourceFrameDimensions();
+      const { width: previewWidth, height: previewHeight, scale } = getPreviewFrameDimensions(sourceWidth, sourceHeight);
+      if (canvas.width !== previewWidth || canvas.height !== previewHeight) {
+        canvas.width = previewWidth;
+        canvas.height = previewHeight;
+      }
+      if (previewScale !== scale || frameCount % 30 === 0) {
+        previewScale = scale;
+        resolutionInfo.textContent = buildResolutionLabel(sourceWidth, sourceHeight, previewWidth, previewHeight);
       }
 
-      ctx.save();
-      ctx.filter = buildCanvasFilter();
-      if (rotation !== 0) {
-        ctx.translate(canvas.width / 2, canvas.height / 2);
-        ctx.rotate((rotation * Math.PI) / 180);
-        ctx.translate(-canvas.width / 2, -canvas.height / 2);
-      }
-      let sx = 1, sy = 1;
-      if (flipH) sx = -1;
-      if (flipV) sy = -1;
-      if (sx !== 1 || sy !== 1) {
-        ctx.translate(sx === -1 ? canvas.width : 0, sy === -1 ? canvas.height : 0);
-        ctx.scale(sx, sy);
-      }
-      ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-      ctx.restore();
-
-      if (needsAdvancedPixelAdjustments()) {
-        applyAdvancedPixelAdjustments();
-      }
-
-      // Sync transform state to effects that need it
-      if (faceDetectionEffect) {
-        faceDetectionEffect.flipH = flipH;
-        faceDetectionEffect.flipV = flipV;
-      }
-
-      // Sync colors
-      if (blobTrackingEffect && blinkDetectionEffect) {
-        blinkDetectionEffect.setFeedbackColor(blobTrackingEffect.boxColor);
-        blobTrackingEffect.connectionColor = blobTrackingEffect.boxColor;
-      }
-
-      effectManager.processFrame(ctx, canvas, videoEl);
+      renderProcessedFrame(canvas, ctx, 'preview');
       syncRecordingCanvasFrame();
 
       // FPS
@@ -727,35 +748,88 @@
     );
   }
 
-  function ensurePostFxBuffers(w, h, scale) {
-    if (!postFxCanvas) {
-      postFxCanvas = document.createElement('canvas');
-      postFxCtx = postFxCanvas.getContext('2d', { willReadFrequently: true });
+  function ensurePostFxBuffers(workspace, w, h, scale) {
+    if (!workspace.canvas) {
+      workspace.canvas = document.createElement('canvas');
+      workspace.ctx = workspace.canvas.getContext('2d', { willReadFrequently: true });
     }
 
     const pw = Math.max(320, Math.round(w * scale));
     const ph = Math.max(180, Math.round(h * scale));
 
-    if (postFxCanvas.width !== pw || postFxCanvas.height !== ph) {
-      postFxCanvas.width = pw;
-      postFxCanvas.height = ph;
+    if (workspace.canvas.width !== pw || workspace.canvas.height !== ph) {
+      workspace.canvas.width = pw;
+      workspace.canvas.height = ph;
     }
-    return { pw, ph };
+    return { pw, ph, fxCanvas: workspace.canvas, fxCtx: workspace.ctx };
   }
 
-  function applyAdvancedPixelAdjustments() {
-    const w = canvas.width;
-    const h = canvas.height;
+  function getFxWorkspace(mode) {
+    if (mode === 'recording') {
+      return {
+        canvas: recordingFxCanvas,
+        ctx: recordingFxCtx,
+        commit(nextCanvas, nextCtx) {
+          recordingFxCanvas = nextCanvas;
+          recordingFxCtx = nextCtx;
+        },
+      };
+    }
+    if (mode === 'capture') {
+      return {
+        canvas: captureFxCanvas,
+        ctx: captureFxCtx,
+        commit(nextCanvas, nextCtx) {
+          captureFxCanvas = nextCanvas;
+          captureFxCtx = nextCtx;
+        },
+      };
+    }
+    return {
+      canvas: postFxCanvas,
+      ctx: postFxCtx,
+      commit(nextCanvas, nextCtx) {
+        postFxCanvas = nextCanvas;
+        postFxCtx = nextCtx;
+      },
+    };
+  }
+
+  function drawBaseFrame(targetCtx, targetCanvas) {
+    targetCtx.save();
+    targetCtx.filter = buildCanvasFilter();
+    if (rotation !== 0) {
+      targetCtx.translate(targetCanvas.width / 2, targetCanvas.height / 2);
+      targetCtx.rotate((rotation * Math.PI) / 180);
+      targetCtx.translate(-targetCanvas.width / 2, -targetCanvas.height / 2);
+    }
+    let sx = 1;
+    let sy = 1;
+    if (flipH) sx = -1;
+    if (flipV) sy = -1;
+    if (sx !== 1 || sy !== 1) {
+      targetCtx.translate(sx === -1 ? targetCanvas.width : 0, sy === -1 ? targetCanvas.height : 0);
+      targetCtx.scale(sx, sy);
+    }
+    targetCtx.drawImage(videoEl, 0, 0, targetCanvas.width, targetCanvas.height);
+    targetCtx.restore();
+  }
+
+  function applyAdvancedPixelAdjustments(targetCanvas = canvas, targetCtx = ctx, mode = 'preview') {
+    const w = targetCanvas.width;
+    const h = targetCanvas.height;
     if (w === 0 || h === 0) return;
 
     let postFxScale = imageSettings.sharpness > 0 ? 0.78 : 0.86;
     if (w * h > 1920 * 1080) postFxScale *= 0.92;
     postFxScale = clamp(postFxScale, 0.72, 0.90);
 
-    const { pw, ph } = ensurePostFxBuffers(w, h, postFxScale);
-    postFxCtx.drawImage(canvas, 0, 0, pw, ph);
+    const workspace = getFxWorkspace(mode);
+    const { pw, ph, fxCanvas, fxCtx } = ensurePostFxBuffers(workspace, w, h, postFxScale);
+    workspace.commit(fxCanvas, fxCtx);
+    fxCtx.drawImage(targetCanvas, 0, 0, pw, ph);
 
-    const imageData = postFxCtx.getImageData(0, 0, pw, ph);
+    const imageData = fxCtx.getImageData(0, 0, pw, ph);
     const data = imageData.data;
 
     const shadows = imageSettings.shadows / 100;
@@ -789,11 +863,31 @@
       applySharpenFilter(imageData, imageSettings.sharpness / 100);
     }
 
-    postFxCtx.putImageData(imageData, 0, 0);
-    ctx.save();
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(postFxCanvas, 0, 0, w, h);
-    ctx.restore();
+    fxCtx.putImageData(imageData, 0, 0);
+    targetCtx.save();
+    targetCtx.imageSmoothingEnabled = true;
+    targetCtx.drawImage(fxCanvas, 0, 0, w, h);
+    targetCtx.restore();
+  }
+
+  function renderProcessedFrame(targetCanvas, targetCtx, mode = 'preview') {
+    if (!videoEl || videoEl.readyState < 2 || targetCanvas.width === 0 || targetCanvas.height === 0) return;
+    drawBaseFrame(targetCtx, targetCanvas);
+    if (needsAdvancedPixelAdjustments()) {
+      applyAdvancedPixelAdjustments(targetCanvas, targetCtx, mode);
+    }
+
+    if (faceDetectionEffect) {
+      faceDetectionEffect.flipH = flipH;
+      faceDetectionEffect.flipV = flipV;
+    }
+
+    if (blobTrackingEffect && blinkDetectionEffect) {
+      blinkDetectionEffect.setFeedbackColor(blobTrackingEffect.boxColor);
+      blobTrackingEffect.connectionColor = blobTrackingEffect.boxColor;
+    }
+
+    effectManager.processFrame(targetCtx, targetCanvas, videoEl);
   }
 
   function applySharpenFilter(imageData, amount) {
@@ -1189,6 +1283,104 @@
     }
   }
 
+  function isPendingPhotoCapture() {
+    return !!pendingCapture && pendingCapture.kind === 'photo';
+  }
+
+  function updatePreviewPhotoEnhancerControls() {
+    if (!previewPhotoEnhancerStrengthGroup || !sldPreviewPhotoEnhancerStrength) return;
+    const enabled = isPendingPhotoCapture() && !!pendingCapture.previewEnhancerEnabled;
+    previewPhotoEnhancerStrengthGroup.classList.toggle('hidden', !enabled);
+    sldPreviewPhotoEnhancerStrength.disabled = !enabled;
+  }
+
+  function syncPreviewPhotoTools() {
+    const isPhoto = isPendingPhotoCapture();
+    if (capturePreviewPhotoTools) {
+      capturePreviewPhotoTools.classList.toggle('hidden', !isPhoto);
+    }
+
+    if (!isPhoto) {
+      if (chkPreviewPhotoEnhancer) chkPreviewPhotoEnhancer.checked = false;
+      if (sldPreviewPhotoEnhancerStrength) {
+        sldPreviewPhotoEnhancerStrength.value = String(imageSettings.qualityEnhancerStrength);
+      }
+      if (valPreviewPhotoEnhancerStrength) {
+        valPreviewPhotoEnhancerStrength.textContent = `${imageSettings.qualityEnhancerStrength}%`;
+      }
+      updatePreviewPhotoEnhancerControls();
+      return;
+    }
+
+    const enabled = !!pendingCapture.previewEnhancerEnabled;
+    const parsedStrength = parseInt(pendingCapture.previewEnhancerStrength, 10);
+    const strength = clamp(
+      Number.isFinite(parsedStrength) ? parsedStrength : imageSettings.qualityEnhancerStrength,
+      0,
+      100
+    );
+    pendingCapture.previewEnhancerEnabled = enabled;
+    pendingCapture.previewEnhancerStrength = strength;
+
+    if (chkPreviewPhotoEnhancer) chkPreviewPhotoEnhancer.checked = enabled;
+    if (sldPreviewPhotoEnhancerStrength) sldPreviewPhotoEnhancerStrength.value = String(strength);
+    if (valPreviewPhotoEnhancerStrength) valPreviewPhotoEnhancerStrength.textContent = `${strength}%`;
+    updatePreviewPhotoEnhancerControls();
+  }
+
+  async function rebuildPendingPhotoPreview() {
+    if (!isPendingPhotoCapture() || !pendingCapture.baseCanvas) return;
+    const token = ++photoPreviewRenderToken;
+    const enabled = !!pendingCapture.previewEnhancerEnabled;
+    const strength = clamp(parseInt(pendingCapture.previewEnhancerStrength, 10) || 0, 0, 100);
+
+    try {
+      const nextBlob = await buildPhotoBlobFromCanvas(pendingCapture.baseCanvas, enabled, strength);
+      if (token !== photoPreviewRenderToken || !isPendingPhotoCapture()) return;
+
+      if (pendingCapture.objectUrl) {
+        URL.revokeObjectURL(pendingCapture.objectUrl);
+      }
+
+      const nextObjectUrl = URL.createObjectURL(nextBlob);
+      pendingCapture.objectUrl = nextObjectUrl;
+      pendingCapture.blob = nextBlob;
+      pendingCapture.meta = {
+        ...(pendingCapture.meta || {}),
+        size: nextBlob.size,
+        enhanced: enabled,
+        enhancerStrength: enabled ? strength : 0,
+      };
+
+      if (capturePreviewImage) {
+        capturePreviewImage.src = nextObjectUrl;
+      }
+      renderCapturePreviewInfo(pendingCapture.meta || {}, 'photo');
+    } catch (err) {
+      console.error('Error rebuilding photo preview:', err);
+      showStatus(captureStatus, 'No se pudo aplicar el mejorador a la foto', 'error');
+    }
+  }
+
+  function onPreviewPhotoEnhancerToggle(e) {
+    if (!isPendingPhotoCapture()) return;
+    pendingCapture.previewEnhancerEnabled = !!e.target.checked;
+    updatePreviewPhotoEnhancerControls();
+    rebuildPendingPhotoPreview();
+  }
+
+  function onPreviewPhotoEnhancerStrengthInput(e) {
+    if (!isPendingPhotoCapture()) return;
+    const strength = clamp(parseInt(e.target.value, 10) || 0, 0, 100);
+    pendingCapture.previewEnhancerStrength = strength;
+    if (valPreviewPhotoEnhancerStrength) {
+      valPreviewPhotoEnhancerStrength.textContent = `${strength}%`;
+    }
+    if (pendingCapture.previewEnhancerEnabled) {
+      rebuildPendingPhotoPreview();
+    }
+  }
+
   function updateCaptureButtons() {
     if (!btnTakePhoto || !btnRecord) return;
     const previewOpen = isCapturePreviewOpen();
@@ -1224,12 +1416,25 @@
       recordingCtx = recordingCanvas.getContext('2d', { willReadFrequently: false });
     }
 
-    if (recordingCanvas.width !== canvas.width || recordingCanvas.height !== canvas.height) {
-      recordingCanvas.width = canvas.width;
-      recordingCanvas.height = canvas.height;
+    const { sourceWidth, sourceHeight } = getSourceFrameDimensions();
+    if (recordingCanvas.width !== sourceWidth || recordingCanvas.height !== sourceHeight) {
+      recordingCanvas.width = sourceWidth;
+      recordingCanvas.height = sourceHeight;
     }
 
     return recordingCanvas;
+  }
+
+  function ensureRecordingEnhancerBuffer(width, height) {
+    if (!recordingEnhancerCanvas) {
+      recordingEnhancerCanvas = document.createElement('canvas');
+      recordingEnhancerCtx = recordingEnhancerCanvas.getContext('2d', { willReadFrequently: false });
+    }
+    if (recordingEnhancerCanvas.width !== width || recordingEnhancerCanvas.height !== height) {
+      recordingEnhancerCanvas.width = width;
+      recordingEnhancerCanvas.height = height;
+    }
+    return recordingEnhancerCanvas;
   }
 
   function getPreferredRecordingFps() {
@@ -1242,9 +1447,9 @@
     const safeWidth = Math.max(1, width);
     const safeHeight = Math.max(1, height);
     const safeFps = clamp(fps || 30, 24, 60);
-    const bitsPerPixelFrame = imageSettings.qualityEnhancer ? 0.16 : 0.135;
+    const bitsPerPixelFrame = imageSettings.qualityEnhancer ? 0.22 : 0.18;
     const estimate = Math.round(safeWidth * safeHeight * safeFps * bitsPerPixelFrame);
-    return clamp(estimate, 5000000, 26000000);
+    return clamp(estimate, 8000000, 32000000);
   }
 
   function drawEnhancedFrameToContext(targetCtx, sourceCanvas, width, height, strengthPct, forExport = false) {
@@ -1273,25 +1478,25 @@
   }
 
   function copyFrameToRecordingCanvas() {
-    if (!recordingCanvas || !recordingCtx || canvas.width === 0 || canvas.height === 0) return;
+    if (!recordingCanvas || !recordingCtx || videoEl.readyState < 2) return;
 
-    if (recordingCanvas.width !== canvas.width || recordingCanvas.height !== canvas.height) {
-      recordingCanvas.width = canvas.width;
-      recordingCanvas.height = canvas.height;
-    }
+    ensureRecordingCanvas();
+    renderProcessedFrame(recordingCanvas, recordingCtx, 'recording');
 
     if (imageSettings.qualityEnhancer) {
-      drawEnhancedFrameToContext(
-        recordingCtx,
-        canvas,
-        recordingCanvas.width,
-        recordingCanvas.height,
-        imageSettings.qualityEnhancerStrength,
-        false
-      );
-    } else {
-      recordingCtx.clearRect(0, 0, recordingCanvas.width, recordingCanvas.height);
-      recordingCtx.drawImage(canvas, 0, 0, recordingCanvas.width, recordingCanvas.height);
+      const enhancerBuffer = ensureRecordingEnhancerBuffer(recordingCanvas.width, recordingCanvas.height);
+      if (recordingEnhancerCtx) {
+        recordingEnhancerCtx.clearRect(0, 0, enhancerBuffer.width, enhancerBuffer.height);
+        recordingEnhancerCtx.drawImage(recordingCanvas, 0, 0, enhancerBuffer.width, enhancerBuffer.height);
+        drawEnhancedFrameToContext(
+          recordingCtx,
+          enhancerBuffer,
+          recordingCanvas.width,
+          recordingCanvas.height,
+          imageSettings.qualityEnhancerStrength,
+          false
+        );
+      }
     }
   }
 
@@ -1300,28 +1505,49 @@
     copyFrameToRecordingCanvas();
   }
 
-  async function buildPhotoCaptureBlob() {
-    const exportCanvas = document.createElement('canvas');
-    exportCanvas.width = canvas.width;
-    exportCanvas.height = canvas.height;
-    const exportCtx = exportCanvas.getContext('2d', { willReadFrequently: true });
-
-    if (imageSettings.qualityEnhancer) {
-      drawEnhancedFrameToContext(
-        exportCtx,
-        canvas,
-        exportCanvas.width,
-        exportCanvas.height,
-        imageSettings.qualityEnhancerStrength,
-        true
-      );
-    } else {
-      exportCtx.drawImage(canvas, 0, 0, exportCanvas.width, exportCanvas.height);
+  async function buildPhotoBlobFromCanvas(baseCanvas, enhancerEnabled, enhancerStrength) {
+    if (!baseCanvas || baseCanvas.width === 0 || baseCanvas.height === 0) {
+      throw new Error('photo_base_canvas_invalid');
     }
+
+    if (!enhancerEnabled) {
+      const rawBlob = await canvasToBlobAsync(baseCanvas, 'image/jpeg', imageSettings.jpegQuality / 100);
+      if (!rawBlob) throw new Error('photo_blob_failed');
+      return rawBlob;
+    }
+
+    const exportCanvas = document.createElement('canvas');
+    exportCanvas.width = baseCanvas.width;
+    exportCanvas.height = baseCanvas.height;
+    const exportCtx = exportCanvas.getContext('2d', { willReadFrequently: true });
+    drawEnhancedFrameToContext(
+      exportCtx,
+      baseCanvas,
+      exportCanvas.width,
+      exportCanvas.height,
+      enhancerStrength,
+      true
+    );
 
     const blob = await canvasToBlobAsync(exportCanvas, 'image/jpeg', imageSettings.jpegQuality / 100);
     if (!blob) throw new Error('photo_blob_failed');
-    return { blob, width: exportCanvas.width, height: exportCanvas.height };
+    return blob;
+  }
+
+  async function buildPhotoCaptureSnapshot(enhancerEnabled, enhancerStrength) {
+    const { sourceWidth, sourceHeight } = getSourceFrameDimensions();
+    if (sourceWidth <= 1 || sourceHeight <= 1) {
+      throw new Error('source_frame_unavailable');
+    }
+
+    const baseCanvas = document.createElement('canvas');
+    baseCanvas.width = sourceWidth;
+    baseCanvas.height = sourceHeight;
+    const baseCtx = baseCanvas.getContext('2d', { willReadFrequently: true });
+    renderProcessedFrame(baseCanvas, baseCtx, 'capture');
+
+    const blob = await buildPhotoBlobFromCanvas(baseCanvas, enhancerEnabled, enhancerStrength);
+    return { blob, width: sourceWidth, height: sourceHeight, baseCanvas };
   }
 
   async function takePhoto() {
@@ -1333,17 +1559,23 @@
       showStatus(captureStatus, 'Primero cierra la vista previa actual', 'info');
       return;
     }
-    if (canvas.width === 0 || canvas.height === 0) {
+    const { sourceWidth, sourceHeight } = getSourceFrameDimensions();
+    if (videoEl.readyState < 2 || sourceWidth <= 1 || sourceHeight <= 1) {
       showStatus(captureStatus, 'Espera un momento y vuelve a sacar la foto', 'info');
       return;
     }
 
     try {
-      const { blob, width, height } = await buildPhotoCaptureBlob();
+      const initialEnhancerEnabled = !!imageSettings.qualityEnhancer;
+      const initialEnhancerStrength = imageSettings.qualityEnhancerStrength;
+      const {
+        blob, width, height, baseCanvas,
+      } = await buildPhotoCaptureSnapshot(initialEnhancerEnabled, initialEnhancerStrength);
       const filename = `hatewebcam-photo-${timestamp()}.jpg`;
       openCapturePreview({
         kind: 'photo',
         blob,
+        baseCanvas,
         filename,
         meta: {
           width,
@@ -1351,8 +1583,8 @@
           size: blob.size,
           format: 'JPEG',
           jpegQuality: imageSettings.jpegQuality,
-          enhanced: !!imageSettings.qualityEnhancer,
-          enhancerStrength: imageSettings.qualityEnhancerStrength,
+          enhanced: initialEnhancerEnabled,
+          enhancerStrength: initialEnhancerStrength,
         },
       });
       showStatus(captureStatus, 'Foto lista en vista previa', 'info');
@@ -1538,7 +1770,29 @@
 
     clearPendingCapture(true);
     const objectUrl = URL.createObjectURL(capture.blob);
-    pendingCapture = { ...capture, objectUrl };
+    const initialPreviewEnhancerEnabled = capture.kind === 'photo'
+      ? !!((capture.meta && typeof capture.meta.enhanced === 'boolean')
+        ? capture.meta.enhanced
+        : imageSettings.qualityEnhancer)
+      : false;
+    const parsedPreviewEnhancerStrength = parseInt(capture.meta && capture.meta.enhancerStrength, 10);
+    const initialPreviewEnhancerStrength = capture.kind === 'photo'
+      ? clamp(
+        Number.isFinite(parsedPreviewEnhancerStrength)
+          ? parsedPreviewEnhancerStrength
+          : imageSettings.qualityEnhancerStrength,
+        0,
+        100
+      )
+      : 0;
+
+    pendingCapture = {
+      ...capture,
+      objectUrl,
+      previewEnhancerEnabled: initialPreviewEnhancerEnabled,
+      previewEnhancerStrength: initialPreviewEnhancerStrength,
+    };
+    photoPreviewRenderToken++;
 
     if (capturePreviewTitle) {
       capturePreviewTitle.innerHTML = capture.kind === 'video'
@@ -1573,6 +1827,7 @@
       }
     }
 
+    syncPreviewPhotoTools();
     renderCapturePreviewInfo(capture.meta || {}, capture.kind);
     capturePreviewModal.classList.remove('hidden');
     updateCaptureButtons();
@@ -1615,7 +1870,11 @@
   }
 
   function clearPendingCapture(silent = false) {
-    if (!pendingCapture) return;
+    photoPreviewRenderToken++;
+    if (!pendingCapture) {
+      syncPreviewPhotoTools();
+      return;
+    }
 
     if (pendingCapture.objectUrl) {
       URL.revokeObjectURL(pendingCapture.objectUrl);
@@ -1646,6 +1905,7 @@
     if (capturePreviewTitle) {
       capturePreviewTitle.innerHTML = '<i class="fa-solid fa-image"></i> Vista previa de captura';
     }
+    syncPreviewPhotoTools();
   }
 
   function closeCapturePreview(showDiscardStatus) {
