@@ -122,13 +122,18 @@
   let recordingEnhancerCtx = null;
   let lastRecordingDurationSec = 0;
   let previewScale = 1;
+  let lastPreviewRenderTs = 0;
   let photoPreviewRenderToken = 0;
+  let previewPhotoEnhancerDebounceId = null;
   let postFxCanvas = null;
   let postFxCtx = null;
   let captureFxCanvas = null;
   let captureFxCtx = null;
   let recordingFxCanvas = null;
   let recordingFxCtx = null;
+  let upscalerInstance = null;
+  let upscalerInitPromise = null;
+  let upscalerDisabled = false;
 
   const DEFAULT_IMAGE_SETTINGS = {
     blackAndWhite: false,
@@ -145,7 +150,8 @@
     qualityEnhancer: false,
     qualityEnhancerStrength: 35,
   };
-  const PREVIEW_MAX_PIXELS = 960 * 540;
+  const PREVIEW_TARGET_FPS = 30;
+  const PREVIEW_MAX_PIXELS = 640 * 360;
   const PREVIEW_MIN_WIDTH = 320;
   const PREVIEW_MIN_HEIGHT = 180;
   const DEFAULT_QUICK_DETECTOR_SETTINGS = {
@@ -587,6 +593,7 @@
 
         frameCount = 0;
         lastFpsTime = performance.now();
+        lastPreviewRenderTs = 0;
         renderLoop();
 
         const cfg = loadConfig();
@@ -695,32 +702,48 @@
     }
     return `${sourceWidth}×${sourceHeight} (preview ${previewWidth}×${previewHeight})`;
   }
-  function renderLoop() {
+  function renderLoop(ts = performance.now()) {
     if (!isRunning) return;
 
-    if (videoEl.readyState >= 2) {
-      const { sourceWidth, sourceHeight } = getSourceFrameDimensions();
-      const { width: previewWidth, height: previewHeight, scale } = getPreviewFrameDimensions(sourceWidth, sourceHeight);
-      if (canvas.width !== previewWidth || canvas.height !== previewHeight) {
-        canvas.width = previewWidth;
-        canvas.height = previewHeight;
+    try {
+      const minPreviewFrameInterval = 1000 / PREVIEW_TARGET_FPS;
+      if (ts - lastPreviewRenderTs < minPreviewFrameInterval) {
+        animFrameId = requestAnimationFrame(renderLoop);
+        return;
       }
-      if (previewScale !== scale || frameCount % 30 === 0) {
-        previewScale = scale;
-        resolutionInfo.textContent = buildResolutionLabel(sourceWidth, sourceHeight, previewWidth, previewHeight);
-      }
+      lastPreviewRenderTs = ts;
 
-      renderProcessedFrame(canvas, ctx, 'preview');
-      syncRecordingCanvasFrame();
+      if (videoEl.readyState >= 2) {
+        const { sourceWidth, sourceHeight } = getSourceFrameDimensions();
+        const { width: previewWidth, height: previewHeight, scale } = getPreviewFrameDimensions(sourceWidth, sourceHeight);
+        if (canvas.width !== previewWidth || canvas.height !== previewHeight) {
+          canvas.width = previewWidth;
+          canvas.height = previewHeight;
+        }
+        if (previewScale !== scale || frameCount % 30 === 0) {
+          previewScale = scale;
+          resolutionInfo.textContent = buildResolutionLabel(sourceWidth, sourceHeight, previewWidth, previewHeight);
+        }
 
-      // FPS
-      frameCount++;
-      const now = performance.now();
-      if (now - lastFpsTime >= 1000) {
-        fpsInfo.textContent = `${frameCount} FPS`;
-        frameCount = 0;
-        lastFpsTime = now;
+        try {
+          renderProcessedFrame(canvas, ctx, 'preview');
+        } catch (renderErr) {
+          console.error('Render frame fallback error:', renderErr);
+          drawBaseFrame(ctx, canvas);
+        }
+        syncRecordingCanvasFrame();
+
+        // FPS
+        frameCount++;
+        const now = performance.now();
+        if (now - lastFpsTime >= 1000) {
+          fpsInfo.textContent = `${frameCount} FPS`;
+          frameCount = 0;
+          lastFpsTime = now;
+        }
       }
+    } catch (err) {
+      console.error('Render loop error:', err);
     }
 
     animFrameId = requestAnimationFrame(renderLoop);
@@ -1335,7 +1358,12 @@
     const strength = clamp(parseInt(pendingCapture.previewEnhancerStrength, 10) || 0, 0, 100);
 
     try {
-      const nextBlob = await buildPhotoBlobFromCanvas(pendingCapture.baseCanvas, enabled, strength);
+      const {
+        blob: nextBlob,
+        width: nextWidth,
+        height: nextHeight,
+        enhancerEngine,
+      } = await buildPhotoBlobFromCanvas(pendingCapture.baseCanvas, enabled, strength);
       if (token !== photoPreviewRenderToken || !isPendingPhotoCapture()) return;
 
       if (pendingCapture.objectUrl) {
@@ -1347,9 +1375,12 @@
       pendingCapture.blob = nextBlob;
       pendingCapture.meta = {
         ...(pendingCapture.meta || {}),
+        width: nextWidth,
+        height: nextHeight,
         size: nextBlob.size,
         enhanced: enabled,
         enhancerStrength: enabled ? strength : 0,
+        enhancerEngine: enabled ? enhancerEngine : 'off',
       };
 
       if (capturePreviewImage) {
@@ -1364,6 +1395,10 @@
 
   function onPreviewPhotoEnhancerToggle(e) {
     if (!isPendingPhotoCapture()) return;
+    if (previewPhotoEnhancerDebounceId) {
+      clearTimeout(previewPhotoEnhancerDebounceId);
+      previewPhotoEnhancerDebounceId = null;
+    }
     pendingCapture.previewEnhancerEnabled = !!e.target.checked;
     updatePreviewPhotoEnhancerControls();
     rebuildPendingPhotoPreview();
@@ -1377,7 +1412,13 @@
       valPreviewPhotoEnhancerStrength.textContent = `${strength}%`;
     }
     if (pendingCapture.previewEnhancerEnabled) {
-      rebuildPendingPhotoPreview();
+      if (previewPhotoEnhancerDebounceId) {
+        clearTimeout(previewPhotoEnhancerDebounceId);
+      }
+      previewPhotoEnhancerDebounceId = setTimeout(() => {
+        previewPhotoEnhancerDebounceId = null;
+        rebuildPendingPhotoPreview();
+      }, 180);
     }
   }
 
@@ -1408,6 +1449,67 @@
     return new Promise((resolve) => {
       sourceCanvas.toBlob((blob) => resolve(blob), mimeType, quality);
     });
+  }
+
+  function isUpscalerRuntimeAvailable() {
+    if (upscalerDisabled) return false;
+    return typeof window !== 'undefined'
+      && typeof window.Upscaler === 'function'
+      && typeof window.DefaultUpscalerJSModel !== 'undefined';
+  }
+
+  async function ensureUpscalerInstance() {
+    if (upscalerDisabled) return null;
+    if (upscalerInstance) return upscalerInstance;
+    if (upscalerInitPromise) return upscalerInitPromise;
+    if (!isUpscalerRuntimeAvailable()) return null;
+
+    upscalerInitPromise = (async () => {
+      try {
+        const instance = new window.Upscaler({
+          model: window.DefaultUpscalerJSModel,
+        });
+        upscalerInstance = instance;
+        return instance;
+      } catch (err) {
+        console.error('No se pudo inicializar UpscalerJS:', err);
+        upscalerDisabled = true;
+        return null;
+      } finally {
+        upscalerInitPromise = null;
+      }
+    })();
+
+    return upscalerInitPromise;
+  }
+
+  function loadImageFromSrc(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('upscaled_image_load_failed'));
+      img.src = src;
+    });
+  }
+
+  async function upscaleCanvasWithUpscaler(sourceCanvas) {
+    const upscaler = await ensureUpscalerInstance();
+    if (!upscaler) return null;
+
+    const upscaledSrc = await upscaler.upscale(sourceCanvas, {
+      patchSize: 64,
+      padding: 2,
+    });
+    if (!upscaledSrc || typeof upscaledSrc !== 'string') return null;
+
+    const upscaledImage = await loadImageFromSrc(upscaledSrc);
+    const upscaledCanvas = document.createElement('canvas');
+    upscaledCanvas.width = Math.max(1, upscaledImage.naturalWidth || upscaledImage.width || sourceCanvas.width);
+    upscaledCanvas.height = Math.max(1, upscaledImage.naturalHeight || upscaledImage.height || sourceCanvas.height);
+    const upscaledCtx = upscaledCanvas.getContext('2d', { willReadFrequently: false });
+    if (!upscaledCtx) return null;
+    upscaledCtx.drawImage(upscaledImage, 0, 0, upscaledCanvas.width, upscaledCanvas.height);
+    return upscaledCanvas;
   }
 
   function ensureRecordingCanvas() {
@@ -1513,16 +1615,36 @@
     if (!enhancerEnabled) {
       const rawBlob = await canvasToBlobAsync(baseCanvas, 'image/jpeg', imageSettings.jpegQuality / 100);
       if (!rawBlob) throw new Error('photo_blob_failed');
-      return rawBlob;
+      return {
+        blob: rawBlob,
+        width: baseCanvas.width,
+        height: baseCanvas.height,
+        enhancerEngine: 'off',
+      };
+    }
+
+    let workingCanvas = baseCanvas;
+    let enhancerEngine = 'classic';
+
+    if (isUpscalerRuntimeAvailable()) {
+      try {
+        const upscaledCanvas = await upscaleCanvasWithUpscaler(baseCanvas);
+        if (upscaledCanvas) {
+          workingCanvas = upscaledCanvas;
+          enhancerEngine = 'upscalerjs';
+        }
+      } catch (err) {
+        console.error('UpscalerJS fallo. Se usa fallback clasico:', err);
+      }
     }
 
     const exportCanvas = document.createElement('canvas');
-    exportCanvas.width = baseCanvas.width;
-    exportCanvas.height = baseCanvas.height;
+    exportCanvas.width = workingCanvas.width;
+    exportCanvas.height = workingCanvas.height;
     const exportCtx = exportCanvas.getContext('2d', { willReadFrequently: true });
     drawEnhancedFrameToContext(
       exportCtx,
-      baseCanvas,
+      workingCanvas,
       exportCanvas.width,
       exportCanvas.height,
       enhancerStrength,
@@ -1531,7 +1653,12 @@
 
     const blob = await canvasToBlobAsync(exportCanvas, 'image/jpeg', imageSettings.jpegQuality / 100);
     if (!blob) throw new Error('photo_blob_failed');
-    return blob;
+    return {
+      blob,
+      width: exportCanvas.width,
+      height: exportCanvas.height,
+      enhancerEngine,
+    };
   }
 
   async function buildPhotoCaptureSnapshot(enhancerEnabled, enhancerStrength) {
@@ -1546,8 +1673,19 @@
     const baseCtx = baseCanvas.getContext('2d', { willReadFrequently: true });
     renderProcessedFrame(baseCanvas, baseCtx, 'capture');
 
-    const blob = await buildPhotoBlobFromCanvas(baseCanvas, enhancerEnabled, enhancerStrength);
-    return { blob, width: sourceWidth, height: sourceHeight, baseCanvas };
+    const {
+      blob,
+      width,
+      height,
+      enhancerEngine,
+    } = await buildPhotoBlobFromCanvas(baseCanvas, enhancerEnabled, enhancerStrength);
+    return {
+      blob,
+      width,
+      height,
+      baseCanvas,
+      enhancerEngine,
+    };
   }
 
   async function takePhoto() {
@@ -1569,7 +1707,7 @@
       const initialEnhancerEnabled = !!imageSettings.qualityEnhancer;
       const initialEnhancerStrength = imageSettings.qualityEnhancerStrength;
       const {
-        blob, width, height, baseCanvas,
+        blob, width, height, baseCanvas, enhancerEngine,
       } = await buildPhotoCaptureSnapshot(initialEnhancerEnabled, initialEnhancerStrength);
       const filename = `hatewebcam-photo-${timestamp()}.jpg`;
       openCapturePreview({
@@ -1585,6 +1723,7 @@
           jpegQuality: imageSettings.jpegQuality,
           enhanced: initialEnhancerEnabled,
           enhancerStrength: initialEnhancerStrength,
+          enhancerEngine: initialEnhancerEnabled ? enhancerEngine : 'off',
         },
       });
       showStatus(captureStatus, 'Foto lista en vista previa', 'info');
@@ -1853,6 +1992,14 @@
       ? `Activo (${meta.enhancerStrength || 0}%)`
       : 'Desactivado';
     rows.push(['Mejorador', enhancerLabel]);
+    if (meta.enhanced) {
+      const enhancerEngineLabel = meta.enhancerEngine === 'upscalerjs'
+        ? 'UpscalerJS + ajuste fino'
+        : meta.enhancerEngine === 'classic'
+          ? 'Clasico'
+          : 'Clasico';
+      rows.push(['Motor', enhancerEngineLabel]);
+    }
 
     for (const [key, value] of rows) {
       const row = document.createElement('div');
@@ -1871,6 +2018,10 @@
 
   function clearPendingCapture(silent = false) {
     photoPreviewRenderToken++;
+    if (previewPhotoEnhancerDebounceId) {
+      clearTimeout(previewPhotoEnhancerDebounceId);
+      previewPhotoEnhancerDebounceId = null;
+    }
     if (!pendingCapture) {
       syncPreviewPhotoTools();
       return;

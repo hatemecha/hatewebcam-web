@@ -297,7 +297,7 @@
         <div class="capture-preview-info" id="capturePreviewInfo"></div>
         <div class="capture-preview-photo-tools hidden" id="capturePreviewPhotoTools">
           <div class="capture-preview-tools-title"><i class="fa-solid fa-wand-magic-sparkles"></i> Mejorador de foto (en esta vista previa)</div>
-          <div class="help-text section-note">Activalo aca para comparar el resultado antes de descargar.</div>
+          <div class="help-text section-note">Activalo aca para comparar el resultado antes de descargar. Usa UpscalerJS cuando esta disponible y puede tardar unos segundos.</div>
           <label class="checkbox-group">
             <input type="checkbox" id="chkPreviewPhotoEnhancer">
             <span>Mejorar foto antes de descargar</span>
@@ -321,6 +321,9 @@
   <!-- MediaPipe CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@upscalerjs/default-model@latest/dist/umd/index.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/upscaler@latest/dist/browser/umd/upscaler.min.js" crossorigin="anonymous"></script>
 
   <!-- App -->
   <script src="js/camera.js"></script>
