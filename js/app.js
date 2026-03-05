@@ -136,6 +136,7 @@
   let captureFxCtx = null;
   let recordingFxCanvas = null;
   let recordingFxCtx = null;
+  let preferredDeviceId = null;
   let faceMeshScriptLoadPromise = null;
   let faceLoadRequestId = 0;
   let blinkLoadRequestId = 0;
@@ -172,7 +173,7 @@
     qualityEnhancerStrength: 35,
   };
   const PREVIEW_TARGET_FPS = DEVICE_PROFILE.lowPower ? 24 : 30;
-  const PREVIEW_MAX_PIXELS = DEVICE_PROFILE.lowPower ? 480 * 270 : 640 * 360;
+  const PREVIEW_MAX_PIXELS = DEVICE_PROFILE.lowPower ? 432 * 243 : 640 * 360;
   const PREVIEW_MIN_WIDTH = 320;
   const PREVIEW_MIN_HEIGHT = 180;
   const MEDIAPIPE_FACE_MESH_SRC = 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js';
@@ -559,6 +560,36 @@
     saveConfig(cfg);
   }
 
+  function renderCameraSelectOptions(devices, preferredId = null) {
+    if (!cameraSelect) return;
+
+    const targetSelection = preferredId || cameraSelect.value || preferredDeviceId || '';
+    cameraSelect.innerHTML = '';
+
+    if (!devices || devices.length === 0) {
+      cameraSelect.innerHTML = '<option value="">No se encontraron camaras</option>';
+      cameraSelect.disabled = true;
+      return;
+    }
+
+    devices.forEach((d, i) => {
+      const opt = document.createElement('option');
+      opt.value = d.deviceId;
+      opt.textContent = d.label || `Camara ${i + 1}`;
+      cameraSelect.appendChild(opt);
+    });
+
+    if (targetSelection) cameraSelect.value = targetSelection;
+    if (!cameraSelect.value && devices[0]) cameraSelect.value = devices[0].deviceId;
+    preferredDeviceId = cameraSelect.value || targetSelection || preferredDeviceId;
+    cameraSelect.disabled = false;
+  }
+
+  async function refreshCameraDevices(preferredId = null) {
+    const devices = await cameraManager.enumerateDevices();
+    renderCameraSelectOptions(devices, preferredId);
+  }
+
   // ─── Init ───
   async function init() {
     const cfg = loadConfig();
@@ -584,20 +615,11 @@
     updateQuickDetectorControlsUI();
     loadImageSettings(cfg);
     updateImageControlsUI();
-
-    const devices = await cameraManager.enumerateDevices();
-    cameraSelect.innerHTML = '';
-    if (devices.length === 0) {
-      cameraSelect.innerHTML = '<option value="">No se encontraron cámaras</option>';
-    } else {
-      devices.forEach((d, i) => {
-        const opt = document.createElement('option');
-        opt.value = d.deviceId;
-        opt.textContent = d.label || `Cámara ${i + 1}`;
-        cameraSelect.appendChild(opt);
-      });
+    preferredDeviceId = typeof cfg.deviceId === 'string' && cfg.deviceId ? cfg.deviceId : null;
+    if (cameraSelect) {
+      cameraSelect.innerHTML = '<option value="">Cargando camaras...</option>';
+      cameraSelect.disabled = true;
     }
-    if (cfg.deviceId) cameraSelect.value = cfg.deviceId;
 
     updateProfilesList();
     bindEvents();
@@ -605,8 +627,9 @@
     bindImageControlEvents();
     updateCaptureButtons();
 
-    // Auto-start camera on load (if browser allows it)
-    await toggleCamera(true);
+    // Auto-start camera on load (if browser allows it) without blocking UI init.
+    void toggleCamera(true);
+    void refreshCameraDevices(preferredDeviceId);
   }
 
   // ─── Events ───
@@ -696,7 +719,8 @@
     }
 
     if (!isRunning) {
-      const ok = await cameraManager.start(videoEl, cameraSelect.value || null);
+      const requestedDeviceId = cameraSelect.value || preferredDeviceId || null;
+      const ok = await cameraManager.start(videoEl, requestedDeviceId);
       if (ok) {
         isRunning = true;
         placeholder.classList.add('hidden');
@@ -724,8 +748,12 @@
         }
 
         const cfg = loadConfig();
-        cfg.deviceId = cameraSelect.value;
+        const settings = cameraManager.getStreamSettings();
+        preferredDeviceId = settings.deviceId || requestedDeviceId || preferredDeviceId;
+        cfg.deviceId = preferredDeviceId || '';
         saveConfig(cfg);
+        if (cameraSelect && preferredDeviceId) cameraSelect.value = preferredDeviceId;
+        void refreshCameraDevices(preferredDeviceId);
       } else {
         placeholder.classList.remove('hidden');
         const msg = placeholder.querySelector('div');
@@ -736,14 +764,18 @@
   }
 
   async function onCameraChange() {
+    preferredDeviceId = cameraSelect.value || null;
     const cfg = loadConfig();
-    cfg.deviceId = cameraSelect.value;
+    cfg.deviceId = preferredDeviceId || '';
     saveConfig(cfg);
     if (!isRunning) return;
 
     cameraSelect.disabled = true;
     try {
       await cameraManager.switchCamera(cameraSelect.value);
+      const settings = cameraManager.getStreamSettings();
+      preferredDeviceId = settings.deviceId || preferredDeviceId;
+      void refreshCameraDevices(preferredDeviceId);
     } catch (err) {
       console.error('Error switching camera:', err);
       showStatus(captureStatus, 'No se pudo cambiar de camara', 'error');

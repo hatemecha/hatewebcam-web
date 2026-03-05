@@ -86,11 +86,11 @@ class CameraManager {
       || (deviceMemory > 0 && deviceMemory <= 4)
       || (hardwareConcurrency > 0 && hardwareConcurrency <= 4);
 
-    const defaultWidth = lowPower ? 1280 : 1920;
-    const defaultHeight = lowPower ? 720 : 1080;
+    const defaultWidth = lowPower ? 960 : 1280;
+    const defaultHeight = lowPower ? 540 : 720;
     const defaultFps = lowPower ? 24 : 30;
-    const maxWidth = lowPower ? 1920 : 3840;
-    const maxHeight = lowPower ? 1080 : 2160;
+    const maxWidth = lowPower ? 1280 : 1920;
+    const maxHeight = lowPower ? 720 : 1080;
 
     const width = opts.width || defaultWidth;
     const height = opts.height || defaultHeight;
@@ -100,14 +100,15 @@ class CameraManager {
       video: {
         width: { ideal: width, max: maxWidth },
         height: { ideal: height, max: maxHeight },
-        aspectRatio: { ideal: width / height },
-        frameRate: { ideal: fps, max: lowPower ? 30 : 60 }
+        frameRate: { ideal: fps, max: lowPower ? 24 : 30 }
       },
       audio: false
     };
 
     if (deviceId) {
       constraints.video.deviceId = { exact: deviceId };
+    } else if (isMobile) {
+      constraints.video.facingMode = { ideal: 'user' };
     }
 
     return constraints;
