@@ -25,7 +25,15 @@ Aplicacion web para usar la camara con filtros en tiempo real, detectores visual
 
 ## Inicio rapido
 
+### Opcion recomendada (GitHub Pages)
 
+La forma correcta de usar el proyecto es esta URL:
+
+```text
+https://hatemecha.github.io/hatewebcam-web/
+```
+
+### Opcion local (desarrollo)
 
 Desde la carpeta del proyecto:
 
