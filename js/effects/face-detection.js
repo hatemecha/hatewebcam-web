@@ -16,10 +16,12 @@ class FaceDetection {
         this.showLandmarks = false;
         this.maxFaces = 2;
         this.processIntervalMs = 45;
-        this.boxSmoothing = 0.65;
+        this.boxSmoothing = 0.82;
         this.visualMode = 'pixelate';
         this.pixelationCellSize = 14;
         this.censorPaddingPercent = 18;
+        this.detectionHoldMs = 220;
+        this.matchDistanceMultiplier = 1.9;
 
         // Transform awareness — set by app.js
         this.flipH = false;
@@ -28,6 +30,7 @@ class FaceDetection {
 
         // Latest results
         this._faces = [];
+        this._nextFaceId = 1;
         this._pixelCanvas = document.createElement('canvas');
         this._pixelCtx = this._pixelCanvas.getContext('2d', { willReadFrequently: true });
 
@@ -67,34 +70,38 @@ class FaceDetection {
 
     _onResults(results) {
         this._processing = false;
+        const now = performance.now();
+        const previousFaces = this._faces.slice();
+        const reusedFaceIds = new Set();
         const nextFaces = [];
 
         if (results.multiFaceLandmarks) {
-            for (let index = 0; index < results.multiFaceLandmarks.length; index++) {
-                const landmarks = results.multiFaceLandmarks[index];
-                let minX = 1, maxX = 0, minY = 1, maxY = 0;
-                for (const lm of landmarks) {
-                    if (lm.x < minX) minX = lm.x;
-                    if (lm.x > maxX) maxX = lm.x;
-                    if (lm.y < minY) minY = lm.y;
-                    if (lm.y > maxY) maxY = lm.y;
-                }
-
-                const prev = this._faces[index];
-                if (prev) {
-                    const keep = this.boxSmoothing;
-                    const take = 1 - keep;
-                    minX = prev.minX * keep + minX * take;
-                    maxX = prev.maxX * keep + maxX * take;
-                    minY = prev.minY * keep + minY * take;
-                    maxY = prev.maxY * keep + maxY * take;
-                }
-
-                nextFaces.push({ minX, maxX, minY, maxY, landmarks });
+            for (const landmarks of results.multiFaceLandmarks) {
+                const detectedFace = this._measureFace(landmarks);
+                const prevFace = this._findMatchingFace(detectedFace, previousFaces, reusedFaceIds);
+                if (prevFace) reusedFaceIds.add(prevFace.id);
+                nextFaces.push(this._stabilizeFace(detectedFace, prevFace, now));
             }
         }
 
-        this._faces = nextFaces;
+        for (const prevFace of previousFaces) {
+            if (reusedFaceIds.has(prevFace.id)) continue;
+            if (now - (prevFace.lastSeenTs || 0) > this.detectionHoldMs) continue;
+            nextFaces.push({
+                ...prevFace,
+                lastSeenTs: prevFace.lastSeenTs || now,
+                missedFrames: (prevFace.missedFrames || 0) + 1,
+            });
+        }
+
+        nextFaces.sort((a, b) => {
+            const aMissed = a.missedFrames || 0;
+            const bMissed = b.missedFrames || 0;
+            if (aMissed !== bMissed) return aMissed - bMissed;
+            return (a.centerX || 0) - (b.centerX || 0);
+        });
+
+        this._faces = nextFaces.slice(0, this.maxFaces);
     }
 
     /**
@@ -131,6 +138,76 @@ class FaceDetection {
 
     _isPixelVisualMode() {
         return this.visualMode === 'pixelate' || this.visualMode === 'hybrid';
+    }
+
+    _measureFace(landmarks) {
+        let minX = 1, maxX = 0, minY = 1, maxY = 0;
+        for (const lm of landmarks) {
+            if (lm.x < minX) minX = lm.x;
+            if (lm.x > maxX) maxX = lm.x;
+            if (lm.y < minY) minY = lm.y;
+            if (lm.y > maxY) maxY = lm.y;
+        }
+
+        const width = Math.max(0.0001, maxX - minX);
+        const height = Math.max(0.0001, maxY - minY);
+        return {
+            minX,
+            maxX,
+            minY,
+            maxY,
+            width,
+            height,
+            centerX: minX + width / 2,
+            centerY: minY + height / 2,
+            landmarks,
+        };
+    }
+
+    _findMatchingFace(face, previousFaces, reusedFaceIds) {
+        let bestFace = null;
+        let bestDistance = Infinity;
+
+        for (const prevFace of previousFaces) {
+            if (!prevFace || reusedFaceIds.has(prevFace.id)) continue;
+
+            const dx = (face.centerX || 0) - (prevFace.centerX || 0);
+            const dy = (face.centerY || 0) - (prevFace.centerY || 0);
+            const distance = Math.hypot(dx, dy);
+            const faceSize = Math.max(face.width || 0, face.height || 0, prevFace.width || 0, prevFace.height || 0);
+            const maxDistance = Math.max(0.06, faceSize * this.matchDistanceMultiplier);
+            if (distance > maxDistance || distance >= bestDistance) continue;
+
+            bestDistance = distance;
+            bestFace = prevFace;
+        }
+
+        return bestFace;
+    }
+
+    _stabilizeFace(face, prevFace, now) {
+        let stabilized = { ...face };
+
+        if (prevFace) {
+            const keep = this.boxSmoothing;
+            const take = 1 - keep;
+            stabilized = {
+                ...face,
+                minX: prevFace.minX * keep + face.minX * take,
+                maxX: prevFace.maxX * keep + face.maxX * take,
+                minY: prevFace.minY * keep + face.minY * take,
+                maxY: prevFace.maxY * keep + face.maxY * take,
+            };
+            stabilized.width = Math.max(0.0001, stabilized.maxX - stabilized.minX);
+            stabilized.height = Math.max(0.0001, stabilized.maxY - stabilized.minY);
+            stabilized.centerX = stabilized.minX + stabilized.width / 2;
+            stabilized.centerY = stabilized.minY + stabilized.height / 2;
+        }
+
+        stabilized.id = prevFace ? prevFace.id : this._nextFaceId++;
+        stabilized.lastSeenTs = now;
+        stabilized.missedFrames = 0;
+        return stabilized;
     }
 
     _getFaceRect(face, canvasWidth, canvasHeight, paddingPercent = this.censorPaddingPercent) {
@@ -254,6 +331,7 @@ class FaceDetection {
             visualMode: this.visualMode,
             pixelationCellSize: this.pixelationCellSize,
             censorPaddingPercent: this.censorPaddingPercent,
+            detectionHoldMs: this.detectionHoldMs,
         };
     }
 
@@ -275,6 +353,9 @@ class FaceDetection {
         }
         if (config.censorPaddingPercent != null) {
             this.censorPaddingPercent = Math.max(0, Math.min(48, Math.round(config.censorPaddingPercent)));
+        }
+        if (config.detectionHoldMs != null) {
+            this.detectionHoldMs = Math.max(80, Math.min(600, Math.round(config.detectionHoldMs)));
         }
     }
 
