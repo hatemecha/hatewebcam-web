@@ -74,8 +74,11 @@
   const inpBlobQuickColor = $('#inpBlobQuickColor');
   const blobQuickColorSwatch = $('#blobQuickColorSwatch');
   const inpFaceQuickColor = $('#inpFaceQuickColor');
+  const faceQuickColorChip = $('#faceQuickColorChip');
   const faceQuickColorSwatch = $('#faceQuickColorSwatch');
   const faceQuickControls = $('#faceQuickControls');
+  const faceQuickLabelWrap = $('#faceQuickLabelWrap');
+  const selFaceQuickMode = $('#selFaceQuickMode');
   const inpFaceQuickLabel = $('#inpFaceQuickLabel');
   const colorPickSection = $('#colorPickSection');
   const btnColorPick = $('#btnColorPick');
@@ -100,6 +103,9 @@
   const btnMobileColorPick = $('#btnMobileColorPick');
   const inpMobileBlobColor = $('#inpMobileBlobColor');
   const inpMobileFaceColor = $('#inpMobileFaceColor');
+  const mobileFaceColorChip = $('#mobileFaceColorChip');
+  const mobileFaceLabelWrap = $('#mobileFaceLabelWrap');
+  const selMobileFaceMode = $('#selMobileFaceMode');
   const inpMobileFaceLabel = $('#inpMobileFaceLabel');
 
   if (!videoEl || !canvas || !ctx || !btnToggleCamera || !cameraSelect || !btnTakePhoto || !btnRecord) {
@@ -206,6 +212,9 @@
     blobBoxColor: '#00ffff',
     faceBoxColor: '#e53935',
     faceLabelText: 'CARA',
+    faceVisualMode: 'pixelate',
+    facePixelationCellSize: 14,
+    faceCensorPaddingPercent: 18,
   };
   let imageSettings = { ...DEFAULT_IMAGE_SETTINGS };
   let quickDetectorSettings = { ...DEFAULT_QUICK_DETECTOR_SETTINGS };
@@ -234,6 +243,21 @@
   function normalizeFaceLabel(value) {
     const label = String(value || '').trim();
     return label ? label.slice(0, 28) : 'CARA';
+  }
+
+  function normalizeFaceVisualMode(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    return ['pixelate', 'box', 'hybrid'].includes(normalized) ? normalized : 'pixelate';
+  }
+
+  function isFaceBoxVisualMode(mode = quickDetectorSettings.faceVisualMode) {
+    const normalized = normalizeFaceVisualMode(mode);
+    return normalized === 'box' || normalized === 'hybrid';
+  }
+
+  function isFacePixelVisualMode(mode = quickDetectorSettings.faceVisualMode) {
+    const normalized = normalizeFaceVisualMode(mode);
+    return normalized === 'pixelate' || normalized === 'hybrid';
   }
 
   function updateMobilePresetButtons(activePreset = null) {
@@ -353,6 +377,9 @@
       ...saved,
     };
     quickDetectorSettings.faceLabelText = normalizeFaceLabel(quickDetectorSettings.faceLabelText);
+    quickDetectorSettings.faceVisualMode = normalizeFaceVisualMode(quickDetectorSettings.faceVisualMode);
+    quickDetectorSettings.facePixelationCellSize = clamp(parseInt(quickDetectorSettings.facePixelationCellSize, 10) || 14, 4, 48);
+    quickDetectorSettings.faceCensorPaddingPercent = clamp(parseInt(quickDetectorSettings.faceCensorPaddingPercent, 10) || 18, 0, 48);
   }
 
   function saveQuickDetectorSettings() {
@@ -375,31 +402,57 @@
     const advFaceColorInput = $('#inpFaceColor');
     const advFaceColorSwatch = $('#faceColorSwatch');
     const advFaceLabelInput = $('#inpFaceLabel');
+    const advFaceModeSelect = $('#selFaceMode');
 
     if (advBlobColorInput) advBlobColorInput.value = quickDetectorSettings.blobBoxColor;
     if (advBlobColorSwatch) advBlobColorSwatch.style.background = quickDetectorSettings.blobBoxColor;
     if (advFaceColorInput) advFaceColorInput.value = quickDetectorSettings.faceBoxColor;
     if (advFaceColorSwatch) advFaceColorSwatch.style.background = quickDetectorSettings.faceBoxColor;
+    if (advFaceModeSelect) advFaceModeSelect.value = quickDetectorSettings.faceVisualMode;
     if (advFaceLabelInput && document.activeElement !== advFaceLabelInput) {
       advFaceLabelInput.value = quickDetectorSettings.faceLabelText;
     }
   }
 
   function updateQuickDetectorControlsUI() {
+    const faceVisualMode = normalizeFaceVisualMode(quickDetectorSettings.faceVisualMode);
+    const showFaceBoxVisuals = isFaceBoxVisualMode(faceVisualMode);
+    quickDetectorSettings.faceVisualMode = faceVisualMode;
+
     if (inpBlobQuickColor) inpBlobQuickColor.value = quickDetectorSettings.blobBoxColor;
     if (blobQuickColorSwatch) blobQuickColorSwatch.style.background = quickDetectorSettings.blobBoxColor;
     if (inpFaceQuickColor) inpFaceQuickColor.value = quickDetectorSettings.faceBoxColor;
     if (faceQuickColorSwatch) faceQuickColorSwatch.style.background = quickDetectorSettings.faceBoxColor;
+    if (selFaceQuickMode) selFaceQuickMode.value = faceVisualMode;
     if (inpFaceQuickLabel && document.activeElement !== inpFaceQuickLabel) {
       inpFaceQuickLabel.value = quickDetectorSettings.faceLabelText;
     }
     if (faceQuickControls) {
       faceQuickControls.classList.toggle('hidden', !chkFaceDetection.checked);
     }
+    if (faceQuickColorChip) {
+      faceQuickColorChip.classList.toggle('hidden', !showFaceBoxVisuals);
+    }
+    if (faceQuickLabelWrap) {
+      faceQuickLabelWrap.classList.toggle('hidden', !showFaceBoxVisuals);
+    }
+    if (inpFaceQuickLabel) {
+      inpFaceQuickLabel.disabled = !showFaceBoxVisuals;
+    }
     if (inpMobileBlobColor) inpMobileBlobColor.value = quickDetectorSettings.blobBoxColor;
     if (inpMobileFaceColor) inpMobileFaceColor.value = quickDetectorSettings.faceBoxColor;
+    if (selMobileFaceMode) selMobileFaceMode.value = faceVisualMode;
     if (inpMobileFaceLabel && document.activeElement !== inpMobileFaceLabel) {
       inpMobileFaceLabel.value = quickDetectorSettings.faceLabelText;
+    }
+    if (mobileFaceColorChip) {
+      mobileFaceColorChip.classList.toggle('hidden', !showFaceBoxVisuals);
+    }
+    if (mobileFaceLabelWrap) {
+      mobileFaceLabelWrap.classList.toggle('hidden', !showFaceBoxVisuals);
+    }
+    if (inpMobileFaceLabel) {
+      inpMobileFaceLabel.disabled = !showFaceBoxVisuals;
     }
     if (btnMobileBlobToggle) {
       btnMobileBlobToggle.classList.toggle('is-active', !!chkBlobTracking.checked);
@@ -420,8 +473,13 @@
   function applyQuickDetectorSettingsToEffects() {
     if (blobTrackingEffect) blobTrackingEffect.boxColor = quickDetectorSettings.blobBoxColor;
     if (faceDetectionEffect) {
-      faceDetectionEffect.boxColor = quickDetectorSettings.faceBoxColor;
-      faceDetectionEffect.labelText = quickDetectorSettings.faceLabelText;
+      faceDetectionEffect.setConfig({
+        boxColor: quickDetectorSettings.faceBoxColor,
+        labelText: quickDetectorSettings.faceLabelText,
+        visualMode: quickDetectorSettings.faceVisualMode,
+        pixelationCellSize: quickDetectorSettings.facePixelationCellSize,
+        censorPaddingPercent: quickDetectorSettings.faceCensorPaddingPercent,
+      });
     }
   }
 
@@ -430,6 +488,9 @@
     if (faceDetectionEffect) {
       quickDetectorSettings.faceBoxColor = faceDetectionEffect.boxColor || quickDetectorSettings.faceBoxColor;
       quickDetectorSettings.faceLabelText = normalizeFaceLabel(faceDetectionEffect.labelText);
+      quickDetectorSettings.faceVisualMode = normalizeFaceVisualMode(faceDetectionEffect.visualMode);
+      quickDetectorSettings.facePixelationCellSize = clamp(parseInt(faceDetectionEffect.pixelationCellSize, 10) || quickDetectorSettings.facePixelationCellSize, 4, 48);
+      quickDetectorSettings.faceCensorPaddingPercent = clamp(parseInt(faceDetectionEffect.censorPaddingPercent, 10) || quickDetectorSettings.faceCensorPaddingPercent, 0, 48);
     }
     updateQuickDetectorControlsUI();
     saveQuickDetectorSettings();
@@ -602,6 +663,20 @@
         quickDetectorSettings.blobBoxColor = e.target.value;
         if (blobTrackingEffect) blobTrackingEffect.boxColor = e.target.value;
         updateQuickDetectorControlsUI();
+        scheduleSaveQuickDetectorSettings();
+      });
+    }
+
+    if (selFaceQuickMode) {
+      selFaceQuickMode.addEventListener('change', (e) => {
+        const value = normalizeFaceVisualMode(e.target.value);
+        quickDetectorSettings.faceVisualMode = value;
+        if (faceDetectionEffect) {
+          faceDetectionEffect.visualMode = value;
+        }
+        updateQuickDetectorControlsUI();
+        renderEffectConfig();
+        updateEffectsInfo();
         scheduleSaveQuickDetectorSettings();
       });
     }
@@ -836,6 +911,19 @@
         scheduleSaveQuickDetectorSettings();
       });
     }
+    if (selMobileFaceMode) {
+      selMobileFaceMode.addEventListener('change', (e) => {
+        const value = normalizeFaceVisualMode(e.target.value);
+        quickDetectorSettings.faceVisualMode = value;
+        if (faceDetectionEffect) {
+          faceDetectionEffect.visualMode = value;
+        }
+        updateQuickDetectorControlsUI();
+        renderEffectConfig();
+        updateEffectsInfo();
+        scheduleSaveQuickDetectorSettings();
+      });
+    }
     if (inpMobileFaceLabel) {
       inpMobileFaceLabel.addEventListener('input', (e) => {
         const value = String(e.target.value || '').slice(0, 28);
@@ -1040,9 +1128,10 @@
 
         if (!faceDetectionEffect) {
           faceDetectionEffect = new FaceDetection();
-          faceDetectionEffect.boxColor = quickDetectorSettings.faceBoxColor;
-          faceDetectionEffect.labelText = quickDetectorSettings.faceLabelText;
+          applyQuickDetectorSettingsToEffects();
           effectManager.addEffect(faceDetectionEffect);
+        } else {
+          applyQuickDetectorSettingsToEffects();
         }
         if (!isRecording) {
           setTimeout(() => hideStatus(captureStatus), 1200);
@@ -1093,7 +1182,12 @@
   function updateEffectsInfo() {
     const names = [];
     if (blobTrackingEffect) names.push('Color');
-    if (faceDetectionEffect) names.push('Caras');
+    if (faceDetectionEffect) {
+      const faceMode = normalizeFaceVisualMode(faceDetectionEffect.visualMode);
+      if (faceMode === 'pixelate') names.push('Caras pixeladas');
+      else if (faceMode === 'hybrid') names.push('Caras mixtas');
+      else names.push('Caras');
+    }
     if (blinkDetectionEffect) names.push('Pestañeos');
     effectsInfo.textContent = names.length > 0 ? names.join(' · ') : 'Sin detectores';
   }
@@ -1583,30 +1677,81 @@
   // --- Face Detection Config ---
   function buildFaceConfig() {
     const fd = faceDetectionEffect;
+    const faceMode = normalizeFaceVisualMode(fd.visualMode);
+    const showBoxVisuals = isFaceBoxVisualMode(faceMode);
+    const showPixelVisuals = isFacePixelVisualMode(faceMode);
     const el = createSection('Detector de caras', `
       <div class="config-block">
         <div class="config-block-title">Configuración</div>
-        <div class="help-text">Detecta caras en el video y dibuja un recuadro alrededor de cada una.</div>
+        <div class="help-text">Detecta caras en el video y permite dibujar recuadros, censurarlas con pixelado o combinar ambos.</div>
         ${slider('sldMaxFaces', 'valMaxFaces', 'Máximo de caras a detectar', fd.maxFaces, 1, 5)}
         <div class="slider-group">
-          <div class="slider-label"><span>Texto del recuadro</span></div>
-          <input type="text" id="inpFaceLabel" class="text-input" maxlength="28" placeholder="Ej: Cliente VIP">
+          <div class="slider-label"><span>Modo visual</span></div>
+          <div class="select-wrapper">
+            <select id="selFaceMode">
+              <option value="pixelate" ${faceMode === 'pixelate' ? 'selected' : ''}>Pixelado</option>
+              <option value="box" ${faceMode === 'box' ? 'selected' : ''}>Recuadro</option>
+              <option value="hybrid" ${faceMode === 'hybrid' ? 'selected' : ''}>Mixto</option>
+            </select>
+          </div>
         </div>
-        <label class="color-picker-btn" style="position:relative;margin-top:6px">
-          <div class="color-swatch" id="faceColorSwatch" style="background:${fd.boxColor}"></div>
-          <span>Color del recuadro</span>
-          <input type="color" id="inpFaceColor" value="${fd.boxColor}">
-        </label>
-        <div style="height:6px"></div>
-        ${slider('sldFaceThickness', 'valFaceThickness', 'Grosor del recuadro', fd.boxThickness, 1, 8)}
+        <div id="facePixelControls" class="${showPixelVisuals ? '' : 'hidden'}">
+          ${slider('sldFacePixelation', 'valFacePixelation', 'Tamano del pixelado', fd.pixelationCellSize, 4, 32)}
+          ${slider('sldFacePadding', 'valFacePadding', 'Margen extra de censura (%)', fd.censorPaddingPercent, 0, 40)}
+        </div>
+        <div id="faceBoxControls" class="${showBoxVisuals ? '' : 'hidden'}">
+          <div class="slider-group">
+            <div class="slider-label"><span>Texto del recuadro</span></div>
+            <input type="text" id="inpFaceLabel" class="text-input" maxlength="28" placeholder="Ej: Cliente VIP">
+          </div>
+          <label class="color-picker-btn" style="position:relative;margin-top:6px">
+            <div class="color-swatch" id="faceColorSwatch" style="background:${fd.boxColor}"></div>
+            <span>Color del recuadro</span>
+            <input type="color" id="inpFaceColor" value="${fd.boxColor}">
+          </label>
+          <div style="height:6px"></div>
+          ${slider('sldFaceThickness', 'valFaceThickness', 'Grosor del recuadro', fd.boxThickness, 1, 8)}
+        </div>
         <label class="checkbox-group"><input type="checkbox" id="chkShowLandmarks" ${fd.showLandmarks ? 'checked' : ''}><span>Mostrar puntos faciales</span></label>
       </div>
     `);
 
     requestAnimationFrame(() => {
+      const selMode = el.querySelector('#selFaceMode');
+      const faceBoxControls = el.querySelector('#faceBoxControls');
+      const facePixelControls = el.querySelector('#facePixelControls');
+      const syncFaceModeUI = () => {
+        const activeMode = normalizeFaceVisualMode(fd.visualMode);
+        if (selMode) selMode.value = activeMode;
+        if (faceBoxControls) faceBoxControls.classList.toggle('hidden', !isFaceBoxVisualMode(activeMode));
+        if (facePixelControls) facePixelControls.classList.toggle('hidden', !isFacePixelVisualMode(activeMode));
+      };
+
+      if (selMode) {
+        selMode.addEventListener('change', e => {
+          const value = normalizeFaceVisualMode(e.target.value);
+          fd.visualMode = value;
+          quickDetectorSettings.faceVisualMode = value;
+          syncFaceModeUI();
+          updateQuickDetectorControlsUI();
+          updateEffectsInfo();
+          scheduleSaveQuickDetectorSettings();
+        });
+      }
+
       bindSlider(el, 'sldMaxFaces', 'valMaxFaces', v => {
         fd.maxFaces = v;
         if (fd.faceMesh) fd.faceMesh.setOptions({ maxNumFaces: v });
+      });
+      bindSlider(el, 'sldFacePixelation', 'valFacePixelation', v => {
+        fd.pixelationCellSize = v;
+        quickDetectorSettings.facePixelationCellSize = v;
+        scheduleSaveQuickDetectorSettings();
+      });
+      bindSlider(el, 'sldFacePadding', 'valFacePadding', v => {
+        fd.censorPaddingPercent = v;
+        quickDetectorSettings.faceCensorPaddingPercent = v;
+        scheduleSaveQuickDetectorSettings();
       });
       bindSlider(el, 'sldFaceThickness', 'valFaceThickness', v => fd.boxThickness = v);
 
@@ -1634,15 +1779,18 @@
 
       const inpColor = el.querySelector('#inpFaceColor');
       const swatch = el.querySelector('#faceColorSwatch');
-      inpColor.addEventListener('input', e => {
-        fd.boxColor = e.target.value;
-        quickDetectorSettings.faceBoxColor = e.target.value;
-        swatch.style.background = e.target.value;
-        updateQuickDetectorControlsUI();
-        scheduleSaveQuickDetectorSettings();
-      });
+      if (inpColor && swatch) {
+        inpColor.addEventListener('input', e => {
+          fd.boxColor = e.target.value;
+          quickDetectorSettings.faceBoxColor = e.target.value;
+          swatch.style.background = e.target.value;
+          updateQuickDetectorControlsUI();
+          scheduleSaveQuickDetectorSettings();
+        });
+      }
 
       el.querySelector('#chkShowLandmarks').addEventListener('change', e => fd.showLandmarks = e.target.checked);
+      syncFaceModeUI();
     });
 
     return el;
@@ -1768,6 +1916,13 @@
     if (config.face) {
       if (config.face.boxColor) quickDetectorSettings.faceBoxColor = config.face.boxColor;
       if (config.face.labelText != null) quickDetectorSettings.faceLabelText = normalizeFaceLabel(config.face.labelText);
+      if (config.face.visualMode != null) quickDetectorSettings.faceVisualMode = normalizeFaceVisualMode(config.face.visualMode);
+      if (config.face.pixelationCellSize != null) {
+        quickDetectorSettings.facePixelationCellSize = clamp(parseInt(config.face.pixelationCellSize, 10) || quickDetectorSettings.facePixelationCellSize, 4, 48);
+      }
+      if (config.face.censorPaddingPercent != null) {
+        quickDetectorSettings.faceCensorPaddingPercent = clamp(parseInt(config.face.censorPaddingPercent, 10) || quickDetectorSettings.faceCensorPaddingPercent, 0, 48);
+      }
       if (faceDetectionEffect) faceDetectionEffect.setConfig(config.face);
     }
     if (config.blink && blinkDetectionEffect) blinkDetectionEffect.setConfig(config.blink);

@@ -398,6 +398,26 @@ input[type="range"]:focus-visible,
   margin: 5px 0 0 20px;
 }
 
+.quick-inline-fields {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.quick-inline-field {
+  flex: 1 1 148px;
+}
+
+.quick-inline-field .quick-chip-label {
+  display: inline-block;
+  margin-bottom: 5px;
+}
+
+.quick-detector-extra > div + div {
+  margin-top: 6px;
+}
+
 .quick-color-chip {
   position: relative;
   display: inline-flex;
@@ -439,6 +459,11 @@ input[type="range"]:focus-visible,
   height: 100%;
   opacity: 0;
   cursor: pointer;
+}
+
+.compact-select-wrapper select {
+  min-height: 30px;
+  font-size: 10px;
 }
 
 .compact-text-input {
@@ -1131,6 +1156,34 @@ input[type="range"]:disabled {
     color: #fff;
   }
 
+  .mobile-inline-field {
+    display: block;
+    margin-top: 8px;
+  }
+
+  .mobile-inline-field > span {
+    display: block;
+    margin-bottom: 5px;
+    color: #bcbcbc;
+    font-size: 10px;
+    font-family: var(--mono);
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+  }
+
+  .mobile-select-wrapper select {
+    min-height: 32px;
+    border-color: #313131;
+    background: #101010;
+    font-size: 11px;
+    color: #f2f2f2;
+  }
+
+  .mobile-select-wrapper::after {
+    right: 10px;
+    color: #8c8c8c;
+  }
+
   .mobile-fx-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1209,6 +1262,10 @@ input[type="range"]:disabled {
 
   .mobile-text-input:disabled {
     opacity: 0.55;
+  }
+
+  .mobile-face-label-wrap {
+    margin-top: 0;
   }
 
   .mobile-hud-bottom {

@@ -65,17 +65,29 @@
                 <span>Pick color</span>
               </button>
             </div>
+            <label class="mobile-inline-field">
+              <span>Modo cara</span>
+              <div class="select-wrapper mobile-select-wrapper">
+                <select id="selMobileFaceMode" aria-label="Modo visual de caras">
+                  <option value="pixelate">Pixelado</option>
+                  <option value="box">Recuadro</option>
+                  <option value="hybrid">Mixto</option>
+                </select>
+              </div>
+            </label>
             <div class="mobile-color-row">
               <label class="mobile-color-chip">
                 <span>Obj</span>
                 <input type="color" id="inpMobileBlobColor" value="#00ffff" aria-label="Color tracking objetos">
               </label>
-              <label class="mobile-color-chip">
+              <label class="mobile-color-chip" id="mobileFaceColorChip">
                 <span>Cara</span>
                 <input type="color" id="inpMobileFaceColor" value="#e53935" aria-label="Color tracking caras">
               </label>
             </div>
-            <input type="text" id="inpMobileFaceLabel" class="mobile-text-input" maxlength="28" placeholder="Nombre recuadro cara">
+            <div class="mobile-face-label-wrap" id="mobileFaceLabelWrap">
+              <input type="text" id="inpMobileFaceLabel" class="mobile-text-input" maxlength="28" placeholder="Nombre recuadro cara">
+            </div>
           </div>
           <div class="mobile-hud-bottom">
             <button type="button" class="mobile-dock-btn" id="btnMobileEffectsDock" aria-controls="mobileFxPanel" aria-expanded="false">
@@ -175,15 +187,29 @@
               <input type="checkbox" id="chkFaceDetection">
               <span><i class="fa-solid fa-face-smile fa-fw"></i> Detectar caras</span>
             </label>
-            <label class="quick-color-chip" title="Color del recuadro de caras">
-              <span class="quick-chip-label">Recuadro</span>
-              <span class="color-swatch" id="faceQuickColorSwatch"></span>
-              <input type="color" id="inpFaceQuickColor" value="#e53935" aria-label="Color del recuadro de caras">
-            </label>
           </div>
           <div class="quick-detector-extra hidden" id="faceQuickControls">
-            <input type="text" id="inpFaceQuickLabel" class="text-input compact-text-input" maxlength="28"
-              placeholder="Texto del recuadro">
+            <div class="quick-inline-fields">
+              <label class="quick-inline-field">
+                <span class="quick-chip-label">Modo</span>
+                <div class="select-wrapper compact-select-wrapper">
+                  <select id="selFaceQuickMode" aria-label="Modo visual de caras">
+                    <option value="pixelate">Pixelado</option>
+                    <option value="box">Recuadro</option>
+                    <option value="hybrid">Mixto</option>
+                  </select>
+                </div>
+              </label>
+              <label class="quick-color-chip" id="faceQuickColorChip" title="Color del recuadro de caras">
+                <span class="quick-chip-label">Recuadro</span>
+                <span class="color-swatch" id="faceQuickColorSwatch"></span>
+                <input type="color" id="inpFaceQuickColor" value="#e53935" aria-label="Color del recuadro de caras">
+              </label>
+            </div>
+            <div id="faceQuickLabelWrap">
+              <input type="text" id="inpFaceQuickLabel" class="text-input compact-text-input" maxlength="28"
+                placeholder="Texto del recuadro">
+            </div>
           </div>
         </div>
 
