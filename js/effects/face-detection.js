@@ -17,7 +17,7 @@ class FaceDetection {
         this.maxFaces = 2;
         this.processIntervalMs = 45;
         this.boxSmoothing = 0.82;
-        this.visualMode = 'pixelate';
+        this.visualMode = 'box';
         this.pixelationCellSize = 14;
         this.censorPaddingPercent = 18;
         this.detectionHoldMs = 220;
@@ -133,7 +133,7 @@ class FaceDetection {
         if (normalized === 'box' || normalized === 'hybrid' || normalized === 'pixelate') {
             return normalized;
         }
-        return 'pixelate';
+        return 'box';
     }
 
     _isBoxVisualMode() {

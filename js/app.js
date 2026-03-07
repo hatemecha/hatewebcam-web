@@ -216,7 +216,7 @@
     blobBoxColor: '#00ffff',
     faceBoxColor: '#e53935',
     faceLabelText: 'CARA',
-    faceVisualMode: 'pixelate',
+    faceVisualMode: 'box',
     facePixelationCellSize: 14,
     faceCensorPaddingPercent: 18,
   };
@@ -251,7 +251,7 @@
 
   function normalizeFaceVisualMode(value) {
     const normalized = String(value || '').trim().toLowerCase();
-    return ['pixelate', 'box', 'hybrid'].includes(normalized) ? normalized : 'pixelate';
+    return ['pixelate', 'box', 'hybrid'].includes(normalized) ? normalized : 'box';
   }
 
   function normalizePreviewQuality(value) {
@@ -287,6 +287,31 @@
 
   function isMobileFxPanelVisible() {
     return !!mobileFxPanel && !mobileFxPanel.classList.contains('hidden');
+  }
+
+  function getCurrentCameraFacingMode() {
+    const settings = cameraManager.getStreamSettings();
+    const facingMode = typeof settings.facingMode === 'string'
+      ? settings.facingMode.trim().toLowerCase()
+      : '';
+    if (facingMode) return facingMode;
+
+    const selectedLabel = cameraSelect && cameraSelect.selectedOptions && cameraSelect.selectedOptions[0]
+      ? String(cameraSelect.selectedOptions[0].textContent || '').trim().toLowerCase()
+      : '';
+    if (/(front|frontal|user|selfie)/.test(selectedLabel)) return 'user';
+    if (/(back|rear|trasera|environment)/.test(selectedLabel)) return 'environment';
+    return '';
+  }
+
+  function shouldAutoCompensateMobileMirror() {
+    if (!isMobileViewport()) return false;
+    const facingMode = getCurrentCameraFacingMode();
+    return facingMode === 'user' || facingMode === 'front';
+  }
+
+  function getEffectiveFlipH() {
+    return shouldAutoCompensateMobileMirror() !== !!flipH;
   }
 
   function setMobileFxPanelVisible(visible) {
@@ -822,6 +847,17 @@
       cfg.forceMirrorDefaultV3 = true;
       saveConfig(cfg);
     }
+    if (cfg.faceVisualModeDefaultV2 !== true) {
+      const savedQuickDetectorSettings = cfg.quickDetectorSettings || {};
+      if (!savedQuickDetectorSettings.faceVisualMode || savedQuickDetectorSettings.faceVisualMode === 'pixelate') {
+        cfg.quickDetectorSettings = {
+          ...savedQuickDetectorSettings,
+          faceVisualMode: 'box',
+        };
+      }
+      cfg.faceVisualModeDefaultV2 = true;
+      saveConfig(cfg);
+    }
     if (typeof cfg.flipH === 'boolean') flipH = cfg.flipH;
     else flipH = false;
     if (chkMirror) chkMirror.checked = flipH;
@@ -1215,7 +1251,7 @@
     if (blobTrackingEffect) names.push('Color');
     if (faceDetectionEffect) {
       const faceMode = normalizeFaceVisualMode(faceDetectionEffect.visualMode);
-      if (faceMode === 'pixelate') names.push('Caras pixeladas');
+      if (faceMode === 'pixelate') names.push('Caras blur/pixeladas');
       else if (faceMode === 'hybrid') names.push('Caras mixtas');
       else names.push('Caras');
     }
@@ -1458,7 +1494,7 @@
     }
     let sx = 1;
     let sy = 1;
-    if (flipH) sx = -1;
+    if (getEffectiveFlipH()) sx = -1;
     if (flipV) sy = -1;
     if (sx !== 1 || sy !== 1) {
       targetCtx.scale(sx, sy);
@@ -1537,7 +1573,7 @@
     }
 
     if (faceDetectionEffect) {
-      faceDetectionEffect.flipH = flipH;
+      faceDetectionEffect.flipH = getEffectiveFlipH();
       faceDetectionEffect.flipV = flipV;
       faceDetectionEffect.rotationDeg = frameRotation;
     }
@@ -1730,15 +1766,15 @@
     const el = createSection('Detector de caras', `
       <div class="config-block">
         <div class="config-block-title">Configuración</div>
-        <div class="help-text">Detecta caras en el video y permite dibujar recuadros, censurarlas con pixelado o combinar ambos.</div>
+        <div class="help-text">Detecta caras en el video y permite dibujar recuadros, usar un modo mixto o censurarlas con blur/pixelado.</div>
         ${slider('sldMaxFaces', 'valMaxFaces', 'Máximo de caras a detectar', fd.maxFaces, 1, 5)}
         <div class="slider-group">
           <div class="slider-label"><span>Modo visual</span></div>
           <div class="select-wrapper">
             <select id="selFaceMode">
-              <option value="pixelate" ${faceMode === 'pixelate' ? 'selected' : ''}>Pixelado</option>
               <option value="box" ${faceMode === 'box' ? 'selected' : ''}>Recuadro</option>
               <option value="hybrid" ${faceMode === 'hybrid' ? 'selected' : ''}>Mixto</option>
+              <option value="pixelate" ${faceMode === 'pixelate' ? 'selected' : ''}>Blur/Pixelado</option>
             </select>
           </div>
         </div>
