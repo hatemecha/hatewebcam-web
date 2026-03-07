@@ -35,11 +35,24 @@
     <!-- Preview -->
     <main class="preview-area">
       <div class="preview-wrapper" id="previewWrapper">
-        <video id="videoElement" class="hidden" autoplay playsinline muted></video>
+        <video id="videoElement" class="preview-source-video" autoplay playsinline muted></video>
         <canvas id="previewCanvas"></canvas>
         <div class="preview-placeholder" id="previewPlaceholder">
           <i class="fa-solid fa-video fa-2x"></i>
           <div>Iniciando cámara automáticamente...</div>
+        </div>
+        <div class="preview-overlay-toolbar" aria-label="Controles de vista previa">
+          <label class="preview-overlay-control" for="previewQualitySelect">
+            <span class="preview-overlay-kicker"><i class="fa-solid fa-film"></i> Preview</span>
+            <div class="select-wrapper preview-overlay-select">
+              <select id="previewQualitySelect" aria-label="Calidad de vista previa">
+                <option value="draft">Borrador</option>
+                <option value="balanced">Balanceada</option>
+                <option value="high" selected>Alta</option>
+                <option value="full">Exacta</option>
+              </select>
+            </div>
+          </label>
         </div>
         <div class="mobile-hud" id="mobileHud" aria-label="Controles rapidos para mobile">
           <div class="mobile-fx-backdrop hidden" id="mobileFxBackdrop"></div>

@@ -22,6 +22,8 @@ class FaceDetection {
         this.censorPaddingPercent = 18;
         this.detectionHoldMs = 220;
         this.matchDistanceMultiplier = 1.9;
+        this.sameFaceOverlapRatio = 0.62;
+        this.sameFaceCenterRatio = 0.38;
 
         // Transform awareness — set by app.js
         this.flipH = false;
@@ -94,14 +96,16 @@ class FaceDetection {
             });
         }
 
-        nextFaces.sort((a, b) => {
+        const dedupedFaces = this._dedupeFaces(nextFaces);
+
+        dedupedFaces.sort((a, b) => {
             const aMissed = a.missedFrames || 0;
             const bMissed = b.missedFrames || 0;
             if (aMissed !== bMissed) return aMissed - bMissed;
             return (a.centerX || 0) - (b.centerX || 0);
         });
 
-        this._faces = nextFaces.slice(0, this.maxFaces);
+        this._faces = dedupedFaces.slice(0, this.maxFaces);
     }
 
     /**
@@ -208,6 +212,79 @@ class FaceDetection {
         stabilized.lastSeenTs = now;
         stabilized.missedFrames = 0;
         return stabilized;
+    }
+
+    _getFaceArea(face) {
+        return Math.max(0, face.width || 0) * Math.max(0, face.height || 0);
+    }
+
+    _getFaceIntersection(faceA, faceB) {
+        const minX = Math.max(faceA.minX || 0, faceB.minX || 0);
+        const minY = Math.max(faceA.minY || 0, faceB.minY || 0);
+        const maxX = Math.min(faceA.maxX || 0, faceB.maxX || 0);
+        const maxY = Math.min(faceA.maxY || 0, faceB.maxY || 0);
+        const width = Math.max(0, maxX - minX);
+        const height = Math.max(0, maxY - minY);
+        return width * height;
+    }
+
+    _isSameFaceCandidate(faceA, faceB) {
+        const areaA = this._getFaceArea(faceA);
+        const areaB = this._getFaceArea(faceB);
+        if (areaA <= 0 || areaB <= 0) return false;
+
+        const intersection = this._getFaceIntersection(faceA, faceB);
+        if (intersection <= 0) return false;
+
+        const smallerArea = Math.max(0.0001, Math.min(areaA, areaB));
+        const overlapRatio = intersection / smallerArea;
+
+        const dx = (faceA.centerX || 0) - (faceB.centerX || 0);
+        const dy = (faceA.centerY || 0) - (faceB.centerY || 0);
+        const centerDistance = Math.hypot(dx, dy);
+        const maxSize = Math.max(faceA.width || 0, faceA.height || 0, faceB.width || 0, faceB.height || 0, 0.0001);
+        const normalizedCenterDistance = centerDistance / maxSize;
+
+        return overlapRatio >= this.sameFaceOverlapRatio
+            && normalizedCenterDistance <= this.sameFaceCenterRatio;
+    }
+
+    _pickPreferredFace(faceA, faceB) {
+        const missedA = faceA.missedFrames || 0;
+        const missedB = faceB.missedFrames || 0;
+        if (missedA !== missedB) return missedA < missedB ? faceA : faceB;
+
+        const seenA = faceA.lastSeenTs || 0;
+        const seenB = faceB.lastSeenTs || 0;
+        if (seenA !== seenB) return seenA > seenB ? faceA : faceB;
+
+        const areaA = this._getFaceArea(faceA);
+        const areaB = this._getFaceArea(faceB);
+        if (areaA !== areaB) return areaA >= areaB ? faceA : faceB;
+
+        return (faceA.id || 0) <= (faceB.id || 0) ? faceA : faceB;
+    }
+
+    _dedupeFaces(faces) {
+        if (!Array.isArray(faces) || faces.length <= 1) return Array.isArray(faces) ? faces.slice() : [];
+
+        const orderedFaces = faces.slice().sort((a, b) => {
+            const preferred = this._pickPreferredFace(a, b);
+            return preferred === a ? -1 : 1;
+        });
+        const uniqueFaces = [];
+
+        for (const face of orderedFaces) {
+            const duplicateIndex = uniqueFaces.findIndex((candidate) => this._isSameFaceCandidate(face, candidate));
+            if (duplicateIndex === -1) {
+                uniqueFaces.push(face);
+                continue;
+            }
+
+            uniqueFaces[duplicateIndex] = this._pickPreferredFace(uniqueFaces[duplicateIndex], face);
+        }
+
+        return uniqueFaces;
     }
 
     _getFaceRect(face, canvasWidth, canvasHeight, paddingPercent = this.censorPaddingPercent) {
@@ -332,6 +409,8 @@ class FaceDetection {
             pixelationCellSize: this.pixelationCellSize,
             censorPaddingPercent: this.censorPaddingPercent,
             detectionHoldMs: this.detectionHoldMs,
+            sameFaceOverlapRatio: this.sameFaceOverlapRatio,
+            sameFaceCenterRatio: this.sameFaceCenterRatio,
         };
     }
 
@@ -356,6 +435,12 @@ class FaceDetection {
         }
         if (config.detectionHoldMs != null) {
             this.detectionHoldMs = Math.max(80, Math.min(600, Math.round(config.detectionHoldMs)));
+        }
+        if (config.sameFaceOverlapRatio != null) {
+            this.sameFaceOverlapRatio = Math.max(0.2, Math.min(0.95, Number(config.sameFaceOverlapRatio)));
+        }
+        if (config.sameFaceCenterRatio != null) {
+            this.sameFaceCenterRatio = Math.max(0.08, Math.min(0.9, Number(config.sameFaceCenterRatio)));
         }
     }
 

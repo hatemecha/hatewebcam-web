@@ -6,15 +6,27 @@
 
   // ─── DOM ───
   const $ = (s) => document.querySelector(s);
+  const MOBILE_RENDER_SAFE_MODE = (() => {
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+    const isMobileUa = /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+    const isMobileViewport = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia('(max-width: 900px)').matches
+      : false;
+    return isMobileUa || isMobileViewport;
+  })();
   const videoEl = $('#videoElement');
   const canvas = $('#previewCanvas');
   const previewWrapper = $('#previewWrapper');
-  const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true }) || canvas.getContext('2d');
+  const previewContextOptions = MOBILE_RENDER_SAFE_MODE
+    ? { alpha: false }
+    : { alpha: false, desynchronized: true };
+  const ctx = canvas.getContext('2d', previewContextOptions) || canvas.getContext('2d');
   const placeholder = $('#previewPlaceholder');
   const statusIndicator = $('#statusIndicator');
   const resolutionInfo = $('#resolutionInfo');
   const fpsInfo = $('#fpsInfo');
   const effectsInfo = $('#effectsInfo');
+  const previewQualitySelect = $('#previewQualitySelect');
 
   const btnToggleCamera = $('#btnToggleCamera');
   const cameraSelect = $('#cameraSelect');
@@ -165,21 +177,6 @@
   let blinkLoadRequestId = 0;
   let isPageVisible = document.visibilityState !== 'hidden';
 
-  const DEVICE_PROFILE = (() => {
-    const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
-    const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
-    const deviceMemory = typeof navigator !== 'undefined' && typeof navigator.deviceMemory === 'number'
-      ? navigator.deviceMemory
-      : 0;
-    const hardwareConcurrency = typeof navigator !== 'undefined' && typeof navigator.hardwareConcurrency === 'number'
-      ? navigator.hardwareConcurrency
-      : 0;
-    const lowPower = isMobile
-      || (deviceMemory > 0 && deviceMemory <= 4)
-      || (hardwareConcurrency > 0 && hardwareConcurrency <= 4);
-    return { lowPower };
-  })();
-
   const DEFAULT_IMAGE_SETTINGS = {
     blackAndWhite: false,
     exposure: 0,
@@ -192,12 +189,19 @@
     sharpness: 0,
     jpegQuality: 92,
     videoFormat: 'auto',
+    previewQuality: 'high',
     qualityEnhancer: false,
     qualityEnhancerStrength: 35,
   };
   const TARGET_FPS = 24;
   const PREVIEW_TARGET_FPS = TARGET_FPS;
-  const PREVIEW_MAX_PIXELS = DEVICE_PROFILE.lowPower ? 432 * 243 : 640 * 360;
+  const DEFAULT_PREVIEW_QUALITY = 'high';
+  const PREVIEW_QUALITY_PRESETS = Object.freeze({
+    draft: { label: 'Borrador', maxPixels: 432 * 243, maxScale: 0.45 },
+    balanced: { label: 'Balanceada', maxPixels: 640 * 360, maxScale: 0.66 },
+    high: { label: 'Alta', maxPixels: 1600 * 900, maxScale: 0.9 },
+    full: { label: 'Exacta', maxPixels: Number.POSITIVE_INFINITY, maxScale: 1 },
+  });
   const PREVIEW_MIN_WIDTH = 320;
   const PREVIEW_MIN_HEIGHT = 180;
   const MEDIAPIPE_FACE_MESH_SRC = 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js';
@@ -250,6 +254,16 @@
     return ['pixelate', 'box', 'hybrid'].includes(normalized) ? normalized : 'pixelate';
   }
 
+  function normalizePreviewQuality(value) {
+    return Object.prototype.hasOwnProperty.call(PREVIEW_QUALITY_PRESETS, value)
+      ? value
+      : DEFAULT_PREVIEW_QUALITY;
+  }
+
+  function getCurrentPreviewQualityPreset() {
+    return PREVIEW_QUALITY_PRESETS[normalizePreviewQuality(imageSettings.previewQuality)];
+  }
+
   function isFaceBoxVisualMode(mode = quickDetectorSettings.faceVisualMode) {
     const normalized = normalizeFaceVisualMode(mode);
     return normalized === 'box' || normalized === 'hybrid';
@@ -285,6 +299,12 @@
     if (btnMobileEffectsDock) {
       btnMobileEffectsDock.classList.toggle('is-active', !!visible);
       btnMobileEffectsDock.setAttribute('aria-expanded', String(!!visible));
+    }
+    if (isRunning && isMobileViewport()) {
+      if (videoEl && videoEl.paused) {
+        void videoEl.play().catch(() => {});
+      }
+      requestPreviewRefresh(true);
     }
   }
 
@@ -514,6 +534,7 @@
     imageSettings.videoFormat = ['auto', 'mp4', 'webm'].includes(imageSettings.videoFormat)
       ? imageSettings.videoFormat
       : 'auto';
+    imageSettings.previewQuality = normalizePreviewQuality(imageSettings.previewQuality);
     imageSettings.qualityEnhancer = !!imageSettings.qualityEnhancer;
     const enhancerStrength = parseInt(imageSettings.qualityEnhancerStrength, 10);
     imageSettings.qualityEnhancerStrength = clamp(Number.isFinite(enhancerStrength) ? enhancerStrength : 35, 0, 100);
@@ -556,6 +577,7 @@
     if (sldJpegQuality) sldJpegQuality.value = String(imageSettings.jpegQuality);
     if (valJpegQuality) valJpegQuality.textContent = `${imageSettings.jpegQuality}%`;
     if (videoFormatSelect) videoFormatSelect.value = imageSettings.videoFormat;
+    if (previewQualitySelect) previewQualitySelect.value = normalizePreviewQuality(imageSettings.previewQuality);
     if (chkQualityEnhancer) chkQualityEnhancer.checked = !!imageSettings.qualityEnhancer;
     if (sldQualityEnhancerStrength) sldQualityEnhancerStrength.value = String(imageSettings.qualityEnhancerStrength);
     if (valQualityEnhancerStrength) valQualityEnhancerStrength.textContent = `${imageSettings.qualityEnhancerStrength}%`;
@@ -625,6 +647,15 @@
       });
     }
 
+    if (previewQualitySelect) {
+      previewQualitySelect.addEventListener('change', (e) => {
+        imageSettings.previewQuality = normalizePreviewQuality(e.target.value);
+        e.target.value = imageSettings.previewQuality;
+        requestPreviewRefresh(true);
+        saveImageSettings();
+      });
+    }
+
     if (chkQualityEnhancer) {
       chkQualityEnhancer.addEventListener('change', (e) => {
         imageSettings.qualityEnhancer = e.target.checked;
@@ -639,6 +670,7 @@
           ...DEFAULT_IMAGE_SETTINGS,
           jpegQuality: imageSettings.jpegQuality,
           videoFormat: imageSettings.videoFormat,
+          previewQuality: imageSettings.previewQuality,
           qualityEnhancer: imageSettings.qualityEnhancer,
           qualityEnhancerStrength: imageSettings.qualityEnhancerStrength,
         };
@@ -957,7 +989,10 @@
     profileSelect.addEventListener('change', loadProfile);
     window.addEventListener('keydown', onGlobalKeyDown);
     document.addEventListener('visibilitychange', onVisibilityChange);
-    window.addEventListener('resize', syncMobileViewportState);
+    window.addEventListener('resize', () => {
+      syncMobileViewportState();
+      requestPreviewRefresh(true);
+    });
 
     window.addEventListener('beforeunload', () => {
       stopRecording(false);
@@ -1019,11 +1054,7 @@
 
         videoEl.addEventListener('loadedmetadata', () => {
           const { sourceWidth, sourceHeight } = getSourceFrameDimensions();
-          const { width: previewWidth, height: previewHeight, scale } = getPreviewFrameDimensions(sourceWidth, sourceHeight);
-          previewScale = scale;
-          canvas.width = previewWidth;
-          canvas.height = previewHeight;
-          resolutionInfo.textContent = buildResolutionLabel(sourceWidth, sourceHeight, previewWidth, previewHeight);
+          syncPreviewCanvasMetrics(sourceWidth, sourceHeight, true);
         }, { once: true });
 
         frameCount = 0;
@@ -1230,10 +1261,12 @@
 
   function getPreviewFrameDimensions(sourceWidth, sourceHeight) {
     const { width: effectiveWidth, height: effectiveHeight } = getEffectiveFrameDimensions(sourceWidth, sourceHeight);
+    const previewPreset = getCurrentPreviewQualityPreset();
     const sourcePixels = Math.max(1, effectiveWidth * effectiveHeight);
-    const baseScale = sourcePixels > PREVIEW_MAX_PIXELS
-      ? Math.sqrt(PREVIEW_MAX_PIXELS / sourcePixels)
+    const pixelScale = sourcePixels > previewPreset.maxPixels
+      ? Math.sqrt(previewPreset.maxPixels / sourcePixels)
       : 1;
+    const baseScale = Math.min(1, pixelScale, previewPreset.maxScale);
 
     const aspect = Math.max(0.0001, effectiveWidth / effectiveHeight);
     let width = Math.max(1, Math.round(effectiveWidth * baseScale));
@@ -1252,11 +1285,47 @@
   }
 
   function buildResolutionLabel(sourceWidth, sourceHeight, previewWidth, previewHeight) {
+    const previewLabel = getCurrentPreviewQualityPreset().label;
     if (sourceWidth === previewWidth && sourceHeight === previewHeight) {
-      return `${sourceWidth}×${sourceHeight}`;
+      return `${sourceWidth}×${sourceHeight} · Preview ${previewLabel}`;
     }
-    return `${sourceWidth}×${sourceHeight} (preview ${previewWidth}×${previewHeight})`;
+    return `${sourceWidth}×${sourceHeight} · Preview ${previewLabel} ${previewWidth}×${previewHeight}`;
   }
+
+  function getDesiredPreviewCanvasMetrics(sourceWidth, sourceHeight) {
+    if (isMobileViewport()) {
+      const wrapperWidth = Math.round((previewWrapper && previewWrapper.clientWidth) || window.innerWidth || sourceWidth);
+      const wrapperHeight = Math.round((previewWrapper && previewWrapper.clientHeight) || window.innerHeight || sourceHeight);
+      return {
+        width: Math.max(PREVIEW_MIN_WIDTH, wrapperWidth),
+        height: Math.max(PREVIEW_MIN_HEIGHT, wrapperHeight),
+        scale: wrapperWidth / Math.max(1, sourceWidth),
+      };
+    }
+    return getPreviewFrameDimensions(sourceWidth, sourceHeight);
+  }
+
+  function syncPreviewCanvasMetrics(sourceWidth, sourceHeight, forceLabel = false) {
+    const { width, height, scale } = getDesiredPreviewCanvasMetrics(sourceWidth, sourceHeight);
+    const resized = canvas.width !== width || canvas.height !== height;
+    if (resized) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+    if (forceLabel || resized || previewScale !== scale) {
+      resolutionInfo.textContent = buildResolutionLabel(sourceWidth, sourceHeight, width, height);
+    }
+    previewScale = scale;
+    return { width, height, scale };
+  }
+
+  function requestPreviewRefresh(forceLabel = false) {
+    lastPreviewRenderTs = 0;
+    if (!isRunning || videoEl.readyState < 2) return;
+    const { sourceWidth, sourceHeight } = getSourceFrameDimensions();
+    syncPreviewCanvasMetrics(sourceWidth, sourceHeight, forceLabel);
+  }
+
   function renderLoop(ts = performance.now()) {
     if (!isRunning || !isPageVisible) {
       animFrameId = null;
@@ -1273,29 +1342,7 @@
 
       if (videoEl.readyState >= 2) {
         const { sourceWidth, sourceHeight } = getSourceFrameDimensions();
-        let previewWidth;
-        let previewHeight;
-        let scale;
-        if (isMobileViewport()) {
-          const wrapperWidth = Math.round((previewWrapper && previewWrapper.clientWidth) || window.innerWidth || sourceWidth);
-          const wrapperHeight = Math.round((previewWrapper && previewWrapper.clientHeight) || window.innerHeight || sourceHeight);
-          previewWidth = Math.max(PREVIEW_MIN_WIDTH, wrapperWidth);
-          previewHeight = Math.max(PREVIEW_MIN_HEIGHT, wrapperHeight);
-          scale = previewWidth / Math.max(1, sourceWidth);
-        } else {
-          const dims = getPreviewFrameDimensions(sourceWidth, sourceHeight);
-          previewWidth = dims.width;
-          previewHeight = dims.height;
-          scale = dims.scale;
-        }
-        if (canvas.width !== previewWidth || canvas.height !== previewHeight) {
-          canvas.width = previewWidth;
-          canvas.height = previewHeight;
-        }
-        if (previewScale !== scale || frameCount % 30 === 0) {
-          previewScale = scale;
-          resolutionInfo.textContent = buildResolutionLabel(sourceWidth, sourceHeight, previewWidth, previewHeight);
-        }
+        syncPreviewCanvasMetrics(sourceWidth, sourceHeight, frameCount % 30 === 0);
 
         try {
           renderProcessedFrame(canvas, ctx, 'preview');
