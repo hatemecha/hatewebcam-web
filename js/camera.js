@@ -26,7 +26,7 @@ class CameraManager {
       this.lastError = null;
       return this.devices;
     } catch (e) {
-      console.error('Error enumerating devices:', e);
+      console.warn('Error enumerating devices:', e);
       this.lastError = e;
       return [];
     }
@@ -62,15 +62,33 @@ class CameraManager {
           this.lastError = null;
           return true;
         } catch (fallbackError) {
-          console.error('Error starting camera (fallback failed):', fallbackError);
+          if (!this._isExpectedCameraAccessError(fallbackError)) {
+            console.warn('Error starting camera (fallback failed):', fallbackError);
+          }
           this.lastError = fallbackError;
           return false;
         }
       }
-      console.error('Error starting camera:', e);
+      if (!this._isExpectedCameraAccessError(e)) {
+        console.warn('Error starting camera:', e);
+      }
       this.lastError = e;
       return false;
     }
+  }
+
+  _isExpectedCameraAccessError(error) {
+    const name = error && error.name ? error.name : '';
+    return [
+      'NotAllowedError',
+      'SecurityError',
+      'NotFoundError',
+      'DevicesNotFoundError',
+      'NotReadableError',
+      'TrackStartError',
+      'OverconstrainedError',
+      'ConstraintNotSatisfiedError',
+    ].includes(name);
   }
 
   _buildVideoConstraints(deviceId = null, opts = {}) {
@@ -85,7 +103,7 @@ class CameraManager {
     const lowPower = isMobile
       || (deviceMemory > 0 && deviceMemory <= 4)
       || (hardwareConcurrency > 0 && hardwareConcurrency <= 4);
-    const targetFps = 24;
+    const targetFps = 30;
 
     const defaultWidth = lowPower ? 960 : 1280;
     const defaultHeight = lowPower ? 540 : 720;

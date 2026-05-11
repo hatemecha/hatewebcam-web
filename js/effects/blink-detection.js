@@ -3,11 +3,12 @@
  * Port of the Python BlinkDetection effect
  */
 class BlinkDetection {
-    constructor() {
+    constructor(options = {}) {
         // MediaPipe Face Mesh
         this.faceMesh = null;
         this.ready = false;
         this.initPromise = null;
+        this.landmarkSource = options.landmarkSource || null;
 
         // EAR landmark indices (same as Python version)
         this.LEFT_EYE_EAR = [33, 133, 159, 145];
@@ -19,9 +20,9 @@ class BlinkDetection {
         this.rightBlinkDetected = false;
         this.showDebug = true;
         this.feedbackColor = '#00ff00';
-        this.processIntervalMs = 60;
-        this.minClosedFrames = 2;
-        this._earSmoothing = 0.7;
+        this.processIntervalMs = 35;
+        this.minClosedFrames = 1;
+        this._earSmoothing = 0.45;
 
         // Callback
         this.blinkCallback = null;
@@ -35,8 +36,11 @@ class BlinkDetection {
         this._leftClosedFrames = 0;
         this._rightClosedFrames = 0;
 
-        // Initialize MediaPipe
-        this._initMediaPipe();
+        if (this.landmarkSource) {
+            this.ready = true;
+        } else {
+            this._initMediaPipe();
+        }
     }
 
     getName() {
@@ -50,9 +54,10 @@ class BlinkDetection {
                 return;
             }
 
+            const faceMeshVersion = '0.4.1633559619';
             this.faceMesh = new FaceMesh({
                 locateFile: (file) => {
-                    return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+                    return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@${faceMeshVersion}/${file}`;
                 }
             });
 
@@ -142,11 +147,62 @@ class BlinkDetection {
         return A / B;
     }
 
+    _disposeOwnFaceMesh() {
+        if (!this.faceMesh) return;
+        const mesh = this.faceMesh;
+        this.faceMesh = null;
+        this._faceMeshProcessing = false;
+        try {
+            if (typeof mesh.close === 'function') {
+                const closeResult = mesh.close();
+                if (closeResult && typeof closeResult.catch === 'function') {
+                    closeResult.catch((e) => {
+                        console.warn('BlinkDetection: could not close own FaceMesh instance.', e);
+                    });
+                }
+            }
+        } catch (e) {
+            console.warn('BlinkDetection: could not close own FaceMesh instance.', e);
+        }
+    }
+
+    setLandmarkSource(source) {
+        this.landmarkSource = source || null;
+        if (this.landmarkSource) {
+            this._disposeOwnFaceMesh();
+            this.ready = true;
+            return;
+        }
+
+        if (!this.faceMesh && typeof FaceMesh !== 'undefined') {
+            this.ready = false;
+            this._initMediaPipe();
+        }
+    }
+
+    _processExternalLandmarks() {
+        const landmarks = this.landmarkSource
+            && typeof this.landmarkSource.getPrimaryFaceLandmarks === 'function'
+            ? this.landmarkSource.getPrimaryFaceLandmarks(this.processIntervalMs * 4)
+            : null;
+        this._onFaceMeshResults({
+            multiFaceLandmarks: landmarks ? [landmarks] : [],
+        });
+    }
+
     /**
      * Process frame — sends to MediaPipe for async processing  
      * Drawing is done from cached results
      */
     processFrame(ctx, canvas, video) {
+        if (this.landmarkSource) {
+            const now = performance.now();
+            if (now - this._lastProcessTs < this.processIntervalMs) return;
+            this._lastProcessTs = now;
+            this._processExternalLandmarks();
+            return;
+        }
+
         // Send frame to MediaPipe (throttled)
         if (this.ready && !this._faceMeshProcessing && video && video.readyState >= 2) {
             const now = performance.now();
@@ -173,14 +229,22 @@ class BlinkDetection {
             showDebug: this.showDebug,
             processIntervalMs: this.processIntervalMs,
             minClosedFrames: this.minClosedFrames,
+            earSmoothing: this._earSmoothing,
         };
     }
 
     setConfig(config) {
         if (config.eyeArThreshold != null) this.eyeArThreshold = config.eyeArThreshold;
         if (config.showDebug != null) this.showDebug = config.showDebug;
-        if (config.processIntervalMs != null) this.processIntervalMs = config.processIntervalMs;
-        if (config.minClosedFrames != null) this.minClosedFrames = config.minClosedFrames;
+        if (config.processIntervalMs != null) {
+            this.processIntervalMs = Math.max(16, Math.min(120, Math.round(config.processIntervalMs)));
+        }
+        if (config.minClosedFrames != null) {
+            this.minClosedFrames = Math.max(1, Math.min(5, Math.round(config.minClosedFrames)));
+        }
+        if (config.earSmoothing != null) {
+            this._earSmoothing = Math.max(0, Math.min(0.95, Number(config.earSmoothing)));
+        }
     }
 
     reset() {

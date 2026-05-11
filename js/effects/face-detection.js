@@ -15,12 +15,12 @@ class FaceDetection {
         this.labelText = 'CARA';
         this.showLandmarks = false;
         this.maxFaces = 2;
-        this.processIntervalMs = 45;
-        this.boxSmoothing = 0.82;
+        this.processIntervalMs = 30;
+        this.boxSmoothing = 0.55;
         this.visualMode = 'box';
         this.pixelationCellSize = 14;
         this.censorPaddingPercent = 18;
-        this.detectionHoldMs = 220;
+        this.detectionHoldMs = 120;
         this.matchDistanceMultiplier = 1.9;
         this.sameFaceOverlapRatio = 0.62;
         this.sameFaceCenterRatio = 0.38;
@@ -41,6 +41,15 @@ class FaceDetection {
 
     getName() { return 'Detector de Caras'; }
 
+    getPrimaryFaceLandmarks(maxAgeMs = this.detectionHoldMs) {
+        const now = performance.now();
+        const face = this._faces.find((candidate) => {
+            if (!candidate || !candidate.landmarks) return false;
+            return now - (candidate.lastSeenTs || 0) <= maxAgeMs;
+        });
+        return face ? face.landmarks : null;
+    }
+
     _initMediaPipe() {
         try {
             if (typeof FaceMesh === 'undefined') {
@@ -48,9 +57,10 @@ class FaceDetection {
                 return;
             }
 
+            const faceMeshVersion = '0.4.1633559619';
             this.faceMesh = new FaceMesh({
                 locateFile: (file) =>
-                    `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
+                    `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@${faceMeshVersion}/${file}`,
             });
 
             this.faceMesh.setOptions({
@@ -423,8 +433,12 @@ class FaceDetection {
             this.maxFaces = config.maxFaces;
             if (this.faceMesh) this.faceMesh.setOptions({ maxNumFaces: this.maxFaces });
         }
-        if (config.processIntervalMs != null) this.processIntervalMs = config.processIntervalMs;
-        if (config.boxSmoothing != null) this.boxSmoothing = config.boxSmoothing;
+        if (config.processIntervalMs != null) {
+            this.processIntervalMs = Math.max(16, Math.min(120, Math.round(config.processIntervalMs)));
+        }
+        if (config.boxSmoothing != null) {
+            this.boxSmoothing = Math.max(0, Math.min(0.95, Number(config.boxSmoothing)));
+        }
         if (config.rotationDeg != null) this.rotationDeg = config.rotationDeg;
         if (config.visualMode != null) this.visualMode = this._normalizeVisualMode(config.visualMode);
         if (config.pixelationCellSize != null) {

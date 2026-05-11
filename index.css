@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
-
 :root {
   --bg: #0c0c0c;
   --bg-panel: #111;
@@ -21,9 +19,12 @@
   --r-sm: 4px;
   --transition: 0.12s ease;
   --header-h: 40px;
+  --preview-max-w: 1180px;
+  --panel-w: clamp(320px, 30vw, 390px);
+  --panel-min-w: 320px;
 
-  --sans: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  --mono: 'JetBrains Mono', 'Courier New', Consolas, monospace;
+  --sans: 'Aptos', 'Segoe UI Variable Text', 'Segoe UI', Helvetica, Arial, sans-serif;
+  --mono: 'Cascadia Mono', 'Segoe UI Mono', Consolas, 'Courier New', monospace;
 }
 
 *,
@@ -160,7 +161,7 @@ body {
 .preview-wrapper {
   position: relative;
   width: 100%;
-  max-width: 1180px;
+  max-width: var(--preview-max-w);
   aspect-ratio: 16 / 9;
   background: #000;
   border: 1px solid var(--border);
@@ -257,7 +258,7 @@ body {
   display: flex;
   justify-content: space-between;
   width: 100%;
-  max-width: 1180px;
+  max-width: var(--preview-max-w);
   margin-top: 5px;
   padding: 0 2px;
   font-family: var(--mono);
@@ -268,8 +269,8 @@ body {
 
 /* ─── Control Panel ─── */
 .control-panel {
-  width: clamp(320px, 30vw, 390px);
-  min-width: 320px;
+  width: var(--panel-w);
+  min-width: var(--panel-min-w);
   height: 100dvh;
   min-height: 100vh;
   padding: var(--header-h) 0 0;
@@ -1083,6 +1084,260 @@ input[type="range"]:disabled {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+@media (min-width: 1600px) {
+  :root {
+    --header-h: 46px;
+    --preview-max-w: min(1500px, calc(100vw - 520px));
+    --panel-w: clamp(380px, 26vw, 480px);
+    --panel-min-w: 380px;
+  }
+
+  body {
+    font-size: 14px;
+  }
+
+  .header-bar {
+    padding: 0 20px;
+  }
+
+  .header-bar .logo {
+    font-size: 12px;
+  }
+
+  .header-bar .logo .beta-tag,
+  .header-links a,
+  .status-indicator {
+    font-size: 11px;
+  }
+
+  .preview-area {
+    padding: calc(var(--header-h) + 14px) 18px 14px;
+  }
+
+  .preview-status-bar {
+    margin-top: 8px;
+    font-size: 10px;
+  }
+
+  .preview-overlay-control {
+    gap: 10px;
+    padding: 9px 11px;
+  }
+
+  .preview-overlay-kicker,
+  .preview-overlay-kicker i {
+    font-size: 10px;
+  }
+
+  .preview-overlay-select {
+    min-width: 154px;
+  }
+
+  .preview-overlay-select select {
+    font-size: 11px;
+  }
+
+  .panel-section {
+    padding: 15px 18px;
+  }
+
+  .section-title {
+    margin-bottom: 10px;
+    font-size: 10px;
+  }
+
+  .section-title i {
+    font-size: 11px;
+  }
+
+  .section-desc,
+  .help-text,
+  .slider-label,
+  .checkbox-group,
+  .radio-option,
+  .color-picker-btn {
+    font-size: 13px;
+  }
+
+  .help-text {
+    margin-bottom: 10px;
+  }
+
+  .btn {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+
+  .btn i {
+    font-size: 12px;
+  }
+
+  .btn-icon {
+    width: 36px;
+    min-width: 36px;
+    padding: 8px;
+  }
+
+  .btn-row,
+  .preset-grid,
+  .quick-detector-row,
+  .quick-inline-fields,
+  .mobile-color-row {
+    gap: 8px;
+  }
+
+  .preset-btn {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .select-wrapper select {
+    padding: 8px 32px 8px 10px;
+    font-size: 12px;
+  }
+
+  .text-input,
+  .compact-text-input {
+    padding: 9px 10px;
+    font-size: 12px;
+  }
+
+  .compact-select-wrapper select {
+    min-height: 36px;
+    font-size: 12px;
+  }
+
+  .slider-group {
+    margin-bottom: 12px;
+  }
+
+  .slider-label .value,
+  .status-msg,
+  .quick-color-chip,
+  .capture-preview-filename,
+  .capture-preview-value,
+  .config-block-title {
+    font-size: 11px;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    width: 12px;
+    height: 12px;
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+  }
+
+  .checkbox-group input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+  }
+
+  .checkbox-group input[type="checkbox"]:checked::after {
+    top: 2px;
+    left: 4.5px;
+  }
+
+  .quick-color-chip {
+    padding: 7px 9px;
+  }
+
+  .quick-chip-label {
+    font-size: 10px;
+  }
+
+  .config-block,
+  .capture-preview-info,
+  .capture-preview-photo-tools {
+    padding: 11px 12px;
+  }
+
+  .capture-preview-card {
+    width: min(1180px, 100%);
+    grid-template-columns: minmax(0, 1.75fr) minmax(320px, 1fr);
+  }
+
+  .capture-preview-header,
+  .capture-preview-meta {
+    padding: 12px 14px;
+  }
+
+  .capture-preview-row {
+    font-size: 12px;
+  }
+}
+
+@media (min-width: 2200px) {
+  :root {
+    --header-h: 52px;
+    --preview-max-w: min(1920px, calc(100vw - 660px));
+    --panel-w: clamp(440px, 22vw, 560px);
+    --panel-min-w: 440px;
+  }
+
+  body {
+    font-size: 15px;
+  }
+
+  .header-bar {
+    padding: 0 24px;
+  }
+
+  .header-bar .logo {
+    font-size: 13px;
+  }
+
+  .header-links a,
+  .status-indicator {
+    font-size: 12px;
+  }
+
+  .preview-area {
+    padding: calc(var(--header-h) + 18px) 24px 18px;
+  }
+
+  .preview-status-bar,
+  .preview-overlay-select select,
+  .quick-chip-label {
+    font-size: 12px;
+  }
+
+  .panel-section {
+    padding: 18px 22px;
+  }
+
+  .section-title {
+    font-size: 11px;
+  }
+
+  .section-desc,
+  .help-text,
+  .slider-label,
+  .checkbox-group,
+  .radio-option,
+  .color-picker-btn,
+  .btn {
+    font-size: 14px;
+  }
+
+  .btn {
+    padding: 11px 16px;
+  }
+
+  .select-wrapper select,
+  .text-input,
+  .compact-text-input {
+    font-size: 13px;
+  }
+
+  .capture-preview-card {
+    width: min(1320px, 100%);
+    grid-template-columns: minmax(0, 1.8fr) minmax(360px, 1fr);
   }
 }
 

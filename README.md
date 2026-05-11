@@ -1,31 +1,31 @@
 # hatewebcam
 
-Aplicacion web para usar la camara con filtros en tiempo real, detectores visuales (color, caras y pestaneos), captura de foto/video y vista previa antes de descargar.
+Aplicación web para usar la cámara con filtros en tiempo real, detectores visuales (color, caras y pestañeos), captura de foto/video y vista previa antes de descargar.
 
 > **BETA**
 
 ![Vista general de la app](screenshots/alex.png)
 
-## Que ofrece
+## Qué ofrece
 
 - Vista previa en vivo con controles de imagen.
-- Captura de **foto (JPEG)** y **video (MP4/WebM segun compatibilidad)**.
-- Vista previa post-captura con metadata (resolucion, formato, tamano, etc.).
-- Opcion de mejorar la foto desde la vista previa antes de descargar.
-- Detectores: objetos por color, caras (Face Mesh) y pestaneos.
+- Captura de **foto (JPEG)** y **video (MP4/WebM según compatibilidad)**.
+- Vista previa post-captura con metadata (resolución, formato, tamaño, etc.).
+- Opción de mejorar la foto desde la vista previa antes de descargar.
+- Detectores: objetos por color, caras (Face Mesh) y pestañeos.
 - Perfiles guardados en el navegador para recuperar configuraciones.
-- Interfaz responsive con HUD dedicado en moviles.
+- Interfaz responsive con HUD dedicado en móviles.
 
 ## Requisitos
 
 - Navegador moderno (recomendado: Chrome/Edge actual).
-- Camara disponible y permisos habilitados.
+- Cámara disponible y permisos habilitados.
 - Servir la app desde `localhost` o `https` (no usar `file://`).
-- Conexion a internet para cargar Face Mesh desde CDN cuando se activan detectores de cara/pestaneos.
+- Conexión a internet para cargar Face Mesh desde CDN cuando se activan detectores de cara/pestañeos.
 
-## Inicio rapido
+## Inicio rápido
 
-### Opcion recomendada (GitHub Pages)
+### Opción recomendada (GitHub Pages)
 
 La forma correcta de usar el proyecto es esta URL:
 
@@ -33,7 +33,7 @@ La forma correcta de usar el proyecto es esta URL:
 https://hatemecha.github.io/hatewebcam-web/
 ```
 
-### Opcion local (desarrollo)
+### Opción local (desarrollo)
 
 Desde la carpeta del proyecto:
 
@@ -47,30 +47,38 @@ Luego abre:
 http://localhost:8080
 ```
 
-## Uso basico
+## Uso básico
 
-1. Abre la app y permite acceso a la camara.
-2. Elige camara si tienes mas de una.
-3. Ajusta filtros rapidos o ajuste fino.
+1. Abre la app y permite acceso a la cámara.
+2. Elige cámara si tienes más de una.
+3. Ajusta filtros rápidos o ajuste fino.
 4. Activa detectores si los necesitas.
-5. Saca foto o graba video.
+5. Saca una foto o graba video.
 6. En la vista previa decide: `Descargar` o `Descartar`.
 
-## Persistencia de configuracion
+## Verificación
+
+Para ejecutar checks básicos de sintaxis y estructura:
+
+```bash
+npm test
+```
+
+## Persistencia de configuración
 
 La app guarda ajustes en `localStorage` del navegador:
 
-- `hatewebcam_config`: configuracion general.
+- `hatewebcam_config`: configuración general.
 - `hatewebcam_profiles`: perfiles guardados.
 
-Si necesitas resetear todo, limpia esos valores desde DevTools o borra datos del sitio.
+Si necesitás resetear todo, limpia esos valores desde DevTools o borra datos del sitio.
 
 
 
 ## Dependencias externas
 
 - [Font Awesome](https://cdnjs.com/libraries/font-awesome) (iconos).
-- [MediaPipe Face Mesh](https://www.npmjs.com/package/@mediapipe/face_mesh) (carga dinamica desde jsDelivr).
+- [MediaPipe Face Mesh](https://www.npmjs.com/package/@mediapipe/face_mesh) (carga dinámica desde jsDelivr, versión fijada).
 
 ## Privacidad
 
@@ -79,7 +87,7 @@ Si necesitas resetear todo, limpia esos valores desde DevTools o borra datos del
 - No hay backend propio en este repositorio.
 
 ## Futuras mejoras
-- Abrir imagenes + editor
+- Abrir imágenes + editor
 
 
 ---

@@ -193,7 +193,7 @@
     qualityEnhancer: false,
     qualityEnhancerStrength: 35,
   };
-  const TARGET_FPS = 24;
+  const TARGET_FPS = 30;
   const PREVIEW_TARGET_FPS = TARGET_FPS;
   const DEFAULT_PREVIEW_QUALITY = 'high';
   const PREVIEW_QUALITY_PRESETS = Object.freeze({
@@ -204,7 +204,8 @@
   });
   const PREVIEW_MIN_WIDTH = 320;
   const PREVIEW_MIN_HEIGHT = 180;
-  const MEDIAPIPE_FACE_MESH_SRC = 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js';
+  const MEDIAPIPE_FACE_MESH_VERSION = '0.4.1633559619';
+  const MEDIAPIPE_FACE_MESH_SRC = `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@${MEDIAPIPE_FACE_MESH_VERSION}/face_mesh.js`;
   const MEDIAPIPE_CONSOLE_NOISE_PATTERNS = [
     'gl_context_webgl.cc',
     'gl_context.cc:351',
@@ -224,24 +225,70 @@
   let quickDetectorSettings = { ...DEFAULT_QUICK_DETECTOR_SETTINGS };
   let saveImageSettingsTimer = null;
   let saveQuickDetectorSettingsTimer = null;
+  let saveEffectSettingsTimer = null;
+  let storageWarningShown = false;
 
   // ─── Storage ───
   const STORAGE_KEY = 'hatewebcam_config';
   const PROFILES_KEY = 'hatewebcam_profiles';
 
+  function loadJsonStorage(key, fallbackValue) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallbackValue;
+    } catch (err) {
+      console.warn(`HateWebcam: no se pudo leer ${key} desde localStorage.`, err);
+      return fallbackValue;
+    }
+  }
+
+  function notifyStorageUnavailable(err) {
+    console.warn('HateWebcam: no se pudieron guardar los ajustes locales.', err);
+    if (storageWarningShown) return;
+    storageWarningShown = true;
+    showStatus(captureStatus || profileStatus, 'No se pudieron guardar los ajustes locales en este navegador.', 'warning');
+  }
+
+  function saveJsonStorage(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+      return true;
+    } catch (err) {
+      notifyStorageUnavailable(err);
+      return false;
+    }
+  }
+
   function loadConfig() {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
-    catch { return {}; }
+    return loadJsonStorage(STORAGE_KEY, {});
   }
-  function saveConfig(cfg) { localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg)); }
+  function saveConfig(cfg) { return saveJsonStorage(STORAGE_KEY, cfg); }
   function loadProfiles() {
-    try { return JSON.parse(localStorage.getItem(PROFILES_KEY)) || {}; }
-    catch { return {}; }
+    return loadJsonStorage(PROFILES_KEY, {});
   }
-  function saveProfiles(p) { localStorage.setItem(PROFILES_KEY, JSON.stringify(p)); }
+  function saveProfiles(p) { return saveJsonStorage(PROFILES_KEY, p); }
 
   function clamp(v, min, max) {
     return Math.min(max, Math.max(min, v));
+  }
+
+  function toFiniteNumber(value, fallback = 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function normalizeHexColor(value, fallback = '#ffffff') {
+    const color = String(value || '').trim();
+    return /^#[0-9a-f]{6}$/i.test(color) ? color : fallback;
   }
 
   function normalizeFaceLabel(value) {
@@ -289,29 +336,8 @@
     return !!mobileFxPanel && !mobileFxPanel.classList.contains('hidden');
   }
 
-  function getCurrentCameraFacingMode() {
-    const settings = cameraManager.getStreamSettings();
-    const facingMode = typeof settings.facingMode === 'string'
-      ? settings.facingMode.trim().toLowerCase()
-      : '';
-    if (facingMode) return facingMode;
-
-    const selectedLabel = cameraSelect && cameraSelect.selectedOptions && cameraSelect.selectedOptions[0]
-      ? String(cameraSelect.selectedOptions[0].textContent || '').trim().toLowerCase()
-      : '';
-    if (/(front|frontal|user|selfie)/.test(selectedLabel)) return 'user';
-    if (/(back|rear|trasera|environment)/.test(selectedLabel)) return 'environment';
-    return '';
-  }
-
-  function shouldAutoCompensateMobileMirror() {
-    if (!isMobileViewport()) return false;
-    const facingMode = getCurrentCameraFacingMode();
-    return facingMode === 'user' || facingMode === 'front';
-  }
-
   function getEffectiveFlipH() {
-    return shouldAutoCompensateMobileMirror() !== !!flipH;
+    return !!flipH;
   }
 
   function setMobileFxPanelVisible(visible) {
@@ -378,7 +404,7 @@
 
     const existing = Array.from(document.scripts).find((s) => {
       const src = s.getAttribute('src') || '';
-      return src.includes('@mediapipe/face_mesh/face_mesh.js');
+      return src.includes('@mediapipe/face_mesh') && src.endsWith('/face_mesh.js');
     });
 
     faceMeshScriptLoadPromise = new Promise((resolve, reject) => {
@@ -539,6 +565,76 @@
     }
     updateQuickDetectorControlsUI();
     saveQuickDetectorSettings();
+  }
+
+  function getSavedEffectConfig(type) {
+    const cfg = loadConfig();
+    return cfg.effectSettings && cfg.effectSettings[type] ? cfg.effectSettings[type] : null;
+  }
+
+  function saveActiveEffectSettings() {
+    const cfg = loadConfig();
+    cfg.effectSettings = {
+      ...(cfg.effectSettings || {}),
+    };
+
+    if (blobTrackingEffect) cfg.effectSettings.blob = blobTrackingEffect.getConfig();
+    if (faceDetectionEffect) cfg.effectSettings.face = faceDetectionEffect.getConfig();
+    if (blinkDetectionEffect) cfg.effectSettings.blink = blinkDetectionEffect.getConfig();
+
+    saveConfig(cfg);
+  }
+
+  function scheduleSaveActiveEffectSettings() {
+    if (saveEffectSettingsTimer) clearTimeout(saveEffectSettingsTimer);
+    saveEffectSettingsTimer = setTimeout(() => {
+      saveEffectSettingsTimer = null;
+      saveActiveEffectSettings();
+    }, 140);
+  }
+
+  function migrateDetectorLatencyDefaults(cfg) {
+    if (cfg.detectorLatencyDefaultV1 === true) return false;
+
+    cfg.effectSettings = {
+      ...(cfg.effectSettings || {}),
+    };
+
+    if (cfg.effectSettings.blob) {
+      const processScale = Number(cfg.effectSettings.blob.processScale);
+      if (!Number.isFinite(processScale) || processScale >= 0.55) {
+        cfg.effectSettings.blob.processScale = 0.45;
+      }
+    }
+
+    if (cfg.effectSettings.face) {
+      const face = cfg.effectSettings.face;
+      if (!Number.isFinite(Number(face.processIntervalMs)) || Number(face.processIntervalMs) >= 45) {
+        face.processIntervalMs = 30;
+      }
+      if (!Number.isFinite(Number(face.boxSmoothing)) || Number(face.boxSmoothing) >= 0.8) {
+        face.boxSmoothing = 0.55;
+      }
+      if (!Number.isFinite(Number(face.detectionHoldMs)) || Number(face.detectionHoldMs) >= 220) {
+        face.detectionHoldMs = 120;
+      }
+    }
+
+    if (cfg.effectSettings.blink) {
+      const blink = cfg.effectSettings.blink;
+      if (!Number.isFinite(Number(blink.processIntervalMs)) || Number(blink.processIntervalMs) >= 60) {
+        blink.processIntervalMs = 35;
+      }
+      if (!Number.isFinite(Number(blink.minClosedFrames)) || Number(blink.minClosedFrames) >= 2) {
+        blink.minClosedFrames = 1;
+      }
+      if (!Number.isFinite(Number(blink.earSmoothing)) || Number(blink.earSmoothing) >= 0.7) {
+        blink.earSmoothing = 0.45;
+      }
+    }
+
+    cfg.detectorLatencyDefaultV1 = true;
+    return true;
   }
 
   function loadImageSettings(cfg) {
@@ -721,6 +817,7 @@
         if (blobTrackingEffect) blobTrackingEffect.boxColor = e.target.value;
         updateQuickDetectorControlsUI();
         scheduleSaveQuickDetectorSettings();
+        scheduleSaveActiveEffectSettings();
       });
     }
 
@@ -735,6 +832,7 @@
         renderEffectConfig();
         updateEffectsInfo();
         scheduleSaveQuickDetectorSettings();
+        scheduleSaveActiveEffectSettings();
       });
     }
 
@@ -744,6 +842,7 @@
         if (faceDetectionEffect) faceDetectionEffect.boxColor = e.target.value;
         updateQuickDetectorControlsUI();
         scheduleSaveQuickDetectorSettings();
+        scheduleSaveActiveEffectSettings();
       });
     }
 
@@ -753,6 +852,7 @@
         quickDetectorSettings.faceLabelText = value || 'CARA';
         if (faceDetectionEffect) faceDetectionEffect.labelText = value;
         scheduleSaveQuickDetectorSettings();
+        scheduleSaveActiveEffectSettings();
         syncAdvancedQuickInputs();
       });
 
@@ -762,6 +862,7 @@
         e.target.value = normalized;
         if (faceDetectionEffect) faceDetectionEffect.labelText = normalized;
         saveQuickDetectorSettings();
+        saveActiveEffectSettings();
         syncAdvancedQuickInputs();
       });
     }
@@ -815,7 +916,7 @@
     cameraSelect.innerHTML = '';
 
     if (!devices || devices.length === 0) {
-      cameraSelect.innerHTML = '<option value="">No se encontraron camaras</option>';
+      cameraSelect.innerHTML = '<option value="">No se encontraron cámaras</option>';
       cameraSelect.disabled = true;
       return;
     }
@@ -823,7 +924,7 @@
     devices.forEach((d, i) => {
       const opt = document.createElement('option');
       opt.value = d.deviceId;
-      opt.textContent = d.label || `Camara ${i + 1}`;
+      opt.textContent = d.label || `Cámara ${i + 1}`;
       cameraSelect.appendChild(opt);
     });
 
@@ -847,6 +948,11 @@
       cfg.forceMirrorDefaultV3 = true;
       saveConfig(cfg);
     }
+    if (cfg.forceMirrorDefaultV4 !== true) {
+      cfg.flipH = false;
+      cfg.forceMirrorDefaultV4 = true;
+      saveConfig(cfg);
+    }
     if (cfg.faceVisualModeDefaultV2 !== true) {
       const savedQuickDetectorSettings = cfg.quickDetectorSettings || {};
       if (!savedQuickDetectorSettings.faceVisualMode || savedQuickDetectorSettings.faceVisualMode === 'pixelate') {
@@ -856,6 +962,9 @@
         };
       }
       cfg.faceVisualModeDefaultV2 = true;
+      saveConfig(cfg);
+    }
+    if (migrateDetectorLatencyDefaults(cfg)) {
       saveConfig(cfg);
     }
     if (typeof cfg.flipH === 'boolean') flipH = cfg.flipH;
@@ -878,7 +987,7 @@
     updateMobilePresetButtons(mobileActivePreset);
     preferredDeviceId = typeof cfg.deviceId === 'string' && cfg.deviceId ? cfg.deviceId : null;
     if (cameraSelect) {
-      cameraSelect.innerHTML = '<option value="">Cargando camaras...</option>';
+      cameraSelect.innerHTML = '<option value="">Cargando cámaras...</option>';
       cameraSelect.disabled = true;
     }
 
@@ -969,6 +1078,7 @@
         if (blobTrackingEffect) blobTrackingEffect.boxColor = e.target.value;
         updateQuickDetectorControlsUI();
         scheduleSaveQuickDetectorSettings();
+        scheduleSaveActiveEffectSettings();
       });
     }
     if (inpMobileFaceColor) {
@@ -977,6 +1087,7 @@
         if (faceDetectionEffect) faceDetectionEffect.boxColor = e.target.value;
         updateQuickDetectorControlsUI();
         scheduleSaveQuickDetectorSettings();
+        scheduleSaveActiveEffectSettings();
       });
     }
     if (selMobileFaceMode) {
@@ -990,6 +1101,7 @@
         renderEffectConfig();
         updateEffectsInfo();
         scheduleSaveQuickDetectorSettings();
+        scheduleSaveActiveEffectSettings();
       });
     }
     if (inpMobileFaceLabel) {
@@ -999,6 +1111,7 @@
         if (faceDetectionEffect) faceDetectionEffect.labelText = value;
         updateQuickDetectorControlsUI();
         scheduleSaveQuickDetectorSettings();
+        scheduleSaveActiveEffectSettings();
       });
       inpMobileFaceLabel.addEventListener('blur', (e) => {
         const normalized = normalizeFaceLabel(e.target.value);
@@ -1006,6 +1119,7 @@
         e.target.value = normalized;
         if (faceDetectionEffect) faceDetectionEffect.labelText = normalized;
         saveQuickDetectorSettings();
+        saveActiveEffectSettings();
       });
     }
     if (chkPreviewPhotoEnhancer) {
@@ -1058,6 +1172,31 @@
   }
 
   // ─── Camera ───
+  function setCameraPlaceholderMessage(message) {
+    if (!placeholder) return;
+    const msg = placeholder.querySelector('div');
+    if (msg) msg.textContent = message;
+  }
+
+  function getCameraStartErrorMessage(error, wasAutoStart = false) {
+    const errorName = error && error.name ? error.name : '';
+    if (errorName === 'NotAllowedError' || errorName === 'SecurityError') {
+      return 'Permiso de cámara bloqueado. Habilitá el permiso del navegador y tocá Encender Cámara.';
+    }
+    if (errorName === 'NotFoundError' || errorName === 'DevicesNotFoundError') {
+      return 'No se encontró una cámara disponible. Conectá una cámara y tocá Encender Cámara.';
+    }
+    if (errorName === 'NotReadableError' || errorName === 'TrackStartError') {
+      return 'Otra app parece estar usando la cámara. Cerrala y tocá Encender Cámara.';
+    }
+    if (errorName === 'OverconstrainedError' || errorName === 'ConstraintNotSatisfiedError') {
+      return 'La cámara no soporta la configuración solicitada. Probá otra cámara o reintentá.';
+    }
+    return wasAutoStart
+      ? 'La cámara no se inició automáticamente. Tocá Encender Cámara para reintentar.'
+      : 'No se pudo activar la cámara. Revisá permisos y reintentá.';
+  }
+
   async function toggleCamera(forceStart = false) {
     if (isRunning && !forceStart) {
       if (isRecording) stopRecording(true);
@@ -1079,6 +1218,7 @@
 
     if (!isRunning) {
       const requestedDeviceId = cameraSelect.value || preferredDeviceId || null;
+      setCameraPlaceholderMessage('Solicitando permiso de cámara...');
       const ok = await cameraManager.start(videoEl, requestedDeviceId);
       if (ok) {
         isRunning = true;
@@ -1110,9 +1250,10 @@
         if (cameraSelect && preferredDeviceId) cameraSelect.value = preferredDeviceId;
         void refreshCameraDevices(preferredDeviceId);
       } else {
+        const message = getCameraStartErrorMessage(cameraManager.lastError, forceStart);
         placeholder.classList.remove('hidden');
-        const msg = placeholder.querySelector('div');
-        if (msg) msg.textContent = 'No se pudo activar la cámara. Revisá permisos y reintentá.';
+        setCameraPlaceholderMessage(message);
+        showStatus(captureStatus, message, 'warning');
       }
       updateCaptureButtons();
     }
@@ -1133,7 +1274,7 @@
       void refreshCameraDevices(preferredDeviceId);
     } catch (err) {
       console.error('Error switching camera:', err);
-      showStatus(captureStatus, 'No se pudo cambiar de camara', 'error');
+      showStatus(captureStatus, 'No se pudo cambiar de cámara', 'error');
       setTimeout(() => hideStatus(captureStatus), 2200);
     } finally {
       cameraSelect.disabled = false;
@@ -1152,11 +1293,18 @@
   }
 
   // ─── Effects ───
+  function syncBlinkLandmarkSource() {
+    if (!blinkDetectionEffect || typeof blinkDetectionEffect.setLandmarkSource !== 'function') return;
+    blinkDetectionEffect.setLandmarkSource(faceDetectionEffect || null);
+  }
+
   async function toggleEffect(type) {
     if (type === 'blob') {
       if (chkBlobTracking.checked) {
         if (!blobTrackingEffect) {
           blobTrackingEffect = new BlobTracking();
+          const savedBlobConfig = getSavedEffectConfig('blob');
+          if (savedBlobConfig) blobTrackingEffect.setConfig(savedBlobConfig);
           blobTrackingEffect.boxColor = quickDetectorSettings.blobBoxColor;
           effectManager.addEffect(blobTrackingEffect);
         }
@@ -1170,6 +1318,7 @@
         if (colorPickSection) colorPickSection.classList.add('hidden');
       }
       syncQuickDetectorSettingsFromEffects();
+      saveActiveEffectSettings();
       renderEffectConfig();
       updateEffectsInfo();
       return;
@@ -1195,28 +1344,32 @@
 
         if (!faceDetectionEffect) {
           faceDetectionEffect = new FaceDetection();
+          const savedFaceConfig = getSavedEffectConfig('face');
+          if (savedFaceConfig) faceDetectionEffect.setConfig(savedFaceConfig);
           applyQuickDetectorSettingsToEffects();
           effectManager.addEffect(faceDetectionEffect);
         } else {
           applyQuickDetectorSettingsToEffects();
         }
+        syncBlinkLandmarkSource();
         if (!isRecording) {
           setTimeout(() => hideStatus(captureStatus), 1200);
         }
       } else {
         if (faceDetectionEffect) effectManager.removeEffect(faceDetectionEffect);
         faceDetectionEffect = null;
+        syncBlinkLandmarkSource();
       }
     } else if (type === 'blink') {
       const requestId = ++blinkLoadRequestId;
       if (chkBlinkDetection.checked) {
-        showStatus(captureStatus, 'Cargando detector de pestaneos...', 'info');
+        showStatus(captureStatus, 'Cargando detector de pestañeos...', 'info');
         chkBlinkDetection.disabled = true;
         try {
           await ensureFaceMeshLoaded();
         } catch (err) {
           console.error('No se pudo cargar MediaPipe Face Mesh:', err);
-          showStatus(captureStatus, 'No se pudo cargar el detector de pestaneos', 'error');
+          showStatus(captureStatus, 'No se pudo cargar el detector de pestañeos', 'error');
           chkBlinkDetection.checked = false;
         } finally {
           chkBlinkDetection.disabled = false;
@@ -1226,9 +1379,12 @@
         if (typeof FaceMesh === 'undefined') return;
 
         if (!blinkDetectionEffect) {
-          blinkDetectionEffect = new BlinkDetection();
+          blinkDetectionEffect = new BlinkDetection({ landmarkSource: faceDetectionEffect || null });
+          const savedBlinkConfig = getSavedEffectConfig('blink');
+          if (savedBlinkConfig) blinkDetectionEffect.setConfig(savedBlinkConfig);
           effectManager.addEffect(blinkDetectionEffect);
         }
+        syncBlinkLandmarkSource();
         if (blobTrackingEffect) {
           blinkDetectionEffect.setBlinkCallback((eye) => blobTrackingEffect.triggerConnection(eye));
         }
@@ -1242,6 +1398,7 @@
     }
 
     syncQuickDetectorSettingsFromEffects();
+    saveActiveEffectSettings();
     renderEffectConfig();
     updateEffectsInfo();
   }
@@ -1648,6 +1805,8 @@
   // --- Blob Tracking Config ---
   function buildBlobConfig() {
     const bt = blobTrackingEffect;
+    const boxColor = normalizeHexColor(bt.boxColor, DEFAULT_QUICK_DETECTOR_SETTINGS.blobBoxColor);
+    bt.boxColor = boxColor;
     const el = createSection('Detector de objetos por color', `
       <div class="config-block">
         <div class="config-block-title">¿Qué detectar?</div>
@@ -1699,11 +1858,17 @@
       </div>
 
       <div class="config-block">
+        <div class="config-block-title">Respuesta</div>
+        <div class="help-text">Bajá la resolución de análisis si notás retraso. Subirla da más precisión, pero consume más CPU.</div>
+        ${slider('sldBlobProcessScale', 'valBlobProcessScale', 'Resolución de análisis (%)', Math.round((bt.processScale || 0.45) * 100), 25, 100)}
+      </div>
+
+      <div class="config-block">
         <div class="config-block-title">Aspecto visual</div>
         <label class="color-picker-btn" style="position:relative">
-          <div class="color-swatch" id="boxColorSwatch" style="background:${bt.boxColor}"></div>
+          <div class="color-swatch" id="boxColorSwatch" style="background:${boxColor}"></div>
           <span>Color del recuadro</span>
-          <input type="color" id="inpBoxColor" value="${bt.boxColor}">
+          <input type="color" id="inpBoxColor" value="${boxColor}">
         </label>
         <div style="height:6px"></div>
         <label class="checkbox-group"><input type="checkbox" id="chkShowCoords" ${bt.showCoordinates ? 'checked' : ''}><span>Mostrar posición (X, Y)</span></label>
@@ -1720,6 +1885,7 @@
           el.querySelector('#cfgColorBlock').style.display = bt.detectionMode === 'manual' ? '' : 'none';
           el.querySelectorAll('.radio-option').forEach(o => o.classList.remove('selected'));
           e.target.closest('.radio-option').classList.add('selected');
+          scheduleSaveActiveEffectSettings();
         });
       });
 
@@ -1738,6 +1904,9 @@
       bindSlider(el, 'sldMaxObj', 'valMaxObj', v => bt.maxObjects = v);
       bindSlider(el, 'sldMinArea', 'valMinArea', v => bt.minArea = v);
       bindSlider(el, 'sldErode', 'valErode', v => bt.erodeIterations = v);
+      bindSlider(el, 'sldBlobProcessScale', 'valBlobProcessScale', v => {
+        bt.processScale = clamp(v / 100, 0.25, 1);
+      });
       bindSlider(el, 'sldThickness', 'valThickness', v => bt.boxThickness = v);
 
       const inpColor = el.querySelector('#inpBoxColor');
@@ -1748,10 +1917,17 @@
         swatch.style.background = e.target.value;
         updateQuickDetectorControlsUI();
         scheduleSaveQuickDetectorSettings();
+        scheduleSaveActiveEffectSettings();
       });
 
-      el.querySelector('#chkShowCoords').addEventListener('change', e => bt.showCoordinates = e.target.checked);
-      el.querySelector('#chkShowCentroid').addEventListener('change', e => bt.showCentroid = e.target.checked);
+      el.querySelector('#chkShowCoords').addEventListener('change', e => {
+        bt.showCoordinates = e.target.checked;
+        scheduleSaveActiveEffectSettings();
+      });
+      el.querySelector('#chkShowCentroid').addEventListener('change', e => {
+        bt.showCentroid = e.target.checked;
+        scheduleSaveActiveEffectSettings();
+      });
     });
 
     return el;
@@ -1763,6 +1939,8 @@
     const faceMode = normalizeFaceVisualMode(fd.visualMode);
     const showBoxVisuals = isFaceBoxVisualMode(faceMode);
     const showPixelVisuals = isFacePixelVisualMode(faceMode);
+    const faceBoxColor = normalizeHexColor(fd.boxColor, DEFAULT_QUICK_DETECTOR_SETTINGS.faceBoxColor);
+    fd.boxColor = faceBoxColor;
     const el = createSection('Detector de caras', `
       <div class="config-block">
         <div class="config-block-title">Configuración</div>
@@ -1779,7 +1957,7 @@
           </div>
         </div>
         <div id="facePixelControls" class="${showPixelVisuals ? '' : 'hidden'}">
-          ${slider('sldFacePixelation', 'valFacePixelation', 'Tamano del pixelado', fd.pixelationCellSize, 4, 32)}
+          ${slider('sldFacePixelation', 'valFacePixelation', 'Tamaño del pixelado', fd.pixelationCellSize, 4, 32)}
           ${slider('sldFacePadding', 'valFacePadding', 'Margen extra de censura (%)', fd.censorPaddingPercent, 0, 40)}
         </div>
         <div id="faceBoxControls" class="${showBoxVisuals ? '' : 'hidden'}">
@@ -1788,14 +1966,21 @@
             <input type="text" id="inpFaceLabel" class="text-input" maxlength="28" placeholder="Ej: Cliente VIP">
           </div>
           <label class="color-picker-btn" style="position:relative;margin-top:6px">
-            <div class="color-swatch" id="faceColorSwatch" style="background:${fd.boxColor}"></div>
+            <div class="color-swatch" id="faceColorSwatch" style="background:${faceBoxColor}"></div>
             <span>Color del recuadro</span>
-            <input type="color" id="inpFaceColor" value="${fd.boxColor}">
+            <input type="color" id="inpFaceColor" value="${faceBoxColor}">
           </label>
           <div style="height:6px"></div>
           ${slider('sldFaceThickness', 'valFaceThickness', 'Grosor del recuadro', fd.boxThickness, 1, 8)}
         </div>
         <label class="checkbox-group"><input type="checkbox" id="chkShowLandmarks" ${fd.showLandmarks ? 'checked' : ''}><span>Mostrar puntos faciales</span></label>
+      </div>
+      <div class="config-block">
+        <div class="config-block-title">Respuesta</div>
+        <div class="help-text">Menos suavizado y menos retención responden más rápido. Si vibra demasiado, subilos un poco.</div>
+        ${slider('sldFaceInterval', 'valFaceInterval', 'Intervalo de análisis (ms)', fd.processIntervalMs, 16, 80)}
+        ${slider('sldFaceSmoothing', 'valFaceSmoothing', 'Suavizado del recuadro (%)', Math.round((fd.boxSmoothing || 0) * 100), 0, 95)}
+        ${slider('sldFaceHold', 'valFaceHold', 'Retención al perder cara (ms)', fd.detectionHoldMs, 80, 300, 10)}
       </div>
     `);
 
@@ -1819,6 +2004,7 @@
           updateQuickDetectorControlsUI();
           updateEffectsInfo();
           scheduleSaveQuickDetectorSettings();
+          scheduleSaveActiveEffectSettings();
         });
       }
 
@@ -1837,6 +2023,15 @@
         scheduleSaveQuickDetectorSettings();
       });
       bindSlider(el, 'sldFaceThickness', 'valFaceThickness', v => fd.boxThickness = v);
+      bindSlider(el, 'sldFaceInterval', 'valFaceInterval', v => {
+        fd.processIntervalMs = clamp(Math.round(v), 16, 80);
+      });
+      bindSlider(el, 'sldFaceSmoothing', 'valFaceSmoothing', v => {
+        fd.boxSmoothing = clamp(v / 100, 0, 0.95);
+      });
+      bindSlider(el, 'sldFaceHold', 'valFaceHold', v => {
+        fd.detectionHoldMs = clamp(Math.round(v), 80, 300);
+      });
 
       const inpLabel = el.querySelector('#inpFaceLabel');
       if (inpLabel) {
@@ -1849,6 +2044,7 @@
             inpFaceQuickLabel.value = quickDetectorSettings.faceLabelText;
           }
           scheduleSaveQuickDetectorSettings();
+          scheduleSaveActiveEffectSettings();
         });
         inpLabel.addEventListener('blur', e => {
           const normalized = normalizeFaceLabel(e.target.value);
@@ -1857,6 +2053,7 @@
           e.target.value = fd.labelText;
           updateQuickDetectorControlsUI();
           saveQuickDetectorSettings();
+          saveActiveEffectSettings();
         });
       }
 
@@ -1869,10 +2066,14 @@
           swatch.style.background = e.target.value;
           updateQuickDetectorControlsUI();
           scheduleSaveQuickDetectorSettings();
+          scheduleSaveActiveEffectSettings();
         });
       }
 
-      el.querySelector('#chkShowLandmarks').addEventListener('change', e => fd.showLandmarks = e.target.checked);
+      el.querySelector('#chkShowLandmarks').addEventListener('change', e => {
+        fd.showLandmarks = e.target.checked;
+        scheduleSaveActiveEffectSettings();
+      });
       syncFaceModeUI();
     });
 
@@ -1887,6 +2088,9 @@
         <div class="config-block-title">Configuración</div>
         <div class="help-text">Cuando cerrás un ojo, se dibujan líneas entre los objetos detectados. Necesitás tener el detector de objetos activado para ver las conexiones.</div>
         ${slider('sldEar', 'valEar', 'Sensibilidad (cuanto más alto, más fácil detectar)', bd.eyeArThreshold, 0.10, 0.40, 0.01)}
+        ${slider('sldBlinkInterval', 'valBlinkInterval', 'Intervalo de análisis (ms)', bd.processIntervalMs, 16, 80)}
+        ${slider('sldBlinkClosedFrames', 'valBlinkClosedFrames', 'Frames cerrados mínimos', bd.minClosedFrames, 1, 4)}
+        ${slider('sldBlinkSmoothing', 'valBlinkSmoothing', 'Suavizado del párpado (%)', Math.round((bd._earSmoothing || 0) * 100), 0, 90)}
       </div>
     `);
 
@@ -1896,6 +2100,16 @@
       sld.addEventListener('input', e => {
         bd.eyeArThreshold = parseFloat(e.target.value);
         val.textContent = bd.eyeArThreshold.toFixed(2);
+        scheduleSaveActiveEffectSettings();
+      });
+      bindSlider(el, 'sldBlinkInterval', 'valBlinkInterval', v => {
+        bd.processIntervalMs = clamp(Math.round(v), 16, 80);
+      });
+      bindSlider(el, 'sldBlinkClosedFrames', 'valBlinkClosedFrames', v => {
+        bd.minClosedFrames = clamp(Math.round(v), 1, 4);
+      });
+      bindSlider(el, 'sldBlinkSmoothing', 'valBlinkSmoothing', v => {
+        bd._earSmoothing = clamp(v / 100, 0, 0.9);
       });
     });
 
@@ -1906,19 +2120,23 @@
   function createSection(title, html) {
     const div = document.createElement('div');
     div.className = 'panel-section fade-in';
-    div.innerHTML = `<div class="section-title accent">${title}</div><div class="effect-config">${html}</div>`;
+    div.innerHTML = `<div class="section-title accent">${escapeHtml(title)}</div><div class="effect-config">${html}</div>`;
     return div;
   }
 
   function slider(id, valId, label, value, min, max, step = 1) {
-    const displayVal = Number.isInteger(value) ? value : parseFloat(value).toFixed(2);
+    const safeValue = toFiniteNumber(value, min);
+    const safeMin = toFiniteNumber(min, 0);
+    const safeMax = toFiniteNumber(max, safeMin);
+    const safeStep = toFiniteNumber(step, 1);
+    const displayVal = Number.isInteger(safeValue) ? safeValue : safeValue.toFixed(2);
     return `
       <div class="slider-group">
         <div class="slider-label">
-          <span>${label}</span>
-          <span class="value" id="${valId}">${displayVal}</span>
+          <span>${escapeHtml(label)}</span>
+          <span class="value" id="${escapeHtml(valId)}">${escapeHtml(displayVal)}</span>
         </div>
-        <input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${value}">
+        <input type="range" id="${escapeHtml(id)}" min="${safeMin}" max="${safeMax}" step="${safeStep}" value="${safeValue}">
       </div>`;
   }
 
@@ -1930,6 +2148,7 @@
       const v = parseFloat(e.target.value);
       val.textContent = Number.isInteger(v) ? v : v.toFixed(2);
       callback(v);
+      scheduleSaveActiveEffectSettings();
     });
   }
 
@@ -2377,16 +2596,16 @@
 
   async function takePhoto() {
     if (!isRunning) {
-      showStatus(captureStatus, 'Primero enciende la camara', 'warning');
+      showStatus(captureStatus, 'Primero encendé la cámara', 'warning');
       return;
     }
     if (isCapturePreviewOpen()) {
-      showStatus(captureStatus, 'Primero cierra la vista previa actual', 'info');
+      showStatus(captureStatus, 'Primero cerrá la vista previa actual', 'info');
       return;
     }
     const { sourceWidth, sourceHeight } = getSourceFrameDimensions();
     if (videoEl.readyState < 2 || sourceWidth <= 1 || sourceHeight <= 1) {
-      showStatus(captureStatus, 'Espera un momento y vuelve a sacar la foto', 'info');
+      showStatus(captureStatus, 'Esperá un momento y volvé a sacar la foto', 'info');
       return;
     }
 
@@ -2429,7 +2648,7 @@
 
   function startRecording() {
     if (!isRunning) {
-      showStatus(captureStatus, 'Primero enciende la camara', 'warning');
+      showStatus(captureStatus, 'Primero encendé la cámara', 'warning');
       return;
     }
     if (isCapturePreviewOpen()) {
@@ -2437,7 +2656,7 @@
       return;
     }
     if (typeof MediaRecorder === 'undefined') {
-      showStatus(captureStatus, 'Tu navegador no soporta grabacion', 'error');
+      showStatus(captureStatus, 'Tu navegador no soporta grabación', 'error');
       return;
     }
 
@@ -2452,7 +2671,7 @@
 
       ensureRecordingCanvas();
       if (recordingCanvas.width === 0 || recordingCanvas.height === 0) {
-        showStatus(captureStatus, 'Espera un momento y reintenta la grabacion', 'info');
+        showStatus(captureStatus, 'Esperá un momento y reintentá la grabación', 'info');
         return;
       }
       currentRecordingMimeType = recordingProfile.mimeType;
@@ -2537,7 +2756,7 @@
       updateCaptureButtons();
     } catch (err) {
       console.error('Error starting recording:', err);
-      showStatus(captureStatus, 'No se pudo iniciar la grabacion', 'error');
+      showStatus(captureStatus, 'No se pudo iniciar la grabación', 'error');
       isRecording = false;
       if (recordingStream) {
         recordingStream.getTracks().forEach((t) => t.stop());

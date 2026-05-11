@@ -39,7 +39,7 @@ class BlobTracking {
         this._tolerance = 30;
 
         // Process on a downscaled copy for better performance
-        this.processScale = 0.55;
+        this.processScale = 0.45;
 
         // Internal processing buffers
         this._tempCanvas = document.createElement('canvas');
