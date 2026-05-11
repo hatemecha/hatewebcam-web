@@ -17,6 +17,8 @@
   const videoEl = $('#videoElement');
   const canvas = $('#previewCanvas');
   const previewWrapper = $('#previewWrapper');
+  const captureCountdown = $('#captureCountdown');
+  const captureCountdownValue = $('#captureCountdownValue');
   const previewContextOptions = MOBILE_RENDER_SAFE_MODE
     ? { alpha: false }
     : { alpha: false, desynchronized: true };
@@ -33,6 +35,7 @@
   const btnTakePhoto = $('#btnTakePhoto');
   const btnRecord = $('#btnRecord');
   const captureStatus = $('#captureStatus');
+  const captureTimerSelect = $('#captureTimerSelect');
   const sldJpegQuality = $('#sldJpegQuality');
   const valJpegQuality = $('#valJpegQuality');
   const videoFormatSelect = $('#videoFormatSelect');
@@ -109,6 +112,7 @@
   const btnMobileFxClose = $('#btnMobileFxClose');
   const btnMobileTakePhoto = $('#btnMobileTakePhoto');
   const btnMobileRecord = $('#btnMobileRecord');
+  const selMobileCaptureTimer = $('#selMobileCaptureTimer');
   const btnMobileBlobToggle = $('#btnMobileBlobToggle');
   const btnMobileFaceToggle = $('#btnMobileFaceToggle');
   const btnMobileBlinkToggle = $('#btnMobileBlinkToggle');
@@ -164,6 +168,9 @@
   let lastPreviewRenderTs = 0;
   let photoPreviewRenderToken = 0;
   let previewPhotoEnhancerDebounceId = null;
+  let photoCountdownTimer = null;
+  let photoCountdownRemaining = 0;
+  let isPhotoCountdownActive = false;
   let postFxCanvas = null;
   let postFxCtx = null;
   let captureFxCanvas = null;
@@ -190,6 +197,7 @@
     jpegQuality: 92,
     videoFormat: 'auto',
     previewQuality: 'high',
+    captureTimerSeconds: 0,
     qualityEnhancer: false,
     qualityEnhancerStrength: 35,
   };
@@ -305,6 +313,11 @@
     return Object.prototype.hasOwnProperty.call(PREVIEW_QUALITY_PRESETS, value)
       ? value
       : DEFAULT_PREVIEW_QUALITY;
+  }
+
+  function normalizeCaptureTimerSeconds(value) {
+    const seconds = parseInt(value, 10);
+    return [0, 5, 10].includes(seconds) ? seconds : 0;
   }
 
   function getCurrentPreviewQualityPreset() {
@@ -656,6 +669,7 @@
       ? imageSettings.videoFormat
       : 'auto';
     imageSettings.previewQuality = normalizePreviewQuality(imageSettings.previewQuality);
+    imageSettings.captureTimerSeconds = normalizeCaptureTimerSeconds(imageSettings.captureTimerSeconds);
     imageSettings.qualityEnhancer = !!imageSettings.qualityEnhancer;
     const enhancerStrength = parseInt(imageSettings.qualityEnhancerStrength, 10);
     imageSettings.qualityEnhancerStrength = clamp(Number.isFinite(enhancerStrength) ? enhancerStrength : 35, 0, 100);
@@ -699,6 +713,8 @@
     if (valJpegQuality) valJpegQuality.textContent = `${imageSettings.jpegQuality}%`;
     if (videoFormatSelect) videoFormatSelect.value = imageSettings.videoFormat;
     if (previewQualitySelect) previewQualitySelect.value = normalizePreviewQuality(imageSettings.previewQuality);
+    if (captureTimerSelect) captureTimerSelect.value = String(imageSettings.captureTimerSeconds);
+    if (selMobileCaptureTimer) selMobileCaptureTimer.value = String(imageSettings.captureTimerSeconds);
     if (chkQualityEnhancer) chkQualityEnhancer.checked = !!imageSettings.qualityEnhancer;
     if (sldQualityEnhancerStrength) sldQualityEnhancerStrength.value = String(imageSettings.qualityEnhancerStrength);
     if (valQualityEnhancerStrength) valQualityEnhancerStrength.textContent = `${imageSettings.qualityEnhancerStrength}%`;
@@ -776,6 +792,17 @@
         saveImageSettings();
       });
     }
+
+    const bindCaptureTimerSelect = (selectEl) => {
+      if (!selectEl) return;
+      selectEl.addEventListener('change', (e) => {
+        imageSettings.captureTimerSeconds = normalizeCaptureTimerSeconds(e.target.value);
+        updateImageControlsUI();
+        saveImageSettings();
+      });
+    };
+    bindCaptureTimerSelect(captureTimerSelect);
+    bindCaptureTimerSelect(selMobileCaptureTimer);
 
     if (chkQualityEnhancer) {
       chkQualityEnhancer.addEventListener('change', (e) => {
@@ -1020,7 +1047,7 @@
     if (btnToggleAdvancedOptions) btnToggleAdvancedOptions.addEventListener('click', toggleAdvancedOptions);
     canvas.addEventListener('click', onCanvasClick);
 
-    if (btnTakePhoto) btnTakePhoto.addEventListener('click', takePhoto);
+    if (btnTakePhoto) btnTakePhoto.addEventListener('click', requestPhotoCapture);
     if (btnRecord) btnRecord.addEventListener('click', toggleRecording);
     if (btnDownloadCapture) btnDownloadCapture.addEventListener('click', downloadPendingCapture);
     if (btnDiscardCapture) btnDiscardCapture.addEventListener('click', () => closeCapturePreview(true));
@@ -1039,7 +1066,7 @@
     if (btnMobileTakePhoto) {
       btnMobileTakePhoto.addEventListener('click', () => {
         setMobileFxPanelVisible(false);
-        takePhoto();
+        requestPhotoCapture();
       });
     }
     if (btnMobileRecord) {
@@ -1145,6 +1172,7 @@
     });
 
     window.addEventListener('beforeunload', () => {
+      cancelPhotoCountdown(false);
       stopRecording(false);
       clearPendingCapture(true);
       if (isRunning) cameraManager.stop();
@@ -1200,6 +1228,7 @@
   async function toggleCamera(forceStart = false) {
     if (isRunning && !forceStart) {
       if (isRecording) stopRecording(true);
+      cancelPhotoCountdown(false);
 
       cameraManager.stop();
       isRunning = false;
@@ -2381,15 +2410,104 @@
     }
   }
 
+  function updateCaptureCountdownUI() {
+    if (!captureCountdown) return;
+    captureCountdown.classList.toggle('hidden', !isPhotoCountdownActive);
+    captureCountdown.classList.toggle('is-final', isPhotoCountdownActive && photoCountdownRemaining <= 1);
+    if (captureCountdownValue) {
+      captureCountdownValue.textContent = String(Math.max(1, photoCountdownRemaining));
+    }
+  }
+
+  function cancelPhotoCountdown(showMessage = true) {
+    if (photoCountdownTimer) {
+      clearInterval(photoCountdownTimer);
+      photoCountdownTimer = null;
+    }
+    const wasActive = isPhotoCountdownActive;
+    isPhotoCountdownActive = false;
+    photoCountdownRemaining = 0;
+    updateCaptureCountdownUI();
+    updateCaptureButtons();
+
+    if (showMessage && wasActive) {
+      showStatus(captureStatus, 'Temporizador cancelado', 'warning');
+      setTimeout(() => hideStatus(captureStatus), 1400);
+    }
+  }
+
+  function validatePhotoCaptureReady() {
+    if (!isRunning) {
+      showStatus(captureStatus, 'Primero encendé la cámara', 'warning');
+      return false;
+    }
+    if (isCapturePreviewOpen()) {
+      showStatus(captureStatus, 'Primero cerrá la vista previa actual', 'info');
+      return false;
+    }
+    const { sourceWidth, sourceHeight } = getSourceFrameDimensions();
+    if (videoEl.readyState < 2 || sourceWidth <= 1 || sourceHeight <= 1) {
+      showStatus(captureStatus, 'Esperá un momento y volvé a sacar la foto', 'info');
+      return false;
+    }
+    return true;
+  }
+
+  function startPhotoCountdown(seconds) {
+    cancelPhotoCountdown(false);
+    isPhotoCountdownActive = true;
+    photoCountdownRemaining = seconds;
+    updateCaptureCountdownUI();
+    updateCaptureButtons();
+    showStatus(captureStatus, `Foto en ${seconds} segundos`, 'info');
+
+    photoCountdownTimer = setInterval(() => {
+      photoCountdownRemaining -= 1;
+      if (photoCountdownRemaining <= 0) {
+        clearInterval(photoCountdownTimer);
+        photoCountdownTimer = null;
+        isPhotoCountdownActive = false;
+        updateCaptureCountdownUI();
+        updateCaptureButtons();
+        void takePhoto();
+        return;
+      }
+      updateCaptureCountdownUI();
+      showStatus(captureStatus, `Foto en ${photoCountdownRemaining} segundos`, 'info');
+    }, 1000);
+  }
+
+  function requestPhotoCapture() {
+    if (isPhotoCountdownActive) {
+      cancelPhotoCountdown(true);
+      return;
+    }
+
+    const timerSeconds = normalizeCaptureTimerSeconds(imageSettings.captureTimerSeconds);
+    if (timerSeconds > 0) {
+      if (!validatePhotoCaptureReady()) return;
+      startPhotoCountdown(timerSeconds);
+      return;
+    }
+
+    void takePhoto();
+  }
+
   function updateCaptureButtons() {
     const previewOpen = isCapturePreviewOpen();
-    const lockCaptureSettings = isRecording || previewOpen;
+    const lockCaptureSettings = isRecording || previewOpen || isPhotoCountdownActive;
     const lockDetectorControls = previewOpen;
 
-    if (btnTakePhoto) btnTakePhoto.disabled = !isRunning || isRecording || previewOpen;
-    if (btnRecord) btnRecord.disabled = (!isRunning && !isRecording) || previewOpen;
+    if (btnTakePhoto) {
+      btnTakePhoto.disabled = (!isRunning || isRecording || previewOpen) && !isPhotoCountdownActive;
+      btnTakePhoto.innerHTML = isPhotoCountdownActive
+        ? '<i class="fa-solid fa-xmark"></i> Cancelar timer'
+        : '<i class="fa-solid fa-camera"></i> Sacar foto';
+    }
+    if (btnRecord) btnRecord.disabled = (!isRunning && !isRecording) || previewOpen || isPhotoCountdownActive;
     if (videoFormatSelect) videoFormatSelect.disabled = lockCaptureSettings;
     if (sldJpegQuality) sldJpegQuality.disabled = lockCaptureSettings;
+    if (captureTimerSelect) captureTimerSelect.disabled = lockCaptureSettings;
     if (chkQualityEnhancer) chkQualityEnhancer.disabled = lockCaptureSettings;
     if (sldQualityEnhancerStrength) {
       sldQualityEnhancerStrength.disabled = lockCaptureSettings || !imageSettings.qualityEnhancer;
@@ -2406,13 +2524,18 @@
     }
 
     if (btnMobileTakePhoto) {
-      btnMobileTakePhoto.disabled = !isRunning || isRecording || previewOpen;
+      btnMobileTakePhoto.disabled = (!isRunning || isRecording || previewOpen) && !isPhotoCountdownActive;
+      btnMobileTakePhoto.classList.toggle('is-countdown', isPhotoCountdownActive);
+      btnMobileTakePhoto.innerHTML = isPhotoCountdownActive
+        ? '<i class="fa-solid fa-xmark"></i>'
+        : '<i class="fa-solid fa-camera"></i>';
     }
+    if (selMobileCaptureTimer) selMobileCaptureTimer.disabled = lockCaptureSettings;
     if (btnMobileEffectsDock) {
       btnMobileEffectsDock.disabled = previewOpen;
     }
     if (btnMobileRecord) {
-      btnMobileRecord.disabled = (!isRunning && !isRecording) || previewOpen;
+      btnMobileRecord.disabled = (!isRunning && !isRecording) || previewOpen || isPhotoCountdownActive;
       btnMobileRecord.classList.toggle('is-recording', isRecording);
       btnMobileRecord.innerHTML = isRecording
         ? '<i class="fa-solid fa-stop"></i>'
@@ -2595,19 +2718,7 @@
   }
 
   async function takePhoto() {
-    if (!isRunning) {
-      showStatus(captureStatus, 'Primero encendé la cámara', 'warning');
-      return;
-    }
-    if (isCapturePreviewOpen()) {
-      showStatus(captureStatus, 'Primero cerrá la vista previa actual', 'info');
-      return;
-    }
-    const { sourceWidth, sourceHeight } = getSourceFrameDimensions();
-    if (videoEl.readyState < 2 || sourceWidth <= 1 || sourceHeight <= 1) {
-      showStatus(captureStatus, 'Esperá un momento y volvé a sacar la foto', 'info');
-      return;
-    }
+    if (!validatePhotoCaptureReady()) return;
 
     try {
       const initialEnhancerEnabled = !!imageSettings.qualityEnhancer;
@@ -2647,6 +2758,10 @@
   }
 
   function startRecording() {
+    if (isPhotoCountdownActive) {
+      showStatus(captureStatus, 'Cancelá el temporizador antes de grabar', 'info');
+      return;
+    }
     if (!isRunning) {
       showStatus(captureStatus, 'Primero encendé la cámara', 'warning');
       return;
