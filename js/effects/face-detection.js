@@ -15,7 +15,7 @@ class FaceDetection {
         this.labelText = 'CARA';
         this.showLandmarks = false;
         this.maxFaces = 2;
-        this.processIntervalMs = 30;
+        this.processIntervalMs = 50;
         this.boxSmoothing = 0.82;
         this.visualMode = 'box';
         this.pixelationCellSize = 14;

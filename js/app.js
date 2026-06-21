@@ -153,7 +153,6 @@
   let recordingEnhancerCtx = null;
   let lastRecordingDurationSec = 0;
   let previewScale = 1;
-  let lastPreviewRenderTs = 0;
   let photoPreviewRenderToken = 0;
   let previewPhotoEnhancerDebounceId = null;
   let photoCountdownTimer = null;
@@ -189,8 +188,7 @@
     qualityEnhancer: false,
     qualityEnhancerStrength: 35,
   };
-  const TARGET_FPS = 30;
-  const PREVIEW_TARGET_FPS = TARGET_FPS;
+  const DEFAULT_CAMERA_FPS = 30;
   const DEFAULT_PREVIEW_QUALITY = 'high';
   const PREVIEW_QUALITY_PRESETS = Object.freeze({
     draft: { label: 'Borrador', maxPixels: 432 * 243, maxScale: 0.45 },
@@ -655,6 +653,14 @@
     return true;
   }
 
+  function migrateDetectorPerformanceDefaults(cfg) {
+    if (cfg.detectorPerformanceDefaultV1 === true) return false;
+    const face = cfg.effectSettings?.face;
+    if (face?.processIntervalMs === 30) face.processIntervalMs = 50;
+    cfg.detectorPerformanceDefaultV1 = true;
+    return true;
+  }
+
   function loadImageSettings(cfg) {
     const saved = cfg.imageSettings || {};
     imageSettings = {
@@ -1002,6 +1008,9 @@
     if (migrateDetectorStabilityDefaults(cfg)) {
       saveConfig(cfg);
     }
+    if (migrateDetectorPerformanceDefaults(cfg)) {
+      saveConfig(cfg);
+    }
     if (typeof cfg.flipH === 'boolean') flipH = cfg.flipH;
     else flipH = false;
     if (chkMirror) chkMirror.checked = flipH;
@@ -1192,18 +1201,14 @@
     if (!isRunning) return;
 
     if (!isPageVisible) {
-      if (animFrameId) {
-        cancelAnimationFrame(animFrameId);
-        animFrameId = null;
-      }
+      cancelRenderLoop();
       return;
     }
 
     if (!animFrameId) {
       frameCount = 0;
       lastFpsTime = performance.now();
-      lastPreviewRenderTs = 0;
-      animFrameId = requestAnimationFrame(renderLoop);
+      scheduleRenderLoop();
     }
   }
 
@@ -1240,8 +1245,7 @@
 
       cameraManager.stop();
       isRunning = false;
-      cancelAnimationFrame(animFrameId);
-      animFrameId = null;
+      cancelRenderLoop();
       btnToggleCamera.innerHTML = '<i class="fa-solid fa-play"></i> Encender Cámara';
       btnToggleCamera.classList.remove('active');
       placeholder.classList.remove('hidden');
@@ -1268,9 +1272,8 @@
 
         frameCount = 0;
         lastFpsTime = performance.now();
-        lastPreviewRenderTs = 0;
         if (isPageVisible) {
-          animFrameId = requestAnimationFrame(renderLoop);
+          scheduleRenderLoop();
         } else {
           animFrameId = null;
         }
@@ -1546,37 +1549,49 @@
   }
 
   function requestPreviewRefresh(forceLabel = false) {
-    lastPreviewRenderTs = 0;
     if (!isRunning || videoEl.readyState < 2) return;
     const { sourceWidth, sourceHeight } = getSourceFrameDimensions();
     syncPreviewCanvasMetrics(sourceWidth, sourceHeight, forceLabel);
   }
 
-  function renderLoop(ts = performance.now()) {
+  function scheduleRenderLoop() {
+    animFrameId = typeof videoEl.requestVideoFrameCallback === 'function'
+      ? videoEl.requestVideoFrameCallback(renderLoop)
+      : requestAnimationFrame(renderLoop);
+  }
+
+  function cancelRenderLoop() {
+    if (animFrameId == null) return;
+    if (typeof videoEl.cancelVideoFrameCallback === 'function') {
+      videoEl.cancelVideoFrameCallback(animFrameId);
+    } else {
+      cancelAnimationFrame(animFrameId);
+    }
+    animFrameId = null;
+  }
+
+  function renderLoop() {
     if (!isRunning || !isPageVisible) {
       animFrameId = null;
       return;
     }
 
     try {
-      const minPreviewFrameInterval = 1000 / PREVIEW_TARGET_FPS;
-      if (ts - lastPreviewRenderTs < minPreviewFrameInterval) {
-        animFrameId = requestAnimationFrame(renderLoop);
-        return;
-      }
-      lastPreviewRenderTs = ts;
-
       if (videoEl.readyState >= 2) {
         const { sourceWidth, sourceHeight } = getSourceFrameDimensions();
         syncPreviewCanvasMetrics(sourceWidth, sourceHeight, frameCount % 30 === 0);
 
         try {
-          renderProcessedFrame(canvas, ctx, 'preview');
+          if (isRecording) {
+            copyFrameToRecordingCanvas();
+            ctx.drawImage(recordingCanvas, 0, 0, canvas.width, canvas.height);
+          } else {
+            renderProcessedFrame(canvas, ctx, 'preview');
+          }
         } catch (renderErr) {
           console.error('Render frame fallback error:', renderErr);
           drawBaseFrame(ctx, canvas, 'preview');
         }
-        syncRecordingCanvasFrame();
 
         // FPS
         frameCount++;
@@ -1591,7 +1606,7 @@
       console.error('Render loop error:', err);
     }
 
-    animFrameId = requestAnimationFrame(renderLoop);
+    scheduleRenderLoop();
   }
 
   function buildCanvasFilter() {
@@ -2597,7 +2612,8 @@
   }
 
   function getPreferredRecordingFps() {
-    return TARGET_FPS;
+    const sourceFps = Number(cameraManager.getStreamSettings().frameRate);
+    return clamp(Math.round(sourceFps || DEFAULT_CAMERA_FPS), 1, 120);
   }
 
   function getRecommendedVideoBitrate(width, height, fps) {
@@ -2655,11 +2671,6 @@
         );
       }
     }
-  }
-
-  function syncRecordingCanvasFrame() {
-    if (!isRecording || !recordingCanvas || !recordingCtx) return;
-    copyFrameToRecordingCanvas();
   }
 
   async function buildPhotoBlobFromCanvas(baseCanvas, enhancerEnabled, enhancerStrength) {

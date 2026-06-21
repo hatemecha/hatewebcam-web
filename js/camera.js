@@ -103,11 +103,11 @@ class CameraManager {
     const lowPower = isMobile
       || (deviceMemory > 0 && deviceMemory <= 4)
       || (hardwareConcurrency > 0 && hardwareConcurrency <= 4);
-    const targetFps = 30;
+    const preferredFps = 60;
 
     const defaultWidth = lowPower ? 960 : 1280;
     const defaultHeight = lowPower ? 540 : 720;
-    const defaultFps = targetFps;
+    const defaultFps = preferredFps;
     const maxWidth = lowPower ? 1280 : 1920;
     const maxHeight = lowPower ? 720 : 1080;
 
@@ -119,7 +119,7 @@ class CameraManager {
       video: {
         width: { ideal: width, max: maxWidth },
         height: { ideal: height, max: maxHeight },
-        frameRate: { ideal: fps, max: targetFps }
+        frameRate: { ideal: fps }
       },
       audio: false
     };

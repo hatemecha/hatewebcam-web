@@ -44,10 +44,29 @@ async function checkCameraStreamCleanup() {
   assert.equal(camera.isRunning(), false);
 }
 
+function checkCameraPreservesSupportedFps() {
+  const CameraManager = loadClass('js/camera.js', 'CameraManager', {
+    console,
+    navigator: { userAgent: '', mediaDevices: {} },
+  });
+  const camera = new CameraManager();
+  const preferred = camera._buildVideoConstraints();
+  const requested = camera._buildVideoConstraints(null, { fps: 30 });
+
+  assert.equal(preferred.video.frameRate.ideal, 60, 'camera should prefer 60 FPS when supported');
+  assert.equal('max' in preferred.video.frameRate, false, 'camera FPS must not be capped');
+  assert.equal(requested.video.frameRate.ideal, 30, 'an explicit camera FPS should be preserved');
+}
+
 function checkReusableMorphologyBuffers() {
+  let now = 0;
+  let analysisCount = 0;
   const fakeContext = {
     drawImage() {},
-    getImageData: () => ({ data: new Uint8ClampedArray(4) }),
+    getImageData: (x, y, width, height) => {
+      analysisCount++;
+      return { data: new Uint8ClampedArray(width * height * 4) };
+    },
   };
   const document = {
     createElement: () => ({
@@ -61,6 +80,7 @@ function checkReusableMorphologyBuffers() {
     Uint8Array,
     Int32Array,
     Math,
+    performance: { now: () => now },
   });
   const effect = new BlobTracking();
   effect._ensureBuffers(3, 3);
@@ -86,6 +106,14 @@ function checkReusableMorphologyBuffers() {
   assert.equal(smoothed[0].x, 4, 'box movement must be smoothed');
   assert.equal(effect._stabilizeBlobs([], 100).length, 1, 'short detection gaps must not flicker');
   assert.equal(effect._stabilizeBlobs([], 220).length, 0, 'stale detections must disappear');
+
+  effect.processFrame(fakeContext, { width: 100, height: 100 });
+  now = 20;
+  effect.processFrame(fakeContext, { width: 100, height: 100 });
+  assert.equal(analysisCount, 1, 'blob analysis must be reused between video frames');
+  now = 50;
+  effect.processFrame(fakeContext, { width: 100, height: 100 });
+  assert.equal(analysisCount, 2, 'blob analysis must resume at its configured interval');
 }
 
 function checkBlinkDetectionUsesRefinedEyeLandmarks() {
@@ -121,11 +149,13 @@ function checkFaceDetectionUsesRefinedEyeLandmarks() {
 
   const effect = new FaceDetection();
   assert.equal(options.refineLandmarks, true, 'shared face landmarks must preserve blink accuracy');
+  assert.equal(effect.processIntervalMs, 50, 'face analysis must not run on every video frame');
   assert.equal(effect.boxSmoothing, 0.82, 'face boxes must keep the stable smoothing default');
   assert.equal(effect.detectionHoldMs, 220, 'short detection gaps must not hide face effects');
 }
 
 await checkCameraStreamCleanup();
+checkCameraPreservesSupportedFps();
 checkReusableMorphologyBuffers();
 checkBlinkDetectionUsesRefinedEyeLandmarks();
 checkFaceDetectionUsesRefinedEyeLandmarks();

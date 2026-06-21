@@ -40,9 +40,11 @@ class BlobTracking {
 
         // Process on a downscaled copy for better performance
         this.processScale = 0.45;
+        this.processIntervalMs = 50;
         this.detectionHoldMs = 180;
         this.detectionSmoothing = 0.6;
         this._trackedBlobs = [];
+        this._lastProcessTs = -Infinity;
 
         // Internal processing buffers
         this._tempCanvas = document.createElement('canvas');
@@ -176,91 +178,96 @@ class BlobTracking {
         if (w === 0 || h === 0) return;
 
         const requestedScale = Math.max(0.1, Math.min(1, this.processScale || 1));
-        const scale = Math.min(requestedScale, Math.sqrt(120000 / (w * h)));
+        const scale = Math.min(requestedScale, Math.sqrt(100000 / (w * h)));
         const sw = Math.max(48, Math.round(w * scale));
         const sh = Math.max(48, Math.round(h * scale));
+        const now = performance.now();
+        const dimensionsChanged = this._workW !== sw || this._workH !== sh;
 
-        this._ensureBuffers(sw, sh);
+        if (dimensionsChanged || now - this._lastProcessTs >= this.processIntervalMs) {
+            this._lastProcessTs = now;
+            this._ensureBuffers(sw, sh);
 
-        // Downscaled frame read to reduce per-pixel workload
-        this._tempCtx.drawImage(canvas, 0, 0, sw, sh);
-        const imageData = this._tempCtx.getImageData(0, 0, sw, sh);
-        const data = imageData.data;
-        const mask = this._mask;
+            // Downscaled frame read to reduce per-pixel workload
+            this._tempCtx.drawImage(canvas, 0, 0, sw, sh);
+            const imageData = this._tempCtx.getImageData(0, 0, sw, sh);
+            const data = imageData.data;
+            const mask = this._mask;
 
-        const hMin = this.hsvMin[0];
-        const hMax = this.hsvMax[0];
-        const sMin = this.hsvMin[1];
-        const sMax = this.hsvMax[1];
-        const vMin = this.hsvMin[2];
-        const vMax = this.hsvMax[2];
+            const hMin = this.hsvMin[0];
+            const hMax = this.hsvMax[0];
+            const sMin = this.hsvMin[1];
+            const sMax = this.hsvMax[1];
+            const vMin = this.hsvMin[2];
+            const vMax = this.hsvMax[2];
 
-        for (let p = 0, i = 0; p < mask.length; p++, i += 4) {
-            const r = data[i] / 255;
-            const g = data[i + 1] / 255;
-            const b = data[i + 2] / 255;
+            for (let p = 0, i = 0; p < mask.length; p++, i += 4) {
+                const r = data[i] / 255;
+                const g = data[i + 1] / 255;
+                const b = data[i + 2] / 255;
 
-            const max = r > g ? (r > b ? r : b) : (g > b ? g : b);
-            const min = r < g ? (r < b ? r : b) : (g < b ? g : b);
-            const d = max - min;
+                const max = r > g ? (r > b ? r : b) : (g > b ? g : b);
+                const min = r < g ? (r < b ? r : b) : (g < b ? g : b);
+                const d = max - min;
 
-            let hue = 0;
-            let sat = 0;
-            const val = Math.round(max * 255);
+                let hue = 0;
+                let sat = 0;
+                const val = Math.round(max * 255);
 
-            if (d !== 0) {
-                sat = Math.round((d / max) * 255);
-                if (max === r) hue = ((g - b) / d) % 6;
-                else if (max === g) hue = (b - r) / d + 2;
-                else hue = (r - g) / d + 4;
-                hue = Math.round(hue * 30);
-                if (hue < 0) hue += 180;
+                if (d !== 0) {
+                    sat = Math.round((d / max) * 255);
+                    if (max === r) hue = ((g - b) / d) % 6;
+                    else if (max === g) hue = (b - r) / d + 2;
+                    else hue = (r - g) / d + 4;
+                    hue = Math.round(hue * 30);
+                    if (hue < 0) hue += 180;
+                }
+
+                let match = false;
+                if (this.detectionMode === 'lights') {
+                    match = val >= 200 && sat <= 50;
+                } else if (this.detectionMode === 'shadows') {
+                    match = val <= 60;
+                } else {
+                    const hueOk = hMin <= hMax ? (hue >= hMin && hue <= hMax) : (hue >= hMin || hue <= hMax);
+                    match = hueOk && sat >= sMin && sat <= sMax && val >= vMin && val <= vMax;
+                }
+
+                mask[p] = match ? 255 : 0;
             }
 
-            let match = false;
-            if (this.detectionMode === 'lights') {
-                match = val >= 200 && sat <= 50;
-            } else if (this.detectionMode === 'shadows') {
-                match = val <= 60;
-            } else {
-                const hueOk = hMin <= hMax ? (hue >= hMin && hue <= hMax) : (hue >= hMin || hue <= hMax);
-                match = hueOk && sat >= sMin && sat <= sMax && val >= vMin && val <= vMax;
+            let processedMask = mask;
+            let outputMask = this._morphBufferA;
+            if (this.erodeIterations > 0) {
+                for (let i = 0; i < this.erodeIterations; i++) {
+                    this._erode(processedMask, outputMask, sw, sh);
+                    processedMask = outputMask;
+                    outputMask = outputMask === this._morphBufferA
+                        ? this._morphBufferB
+                        : this._morphBufferA;
+                }
+            }
+            if (this.dilateIterations > 0) {
+                for (let i = 0; i < this.dilateIterations; i++) {
+                    this._dilate(processedMask, outputMask, sw, sh);
+                    processedMask = outputMask;
+                    outputMask = outputMask === this._morphBufferA
+                        ? this._morphBufferB
+                        : this._morphBufferA;
+                }
             }
 
-            mask[p] = match ? 255 : 0;
+            const areaScale = scale * scale;
+            const minAreaScaled = this.minArea * areaScale;
+            const maxAreaScaled = this.maxArea * areaScale;
+            const blobs = this._findBlobs(processedMask, sw, sh);
+            this._stabilizeBlobs(blobs
+                .filter((bObj) => bObj.area >= minAreaScaled && bObj.area <= maxAreaScaled)
+                .sort((a, bObj) => bObj.area - a.area)
+                .slice(0, this.maxObjects), now);
         }
 
-        let processedMask = mask;
-        let outputMask = this._morphBufferA;
-        if (this.erodeIterations > 0) {
-            for (let i = 0; i < this.erodeIterations; i++) {
-                this._erode(processedMask, outputMask, sw, sh);
-                processedMask = outputMask;
-                outputMask = outputMask === this._morphBufferA
-                    ? this._morphBufferB
-                    : this._morphBufferA;
-            }
-        }
-        if (this.dilateIterations > 0) {
-            for (let i = 0; i < this.dilateIterations; i++) {
-                this._dilate(processedMask, outputMask, sw, sh);
-                processedMask = outputMask;
-                outputMask = outputMask === this._morphBufferA
-                    ? this._morphBufferB
-                    : this._morphBufferA;
-            }
-        }
-
-        const blobs = this._findBlobs(processedMask, sw, sh);
-
-        const areaScale = scale * scale;
-        const minAreaScaled = this.minArea * areaScale;
-        const maxAreaScaled = this.maxArea * areaScale;
-
-        const filtered = this._stabilizeBlobs(blobs
-            .filter((bObj) => bObj.area >= minAreaScaled && bObj.area <= maxAreaScaled)
-            .sort((a, bObj) => bObj.area - a.area)
-            .slice(0, this.maxObjects));
+        const filtered = this._trackedBlobs;
 
         this.centroids.length = 0;
 
@@ -488,6 +495,7 @@ class BlobTracking {
             tolerance: this._tolerance,
             detectionMode: this.detectionMode,
             processScale: this.processScale,
+            processIntervalMs: this.processIntervalMs,
         };
     }
 
@@ -506,6 +514,9 @@ class BlobTracking {
         if (config.tolerance != null) this._tolerance = config.tolerance;
         if (config.detectionMode) this.detectionMode = config.detectionMode;
         if (config.processScale != null) this.processScale = config.processScale;
+        if (config.processIntervalMs != null) {
+            this.processIntervalMs = Math.max(16, Math.min(120, Math.round(config.processIntervalMs)));
+        }
     }
 
     reset() {
@@ -513,5 +524,6 @@ class BlobTracking {
         this.rightActive = false;
         this.centroids.length = 0;
         this._trackedBlobs.length = 0;
+        this._lastProcessTs = -Infinity;
     }
 }
