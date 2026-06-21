@@ -7,6 +7,7 @@ const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const javascriptFiles = [
   'js/app.js',
+  'js/video-timeline.js',
   'js/camera.js',
   'js/effects/effect-manager.js',
   'js/effects/blob-tracking.js',
@@ -23,10 +24,17 @@ const requiredHtmlFragments = [
   'id="btnRecord"',
   'id="captureTimerSelect"',
   'id="captureCountdown"',
+  'id="btnVideoMode"',
+  'id="videoFileInput"',
+  'id="videoTimeline"',
+  'id="timelineSelection"',
+  'id="btnExportVideo"',
+  'id="videoExportModal"',
   'id="chkMirror"',
   'id="chkFaceDetection"',
   'id="chkBlinkDetection"',
   'js/app.js',
+  'js/video-timeline.js',
 ];
 
 function fail(message) {

@@ -9,7 +9,7 @@
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
     integrity="sha384-t1nt8BQoYMLFN5p42tRAtuAAFQaCQODekUVeKKZrEnEyp4H2R0RHFz0KWpmj7i8g" crossorigin="anonymous">
-  <link rel="stylesheet" href="index.css?v=20260511-timer">
+  <link rel="stylesheet" href="index.css?v=20260621-editor2">
 </head>
 
 <body>
@@ -17,6 +17,10 @@
   <!-- Header -->
   <header class="header-bar">
     <div class="logo">HATEWEBCAM <span class="beta-tag">BETA</span></div>
+    <div class="mode-switch" role="tablist" aria-label="Modo de trabajo">
+      <button type="button" class="mode-tab is-active" id="btnWebcamMode" role="tab" aria-selected="true">Webcam</button>
+      <button type="button" class="mode-tab" id="btnVideoMode" role="tab" aria-selected="false">Video</button>
+    </div>
     <nav class="header-links" aria-label="Enlaces del proyecto">
       <a href="https://github.com/hatemecha/hatewebcam-web" target="_blank" rel="noopener noreferrer" title="Repositorio en GitHub">
         <i class="fa-brands fa-github"></i>
@@ -50,8 +54,8 @@
             <div class="select-wrapper preview-overlay-select">
               <select id="previewQualitySelect" aria-label="Calidad de vista previa">
                 <option value="draft">Borrador</option>
-                <option value="balanced">Balanceada</option>
-                <option value="high" selected>Alta</option>
+                <option value="balanced" selected>Balanceada</option>
+                <option value="high">Alta</option>
                 <option value="full">Exacta</option>
               </select>
             </div>
@@ -134,13 +138,82 @@
         <span id="fpsInfo">—</span>
         <span id="effectsInfo">Sin detectores</span>
       </div>
+      <section class="video-timeline-shell video-only hidden" id="videoTimelineShell" aria-label="Editor de video">
+        <div class="video-transport">
+          <button type="button" class="btn btn-icon" id="btnVideoStart" aria-label="Ir al inicio"><i class="fa-solid fa-backward-step"></i></button>
+          <button type="button" class="btn btn-icon" id="btnVideoBack" aria-label="Retroceder 5 segundos"><i class="fa-solid fa-rotate-left"></i></button>
+          <button type="button" class="btn btn-icon" id="btnVideoPlay" aria-label="Reproducir video"><i class="fa-solid fa-play"></i></button>
+          <button type="button" class="btn btn-icon" id="btnVideoForward" aria-label="Avanzar 5 segundos"><i class="fa-solid fa-rotate-right"></i></button>
+          <button type="button" class="btn btn-icon" id="btnVideoEnd" aria-label="Ir al final"><i class="fa-solid fa-forward-step"></i></button>
+          <input type="range" id="videoSeek" min="0" max="0" step="0.01" value="0" aria-label="Posición del video">
+          <span class="mono" id="videoTimeLabel">00:00 / 00:00</span>
+          <button type="button" class="btn btn-icon" id="btnVideoMute" aria-label="Activar audio" aria-pressed="true"><i class="fa-solid fa-volume-xmark"></i></button>
+        </div>
+        <div class="timeline-ruler" id="videoTimeline" aria-label="Línea de tiempo de efectos. Arrastrá para elegir un intervalo.">
+          <div class="timeline-trim" id="timelineTrim"></div>
+          <button type="button" class="timeline-trim-handle start" id="timelineTrimStartHandle" aria-label="Mover inicio del recorte"></button>
+          <button type="button" class="timeline-trim-handle end" id="timelineTrimEndHandle" aria-label="Mover final del recorte"></button>
+          <div class="timeline-selection" id="timelineSelection"></div>
+          <div class="timeline-playhead" id="timelinePlayhead"></div>
+          <div class="timeline-items" id="timelineItems"></div>
+        </div>
+        <div class="timeline-hint"><span>Arrastrá el fondo para marcar un intervalo</span><span id="videoEffectRangeLabel">0.00s — 0.00s</span></div>
+      </section>
     </main>
 
     <!-- Controls -->
     <aside class="control-panel" id="controlPanel">
 
+      <div class="panel-section video-only hidden">
+        <div class="section-title accent"><i class="fa-solid fa-file-video"></i> Archivo de video</div>
+        <input type="file" id="videoFileInput" accept="video/*" class="hidden">
+        <button type="button" class="btn primary" id="btnChooseVideo"><i class="fa-solid fa-folder-open"></i> Elegir video</button>
+        <div class="video-file-meta mono" id="videoFileMeta">Ningún archivo cargado</div>
+        <div class="status-msg hidden" id="videoEditorStatus" role="status" aria-live="polite"></div>
+      </div>
+
+      <div class="panel-section video-only hidden">
+        <div class="section-title accent"><i class="fa-solid fa-scissors"></i> Recorte</div>
+        <div class="help-text">Arrastrá los extremos rojos de la timeline para definir el inicio y el final.</div>
+        <details class="timeline-fine-controls">
+          <summary>Ajuste fino por tiempo</summary>
+          <div class="video-time-grid timeline-values">
+            <label><span>Inicio</span><input type="number" id="videoTrimStart" min="0" step="0.01" value="0"></label>
+            <label><span>Final</span><input type="number" id="videoTrimEnd" min="0" step="0.01" value="0"></label>
+          </div>
+        </details>
+        <div class="btn-row">
+          <button type="button" class="btn" id="btnSetTrimFromPlayhead">Entrada = cursor</button>
+          <button type="button" class="btn" id="btnSetTrimEndFromPlayhead">Salida = cursor</button>
+        </div>
+      </div>
+
+      <div class="panel-section video-only hidden">
+        <div class="section-title accent"><i class="fa-solid fa-layer-group"></i> Intervalo de efecto</div>
+        <div class="help-text">Elegí el efecto, arrastrá un tramo en la timeline y agregalo. Los tipos distintos pueden superponerse.</div>
+        <div class="select-wrapper">
+          <select id="videoEffectType" aria-label="Tipo de efecto">
+            <option value="look">Look / ajustes visuales</option>
+            <option value="blob">Tracking de color</option>
+            <option value="face">Detección de caras</option>
+            <option value="blink">Detección de pestañeos</option>
+          </select>
+        </div>
+        <details class="timeline-fine-controls">
+          <summary>Ajuste fino por tiempo</summary>
+          <div class="video-time-grid timeline-values">
+            <label><span>Desde</span><input type="number" id="videoEffectStart" min="0" step="0.01" value="0"></label>
+            <label><span>Hasta</span><input type="number" id="videoEffectEnd" min="0" step="0.01" value="0"></label>
+          </div>
+        </details>
+        <div class="btn-row">
+          <button type="button" class="btn primary" id="btnSaveVideoEffect">Agregar intervalo</button>
+          <button type="button" class="btn danger hidden" id="btnDeleteVideoEffect">Eliminar</button>
+        </div>
+      </div>
+
       <!-- Camera -->
-      <div class="panel-section">
+      <div class="panel-section webcam-only">
         <div class="section-title accent"><i class="fa-solid fa-video"></i> Cámara</div>
         <div class="help-text">La cámara se inicia sola al abrir la página.</div>
         <button type="button" class="btn primary" id="btnToggleCamera">
@@ -157,7 +230,7 @@
       </div>
 
       <!-- Capture -->
-      <div class="panel-section">
+      <div class="panel-section webcam-only">
         <div class="section-title accent"><i class="fa-solid fa-camera-retro"></i> Captura</div>
         <div class="help-text">Controles directos para sacar fotos y grabar sin tocar configuraciones extra.</div>
         <div class="btn-row">
@@ -282,9 +355,10 @@
 
         <!-- Capture Settings -->
         <div class="panel-section">
-          <div class="section-title"><i class="fa-solid fa-film"></i> Calidad de captura</div>
-          <div class="help-text">Las fotos se descargan en JPEG. Para video se intenta MP4 y, si no está disponible, se usa WebM.</div>
-          <div class="slider-group">
+          <div class="section-title"><i class="fa-solid fa-film"></i> Calidad de salida</div>
+          <div class="help-text photo-only">Las fotos se descargan en JPEG. Para video se intenta MP4 y, si no está disponible, se usa WebM.</div>
+          <div class="help-text video-only hidden">La exportación conserva la resolución original y usa el mejor formato disponible en el navegador.</div>
+          <div class="slider-group photo-only">
             <div class="slider-label"><span>Calidad foto JPEG</span><span class="value" id="valJpegQuality">92%</span></div>
             <input type="range" id="sldJpegQuality" min="60" max="100" step="1" value="92">
           </div>
@@ -305,13 +379,15 @@
             <div class="slider-label"><span>Intensidad del mejorador</span><span class="value" id="valQualityEnhancerStrength">35%</span></div>
             <input type="range" id="sldQualityEnhancerStrength" min="0" max="100" step="1" value="35">
           </div>
-          <div class="help-text section-note">Aplica limpieza y nitidez extra al archivo final (foto y video).</div>
+          <div class="help-text section-note photo-only">Aplica limpieza y nitidez extra al archivo final.</div>
+          <div class="help-text section-note video-only hidden">Aplica limpieza y nitidez extra al video exportado.</div>
         </div>
 
         <!-- Transforms -->
         <div class="panel-section">
           <div class="section-title"><i class="fa-solid fa-image"></i> Imagen</div>
-          <div class="help-text">Ajustá orientación y encuadre de la cámara.</div>
+          <div class="help-text webcam-only">Ajustá orientación y encuadre de la cámara.</div>
+          <div class="help-text video-only hidden">Ajustá orientación y encuadre del video.</div>
           <label class="checkbox-group">
             <input type="checkbox" id="chkMirror">
             <span>Espejo (invertir horizontalmente)</span>
@@ -335,7 +411,8 @@
         <!-- Image Tuning -->
         <div class="panel-section">
           <div class="section-title accent"><i class="fa-solid fa-screwdriver-wrench"></i> Ajuste fino</div>
-          <div class="help-text">Personalizá el look en tiempo real. También aplica a foto y grabación.</div>
+          <div class="help-text webcam-only">Personalizá el look en tiempo real. También aplica a foto y grabación.</div>
+          <div class="help-text video-only hidden">Personalizá el look que se aplica a la preview y a la exportación.</div>
           <div class="slider-group">
             <div class="slider-label"><span>Exposición</span><span class="value" id="valExposure">0</span></div>
             <input type="range" id="sldExposure" min="-100" max="100" step="1" value="0">
@@ -396,7 +473,25 @@
 
       </div>
 
+      <div class="panel-section video-only hidden">
+        <div class="section-title accent"><i class="fa-solid fa-file-export"></i> Exportar</div>
+        <div class="help-text">Se procesa localmente en resolución original. La preview no cambia la calidad final.</div>
+        <div class="video-export-summary mono" id="videoExportDetails">Cargá un video para exportar.</div>
+        <button type="button" class="btn primary" id="btnExportVideo" disabled><i class="fa-solid fa-download"></i> Exportar video</button>
+      </div>
+
     </aside>
+  </div>
+
+  <div class="capture-preview-modal video-export-modal hidden" id="videoExportModal" role="dialog" aria-modal="true" aria-labelledby="videoExportTitle">
+    <div class="video-export-card">
+      <div class="section-title accent" id="videoExportTitle"><i class="fa-solid fa-file-export"></i> Exportando video</div>
+      <div class="video-export-summary mono" id="videoExportSummary">Preparando exportación…</div>
+      <progress id="videoExportProgress" max="1" value="0"></progress>
+      <div class="help-text">No cierres esta pestaña mientras se procesa el archivo.</div>
+      <button type="button" class="btn danger" id="btnCancelVideoExport">Cancelar</button>
+      <button type="button" class="btn primary hidden" id="btnCloseVideoExportModal">Listo</button>
+    </div>
   </div>
 
   <div class="capture-preview-modal hidden" id="capturePreviewModal" role="dialog" aria-modal="true" aria-labelledby="capturePreviewTitle">
@@ -438,12 +533,13 @@
     </div>
   </div>
   <!-- App -->
+  <script src="js/video-timeline.js?v=20260621-editor"></script>
   <script src="js/camera.js?v=20260511-timer"></script>
   <script src="js/effects/blob-tracking.js?v=20260511-timer"></script>
   <script src="js/effects/blink-detection.js?v=20260511-timer"></script>
   <script src="js/effects/face-detection.js?v=20260511-timer"></script>
   <script src="js/effects/effect-manager.js?v=20260511-timer"></script>
-  <script src="js/app.js?v=20260511-timer"></script>
+  <script src="js/app.js?v=20260621-editor2"></script>
 </body>
 
 </html>

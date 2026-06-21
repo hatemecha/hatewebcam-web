@@ -40,9 +40,9 @@ class BlobTracking {
 
         // Process on a downscaled copy for better performance
         this.processScale = 0.45;
-        this.processIntervalMs = 50;
-        this.detectionHoldMs = 180;
-        this.detectionSmoothing = 0.6;
+        this.processIntervalMs = 33;
+        this.detectionHoldMs = 110;
+        this.detectionSmoothing = 0.35;
         this._trackedBlobs = [];
         this._lastProcessTs = -Infinity;
 
@@ -178,7 +178,9 @@ class BlobTracking {
         if (w === 0 || h === 0) return;
 
         const requestedScale = Math.max(0.1, Math.min(1, this.processScale || 1));
-        const scale = Math.min(requestedScale, Math.sqrt(100000 / (w * h)));
+        // Preview quality must not change detection. processScale targets a canonical 640×360 frame.
+        const targetPixels = 640 * 360 * requestedScale * requestedScale;
+        const scale = Math.min(1, Math.sqrt(targetPixels / (w * h)));
         const sw = Math.max(48, Math.round(w * scale));
         const sh = Math.max(48, Math.round(h * scale));
         const now = performance.now();

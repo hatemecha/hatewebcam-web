@@ -15,6 +15,7 @@ Aplicación web para usar la cámara con filtros en tiempo real, detectores visu
 - Detectores: objetos por color, caras (Face Mesh) y pestañeos.
 - Perfiles guardados en el navegador para recuperar configuraciones.
 - Interfaz responsive con HUD dedicado en móviles.
+- Editor local de video con recorte y efectos por intervalos sobre una timeline interactiva.
 
 ## Requisitos
 
@@ -56,6 +57,15 @@ http://localhost:8080
 5. Saca una foto o graba video.
 6. En la vista previa decide: `Descargar` o `Descartar`.
 
+## Editor de video
+
+1. Abre la pestaña `Video` y elige un archivo local.
+2. Arrastra los extremos de la timeline para recortar y marca sobre ella los intervalos de efectos.
+3. Configura un look o detector y agrégalo al tramo marcado.
+4. Exporta; un modal bloquea la edición hasta iniciar la descarga final.
+
+La exportación es local, sin audio, conserva la resolución original y tarda aproximadamente lo mismo que el tramo elegido. El codec final depende del navegador.
+
 ## Verificación
 
 Para ejecutar checks básicos de sintaxis y estructura:
@@ -85,10 +95,6 @@ Si necesitás resetear todo, limpia esos valores desde DevTools o borra datos de
 - El procesamiento principal se realiza en el navegador.
 - Las capturas se descargan localmente por el usuario.
 - No hay backend propio en este repositorio.
-
-## Futuras mejoras
-- Abrir imágenes + editor
-
 
 ---
 hatemecha @ alex romero

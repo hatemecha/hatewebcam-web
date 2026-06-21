@@ -103,7 +103,7 @@ function checkReusableMorphologyBuffers() {
   const blob = { x: 0, y: 0, width: 20, height: 20, area: 400, cx: 10, cy: 10 };
   effect._stabilizeBlobs([blob], 0);
   const smoothed = effect._stabilizeBlobs([{ ...blob, x: 10, cx: 20 }], 30);
-  assert.equal(smoothed[0].x, 4, 'box movement must be smoothed');
+  assert.equal(smoothed[0].x, 6.5, 'box movement must stay responsive without jittering');
   assert.equal(effect._stabilizeBlobs([], 100).length, 1, 'short detection gaps must not flicker');
   assert.equal(effect._stabilizeBlobs([], 220).length, 0, 'stale detections must disappear');
 
@@ -114,6 +114,13 @@ function checkReusableMorphologyBuffers() {
   now = 50;
   effect.processFrame(fakeContext, { width: 100, height: 100 });
   assert.equal(analysisCount, 2, 'blob analysis must resume at its configured interval');
+
+  now = 100;
+  effect.processFrame(fakeContext, { width: 640, height: 360 });
+  const workSize = [effect._workW, effect._workH];
+  now = 150;
+  effect.processFrame(fakeContext, { width: 1600, height: 900 });
+  assert.deepEqual([effect._workW, effect._workH], workSize, 'preview quality must not change detector resolution');
 }
 
 function checkBlinkDetectionUsesRefinedEyeLandmarks() {
@@ -130,8 +137,8 @@ function checkBlinkDetectionUsesRefinedEyeLandmarks() {
 
   const effect = new BlinkDetection();
   assert.equal(options.refineLandmarks, true, 'blink detection needs refined eye landmarks');
-  assert.equal(effect.minClosedFrames, 2, 'one noisy frame must not trigger a blink');
-  assert.equal(effect._earSmoothing, 0.7, 'eye movement must be smoothed');
+  assert.equal(effect.minClosedFrames, 1, 'blink response should not wait for extra frames');
+  assert.equal(effect._earSmoothing, 0.35, 'eye smoothing must prioritize low latency');
 }
 
 function checkFaceDetectionUsesRefinedEyeLandmarks() {
@@ -149,9 +156,28 @@ function checkFaceDetectionUsesRefinedEyeLandmarks() {
 
   const effect = new FaceDetection();
   assert.equal(options.refineLandmarks, true, 'shared face landmarks must preserve blink accuracy');
-  assert.equal(effect.processIntervalMs, 50, 'face analysis must not run on every video frame');
-  assert.equal(effect.boxSmoothing, 0.82, 'face boxes must keep the stable smoothing default');
-  assert.equal(effect.detectionHoldMs, 220, 'short detection gaps must not hide face effects');
+  assert.equal(effect.processIntervalMs, 30, 'face analysis must refresh near video frame rate');
+  assert.equal(effect.boxSmoothing, 0.5, 'face boxes must respond without excessive lag');
+  assert.equal(effect.detectionHoldMs, 120, 'short gaps may be held without leaving stale boxes');
+}
+
+function checkVideoTimelineIntervals() {
+  const VideoTimeline = loadClass('js/video-timeline.js', 'VideoTimeline');
+  const timeline = new VideoTimeline(20);
+  timeline.setTrim(2, 18);
+  const look = timeline.add('look', 2, 8, { contrast: 120 });
+  const face = timeline.add('face', 6, 10, { visualMode: 'pixelate' });
+
+  assert.deepEqual(Array.from(timeline.activeAt(2), (item) => item.type), ['look']);
+  assert.deepEqual(Array.from(timeline.activeAt(6), (item) => item.type), ['look', 'face']);
+  assert.deepEqual(Array.from(timeline.activeAt(8), (item) => item.type), ['face'], 'end boundaries must be exclusive');
+  assert.throws(() => timeline.add('look', 7, 9), /superponer/);
+  assert.throws(() => timeline.add('blink', 0, 3), /dentro del recorte/);
+  assert.throws(() => timeline.setTrim(4, 16), /fuera del nuevo recorte/);
+
+  timeline.upsert({ ...look, startTime: 3, endTime: 6 });
+  timeline.remove(face.id);
+  assert.equal(timeline.activeAt(6).length, 0);
 }
 
 await checkCameraStreamCleanup();
@@ -159,4 +185,5 @@ checkCameraPreservesSupportedFps();
 checkReusableMorphologyBuffers();
 checkBlinkDetectionUsesRefinedEyeLandmarks();
 checkFaceDetectionUsesRefinedEyeLandmarks();
+checkVideoTimelineIntervals();
 console.log('Unit check passed.');

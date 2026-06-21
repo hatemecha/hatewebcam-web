@@ -17,6 +17,45 @@
   const fpsInfo = $('#fpsInfo');
   const effectsInfo = $('#effectsInfo');
   const previewQualitySelect = $('#previewQualitySelect');
+  const btnWebcamMode = $('#btnWebcamMode');
+  const btnVideoMode = $('#btnVideoMode');
+  const videoFileInput = $('#videoFileInput');
+  const btnChooseVideo = $('#btnChooseVideo');
+  const videoFileMeta = $('#videoFileMeta');
+  const videoEditorStatus = $('#videoEditorStatus');
+  const btnVideoStart = $('#btnVideoStart');
+  const btnVideoBack = $('#btnVideoBack');
+  const btnVideoPlay = $('#btnVideoPlay');
+  const btnVideoForward = $('#btnVideoForward');
+  const btnVideoEnd = $('#btnVideoEnd');
+  const btnVideoMute = $('#btnVideoMute');
+  const videoSeek = $('#videoSeek');
+  const videoTimeLabel = $('#videoTimeLabel');
+  const videoTimelineEl = $('#videoTimeline');
+  const timelineTrim = $('#timelineTrim');
+  const timelineTrimStartHandle = $('#timelineTrimStartHandle');
+  const timelineTrimEndHandle = $('#timelineTrimEndHandle');
+  const timelineSelection = $('#timelineSelection');
+  const timelinePlayhead = $('#timelinePlayhead');
+  const timelineItems = $('#timelineItems');
+  const videoEffectRangeLabel = $('#videoEffectRangeLabel');
+  const videoTrimStart = $('#videoTrimStart');
+  const videoTrimEnd = $('#videoTrimEnd');
+  const btnSetTrimFromPlayhead = $('#btnSetTrimFromPlayhead');
+  const btnSetTrimEndFromPlayhead = $('#btnSetTrimEndFromPlayhead');
+  const videoEffectType = $('#videoEffectType');
+  const videoEffectStart = $('#videoEffectStart');
+  const videoEffectEnd = $('#videoEffectEnd');
+  const btnSaveVideoEffect = $('#btnSaveVideoEffect');
+  const btnDeleteVideoEffect = $('#btnDeleteVideoEffect');
+  const videoExportDetails = $('#videoExportDetails');
+  const videoExportModal = $('#videoExportModal');
+  const videoExportTitle = $('#videoExportTitle');
+  const videoExportSummary = $('#videoExportSummary');
+  const videoExportProgress = $('#videoExportProgress');
+  const btnExportVideo = $('#btnExportVideo');
+  const btnCancelVideoExport = $('#btnCancelVideoExport');
+  const btnCloseVideoExportModal = $('#btnCloseVideoExportModal');
 
   const btnToggleCamera = $('#btnToggleCamera');
   const cameraSelect = $('#cameraSelect');
@@ -170,6 +209,20 @@
   let faceLoadRequestId = 0;
   let blinkLoadRequestId = 0;
   let isPageVisible = document.visibilityState !== 'hidden';
+  let sourceMode = 'camera';
+  let videoObjectUrl = '';
+  let videoSourceFile = null;
+  let videoTimeline = new VideoTimeline();
+  let selectedVideoEffectId = '';
+  let appliedTimelineItemIds = {};
+  let videoBaseImageSettings = null;
+  let isVideoExporting = false;
+  let videoExportRecorder = null;
+  let videoExportChunks = [];
+  let videoExportFileName = '';
+  let videoExportWakeLock = null;
+  let videoExportPausedByVisibility = false;
+  let webcamSessionState = null;
 
   const DEFAULT_IMAGE_SETTINGS = {
     blackAndWhite: false,
@@ -183,13 +236,13 @@
     sharpness: 0,
     jpegQuality: 92,
     videoFormat: 'auto',
-    previewQuality: 'high',
+    previewQuality: 'balanced',
     captureTimerSeconds: 0,
     qualityEnhancer: false,
     qualityEnhancerStrength: 35,
   };
   const DEFAULT_CAMERA_FPS = 30;
-  const DEFAULT_PREVIEW_QUALITY = 'high';
+  const DEFAULT_PREVIEW_QUALITY = 'balanced';
   const PREVIEW_QUALITY_PRESETS = Object.freeze({
     draft: { label: 'Borrador', maxPixels: 432 * 243, maxScale: 0.45 },
     balanced: { label: 'Balanceada', maxPixels: 640 * 360, maxScale: 0.66 },
@@ -539,6 +592,8 @@
     }
     syncAdvancedQuickInputs();
     updateCaptureButtons();
+    updateVideoEffectInspector();
+    updateVideoEditorUI();
   }
 
   function applyQuickDetectorSettingsToEffects() {
@@ -593,71 +648,31 @@
     }, 140);
   }
 
-  function migrateDetectorLatencyDefaults(cfg) {
-    if (cfg.detectorLatencyDefaultV1 === true) return false;
-
-    cfg.effectSettings = {
-      ...(cfg.effectSettings || {}),
+  function migrateResponsiveEditorDefaults(cfg) {
+    if (cfg.responsiveEditorDefaultsV1 === true) return false;
+    cfg.imageSettings = { ...(cfg.imageSettings || {}) };
+    if (!cfg.imageSettings.previewQuality || cfg.imageSettings.previewQuality === 'high') {
+      cfg.imageSettings.previewQuality = 'balanced';
+    }
+    cfg.effectSettings = { ...(cfg.effectSettings || {}) };
+    cfg.effectSettings.blob = {
+      ...(cfg.effectSettings.blob || {}),
+      processScale: 0.45,
+      processIntervalMs: 33,
     };
-
-    if (cfg.effectSettings.blob) {
-      const processScale = Number(cfg.effectSettings.blob.processScale);
-      if (!Number.isFinite(processScale) || processScale >= 0.55) {
-        cfg.effectSettings.blob.processScale = 0.45;
-      }
-    }
-
-    if (cfg.effectSettings.face) {
-      const face = cfg.effectSettings.face;
-      if (!Number.isFinite(Number(face.processIntervalMs)) || Number(face.processIntervalMs) >= 45) {
-        face.processIntervalMs = 30;
-      }
-      if (!Number.isFinite(Number(face.boxSmoothing)) || Number(face.boxSmoothing) >= 0.8) {
-        face.boxSmoothing = 0.55;
-      }
-      if (!Number.isFinite(Number(face.detectionHoldMs)) || Number(face.detectionHoldMs) >= 220) {
-        face.detectionHoldMs = 120;
-      }
-    }
-
-    if (cfg.effectSettings.blink) {
-      const blink = cfg.effectSettings.blink;
-      if (!Number.isFinite(Number(blink.processIntervalMs)) || Number(blink.processIntervalMs) >= 60) {
-        blink.processIntervalMs = 35;
-      }
-      if (!Number.isFinite(Number(blink.minClosedFrames)) || Number(blink.minClosedFrames) >= 2) {
-        blink.minClosedFrames = 1;
-      }
-      if (!Number.isFinite(Number(blink.earSmoothing)) || Number(blink.earSmoothing) >= 0.7) {
-        blink.earSmoothing = 0.45;
-      }
-    }
-
-    cfg.detectorLatencyDefaultV1 = true;
-    return true;
-  }
-
-  function migrateDetectorStabilityDefaults(cfg) {
-    if (cfg.detectorStabilityDefaultV1 === true) return false;
-    const face = cfg.effectSettings?.face;
-    const blink = cfg.effectSettings?.blink;
-    if (face?.boxSmoothing === 0.55 && face?.detectionHoldMs === 120) {
-      face.boxSmoothing = 0.82;
-      face.detectionHoldMs = 220;
-    }
-    if (blink?.minClosedFrames === 1 && blink?.earSmoothing === 0.45) {
-      blink.minClosedFrames = 2;
-      blink.earSmoothing = 0.7;
-    }
-    cfg.detectorStabilityDefaultV1 = true;
-    return true;
-  }
-
-  function migrateDetectorPerformanceDefaults(cfg) {
-    if (cfg.detectorPerformanceDefaultV1 === true) return false;
-    const face = cfg.effectSettings?.face;
-    if (face?.processIntervalMs === 30) face.processIntervalMs = 50;
-    cfg.detectorPerformanceDefaultV1 = true;
+    cfg.effectSettings.face = {
+      ...(cfg.effectSettings.face || {}),
+      processIntervalMs: 30,
+      boxSmoothing: 0.5,
+      detectionHoldMs: 120,
+    };
+    cfg.effectSettings.blink = {
+      ...(cfg.effectSettings.blink || {}),
+      processIntervalMs: 30,
+      minClosedFrames: 1,
+      earSmoothing: 0.35,
+    };
+    cfg.responsiveEditorDefaultsV1 = true;
     return true;
   }
 
@@ -977,6 +992,659 @@
     renderCameraSelectOptions(devices, preferredId);
   }
 
+  // ─── Local video editor ───
+  function setSourceMode(mode) {
+    if (mode === sourceMode) return;
+    if (isVideoExporting) return;
+
+    if (mode === 'video') {
+      webcamSessionState = {
+        imageSettings: { ...imageSettings },
+        blob: chkBlobTracking.checked,
+        face: chkFaceDetection.checked,
+        blink: chkBlinkDetection.checked,
+        blobConfig: blobTrackingEffect?.getConfig() || null,
+        faceConfig: faceDetectionEffect?.getConfig() || null,
+        blinkConfig: blinkDetectionEffect?.getConfig() || null,
+      };
+      if (isRunning) {
+        cameraManager.stop();
+        isRunning = false;
+        cancelRenderLoop();
+      }
+      sourceMode = 'video';
+      document.body.classList.add('video-mode');
+      document.querySelectorAll('.webcam-only').forEach((el) => el.classList.add('hidden'));
+      document.querySelectorAll('.video-only').forEach((el) => el.classList.remove('hidden'));
+      btnWebcamMode.classList.remove('is-active');
+      btnVideoMode.classList.add('is-active');
+      btnWebcamMode.setAttribute('aria-selected', 'false');
+      btnVideoMode.setAttribute('aria-selected', 'true');
+      setCameraPlaceholderMessage('Elegí un video para empezar a editar.');
+      placeholder.classList.remove('hidden');
+      updateVideoEditorUI();
+      return;
+    }
+
+    disposeVideoSource();
+    sourceMode = 'camera';
+    document.body.classList.remove('video-mode');
+    document.querySelectorAll('.video-only').forEach((el) => el.classList.add('hidden'));
+    document.querySelectorAll('.webcam-only').forEach((el) => el.classList.remove('hidden'));
+    btnVideoMode.classList.remove('is-active');
+    btnWebcamMode.classList.add('is-active');
+    btnVideoMode.setAttribute('aria-selected', 'false');
+    btnWebcamMode.setAttribute('aria-selected', 'true');
+    setCameraPlaceholderMessage('Iniciando cámara automáticamente...');
+    void restoreWebcamSessionState();
+    void toggleCamera(true);
+  }
+
+  async function restoreWebcamSessionState() {
+    if (!webcamSessionState) return;
+    imageSettings = { ...webcamSessionState.imageSettings };
+    updateImageControlsUI();
+    for (const [type, checkbox] of [['blob', chkBlobTracking], ['face', chkFaceDetection], ['blink', chkBlinkDetection]]) {
+      if (checkbox.checked) {
+        checkbox.checked = false;
+        await toggleEffect(type);
+      }
+      if (webcamSessionState[type]) {
+        checkbox.checked = true;
+        await toggleEffect(type);
+        const effect = type === 'blob' ? blobTrackingEffect : type === 'face' ? faceDetectionEffect : blinkDetectionEffect;
+        const config = webcamSessionState[`${type}Config`];
+        if (effect && config) effect.setConfig(config);
+      }
+    }
+    webcamSessionState = null;
+    updateQuickDetectorControlsUI();
+    updateEffectsInfo();
+  }
+
+  function disposeVideoSource() {
+    if (isVideoExporting) cancelVideoExport();
+    videoEl.pause();
+    cancelRenderLoop();
+    isRunning = false;
+    if (videoObjectUrl) URL.revokeObjectURL(videoObjectUrl);
+    videoObjectUrl = '';
+    videoSourceFile = null;
+    videoEl.removeAttribute('src');
+    videoEl.load();
+    videoTimeline = new VideoTimeline();
+    selectedVideoEffectId = '';
+    appliedTimelineItemIds = {};
+    videoBaseImageSettings = null;
+    timelineItems.innerHTML = '';
+    placeholder.classList.remove('hidden');
+  }
+
+  async function loadVideoFile(file) {
+    if (!file || !(file instanceof File)) return;
+    if (!file.type.startsWith('video/')) {
+      showStatus(videoEditorStatus, 'Elegí un archivo de video válido.', 'error');
+      return;
+    }
+
+    disposeVideoSource();
+    videoSourceFile = file;
+    videoObjectUrl = URL.createObjectURL(file);
+    videoEl.srcObject = null;
+    videoEl.src = videoObjectUrl;
+    videoEl.muted = true;
+    videoEl.preload = 'auto';
+    setCameraPlaceholderMessage('Leyendo metadata del video...');
+
+    try {
+      await new Promise((resolve, reject) => {
+        const loaded = () => {
+          videoEl.removeEventListener('error', failed);
+          resolve();
+        };
+        const failed = () => {
+          videoEl.removeEventListener('loadedmetadata', loaded);
+          reject(new Error('video_decode_failed'));
+        };
+        videoEl.addEventListener('loadedmetadata', loaded, { once: true });
+        videoEl.addEventListener('error', failed, { once: true });
+        videoEl.load();
+      });
+      if (!Number.isFinite(videoEl.duration) || videoEl.duration <= 0 || !videoEl.videoWidth) {
+        throw new Error('video_metadata_invalid');
+      }
+      videoEl.currentTime = Math.min(0.001, videoEl.duration);
+      void videoEl.play().then(() => videoEl.pause()).catch(() => {});
+
+      videoTimeline.setDuration(videoEl.duration);
+      videoBaseImageSettings = { ...imageSettings };
+      isRunning = true;
+      placeholder.classList.add('hidden');
+      videoSeek.max = String(videoEl.duration);
+      videoTrimStart.max = String(videoEl.duration);
+      videoTrimEnd.max = String(videoEl.duration);
+      videoEffectStart.max = String(videoEl.duration);
+      videoEffectEnd.max = String(videoEl.duration);
+      videoTrimStart.value = '0';
+      videoTrimEnd.value = videoEl.duration.toFixed(2);
+      videoEffectStart.value = '0';
+      videoEffectEnd.value = videoEl.duration.toFixed(2);
+      videoFileMeta.textContent = `${file.name} · ${formatBytes(file.size)} · ${videoEl.videoWidth}×${videoEl.videoHeight} · ${formatDurationDetailed(videoEl.duration)}`;
+      frameCount = 0;
+      lastFpsTime = performance.now();
+      syncPreviewCanvasMetrics(videoEl.videoWidth, videoEl.videoHeight, true);
+      scheduleRenderLoop();
+      renderVideoTimeline();
+      updateVideoEditorUI();
+      showStatus(videoEditorStatus, 'Video listo para editar.', 'success');
+      setTimeout(() => hideStatus(videoEditorStatus), 1800);
+    } catch (err) {
+      console.error('Error loading video:', err);
+      disposeVideoSource();
+      setCameraPlaceholderMessage('No se pudo abrir este video.');
+      showStatus(videoEditorStatus, 'El navegador no puede decodificar este archivo.', 'error');
+      updateVideoEditorUI();
+    }
+  }
+
+  function applyVideoTrim(resetSelection = true) {
+    if (!videoSourceFile) return;
+    try {
+      videoTimeline.setTrim(videoTrimStart.value, videoTrimEnd.value);
+      videoEl.currentTime = clamp(videoEl.currentTime, videoTimeline.trimStart, videoTimeline.trimEnd);
+      if (resetSelection) {
+        videoEffectStart.value = videoTimeline.trimStart.toFixed(2);
+        videoEffectEnd.value = videoTimeline.trimEnd.toFixed(2);
+      }
+      renderVideoTimeline();
+      updateVideoEditorUI();
+    } catch (err) {
+      videoTrimStart.value = videoTimeline.trimStart.toFixed(2);
+      videoTrimEnd.value = videoTimeline.trimEnd.toFixed(2);
+      showStatus(videoEditorStatus, err.message, 'error');
+    }
+  }
+
+  function snapshotVideoEffectConfig(type) {
+    if (type === 'look') {
+      const {
+        previewQuality,
+        jpegQuality,
+        videoFormat,
+        captureTimerSeconds,
+        qualityEnhancer,
+        qualityEnhancerStrength,
+        ...lookSettings
+      } = imageSettings;
+      return lookSettings;
+    }
+    if (type === 'blob') return blobTrackingEffect ? blobTrackingEffect.getConfig() : {
+      boxColor: quickDetectorSettings.blobBoxColor,
+    };
+    if (type === 'face') return faceDetectionEffect ? faceDetectionEffect.getConfig() : {
+      boxColor: quickDetectorSettings.faceBoxColor,
+      labelText: quickDetectorSettings.faceLabelText,
+      visualMode: quickDetectorSettings.faceVisualMode,
+      pixelationCellSize: quickDetectorSettings.facePixelationCellSize,
+      censorPaddingPercent: quickDetectorSettings.faceCensorPaddingPercent,
+    };
+    return blinkDetectionEffect ? blinkDetectionEffect.getConfig() : {};
+  }
+
+  async function saveVideoEffectInterval() {
+    if (!videoSourceFile) return;
+    try {
+      const type = videoEffectType.value;
+      const existing = videoTimeline.items.find((item) => item.id === selectedVideoEffectId);
+      const candidate = {
+        id: existing ? existing.id : (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`),
+        type,
+        startTime: Number(videoEffectStart.value),
+        endTime: Number(videoEffectEnd.value),
+        config: snapshotVideoEffectConfig(type),
+      };
+      const saved = videoTimeline.upsert(candidate);
+      selectedVideoEffectId = saved.id;
+      if (type === 'face' || type === 'blink') {
+        try { await ensureFaceMeshLoaded(); } catch (err) { console.warn('Detector preload failed:', err); }
+      }
+      renderVideoTimeline();
+      updateVideoEffectInspector();
+      showStatus(videoEditorStatus, existing ? 'Intervalo actualizado.' : 'Intervalo agregado.', 'success');
+      setTimeout(() => hideStatus(videoEditorStatus), 1400);
+    } catch (err) {
+      showStatus(videoEditorStatus, err.message, 'error');
+    }
+  }
+
+  function selectVideoEffect(id) {
+    selectedVideoEffectId = id || '';
+    const item = videoTimeline.items.find((candidate) => candidate.id === selectedVideoEffectId);
+    if (item) {
+      videoEffectType.value = item.type;
+      videoEffectStart.value = item.startTime.toFixed(2);
+      videoEffectEnd.value = item.endTime.toFixed(2);
+    }
+    renderVideoTimeline();
+    updateVideoEffectInspector();
+  }
+
+  function deleteSelectedVideoEffect() {
+    if (!selectedVideoEffectId) return;
+    videoTimeline.remove(selectedVideoEffectId);
+    selectedVideoEffectId = '';
+    renderVideoTimeline();
+    updateVideoEffectInspector();
+    void syncVideoTimelineEffects(true);
+  }
+
+  function updateVideoEffectInspector() {
+    const editing = !!videoTimeline.items.find((item) => item.id === selectedVideoEffectId);
+    btnSaveVideoEffect.textContent = editing ? 'Actualizar intervalo' : 'Agregar intervalo';
+    btnDeleteVideoEffect.classList.toggle('hidden', !editing);
+  }
+
+  function renderVideoTimeline() {
+    if (!timelineItems || !videoTimelineEl) return;
+    const duration = Math.max(0.001, videoTimeline.duration);
+    const percent = (time) => `${clamp((time / duration) * 100, 0, 100)}%`;
+    timelineTrim.style.left = percent(videoTimeline.trimStart);
+    timelineTrim.style.width = percent(videoTimeline.trimEnd - videoTimeline.trimStart);
+    timelineTrimStartHandle.style.left = percent(videoTimeline.trimStart);
+    timelineTrimEndHandle.style.left = percent(videoTimeline.trimEnd);
+    const selectionStart = clamp(Number(videoEffectStart.value) || 0, videoTimeline.trimStart, videoTimeline.trimEnd);
+    const selectionEnd = clamp(Number(videoEffectEnd.value) || 0, selectionStart, videoTimeline.trimEnd);
+    videoEffectStart.value = selectionStart.toFixed(2);
+    videoEffectEnd.value = selectionEnd.toFixed(2);
+    timelineSelection.style.left = percent(selectionStart);
+    timelineSelection.style.width = percent(selectionEnd - selectionStart);
+    videoEffectRangeLabel.textContent = `${selectionStart.toFixed(2)}s — ${selectionEnd.toFixed(2)}s`;
+    timelinePlayhead.style.left = percent(videoEl.currentTime || 0);
+    timelineItems.innerHTML = '';
+    const rowByType = { look: 0, blob: 1, face: 2, blink: 3 };
+    const labels = { look: 'LOOK', blob: 'COLOR', face: 'CARAS', blink: 'OJOS' };
+    videoTimeline.items.forEach((item) => {
+      const el = document.createElement('button');
+      el.type = 'button';
+      el.className = `timeline-item${item.id === selectedVideoEffectId ? ' is-selected' : ''}`;
+      el.dataset.id = item.id;
+      el.dataset.type = item.type;
+      el.textContent = labels[item.type];
+      el.style.left = percent(item.startTime);
+      el.style.width = percent(item.endTime - item.startTime);
+      el.style.top = `${rowByType[item.type] * 17}px`;
+      el.addEventListener('click', (event) => {
+        event.stopPropagation();
+        selectVideoEffect(item.id);
+      });
+      el.addEventListener('pointerdown', (event) => beginTimelineDrag(event, item, el));
+      timelineItems.appendChild(el);
+    });
+  }
+
+  function getTimelineTime(clientX) {
+    const bounds = videoTimelineEl.getBoundingClientRect();
+    const ratio = clamp((clientX - bounds.left) / Math.max(1, bounds.width), 0, 1);
+    return ratio * videoTimeline.duration;
+  }
+
+  function setTimelineSelection(startTime, endTime) {
+    const minSpan = Math.min(0.05, videoTimeline.trimEnd - videoTimeline.trimStart);
+    const start = clamp(Math.min(startTime, endTime), videoTimeline.trimStart, videoTimeline.trimEnd - minSpan);
+    const end = clamp(Math.max(startTime, endTime), start + minSpan, videoTimeline.trimEnd);
+    videoEffectStart.value = start.toFixed(2);
+    videoEffectEnd.value = end.toFixed(2);
+    selectedVideoEffectId = '';
+    updateVideoEffectInspector();
+    renderVideoTimeline();
+  }
+
+  function beginTimelineSelection(event) {
+    if (!videoSourceFile || isVideoExporting || event.button !== 0) return;
+    if (event.target.closest('.timeline-item, .timeline-trim-handle')) return;
+    event.preventDefault();
+    const origin = getTimelineTime(event.clientX);
+    let moved = false;
+    setTimelineSelection(origin, Math.min(videoTimeline.trimEnd, origin + 0.05));
+
+    const move = (moveEvent) => {
+      moved = true;
+      setTimelineSelection(origin, getTimelineTime(moveEvent.clientX));
+    };
+    const end = (endEvent) => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', end);
+      if (!moved) seekVideo(getTimelineTime(endEvent.clientX));
+    };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', end, { once: true });
+  }
+
+  function beginTrimDrag(event, edge) {
+    if (!videoSourceFile || isVideoExporting) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const itemStarts = videoTimeline.items.map((item) => item.startTime);
+    const itemEnds = videoTimeline.items.map((item) => item.endTime);
+    const minEnd = itemEnds.length ? Math.max(...itemEnds) : 0.05;
+    const maxStart = itemStarts.length ? Math.min(...itemStarts) : videoTimeline.duration - 0.05;
+
+    const move = (moveEvent) => {
+      const time = getTimelineTime(moveEvent.clientX);
+      if (edge === 'start') {
+        videoTrimStart.value = clamp(time, 0, Math.min(maxStart, videoTimeline.trimEnd - 0.05)).toFixed(2);
+      } else {
+        videoTrimEnd.value = clamp(time, Math.max(minEnd, videoTimeline.trimStart + 0.05), videoTimeline.duration).toFixed(2);
+      }
+      applyVideoTrim(false);
+    };
+    const end = () => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', end);
+    };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', end, { once: true });
+  }
+
+  function beginTimelineDrag(event, item, element) {
+    event.preventDefault();
+    event.stopPropagation();
+    selectedVideoEffectId = item.id;
+    videoEffectType.value = item.type;
+    videoEffectStart.value = item.startTime.toFixed(2);
+    videoEffectEnd.value = item.endTime.toFixed(2);
+    timelineItems.querySelectorAll('.timeline-item').forEach((candidate) => {
+      candidate.classList.toggle('is-selected', candidate === element);
+    });
+    updateVideoEffectInspector();
+    const bounds = videoTimelineEl.getBoundingClientRect();
+    const originX = event.clientX;
+    const original = { ...item };
+    const edge = event.offsetX < 8 ? 'start' : event.offsetX > element.offsetWidth - 8 ? 'end' : 'move';
+
+    const move = (moveEvent) => {
+      const delta = ((moveEvent.clientX - originX) / Math.max(1, bounds.width)) * videoTimeline.duration;
+      let startTime = original.startTime;
+      let endTime = original.endTime;
+      if (edge === 'start') startTime = clamp(original.startTime + delta, videoTimeline.trimStart, original.endTime - 0.05);
+      else if (edge === 'end') endTime = clamp(original.endTime + delta, original.startTime + 0.05, videoTimeline.trimEnd);
+      else {
+        const length = original.endTime - original.startTime;
+        startTime = clamp(original.startTime + delta, videoTimeline.trimStart, videoTimeline.trimEnd - length);
+        endTime = startTime + length;
+      }
+      videoEffectStart.value = startTime.toFixed(2);
+      videoEffectEnd.value = endTime.toFixed(2);
+      element.style.left = `${(startTime / videoTimeline.duration) * 100}%`;
+      element.style.width = `${((endTime - startTime) / videoTimeline.duration) * 100}%`;
+    };
+    const end = () => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', end);
+      try {
+        videoTimeline.upsert({ ...item, startTime: Number(videoEffectStart.value), endTime: Number(videoEffectEnd.value) });
+      } catch (err) {
+        showStatus(videoEditorStatus, err.message, 'error');
+      }
+      selectVideoEffect(item.id);
+    };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', end, { once: true });
+  }
+
+  async function setTimelineDetector(type, item) {
+    const checkbox = type === 'blob' ? chkBlobTracking : type === 'face' ? chkFaceDetection : chkBlinkDetection;
+    if (!checkbox) return;
+    const shouldEnable = !!item;
+    if (checkbox.checked !== shouldEnable) {
+      checkbox.checked = shouldEnable;
+      await toggleEffect(type);
+    }
+    const effect = type === 'blob' ? blobTrackingEffect : type === 'face' ? faceDetectionEffect : blinkDetectionEffect;
+    if (item && effect && typeof effect.setConfig === 'function') effect.setConfig(item.config || {});
+  }
+
+  async function syncVideoTimelineEffects(force = false) {
+    if (sourceMode !== 'video' || !videoSourceFile) return;
+    const active = videoTimeline.activeAt(videoEl.currentTime);
+    const byType = Object.fromEntries(active.map((item) => [item.type, item]));
+    if (force || appliedTimelineItemIds.look !== byType.look?.id) {
+      const operationalSettings = {
+        previewQuality: imageSettings.previewQuality,
+        jpegQuality: imageSettings.jpegQuality,
+        videoFormat: imageSettings.videoFormat,
+        captureTimerSeconds: imageSettings.captureTimerSeconds,
+        qualityEnhancer: imageSettings.qualityEnhancer,
+        qualityEnhancerStrength: imageSettings.qualityEnhancerStrength,
+      };
+      imageSettings = {
+        ...(videoBaseImageSettings || DEFAULT_IMAGE_SETTINGS),
+        ...(byType.look?.config || {}),
+        ...operationalSettings,
+      };
+      appliedTimelineItemIds.look = byType.look?.id || '';
+    }
+    for (const type of ['blob', 'face', 'blink']) {
+      if (force || appliedTimelineItemIds[type] !== byType[type]?.id) {
+        appliedTimelineItemIds[type] = byType[type]?.id || '';
+        await setTimelineDetector(type, byType[type]);
+      }
+    }
+    updateEffectsInfo();
+  }
+
+  function updateVideoEditorUI() {
+    const loaded = !!videoSourceFile;
+    [btnVideoStart, btnVideoBack, btnVideoPlay, btnVideoForward, btnVideoEnd, btnVideoMute]
+      .forEach((button) => { button.disabled = !loaded || isVideoExporting; });
+    videoSeek.disabled = !loaded || isVideoExporting;
+    btnExportVideo.disabled = !loaded || isVideoExporting;
+    videoTrimStart.disabled = !loaded || isVideoExporting;
+    videoTrimEnd.disabled = !loaded || isVideoExporting;
+    btnSaveVideoEffect.disabled = !loaded || isVideoExporting;
+    if (!loaded) {
+      videoFileMeta.textContent = 'Ningún archivo cargado';
+      videoExportDetails.textContent = 'Cargá un video para exportar.';
+      return;
+    }
+    const profile = typeof MediaRecorder !== 'undefined' ? getRecordingProfile() : null;
+    videoExportDetails.textContent = `${videoEl.videoWidth}×${videoEl.videoHeight} original · ${profile ? profile.extension.toUpperCase() : 'sin encoder compatible'} · sin audio`;
+  }
+
+  function updateVideoTransport() {
+    if (sourceMode !== 'video') return;
+    const duration = videoTimeline.duration || 0;
+    videoSeek.value = String(videoEl.currentTime || 0);
+    videoTimeLabel.textContent = `${formatDurationDetailed(videoEl.currentTime || 0)} / ${formatDurationDetailed(duration)}`;
+    btnVideoPlay.innerHTML = videoEl.paused
+      ? '<i class="fa-solid fa-play"></i>'
+      : '<i class="fa-solid fa-pause"></i>';
+    updateVideoMuteButton();
+    if (duration > 0) timelinePlayhead.style.left = `${clamp((videoEl.currentTime / duration) * 100, 0, 100)}%`;
+    if (isVideoExporting) {
+      const range = Math.max(0.001, videoTimeline.trimEnd - videoTimeline.trimStart);
+      const progress = clamp((videoEl.currentTime - videoTimeline.trimStart) / range, 0, 1);
+      videoExportProgress.value = progress;
+      const remaining = Math.max(0, videoTimeline.trimEnd - videoEl.currentTime);
+      videoExportSummary.textContent = `Exportando ${Math.round(progress * 100)}% · quedan ${formatDurationDetailed(remaining)}`;
+    }
+  }
+
+  async function toggleVideoPlayback() {
+    if (!videoSourceFile || isVideoExporting) return;
+    if (videoEl.paused) {
+      if (videoEl.currentTime < videoTimeline.trimStart || videoEl.currentTime >= videoTimeline.trimEnd) {
+        videoEl.currentTime = videoTimeline.trimStart;
+      }
+      await videoEl.play().catch(() => showStatus(videoEditorStatus, 'No se pudo reproducir el video.', 'error'));
+      if (!animFrameId) scheduleRenderLoop();
+    } else {
+      videoEl.pause();
+    }
+    updateVideoTransport();
+  }
+
+  function seekVideo(time) {
+    if (!videoSourceFile || isVideoExporting) return;
+    videoEl.currentTime = clamp(Number(time) || 0, videoTimeline.trimStart, videoTimeline.trimEnd);
+    updateVideoTransport();
+    if (!animFrameId) scheduleRenderLoop();
+  }
+
+  function jumpVideo(seconds) {
+    seekVideo((videoEl.currentTime || 0) + seconds);
+  }
+
+  function updateVideoMuteButton() {
+    btnVideoMute.setAttribute('aria-pressed', String(videoEl.muted));
+    btnVideoMute.setAttribute('aria-label', videoEl.muted ? 'Activar audio' : 'Silenciar audio');
+    btnVideoMute.innerHTML = videoEl.muted
+      ? '<i class="fa-solid fa-volume-xmark"></i>'
+      : '<i class="fa-solid fa-volume-high"></i>';
+  }
+
+  async function startVideoExport() {
+    if (!videoSourceFile || isVideoExporting) return;
+    if (typeof MediaRecorder === 'undefined' || typeof canvas.captureStream !== 'function') {
+      showStatus(videoEditorStatus, 'Este navegador no puede exportar el video.', 'error');
+      return;
+    }
+    const profile = getRecordingProfile();
+    if (!profile) {
+      showStatus(videoEditorStatus, 'No hay un formato de salida compatible.', 'error');
+      return;
+    }
+
+    try {
+      const baseName = videoSourceFile.name.replace(/\.[^.]+$/, '') || 'hatewebcam-video';
+      videoExportFileName = `${baseName}-editado.${profile.extension}`;
+      videoExportChunks = [];
+      ensureRecordingCanvas();
+      copyFrameToRecordingCanvas();
+      const exportStream = recordingCanvas.captureStream(60);
+      videoExportRecorder = new MediaRecorder(exportStream, {
+        mimeType: profile.mimeType,
+        videoBitsPerSecond: getRecommendedVideoBitrate(recordingCanvas.width, recordingCanvas.height, 60),
+      });
+      videoExportRecorder.ondataavailable = (event) => {
+        if (event.data?.size) videoExportChunks.push(event.data);
+      };
+      videoExportRecorder.onerror = (event) => failVideoExport(event.error || new Error('media_recorder_failed'));
+      videoExportRecorder.onstop = completeVideoExport;
+      isVideoExporting = true;
+      videoExportProgress.value = 0;
+      videoExportTitle.innerHTML = '<i class="fa-solid fa-file-export"></i> Exportando video';
+      videoExportSummary.textContent = 'Preparando exportación…';
+      btnCancelVideoExport.classList.remove('hidden');
+      btnCloseVideoExportModal.classList.add('hidden');
+      videoExportModal.classList.remove('hidden');
+      updateVideoEditorUI();
+      if (Math.abs(videoEl.currentTime - videoTimeline.trimStart) > 0.001) {
+        videoEl.currentTime = videoTimeline.trimStart;
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('video_seek_timeout')), 5000);
+          videoEl.addEventListener('seeked', () => {
+            clearTimeout(timeout);
+            resolve();
+          }, { once: true });
+        });
+      }
+      await syncVideoTimelineEffects(true);
+      copyFrameToRecordingCanvas();
+      if ('wakeLock' in navigator) {
+        videoExportWakeLock = await navigator.wakeLock.request('screen').catch(() => null);
+      }
+      videoExportRecorder.start(1000);
+      await videoEl.play();
+      if (!animFrameId) scheduleRenderLoop();
+    } catch (err) {
+      if (err.name !== 'AbortError') failVideoExport(err);
+    }
+  }
+
+  function stopVideoExport() {
+    if (!isVideoExporting) return;
+    isVideoExporting = false;
+    videoEl.pause();
+    if (videoExportRecorder?.state && videoExportRecorder.state !== 'inactive') videoExportRecorder.stop();
+  }
+
+  function stopVideoExportAtRangeEnd() {
+    if (!isVideoExporting) return;
+    if (videoEl.ended || videoEl.currentTime >= videoTimeline.trimEnd - (1 / 60)) {
+      stopVideoExport();
+    }
+  }
+
+  async function completeVideoExport() {
+    try {
+      if (videoExportChunks.length === 0) throw new Error('empty_video_export');
+      // ponytail: Blob export is the reliable browser path; stream to disk only if long clips make memory measurable.
+      const blob = new Blob(videoExportChunks, { type: videoExportRecorder?.mimeType || 'video/webm' });
+      downloadBlob(blob, videoExportFileName);
+      showStatus(videoEditorStatus, 'Exportación terminada y guardada.', 'success');
+      videoExportProgress.value = 1;
+      videoExportTitle.innerHTML = '<i class="fa-solid fa-circle-check"></i> Exportación terminada';
+      videoExportSummary.textContent = `${videoExportFileName} · ${formatBytes(blob.size)} · descarga iniciada`;
+    } catch (err) {
+      console.error('Video export finalization failed:', err);
+      showStatus(videoEditorStatus, 'No se pudo completar el archivo.', 'error');
+      videoExportTitle.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Error de exportación';
+      videoExportSummary.textContent = 'No se pudo generar el archivo. Probá con un tramo más corto.';
+    } finally {
+      btnCancelVideoExport.classList.add('hidden');
+      btnCloseVideoExportModal.classList.remove('hidden');
+      cleanupVideoExport(true);
+    }
+  }
+
+  async function cancelVideoExport(showMessage = true) {
+    if (!isVideoExporting && !videoExportRecorder) return;
+    isVideoExporting = false;
+    videoEl.pause();
+    if (videoExportRecorder?.state && videoExportRecorder.state !== 'inactive') {
+      videoExportRecorder.onstop = null;
+      videoExportRecorder.stop();
+    }
+    if (showMessage) showStatus(videoEditorStatus, 'Exportación cancelada.', 'warning');
+    videoExportTitle.innerHTML = '<i class="fa-solid fa-ban"></i> Exportación cancelada';
+    videoExportSummary.textContent = 'No se descargó ningún archivo.';
+    btnCancelVideoExport.classList.add('hidden');
+    btnCloseVideoExportModal.classList.remove('hidden');
+    cleanupVideoExport(true);
+  }
+
+  function failVideoExport(err) {
+    console.error('Video export failed:', err);
+    showStatus(videoEditorStatus, 'La exportación falló. Revisá espacio libre y permisos.', 'error');
+    void cancelVideoExport(false).then(() => {
+      videoExportTitle.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Error de exportación';
+      videoExportSummary.textContent = 'La exportación falló. Probá con un tramo más corto.';
+    });
+  }
+
+  function cleanupVideoExport(keepModal = false) {
+    isVideoExporting = false;
+    videoExportRecorder = null;
+    videoExportChunks = [];
+    videoExportFileName = '';
+    if (!keepModal) {
+      videoExportProgress.value = 0;
+      videoExportModal.classList.add('hidden');
+    }
+    if (videoExportWakeLock) videoExportWakeLock.release().catch(() => {});
+    videoExportWakeLock = null;
+    videoExportPausedByVisibility = false;
+    updateVideoEditorUI();
+    updateVideoTransport();
+  }
+
+  function closeVideoExportModal() {
+    if (isVideoExporting) return;
+    videoExportModal.classList.add('hidden');
+    videoExportProgress.value = 0;
+  }
+
   // ─── Init ───
   async function init() {
     const cfg = loadConfig();
@@ -1002,13 +1670,7 @@
       cfg.faceVisualModeDefaultV2 = true;
       saveConfig(cfg);
     }
-    if (migrateDetectorLatencyDefaults(cfg)) {
-      saveConfig(cfg);
-    }
-    if (migrateDetectorStabilityDefaults(cfg)) {
-      saveConfig(cfg);
-    }
-    if (migrateDetectorPerformanceDefaults(cfg)) {
+    if (migrateResponsiveEditorDefaults(cfg)) {
       saveConfig(cfg);
     }
     if (typeof cfg.flipH === 'boolean') flipH = cfg.flipH;
@@ -1050,6 +1712,51 @@
 
   // ─── Events ───
   function bindEvents() {
+    btnWebcamMode.addEventListener('click', () => setSourceMode('camera'));
+    btnVideoMode.addEventListener('click', () => setSourceMode('video'));
+    btnChooseVideo.addEventListener('click', () => videoFileInput.click());
+    videoFileInput.addEventListener('change', () => {
+      const [file] = videoFileInput.files || [];
+      if (file) void loadVideoFile(file);
+      videoFileInput.value = '';
+    });
+    btnVideoStart.addEventListener('click', () => seekVideo(videoTimeline.trimStart));
+    btnVideoBack.addEventListener('click', () => jumpVideo(-5));
+    btnVideoPlay.addEventListener('click', () => { void toggleVideoPlayback(); });
+    btnVideoForward.addEventListener('click', () => jumpVideo(5));
+    btnVideoEnd.addEventListener('click', () => seekVideo(videoTimeline.trimEnd));
+    btnVideoMute.addEventListener('click', () => {
+      videoEl.muted = !videoEl.muted;
+      updateVideoMuteButton();
+    });
+    videoSeek.addEventListener('input', () => seekVideo(videoSeek.value));
+    videoTrimStart.addEventListener('change', applyVideoTrim);
+    videoTrimEnd.addEventListener('change', applyVideoTrim);
+    btnSetTrimFromPlayhead.addEventListener('click', () => {
+      videoTrimStart.value = String(videoEl.currentTime || 0);
+      applyVideoTrim();
+    });
+    btnSetTrimEndFromPlayhead.addEventListener('click', () => {
+      videoTrimEnd.value = String(videoEl.currentTime || 0);
+      applyVideoTrim();
+    });
+    btnSaveVideoEffect.addEventListener('click', () => { void saveVideoEffectInterval(); });
+    btnDeleteVideoEffect.addEventListener('click', deleteSelectedVideoEffect);
+    btnExportVideo.addEventListener('click', () => { void startVideoExport(); });
+    btnCancelVideoExport.addEventListener('click', () => { void cancelVideoExport(); });
+    btnCloseVideoExportModal.addEventListener('click', closeVideoExportModal);
+    videoTimelineEl.addEventListener('pointerdown', beginTimelineSelection);
+    timelineTrimStartHandle.addEventListener('pointerdown', (event) => beginTrimDrag(event, 'start'));
+    timelineTrimEndHandle.addEventListener('pointerdown', (event) => beginTrimDrag(event, 'end'));
+    videoEl.addEventListener('play', updateVideoTransport);
+    videoEl.addEventListener('pause', updateVideoTransport);
+    videoEl.addEventListener('timeupdate', stopVideoExportAtRangeEnd);
+    videoEl.addEventListener('ended', stopVideoExportAtRangeEnd);
+    videoEl.addEventListener('seeked', () => {
+      updateVideoTransport();
+      void syncVideoTimelineEffects();
+      if (!animFrameId && isRunning) scheduleRenderLoop();
+    });
     btnToggleCamera.addEventListener('click', () => toggleCamera(false));
     cameraSelect.addEventListener('change', onCameraChange);
     chkMirror.addEventListener('change', onTransformChange);
@@ -1193,11 +1900,27 @@
       stopRecording(false);
       clearPendingCapture(true);
       if (isRunning) cameraManager.stop();
+      if (videoObjectUrl) URL.revokeObjectURL(videoObjectUrl);
     });
   }
 
   function onVisibilityChange() {
     isPageVisible = document.visibilityState !== 'hidden';
+    if (isVideoExporting && videoExportRecorder) {
+      if (!isPageVisible && videoExportRecorder.state === 'recording') {
+        videoExportPausedByVisibility = true;
+        videoExportRecorder.pause();
+        videoEl.pause();
+        showStatus(videoEditorStatus, 'Exportación pausada: volvé a esta pestaña.', 'warning');
+        videoExportSummary.textContent = 'Exportación pausada. Volvé a esta pestaña para continuar.';
+      } else if (isPageVisible && videoExportPausedByVisibility && videoExportRecorder.state === 'paused') {
+        videoExportPausedByVisibility = false;
+        videoExportRecorder.resume();
+        void videoEl.play();
+        hideStatus(videoEditorStatus);
+        updateVideoTransport();
+      }
+    }
     if (!isRunning) return;
 
     if (!isPageVisible) {
@@ -1239,6 +1962,7 @@
   }
 
   async function toggleCamera(forceStart = false) {
+    if (sourceMode !== 'camera') return;
     if (isRunning && !forceStart) {
       if (isRecording) stopRecording(true);
       cancelPhotoCountdown(false);
@@ -1472,7 +2196,7 @@
   }
 
   function getEffectiveRotationDegrees(sourceWidth, sourceHeight) {
-    if (isMobileViewport()) {
+    if (sourceMode === 'camera' && isMobileViewport()) {
       return normalizeRotationDegrees(getMobileAutoRotationDegrees(sourceWidth, sourceHeight));
     }
     return normalizeRotationDegrees(rotation);
@@ -1578,11 +2302,21 @@
 
     try {
       if (videoEl.readyState >= 2) {
+        if (sourceMode === 'video') {
+          void syncVideoTimelineEffects();
+          if (videoEl.currentTime >= videoTimeline.trimEnd) {
+            if (isVideoExporting) stopVideoExport();
+            else {
+              videoEl.pause();
+              videoEl.currentTime = videoTimeline.trimEnd;
+            }
+          }
+        }
         const { sourceWidth, sourceHeight } = getSourceFrameDimensions();
         syncPreviewCanvasMetrics(sourceWidth, sourceHeight, frameCount % 30 === 0);
 
         try {
-          if (isRecording) {
+          if (isRecording || isVideoExporting) {
             copyFrameToRecordingCanvas();
             ctx.drawImage(recordingCanvas, 0, 0, canvas.width, canvas.height);
           } else {
@@ -1601,6 +2335,7 @@
           frameCount = 0;
           lastFpsTime = now;
         }
+        updateVideoTransport();
       }
     } catch (err) {
       console.error('Render loop error:', err);
@@ -2622,7 +3357,7 @@
     const safeFps = clamp(fps || 30, 24, 60);
     const bitsPerPixelFrame = imageSettings.qualityEnhancer ? 0.22 : 0.18;
     const estimate = Math.round(safeWidth * safeHeight * safeFps * bitsPerPixelFrame);
-    return clamp(estimate, 8000000, 32000000);
+    return clamp(estimate, 8000000, 80000000);
   }
 
   function drawEnhancedFrameToContext(targetCtx, sourceCanvas, width, height, strengthPct, forExport = false) {
@@ -3203,7 +3938,7 @@
     document.body.appendChild(a);
     a.click();
     a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1500);
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
 
   function timestamp() {
