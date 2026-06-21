@@ -4,8 +4,6 @@ Aplicación web para usar la cámara con filtros en tiempo real, detectores visu
 
 > **BETA**
 
-![Vista general de la app](screenshots/alex.png)
-
 ## Qué ofrece
 
 - Vista previa en vivo con controles de imagen.

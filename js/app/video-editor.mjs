@@ -1,0 +1,1276 @@
+/** @param {import('./controller.mjs').AppController} proto */
+export function applyLocalvideoeditorMixin(proto) {
+  proto.setSourceMode = function (mode) {
+    if (mode === this.sourceMode) return;
+    if (this.isVideoExporting) return;
+
+    if (mode === 'video') {
+      this.webcamSessionState = {
+        imageSettings: { ...this.imageSettings },
+        blob: this.chkBlobTracking.checked,
+        face: this.chkFaceDetection.checked,
+        blink: this.chkBlinkDetection.checked,
+        blobConfig: this.blobTrackingEffect?.getConfig() || null,
+        faceConfig: this.faceDetectionEffect?.getConfig() || null,
+        blinkConfig: this.blinkDetectionEffect?.getConfig() || null,
+      };
+      if (this.isRunning) {
+        this.cameraManager.stop();
+        this.isRunning = false;
+        this.cancelRenderLoop();
+      }
+      this.sourceMode = 'video';
+      document.body.classList.add('video-mode');
+      document.querySelectorAll('.webcam-only').forEach((el) => el.classList.add('hidden'));
+      document.querySelectorAll('.video-only').forEach((el) => el.classList.remove('hidden'));
+      this.mountVideoEffectsControls();
+      this.setEditorTool('select');
+      this.setInspectorTab('project');
+      this.applyTimelineZoom();
+      this.btnWebcamMode.classList.remove('is-active');
+      this.btnVideoMode.classList.add('is-active');
+      this.btnWebcamMode.setAttribute('aria-selected', 'false');
+      this.btnVideoMode.setAttribute('aria-selected', 'true');
+      this.setCameraPlaceholderMessage('Elegí un video para editar.');
+      this.placeholder.classList.remove('hidden');
+      this.updateVideoEditorUI();
+      return;
+    }
+
+    this.disposeVideoSource();
+    this.sourceMode = 'camera';
+    document.body.classList.remove('video-mode');
+    delete document.body.dataset.editorTool;
+    this.unmountVideoEffectsControls();
+    document.querySelectorAll('.video-only').forEach((el) => el.classList.add('hidden'));
+    document.querySelectorAll('.webcam-only').forEach((el) => el.classList.remove('hidden'));
+    this.btnVideoMode.classList.remove('is-active');
+    this.btnWebcamMode.classList.add('is-active');
+    this.btnVideoMode.setAttribute('aria-selected', 'false');
+    this.btnWebcamMode.setAttribute('aria-selected', 'true');
+    this.setCameraPlaceholderMessage('Iniciando cámara automáticamente...');
+    void this.restoreWebcamSessionState();
+    void this.toggleCamera(true);
+  }
+
+  proto.restoreWebcamSessionState = async function () {
+    if (!this.webcamSessionState) return;
+    this.imageSettings = { ...this.webcamSessionState.imageSettings };
+    this.updateImageControlsUI();
+    for (const [type, checkbox] of [['blob', this.chkBlobTracking], ['face', this.chkFaceDetection], ['blink', this.chkBlinkDetection]]) {
+      if (checkbox.checked) {
+        checkbox.checked = false;
+        await this.toggleEffect(type);
+      }
+      if (this.webcamSessionState[type]) {
+        checkbox.checked = true;
+        await this.toggleEffect(type);
+        const effect = type === 'blob' ? blobTrackingEffect: type === 'face' ? faceDetectionEffect: this.blinkDetectionEffect;
+        const config = this.webcamSessionState[`${type}Config`];
+        if (effect && config) effect.setConfig(config);
+      }
+    }
+    this.webcamSessionState = null;
+    this.updateQuickDetectorControlsUI();
+    this.updateEffectsInfo();
+  }
+
+  proto.disposeVideoSource = function () {
+    if (this.isVideoExporting) this.cancelVideoExport();
+    this.videoEl.pause();
+    this.cancelRenderLoop();
+    this.isRunning = false;
+    if (this.videoObjectUrl) URL.revokeObjectURL(this.videoObjectUrl);
+    this.videoObjectUrl = '';
+    this.videoSourceFile = null;
+    this.videoSourceFps = 30;
+    this.videoSourceAverageBitrate = 0;
+    this.videoEl.removeAttribute('src');
+    this.videoEl.load();
+    this.videoTimeline = new VideoTimeline();
+    this.editorHistory?.clear();
+    this.updateEditorHistoryButtons();
+    this.timelineZoom = 1;
+    this.selectedVideoEffectId = '';
+    this.appliedTimelineItemIds = {};
+    this.videoBaseImageSettings = null;
+    this.timelineItems.innerHTML = '';
+    if (this.sourceMode === 'video') {
+      this.setCameraPlaceholderMessage('Elegí un video para editar.');
+    }
+    this.placeholder.classList.remove('hidden');
+  }
+
+  proto.loadVideoFile = async function (file) {
+    if (!file || !(file instanceof File)) return;
+    if (!file.type.startsWith('video/')) {
+      this.showStatus(this.videoEditorStatus, 'Elegí un archivo de video válido.', 'error');
+      return;
+    }
+
+    this.disposeVideoSource();
+    this.videoSourceFile = file;
+    this.videoObjectUrl = URL.createObjectURL(file);
+    this.videoEl.srcObject = null;
+    this.videoEl.src = this.videoObjectUrl;
+    this.videoEl.muted = true;
+    this.videoEl.preload = 'auto';
+    this.setCameraPlaceholderMessage('Leyendo metadata del video...');
+
+    try {
+      await new Promise((resolve, reject) => {
+        const loaded = () => {
+          this.videoEl.removeEventListener('error', failed);
+          resolve();
+        };
+        const failed = () => {
+          this.videoEl.removeEventListener('loadedmetadata', loaded);
+          reject(new Error('video_decode_failed'));
+        };
+        this.videoEl.addEventListener('loadedmetadata', loaded, { once: true });
+        this.videoEl.addEventListener('error', failed, { once: true });
+        this.videoEl.load();
+      });
+      if (!Number.isFinite(this.videoEl.duration) || this.videoEl.duration <= 0 || !this.videoEl.videoWidth || !this.videoEl.videoHeight) {
+        throw new Error('video_metadata_invalid');
+      }
+      this.videoEl.currentTime = Math.min(0.001, this.videoEl.duration);
+
+      const { calculateFrameRateFromMediaTimes, calculateSourceAverageBitrate } = await import('../video-export.mjs');
+      this.videoSourceFps = await this.detectVideoSourceFps(this.videoEl, calculateFrameRateFromMediaTimes);
+      this.videoSourceAverageBitrate = calculateSourceAverageBitrate(file.size, this.videoEl.duration);
+      this.videoTimeline.setDuration(this.videoEl.duration);
+      this.videoBaseImageSettings = { ...this.imageSettings };
+      this.isRunning = true;
+      this.placeholder.classList.add('hidden');
+      this.videoSeek.max = String(this.videoEl.duration);
+      this.videoTrimStart.max = String(this.videoEl.duration);
+      this.videoTrimEnd.max = String(this.videoEl.duration);
+      this.videoEffectStart.max = String(this.videoEl.duration);
+      this.videoEffectEnd.max = String(this.videoEl.duration);
+      this.videoTrimStart.value = '0';
+      this.videoTrimEnd.value = this.videoEl.duration.toFixed(2);
+      this.videoEffectStart.value = '0';
+      this.videoEffectEnd.value = this.videoEl.duration.toFixed(2);
+      this.videoFileMeta.textContent = `${file.name} · ${this.formatBytes(file.size)} · ${this.videoEl.videoWidth}×${this.videoEl.videoHeight} · ${this.formatDurationDetailed(this.videoEl.duration)} · ${this.formatVideoFps(this.videoSourceFps)} FPS · ${this.formatVideoBitrate(this.videoSourceAverageBitrate)} estimado`;
+      this.frameCount = 0;
+      this.lastFpsTime = performance.now();
+      this.syncPreviewCanvasMetrics(this.videoEl.videoWidth, this.videoEl.videoHeight, true);
+      this.scheduleRenderLoop();
+      this.renderVideoTimeline();
+      this.updateVideoEditorUI();
+      this.applyTimelineZoom();
+      this.showStatus(this.videoEditorStatus, 'Video listo.', 'success');
+      setTimeout(() => this.hideStatus(this.videoEditorStatus), 1800);
+    } catch (err) {
+      console.error('Error loading video:', err);
+      this.disposeVideoSource();
+      this.setCameraPlaceholderMessage('No se pudo abrir este video.');
+      const message = err?.message === 'video_metadata_invalid'
+        ? 'El video no contiene resolución o duración válidas.'
+        : 'El navegador no puede decodificar este archivo.';
+      this.showStatus(this.videoEditorStatus, message, 'error');
+      this.updateVideoEditorUI();
+    }
+  }
+
+  proto.applyVideoTrim = function (resetSelection = true) {
+    if (!this.videoSourceFile) return;
+    try {
+      this.videoTimeline.setTrim(this.videoTrimStart.value, this.videoTrimEnd.value);
+      this.videoEl.currentTime = this.clamp(this.videoEl.currentTime, this.videoTimeline.trimStart, this.videoTimeline.trimEnd);
+      if (resetSelection) {
+        this.videoEffectStart.value = this.videoTimeline.trimStart.toFixed(2);
+        this.videoEffectEnd.value = this.videoTimeline.trimEnd.toFixed(2);
+      }
+      this.renderVideoTimeline();
+      this.updateVideoEditorUI();
+    } catch (err) {
+      this.videoTrimStart.value = this.videoTimeline.trimStart.toFixed(2);
+      this.videoTrimEnd.value = this.videoTimeline.trimEnd.toFixed(2);
+      this.showStatus(this.videoEditorStatus, err.message, 'error');
+    }
+  }
+
+  proto.getSelectedVideoEffectItem = function () {
+    return this.videoTimeline.items.find((candidate) => candidate.id === this.selectedVideoEffectId) || null;
+  }
+
+  proto.updateAdjustmentsPanelState = function () {
+    const item = this.getSelectedVideoEffectItem();
+    const hasSelection = !!item;
+    if (this.inspectorAdjustmentsEmpty) this.inspectorAdjustmentsEmpty.classList.toggle('hidden', hasSelection);
+    if (this.inspectorAdjustmentsHost) this.inspectorAdjustmentsHost.classList.toggle('hidden', !hasSelection);
+    if (this.adjustContextNav) this.adjustContextNav.classList.toggle('hidden', !hasSelection);
+    if (hasSelection) this.updateAdjustmentsContext();
+  }
+
+  proto.snapshotVideoEffectConfig = function (type) {
+    if (type === 'look') {
+      const {
+        previewQuality,
+        jpegQuality,
+        videoFormat,
+        captureTimerSeconds,
+        qualityEnhancer,
+        qualityEnhancerStrength,
+        ...lookSettings
+      } = this.imageSettings;
+      return lookSettings;
+    }
+    if (type === 'blob') return this.blobTrackingEffect ? this.blobTrackingEffect.getConfig() : {
+      boxColor: this.quickDetectorSettings.blobBoxColor,
+    };
+    if (type === 'face') return this.faceDetectionEffect ? this.faceDetectionEffect.getConfig() : {
+      boxColor: this.quickDetectorSettings.faceBoxColor,
+      labelText: this.quickDetectorSettings.faceLabelText,
+      showBox: this.quickDetectorSettings.faceShowBox,
+      showBlur: this.quickDetectorSettings.faceShowBlur,
+      visualMode: this.getFaceVisualMode(),
+      pixelationCellSize: this.quickDetectorSettings.facePixelationCellSize,
+      censorPaddingPercent: this.quickDetectorSettings.faceCensorPaddingPercent,
+    };
+    return this.blinkDetectionEffect ? this.blinkDetectionEffect.getConfig() : {};
+  }
+
+  proto.applyVideoEffectItemConfig = function (item) {
+    if (!item?.config) return;
+    if (item.type === 'look') {
+      const {
+        previewQuality,
+        jpegQuality,
+        videoFormat,
+        captureTimerSeconds,
+        qualityEnhancer,
+        qualityEnhancerStrength,
+        ...lookSettings
+      } = item.config;
+      this.imageSettings = { ...this.imageSettings, ...lookSettings };
+      this.updateImageControlsUI();
+      this.saveImageSettings();
+      return;
+    }
+    if (item.type === 'blob' && this.blobTrackingEffect) {
+      this.blobTrackingEffect.setConfig(item.config);
+    } else if (item.type === 'face' && this.faceDetectionEffect) {
+      this.faceDetectionEffect.setConfig(item.config);
+    } else if (item.type === 'blink' && this.blinkDetectionEffect) {
+      this.blinkDetectionEffect.setConfig(item.config);
+    }
+    this.syncQuickDetectorSettingsFromEffects();
+    this.renderEffectConfig();
+  }
+
+  proto.commitSelectedEffectTiming = function (options = {}) {
+    if (!this.selectedVideoEffectId) return;
+    const item = this.videoTimeline.items.find((candidate) => candidate.id === this.selectedVideoEffectId);
+    if (!item) return;
+    const minSpan = 0.05;
+    const startTime = this.clamp(Number(this.videoEffectStart.value) || 0, this.videoTimeline.trimStart, this.videoTimeline.trimEnd - minSpan);
+    const endTime = this.clamp(Number(this.videoEffectEnd.value) || 0, startTime + minSpan, this.videoTimeline.trimEnd);
+    this.videoEffectStart.value = startTime.toFixed(2);
+    this.videoEffectEnd.value = endTime.toFixed(2);
+    try {
+      if (options.pushHistory) this.pushTimelineHistory();
+      this.videoTimeline.upsert({ ...item, startTime, endTime });
+      this.renderVideoTimeline();
+      void this.syncVideoTimelineEffects(true);
+    } catch (err) {
+      this.showStatus(this.videoEditorStatus, err.message, 'error');
+      this.selectVideoEffect(item.id);
+    }
+  }
+
+  proto.addTimelineEffectClip = async function (type, anchorTime, duration = this.DEFAULT_TIMELINE_EFFECT_DURATION) {
+    if (!this.videoSourceFile || !this.TIMELINE_EFFECT_META[type]) return null;
+    const span = Math.max(0.05, Math.min(duration, this.videoTimeline.trimEnd - this.videoTimeline.trimStart));
+    let startTime = this.snapTimelineTime(anchorTime - span / 2);
+    startTime = this.clamp(startTime, this.videoTimeline.trimStart, this.videoTimeline.trimEnd - span);
+    let endTime = this.clamp(startTime + span, startTime + 0.05, this.videoTimeline.trimEnd);
+    if (endTime <= startTime) {
+      this.showStatus(this.videoEditorStatus, 'No hay espacio libre en esa pista.', 'error');
+      return null;
+    }
+    try {
+      this.pushTimelineHistory();
+      const saved = this.videoTimeline.upsert({
+        id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+        type,
+        startTime,
+        endTime,
+        config: this.snapshotVideoEffectConfig(type),
+      });
+      if (type === 'face' || type === 'blink') {
+        try { await this.ensureFaceMeshLoaded(); } catch (err) { console.warn('Detector preload failed:', err); }
+      }
+      this.selectVideoEffect(saved.id);
+      void this.syncVideoTimelineEffects(true);
+      this.showStatus(this.videoEditorStatus, `${this.TIMELINE_EFFECT_META[type].label} agregado.`, 'success');
+      setTimeout(() => this.hideStatus(this.videoEditorStatus), 1200);
+      this.setInspectorTab('adjust');
+      return saved;
+    } catch (err) {
+      this.showStatus(this.videoEditorStatus, err.message, 'error');
+      return null;
+    }
+  }
+
+  proto.getTimelineRowFromClientY = function (clientY) {
+    if (!this.timelineTrackArea) return null;
+    const bounds = this.timelineTrackArea.getBoundingClientRect();
+    if (clientY < bounds.top || clientY > bounds.bottom) return null;
+    const ratio = this.clamp((clientY - bounds.top) / bounds.height, 0, 0.999);
+    const row = Math.floor(ratio * 5);
+    if (row <= 0) return null;
+    return Object.keys(this.TIMELINE_EFFECT_META).find((type) => this.TIMELINE_EFFECT_META[type].row === row) || null;
+  }
+
+  proto.clearTimelineDropTargets = function () {
+    this.videoTimelineEl?.querySelectorAll('.timeline-track-effects.is-drop-target').forEach((track) => {
+      track.classList.remove('is-drop-target');
+    });
+  }
+
+  proto.setTimelineDropTarget = function (type) {
+    this.clearTimelineDropTargets();
+    if (!type || !this.videoTimelineEl) return;
+    const track = this.videoTimelineEl.querySelector(`.timeline-track-effects[data-track="${type}"]`);
+    track?.classList.add('is-drop-target');
+  }
+
+  proto.updateTimelineDragGhost = function (clientX, clientY, label) {
+    if (!this.timelineDragGhost) {
+      this.timelineDragGhost = document.createElement('div');
+      this.timelineDragGhost.className = 'timeline-drag-ghost';
+      document.body.appendChild(this.timelineDragGhost);
+    }
+    this.timelineDragGhost.textContent = label;
+    this.timelineDragGhost.style.left = `${clientX}px`;
+    this.timelineDragGhost.style.top = `${clientY}px`;
+  }
+
+  proto.removeTimelineDragGhost = function () {
+    this.timelineDragGhost?.remove();
+    this.timelineDragGhost = null;
+  }
+
+  proto.finishPaletteDrag = function (event) {
+    if (!this.paletteDragState) return;
+    const chip = this.paletteDragState.chip;
+    chip?.classList.remove('is-dragging');
+    if (chip?.hasPointerCapture?.(event.pointerId)) chip.releasePointerCapture(event.pointerId);
+    const type = this.paletteDragState.type;
+    const moved = this.paletteDragState.moved;
+    this.paletteDragState = null;
+    this.removeTimelineDragGhost();
+    this.clearTimelineDropTargets();
+    this.updateEffectTrackHighlight();
+    if (!moved || !this.videoSourceFile) return;
+    const rowType = this.getTimelineRowFromClientY(event.clientY);
+    if (rowType !== type) {
+      this.showStatus(this.videoEditorStatus, `Soltá ${this.TIMELINE_EFFECT_META[type].label} en la pista ${this.TIMELINE_EFFECT_META[type].trackLabel}.`, 'warning');
+      setTimeout(() => this.hideStatus(this.videoEditorStatus), 1800);
+      return;
+    }
+    void this.addTimelineEffectClip(type, this.getTimelineTime(event.clientX));
+  }
+
+  proto.bindTimelinePaletteDrag = function () {
+    if (!this.timelineEffectPalette) return;
+    this.timelineEffectPalette.querySelectorAll('.timeline-palette-chip').forEach((chip) => {
+      chip.addEventListener('pointerdown', (event) => {
+        if (!this.videoSourceFile || this.isVideoExporting || event.button !== 0 || chip.disabled) return;
+        event.preventDefault();
+        const type = chip.dataset.effectType;
+        if (!this.TIMELINE_EFFECT_META[type]) return;
+        this.paletteDragState = { type, chip, moved: false };
+        chip.classList.add('is-dragging');
+        chip.setPointerCapture(event.pointerId);
+        this.updateTimelineDragGhost(event.clientX, event.clientY, this.TIMELINE_EFFECT_META[type].label);
+        this.setTimelineDropTarget(type);
+      });
+      chip.addEventListener('pointermove', (event) => {
+        if (!this.paletteDragState || this.paletteDragState.chip !== chip) return;
+        this.paletteDragState.moved = true;
+        this.updateTimelineDragGhost(event.clientX, event.clientY, this.TIMELINE_EFFECT_META[this.paletteDragState.type].label);
+        const rowType = this.getTimelineRowFromClientY(event.clientY);
+        this.setTimelineDropTarget(rowType === this.paletteDragState.type ? rowType : null);
+      });
+      chip.addEventListener('pointerup', this.finishPaletteDrag.bind(this));
+      chip.addEventListener('pointercancel', this.finishPaletteDrag.bind(this));
+      chip.addEventListener('dragstart', (event) => event.preventDefault());
+    });
+
+    this.videoTimelineEl?.querySelectorAll('.timeline-track-effects').forEach((track) => {
+      track.addEventListener('dblclick', (event) => {
+        if (!this.videoSourceFile || event.target.closest('.timeline-item')) return;
+        event.preventDefault();
+        void this.addTimelineEffectClip(track.dataset.track, this.videoEl.currentTime || this.videoTimeline.trimStart);
+      });
+    });
+  }
+
+  proto.selectVideoEffect = function (id) {
+    this.selectedVideoEffectId = id || '';
+    const item = this.videoTimeline.items.find((candidate) => candidate.id === this.selectedVideoEffectId);
+    if (item) {
+      this.videoEffectType.value = item.type;
+      this.videoEffectStart.value = item.startTime.toFixed(2);
+      this.videoEffectEnd.value = item.endTime.toFixed(2);
+      this.applyVideoEffectItemConfig(item);
+    }
+    this.renderVideoTimeline();
+    this.updateVideoEffectInspector();
+    this.updateAdjustmentsPanelState();
+    this.updateEffectTrackHighlight();
+    this.updateTimelineHint();
+    if (item) this.setInspectorTab('effect');
+  }
+
+  proto.deleteSelectedVideoEffect = function () {
+    if (!this.selectedVideoEffectId) return;
+    this.pushTimelineHistory();
+    this.videoTimeline.remove(this.selectedVideoEffectId);
+    this.selectedVideoEffectId = '';
+    this.renderVideoTimeline();
+    this.updateVideoEffectInspector();
+    this.updateAdjustmentsPanelState();
+    void this.syncVideoTimelineEffects(true);
+  }
+
+  proto.updateVideoEffectInspector = function () {
+    const item = this.videoTimeline.items.find((candidate) => candidate.id === this.selectedVideoEffectId);
+    const editing = !!item;
+    if (this.videoEffectEmptyHint) this.videoEffectEmptyHint.classList.toggle('hidden', editing);
+    if (this.videoEffectClipMeta) this.videoEffectClipMeta.classList.toggle('hidden', !editing);
+    if (item && this.videoEffectTypeLabel) {
+      this.videoEffectTypeLabel.textContent = `${this.TIMELINE_EFFECT_META[item.type]?.trackLabel || item.type} · ${this.TIMELINE_EFFECT_META[item.type]?.label || item.type}`;
+    }
+    if (item && this.videoEffectDurationLabel) {
+      const duration = Math.max(0, item.endTime - item.startTime);
+      this.videoEffectDurationLabel.textContent = `Duración: ${duration.toFixed(2)} s`;
+    }
+    if (this.btnDeleteVideoEffect) this.btnDeleteVideoEffect.disabled = !editing;
+    if (this.btnOpenEffectAdjust) this.btnOpenEffectAdjust.disabled = !editing;
+  }
+
+  proto.mountVideoEffectsControls = function () {
+    if (!this.effectsControlsSlot || !this.inspectorAdjustmentsHost) return;
+    if (this.effectsControlsSlot.parentElement !== this.inspectorAdjustmentsHost) {
+      this.inspectorAdjustmentsHost.appendChild(this.effectsControlsSlot);
+    }
+    this.effectsControlsSlot.classList.add('is-contextual');
+    this.setAdvancedOptionsVisible(true);
+    this.updateAdjustmentsPanelState();
+  }
+
+  proto.unmountVideoEffectsControls = function () {
+    if (!this.effectsControlsSlot || !this.controlPanel) return;
+    this.effectsControlsSlot.classList.remove('is-contextual');
+    delete this.effectsControlsSlot.dataset.adjustContext;
+    this.adjustContextNav?.classList.add('hidden');
+    this.effectsControlsSlot.querySelectorAll('.adjust-context-group').forEach((group) => {
+      group.classList.remove('is-active');
+    });
+    this.videoTimelineEl?.querySelectorAll('.timeline-track-label[data-adjust-context]').forEach((label) => {
+      label.classList.remove('is-active');
+    });
+    const cfg = this.loadConfig();
+    this.setAdvancedOptionsVisible(!!cfg.showAdvancedOptions);
+    const captureSection = this.controlPanel.querySelector('.panel-section.webcam-only:nth-of-type(2)');
+    if (captureSection && this.effectsControlsSlot.parentElement !== this.controlPanel) {
+      captureSection.insertAdjacentElement('afterend', this.effectsControlsSlot);
+    }
+  }
+
+  proto.resolveAdjustmentsContext = function () {
+    const selected = this.getSelectedVideoEffectItem();
+    if (selected) return selected.type;
+    return 'look';
+  }
+
+  proto.setAdjustmentsContext = function (context, options = {}) {
+    if (!this.getSelectedVideoEffectItem()) return;
+    if (context === 'video') context = 'look';
+    if (!context || !this.ADJUST_CONTEXT_HELP[context]) return;
+    this.adjustmentsContext = context;
+    if (this.effectsControlsSlot) {
+      this.effectsControlsSlot.dataset.adjustContext = context;
+    }
+    this.adjustContextNav?.querySelectorAll('.adjust-context-tab').forEach((tab) => {
+      const active = tab.dataset.adjustContext === context;
+      tab.classList.toggle('is-active', active);
+      tab.setAttribute('aria-selected', String(active));
+    });
+    this.effectsControlsSlot?.querySelectorAll('.adjust-context-group').forEach((group) => {
+      group.classList.toggle('is-active', group.dataset.adjustContext === context);
+    });
+    this.videoTimelineEl?.querySelectorAll('.timeline-track-label[data-adjust-context]').forEach((label) => {
+      label.classList.toggle('is-active', label.dataset.adjustContext === context);
+    });
+    if (this.adjustContextHelp) {
+      this.adjustContextHelp.textContent = this.ADJUST_CONTEXT_HELP[context];
+    }
+    if (options.syncEffectType && this.videoEffectType) {
+      this.videoEffectType.value = options.effectType || context;
+      this.updateEffectTrackHighlight();
+      this.updateTimelineHint();
+    }
+    if (options.syncTool) {
+      if (options.tool === 'trim') {
+        this.setEditorTool('trim', { skipTab: true });
+      } else if (options.tool === 'effect') {
+        this.setEditorTool('select', { skipTab: true });
+        if (this.videoEffectType) {
+          this.videoEffectType.value = options.effectType || (context === 'look' ? 'look' : context);
+        }
+        this.updateEffectTrackHighlight();
+        this.updateTimelineHint();
+      }
+    }
+  }
+
+  proto.updateAdjustmentsContext = function (options = {}) {
+    if (this.sourceMode !== 'video') return;
+    if (!this.getSelectedVideoEffectItem()) {
+      this.updateAdjustmentsPanelState();
+      return;
+    }
+    this.setAdjustmentsContext(this.resolveAdjustmentsContext(), options);
+  }
+
+  proto.openAdjustmentsForContext = function (context, options = {}) {
+    if (this.sourceMode !== 'video') return;
+    this.setAdjustmentsContext(context, options);
+    this.setInspectorTab('adjust');
+  }
+
+  proto.updateEffectTrackHighlight = function (activeType = null) {
+    if (!this.videoTimelineEl) return;
+    const selected = this.videoTimeline.items.find((item) => item.id === this.selectedVideoEffectId);
+    const type = activeType || this.paletteDragState?.type || selected?.type || null;
+    this.videoTimelineEl.querySelectorAll('.timeline-track-effects').forEach((track) => {
+      track.classList.toggle('is-target-track', !!type && track.dataset.track === type);
+    });
+  }
+
+  proto.setInspectorTab = function (tabName) {
+    this.inspectorTabs.forEach((tab) => {
+      const active = tab.dataset.tab === tabName;
+      tab.classList.toggle('is-active', active);
+      tab.setAttribute('aria-selected', String(active));
+    });
+    this.inspectorPanels.forEach((panel) => {
+      const active = panel.id === `inspectorPanel${tabName.charAt(0).toUpperCase()}${tabName.slice(1)}`;
+      panel.classList.toggle('is-active', active);
+      panel.hidden = !active;
+    });
+    if (tabName === 'adjust' && this.sourceMode === 'video') {
+      this.updateAdjustmentsPanelState();
+    }
+  }
+
+  proto.setEditorTool = function (tool, options = {}) {
+    this.editorTool = tool;
+    document.body.dataset.editorTool = tool;
+    if (this.videoTimelineEl) this.videoTimelineEl.dataset.editorTool = tool;
+    [this.btnToolSelect, this.btnToolTrim].forEach((button) => {
+      if (!button) return;
+      button.classList.toggle('is-active', button.dataset.tool === tool);
+    });
+    this.updateTimelineHint();
+    this.updateEffectTrackHighlight();
+    if (this.sourceMode === 'video' && document.querySelector('.video-inspector-tab[data-tab="adjust"]')?.classList.contains('is-active')) {
+      this.updateAdjustmentsPanelState();
+    }
+  }
+
+  proto.updateTimelineHint = function () {
+    if (!this.timelineHintText) return;
+    if (!this.videoSourceFile) {
+      this.timelineHintText.textContent = '';
+      return;
+    }
+    const hints = {
+      select: 'Arrastrá efectos a la timeline o mové los clips con el mouse.',
+      trim: 'Arrastrá los bordes rojos en VIDEO.',
+    };
+    this.timelineHintText.textContent = hints[this.editorTool] || hints.select;
+  }
+
+  proto.pushTimelineHistory = function () {
+    if (!this.editorHistory || this.timelineHistorySuspended || !this.videoSourceFile) return;
+    this.editorHistory.push(this.videoTimeline);
+    this.updateEditorHistoryButtons();
+  }
+
+  proto.undoTimelineEdit = function () {
+    if (!this.editorHistory?.undo(this.videoTimeline)) return;
+    this.selectedVideoEffectId = '';
+    this.applyVideoTrim(false);
+    this.renderVideoTimeline();
+    this.updateVideoEffectInspector();
+    void this.syncVideoTimelineEffects(true);
+  }
+
+  proto.redoTimelineEdit = function () {
+    if (!this.editorHistory?.redo(this.videoTimeline)) return;
+    this.selectedVideoEffectId = '';
+    this.applyVideoTrim(false);
+    this.renderVideoTimeline();
+    this.updateVideoEffectInspector();
+    void this.syncVideoTimelineEffects(true);
+  }
+
+  proto.updateEditorHistoryButtons = function () {
+    if (this.btnEditorUndo) this.btnEditorUndo.disabled = !this.editorHistory?.canUndo || this.isVideoExporting;
+    if (this.btnEditorRedo) this.btnEditorRedo.disabled = !this.editorHistory?.canRedo || this.isVideoExporting;
+  }
+
+  proto.applyTimelineZoom = function () {
+    if (!this.timelineScroll || !this.timelineTrackArea) return;
+    const baseWidth = this.timelineViewport ? this.timelineViewport.clientWidth - 72 : 800;
+    const width = Math.max(baseWidth, baseWidth * this.timelineZoom);
+    this.timelineScroll.style.width = `${width + 72}px`;
+    if (this.timelineZoomInput) this.timelineZoomInput.value = String(this.timelineZoom);
+    this.renderVideoTimeline();
+    this.renderTimelineRuler();
+  }
+
+  proto.getTimelineTrackAreaBounds = function () {
+    if (!this.timelineTrackArea) return { left: 0, width: 1 };
+    const rect = this.timelineTrackArea.getBoundingClientRect();
+    return { left: rect.left, width: Math.max(1, rect.width) };
+  }
+
+  proto.snapTimelineTime = function (time) {
+    if (!this.chkTimelineSnap?.checked) return time;
+    const points = new Set([
+      this.videoTimeline.trimStart,
+      this.videoTimeline.trimEnd,
+      this.videoEl.currentTime || 0,
+    ]);
+    this.videoTimeline.items.forEach((item) => {
+      points.add(item.startTime);
+      points.add(item.endTime);
+    });
+    let closest = time;
+    let minDelta = 0.12 / Math.max(1, this.timelineZoom);
+    points.forEach((point) => {
+      const delta = Math.abs(point - time);
+      if (delta < minDelta) {
+        minDelta = delta;
+        closest = point;
+      }
+    });
+    return closest;
+  }
+
+  proto.renderTimelineRuler = function () {
+    if (!this.timelineTimeRuler || !this.timelineTrackArea) return;
+    const duration = Math.max(0.001, this.videoTimeline.duration);
+    const width = this.timelineTrackArea.offsetWidth;
+    this.timelineTimeRuler.style.width = `${width}px`;
+    this.timelineTimeRuler.innerHTML = '';
+    const interval = duration <= 20 ? 1 : duration <= 60 ? 5 : duration <= 180 ? 10 : 30;
+    for (let t = 0; t <= duration + 0.001; t += interval) {
+      const tick = document.createElement('div');
+      tick.className = 'timeline-time-tick';
+      tick.style.left = `${(t / duration) * 100}%`;
+      this.timelineTimeRuler.appendChild(tick);
+      const label = document.createElement('div');
+      label.className = 'timeline-time-label';
+      label.style.left = `${(t / duration) * 100}%`;
+      label.textContent = this.formatDurationDetailed(t);
+      this.timelineTimeRuler.appendChild(label);
+    }
+  }
+
+  proto.positionTimelineElement = function (el, startTime, endTime = null) {
+    const duration = Math.max(0.001, this.videoTimeline.duration);
+    const left = (startTime / duration) * 100;
+    el.style.left = `${this.clamp(left, 0, 100)}%`;
+    if (endTime != null) {
+      el.style.width = `${this.clamp(((endTime - startTime) / duration) * 100, 0, 100)}%`;
+    }
+  }
+
+  proto.positionTimelineRowElement = function (el, startTime, endTime, rowIndex) {
+    this.positionTimelineElement(el, startTime, endTime);
+    el.style.top = `calc(${rowIndex} * 20% + 3px)`;
+    el.style.height = 'calc(20% - 6px)';
+  }
+
+  proto.renderVideoTimeline = function () {
+    if (!this.timelineItems || !this.videoTimelineEl || !this.timelineTrackArea) return;
+    const duration = Math.max(0.001, this.videoTimeline.duration);
+    const percent = (time) => `${this.clamp((time / duration) * 100, 0, 100)}%`;
+
+    if (this.timelineVideoClip) {
+      this.timelineVideoClip.style.left = '0';
+      this.timelineVideoClip.style.width = '100%';
+    }
+    this.timelineTrim.style.left = percent(this.videoTimeline.trimStart);
+    this.timelineTrim.style.width = percent(this.videoTimeline.trimEnd - this.videoTimeline.trimStart);
+    this.timelineTrimStartHandle.style.left = percent(this.videoTimeline.trimStart);
+    this.timelineTrimEndHandle.style.left = percent(this.videoTimeline.trimEnd);
+    if (this.timelineTrimOutsideStart) {
+      this.timelineTrimOutsideStart.style.width = percent(this.videoTimeline.trimStart);
+    }
+    if (this.timelineTrimOutsideEnd) {
+      this.timelineTrimOutsideEnd.style.left = percent(this.videoTimeline.trimEnd);
+      this.timelineTrimOutsideEnd.style.width = percent(duration - this.videoTimeline.trimEnd);
+    }
+
+    const selectionStart = this.selectedVideoEffectId
+      ? this.clamp(Number(this.videoEffectStart.value) || 0, this.videoTimeline.trimStart, this.videoTimeline.trimEnd)
+      : (this.videoEl.currentTime || 0);
+    const selectionEnd = this.selectedVideoEffectId
+      ? this.clamp(Number(this.videoEffectEnd.value) || 0, selectionStart, this.videoTimeline.trimEnd)
+      : selectionStart;
+    if (this.selectedVideoEffectId) {
+      this.videoEffectStart.value = selectionStart.toFixed(2);
+      this.videoEffectEnd.value = selectionEnd.toFixed(2);
+    }
+    if (this.videoEffectRangeLabel) {
+      if (this.selectedVideoEffectId) {
+        this.videoEffectRangeLabel.textContent = `${this.formatDurationDetailed(selectionStart)} — ${this.formatDurationDetailed(selectionEnd)}`;
+      } else {
+        this.videoEffectRangeLabel.textContent = `Cursor: ${this.formatDurationDetailed(this.videoEl.currentTime || 0)}`;
+      }
+    }
+    this.timelinePlayhead.style.left = percent(this.videoEl.currentTime || 0);
+
+    this.timelineItems.innerHTML = '';
+    this.videoTimeline.items.forEach((item) => {
+      const meta = this.TIMELINE_EFFECT_META[item.type] || { trackLabel: item.type, row: 1 };
+      const el = document.createElement('div');
+      el.className = `timeline-item${item.id === this.selectedVideoEffectId ? ' is-selected' : ''}`;
+      el.dataset.id = item.id;
+      el.dataset.type = item.type;
+      el.innerHTML = `
+        <span class="timeline-item-handle start" aria-hidden="true"></span>
+        <span class="timeline-item-label">${meta.trackLabel}</span>
+        <span class="timeline-item-handle end" aria-hidden="true"></span>
+      `;
+      this.positionTimelineRowElement(el, item.startTime, item.endTime, meta.row);
+      el.addEventListener('pointerdown', (event) => this.beginTimelineDrag(event, item, el));
+      this.timelineItems.appendChild(el);
+    });
+    this.renderTimelineRuler();
+    this.updateEffectTrackHighlight();
+  }
+
+  proto.getTimelineTime = function (clientX) {
+    const bounds = this.getTimelineTrackAreaBounds();
+    const ratio = this.clamp((clientX - bounds.left) / bounds.width, 0, 1);
+    return this.snapTimelineTime(ratio * this.videoTimeline.duration);
+  }
+
+  proto.beginTimelineSelection = function (event) {
+    if (!this.videoSourceFile || this.isVideoExporting || event.button !== 0) return;
+    if (event.target.closest('.timeline-item, .timeline-item-handle, .timeline-trim-handle, .timeline-playhead-handle')) return;
+    event.preventDefault();
+
+    if (this.editorTool === 'trim') {
+      this.seekVideo(this.getTimelineTime(event.clientX));
+      return;
+    }
+
+    this.seekVideo(this.getTimelineTime(event.clientX));
+
+    if (this.editorTool === 'select' && event.target.closest('.timeline-track-effects') && !event.target.closest('.timeline-item')) {
+      this.selectVideoEffect('');
+    }
+  }
+
+  proto.beginTrimDrag = function (event, edge) {
+    if (!this.videoSourceFile || this.isVideoExporting || this.editorTool !== 'trim') return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.pushTimelineHistory();
+    const itemStarts = this.videoTimeline.items.map((item) => item.startTime);
+    const itemEnds = this.videoTimeline.items.map((item) => item.endTime);
+    const minEnd = itemEnds.length ? Math.max(...itemEnds) : 0.05;
+    const maxStart = itemStarts.length ? Math.min(...itemStarts) : this.videoTimeline.duration - 0.05;
+
+    const move = (moveEvent) => {
+      const time = this.getTimelineTime(moveEvent.clientX);
+      if (edge === 'start') {
+        this.videoTrimStart.value = this.clamp(time, 0, Math.min(maxStart, this.videoTimeline.trimEnd - 0.05)).toFixed(2);
+      } else {
+        this.videoTrimEnd.value = this.clamp(time, Math.max(minEnd, this.videoTimeline.trimStart + 0.05), this.videoTimeline.duration).toFixed(2);
+      }
+      this.applyVideoTrim(false);
+    };
+    const end = () => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', end);
+    };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', end, { once: true });
+  }
+
+  proto.beginTimelineDrag = function (event, item, element) {
+    if (!this.videoSourceFile || this.isVideoExporting || event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (this.editorTool !== 'select') this.setEditorTool('select', { skipTab: true });
+    this.selectedVideoEffectId = item.id;
+    this.videoEffectType.value = item.type;
+    this.videoEffectStart.value = item.startTime.toFixed(2);
+    this.videoEffectEnd.value = item.endTime.toFixed(2);
+    this.timelineItems.querySelectorAll('.timeline-item').forEach((candidate) => {
+      candidate.classList.toggle('is-selected', candidate === element);
+    });
+    this.updateVideoEffectInspector();
+    this.setInspectorTab('effect');
+    const bounds = this.getTimelineTrackAreaBounds();
+    const originX = event.clientX;
+    const original = { ...item };
+    const handleStart = event.target.closest('.timeline-item-handle.start');
+    const handleEnd = event.target.closest('.timeline-item-handle.end');
+    let edge = 'move';
+    if (handleStart) edge = 'start';
+    else if (handleEnd) edge = 'end';
+    element.classList.add('is-dragging');
+
+    const move = (moveEvent) => {
+      const delta = ((moveEvent.clientX - originX) / bounds.width) * this.videoTimeline.duration;
+      let startTime = original.startTime;
+      let endTime = original.endTime;
+      if (edge === 'start') startTime = this.clamp(original.startTime + delta, this.videoTimeline.trimStart, original.endTime - 0.05);
+      else if (edge === 'end') endTime = this.clamp(original.endTime + delta, original.startTime + 0.05, this.videoTimeline.trimEnd);
+      else {
+        const length = original.endTime - original.startTime;
+        startTime = this.clamp(original.startTime + delta, this.videoTimeline.trimStart, this.videoTimeline.trimEnd - length);
+        endTime = startTime + length;
+      }
+      startTime = this.snapTimelineTime(startTime);
+      endTime = this.snapTimelineTime(endTime);
+      this.videoEffectStart.value = startTime.toFixed(2);
+      this.videoEffectEnd.value = endTime.toFixed(2);
+      this.positionTimelineRowElement(element, startTime, endTime, this.TIMELINE_EFFECT_META[item.type]?.row || 1);
+      if (this.videoEffectRangeLabel) {
+        this.videoEffectRangeLabel.textContent = `${this.formatDurationDetailed(startTime)} — ${this.formatDurationDetailed(endTime)}`;
+      }
+      if (this.videoEffectDurationLabel) {
+        this.videoEffectDurationLabel.textContent = `Duración: ${Math.max(0, endTime - startTime).toFixed(2)} s`;
+      }
+    };
+    const end = () => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', end);
+      element.classList.remove('is-dragging');
+      try {
+        this.pushTimelineHistory();
+        this.videoTimeline.upsert({ ...item, startTime: Number(this.videoEffectStart.value), endTime: Number(this.videoEffectEnd.value) });
+      } catch (err) {
+        this.showStatus(this.videoEditorStatus, err.message, 'error');
+      }
+      this.selectVideoEffect(item.id);
+      void this.syncVideoTimelineEffects(true);
+    };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', end, { once: true });
+  }
+
+  proto.beginPlayheadDrag = function (event) {
+    if (!this.videoSourceFile || this.isVideoExporting || event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.seekVideo(this.getTimelineTime(event.clientX));
+    const move = (moveEvent) => this.seekVideo(this.getTimelineTime(moveEvent.clientX));
+    const end = () => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', end);
+    };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', end, { once: true });
+  }
+
+  proto.handleVideoEditorKeydown = function (event) {
+    if (this.sourceMode !== 'video' || this.isVideoExporting) return;
+    const tag = event.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || event.target.isContentEditable) return;
+
+    if (event.ctrlKey && event.key.toLowerCase() === 'z') {
+      event.preventDefault();
+      if (event.shiftKey) this.redoTimelineEdit();
+      else this.undoTimelineEdit();
+      return;
+    }
+    if (event.ctrlKey && event.key.toLowerCase() === 'y') {
+      event.preventDefault();
+      this.redoTimelineEdit();
+      return;
+    }
+    if (event.key === ' ') {
+      event.preventDefault();
+      void this.toggleVideoPlayback();
+      return;
+    }
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      this.jumpVideo(event.shiftKey ? -5 : -0.04);
+      return;
+    }
+    if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      this.jumpVideo(event.shiftKey ? 5 : 0.04);
+      return;
+    }
+    if (event.key.toLowerCase() === 'i') {
+      event.preventDefault();
+      this.videoTrimStart.value = String(this.videoEl.currentTime || 0);
+      this.pushTimelineHistory();
+      this.applyVideoTrim();
+      this.setEditorTool('trim');
+      return;
+    }
+    if (event.key.toLowerCase() === 'o') {
+      event.preventDefault();
+      this.videoTrimEnd.value = String(this.videoEl.currentTime || 0);
+      this.pushTimelineHistory();
+      this.applyVideoTrim();
+      this.setEditorTool('trim');
+      return;
+    }
+    if (event.key === 'Delete' || event.key === 'Backspace') {
+      if (this.selectedVideoEffectId) {
+        event.preventDefault();
+        this.deleteSelectedVideoEffect();
+      }
+      return;
+    }
+    if (event.key.toLowerCase() === 'v') {
+      this.setEditorTool('select');
+      return;
+    }
+    if (event.key.toLowerCase() === 't') {
+      this.setEditorTool('trim');
+    }
+  }
+
+  proto.setTimelineDetector = async function (type, item) {
+    const checkbox = type === 'blob' ? chkBlobTracking: type === 'face' ? chkFaceDetection: this.chkBlinkDetection;
+    if (!checkbox) return;
+    const shouldEnable = !!item;
+    if (checkbox.checked !== shouldEnable) {
+      checkbox.checked = shouldEnable;
+      await this.toggleEffect(type);
+    }
+    const effect = type === 'blob' ? blobTrackingEffect: type === 'face' ? faceDetectionEffect: this.blinkDetectionEffect;
+    if (item && effect && typeof effect.setConfig === 'function') effect.setConfig(item.config || {});
+  }
+
+  proto.syncVideoTimelineLookAt = function (mediaTime) {
+    if (this.sourceMode !== 'video' || !this.videoSourceFile) return;
+    const active = this.videoTimeline.activeAt(mediaTime);
+    const lookItem = active.find((item) => item.type === 'look');
+    if (this.appliedTimelineItemIds.look === (lookItem?.id || '')) return;
+    const operationalSettings = {
+      previewQuality: this.imageSettings.previewQuality,
+      jpegQuality: this.imageSettings.jpegQuality,
+      videoFormat: this.imageSettings.videoFormat,
+      captureTimerSeconds: this.imageSettings.captureTimerSeconds,
+      qualityEnhancer: this.imageSettings.qualityEnhancer,
+      qualityEnhancerStrength: this.imageSettings.qualityEnhancerStrength,
+    };
+    this.imageSettings = {
+      ...(this.videoBaseImageSettings || this.DEFAULT_IMAGE_SETTINGS),
+      ...(lookItem?.config || {}),
+      ...operationalSettings,
+    };
+    this.appliedTimelineItemIds.look = lookItem?.id || '';
+    this.updateEffectsInfo();
+  }
+
+  proto.timelineDetectorIdsAt = function (mediaTime) {
+    const active = this.videoTimeline.activeAt(mediaTime);
+    return Object.fromEntries(['blob', 'face', 'blink'].map((type) => {
+      const item = active.find((entry) => entry.type === type);
+      return [type, item?.id || ''];
+    }));
+  }
+
+  proto.needsTimelineDetectorSync = function (mediaTime) {
+    const ids = this.timelineDetectorIdsAt(mediaTime);
+    return ['blob', 'face', 'blink'].some((type) => this.appliedTimelineItemIds[type] !== ids[type]);
+  }
+
+  proto.syncVideoTimelineEffects = async function (force = false) {
+    if (this.sourceMode !== 'video' || !this.videoSourceFile) return;
+    const active = this.videoTimeline.activeAt(this.videoEl.currentTime);
+    const byType = Object.fromEntries(active.map((item) => [item.type, item]));
+    if (force || this.appliedTimelineItemIds.look !== byType.look?.id) {
+      const operationalSettings = {
+        previewQuality: this.imageSettings.previewQuality,
+        jpegQuality: this.imageSettings.jpegQuality,
+        videoFormat: this.imageSettings.videoFormat,
+        captureTimerSeconds: this.imageSettings.captureTimerSeconds,
+        qualityEnhancer: this.imageSettings.qualityEnhancer,
+        qualityEnhancerStrength: this.imageSettings.qualityEnhancerStrength,
+      };
+      this.imageSettings = {
+        ...(this.videoBaseImageSettings || this.DEFAULT_IMAGE_SETTINGS),
+        ...(byType.look?.config || {}),
+        ...operationalSettings,
+      };
+      this.appliedTimelineItemIds.look = byType.look?.id || '';
+    }
+    for (const type of ['blob', 'face', 'blink']) {
+      if (force || this.appliedTimelineItemIds[type] !== byType[type]?.id) {
+        this.appliedTimelineItemIds[type] = byType[type]?.id || '';
+        await this.setTimelineDetector(type, byType[type]);
+      }
+    }
+    this.updateEffectsInfo();
+  }
+
+  proto.updateVideoEditorUI = function () {
+    const loaded = !!this.videoSourceFile;
+    [this.btnVideoStart, this.btnVideoBack, this.btnVideoPlay, this.btnVideoForward, this.btnVideoEnd, this.btnVideoMute]
+      .forEach((button) => { if (button) button.disabled = !loaded || this.isVideoExporting; });
+    if (this.videoSeek) this.videoSeek.disabled = !loaded || this.isVideoExporting;
+    if (this.btnExportVideo) this.btnExportVideo.disabled = !loaded || this.isVideoExporting;
+    if (this.btnHeaderExportVideo) this.btnHeaderExportVideo.disabled = !loaded || this.isVideoExporting;
+    if (this.videoTrimStart) this.videoTrimStart.disabled = !loaded || this.isVideoExporting;
+    if (this.videoTrimEnd) this.videoTrimEnd.disabled = !loaded || this.isVideoExporting;
+    this.timelineEffectPalette?.querySelectorAll('.timeline-palette-chip').forEach((chip) => {
+      chip.disabled = !loaded || this.isVideoExporting;
+    });
+    this.updateVideoEffectInspector();
+    this.updateEditorHistoryButtons();
+    if (!loaded) {
+      if (this.videoFileMeta) this.videoFileMeta.textContent = 'Ningún archivo cargado';
+      if (this.videoExportDetails) this.videoExportDetails.textContent = 'Cargá un video para exportar.';
+      if (this.sourceMode === 'video') {
+        this.setCameraPlaceholderMessage('Elegí un video para editar.');
+        this.placeholder.classList.remove('hidden');
+      }
+      this.updateTimelineHint();
+      return;
+    }
+    this.placeholder.classList.add('hidden');
+    if (this.videoExportDetails) {
+      const bitrate = this.getRecommendedVideoBitrate(this.videoEl.videoWidth, this.videoEl.videoHeight, this.videoSourceFps);
+      const exportLabel = typeof VideoEncoder !== 'undefined' ? 'WebM · WebCodecs' : 'WebCodecs no disponible';
+      this.videoExportDetails.textContent = `${this.videoEl.videoWidth}×${this.videoEl.videoHeight} · ${this.formatVideoFps(this.videoSourceFps)} FPS · ${this.formatVideoBitrate(bitrate)} · ${exportLabel} · sin audio`;
+    }
+    this.updateTimelineHint();
+  }
+
+  proto.updateVideoTransport = function () {
+    if (this.sourceMode !== 'video') return;
+    const duration = this.videoTimeline.duration || 0;
+    this.videoSeek.value = String(this.videoEl.currentTime || 0);
+    this.videoTimeLabel.textContent = `${this.formatDurationDetailed(this.videoEl.currentTime || 0)} / ${this.formatDurationDetailed(duration)}`;
+    this.btnVideoPlay.innerHTML = this.videoEl.paused
+      ? '<i class="fa-solid fa-play"></i>'
+      : '<i class="fa-solid fa-pause"></i>';
+    this.updateVideoMuteButton();
+    if (duration > 0) this.timelinePlayhead.style.left = `${this.clamp((this.videoEl.currentTime / duration) * 100, 0, 100)}%`;
+    if (this.isVideoExporting) {
+      const range = Math.max(0.001, this.videoTimeline.trimEnd - this.videoTimeline.trimStart);
+      const progress = this.clamp((this.videoEl.currentTime - this.videoTimeline.trimStart) / range, 0, 1);
+      this.videoExportProgress.value = progress;
+      const remaining = Math.max(0, this.videoTimeline.trimEnd - this.videoEl.currentTime);
+      this.videoExportSummary.textContent = `Exportando ${Math.round(progress * 100)}% · quedan ${this.formatDurationDetailed(remaining)}`;
+    }
+  }
+
+  proto.toggleVideoPlayback = async function () {
+    if (!this.videoSourceFile || this.isVideoExporting) return;
+    if (this.videoEl.paused) {
+      if (this.videoEl.currentTime < this.videoTimeline.trimStart || this.videoEl.currentTime >= this.videoTimeline.trimEnd) {
+        this.videoEl.currentTime = this.videoTimeline.trimStart;
+      }
+      await this.videoEl.play().catch(() => this.showStatus(this.videoEditorStatus, 'No se pudo reproducir el video.', 'error'));
+      if (!this.animFrameId) this.scheduleRenderLoop();
+    } else {
+      this.videoEl.pause();
+    }
+    this.updateVideoTransport();
+  }
+
+  proto.seekVideo = function (time) {
+    if (!this.videoSourceFile || this.isVideoExporting) return;
+    this.videoEl.currentTime = this.clamp(Number(time) || 0, this.videoTimeline.trimStart, this.videoTimeline.trimEnd);
+    this.updateVideoTransport();
+    if (!this.animFrameId) this.scheduleRenderLoop();
+  }
+
+  proto.jumpVideo = function (seconds) {
+    this.seekVideo((this.videoEl.currentTime || 0) + seconds);
+  }
+
+  proto.updateVideoMuteButton = function () {
+    this.btnVideoMute.setAttribute('aria-pressed', String(this.videoEl.muted));
+    this.btnVideoMute.setAttribute('aria-label', this.videoEl.muted ? 'Activar audio' : 'Silenciar audio');
+    this.btnVideoMute.innerHTML = this.videoEl.muted
+      ? '<i class="fa-solid fa-volume-xmark"></i>'
+      : '<i class="fa-solid fa-volume-high"></i>';
+  }
+
+  proto.renderVideoExportFrame = async function (frameIndex, fps) {
+    const start = this.videoTimeline.trimStart;
+    const time = start + frameIndex / fps;
+    await this.seekVideoForExport(time);
+    if (this.needsTimelineDetectorSync(time)) {
+      await this.syncVideoTimelineEffects(true);
+    } else {
+      this.syncVideoTimelineLookAt(time);
+    }
+    this.renderSourceFrameBuffer(true);
+  }
+
+  proto.runVideoExportViaWebCodecs = async function () {
+    const { calculateExportBitrate, calculateExportFrameCount, encodeCanvasSequence } = await import('../video-export.mjs');
+    const fps = this.getVideoExportFps();
+    const start = this.videoTimeline.trimStart;
+    const end = this.videoTimeline.trimEnd;
+    const totalFrames = calculateExportFrameCount(end - start, fps);
+    this.ensureRecordingCanvas();
+
+    const baseName = this.videoSourceFile.name.replace(/\.[^.]+$/, '') || 'hatewebcam-video';
+    this.videoExportFileName = `${baseName}-editado.webm`;
+
+    return encodeCanvasSequence({
+      canvas: this.recordingCanvas,
+      width: this.recordingCanvas.width,
+      height: this.recordingCanvas.height,
+      fps,
+      totalFrames,
+      duration: end - start,
+      bitrate: calculateExportBitrate(
+        this.videoSourceAverageBitrate,
+        this.recordingCanvas.width,
+        this.recordingCanvas.height,
+        fps,
+        this.imageSettings.qualityEnhancer
+      ),
+      renderFrame: (frameIndex) => this.renderVideoExportFrame(frameIndex, fps),
+      onProgress: (done, total) => {
+        this.videoExportProgress.value = done / total;
+        const remainingSec = Math.max(0, (total - done) / fps);
+        this.videoExportSummary.textContent = `Exportando ${Math.round((done / total) * 100)}% · ${this.formatVideoFps(fps)} FPS · ${this.formatDurationDetailed(remainingSec)} restantes`;
+      },
+      shouldCancel: () => !this.isVideoExporting,
+    });
+  }
+
+  proto.finalizeVideoExportBlob = async function (blob) {
+    this.downloadBlob(blob, this.videoExportFileName);
+    this.showStatus(this.videoEditorStatus, 'Exportación terminada y guardada.', 'success');
+    this.videoExportProgress.value = 1;
+    this.videoExportTitle.innerHTML = '<i class="fa-solid fa-circle-check"></i> Exportación terminada';
+    this.videoExportSummary.textContent = `${this.videoExportFileName} · ${this.formatBytes(blob.size)} · descarga iniciada`;
+    this.btnCancelVideoExport.classList.add('hidden');
+    this.btnCloseVideoExportModal.classList.remove('hidden');
+    this.cleanupVideoExport(true);
+  }
+
+  proto.startVideoExport = async function () {
+    if (!this.videoSourceFile || this.isVideoExporting) return;
+    if (typeof HTMLCanvasElement === 'undefined') {
+      this.showStatus(this.videoEditorStatus, 'Este navegador no puede exportar el video.', 'error');
+      return;
+    }
+
+    if (typeof VideoEncoder === 'undefined' || typeof VideoFrame === 'undefined') {
+      this.showStatus(this.videoEditorStatus, 'La exportación requiere Chrome o Edge actualizado con WebCodecs.', 'error');
+      return;
+    }
+
+    try {
+      this.ensureRecordingCanvas();
+      this.isVideoExporting = true;
+      this.videoExportProgress.value = 0;
+      this.videoExportTitle.innerHTML = '<i class="fa-solid fa-file-export"></i> Exportando video';
+      this.videoExportSummary.textContent = 'Preparando exportación…';
+      this.btnCancelVideoExport.classList.remove('hidden');
+      this.btnCloseVideoExportModal.classList.add('hidden');
+      this.videoExportModal.classList.remove('hidden');
+      this.activateModalFocusTrap(this.videoExportModal, this.btnCancelVideoExport);
+      this.updateVideoEditorUI();
+      this.cancelRenderLoop();
+      if ('wakeLock' in navigator) {
+        this.videoExportWakeLock = await navigator.wakeLock.request('screen').catch(() => null);
+      }
+
+      const blob = await this.runVideoExportViaWebCodecs();
+      await this.finalizeVideoExportBlob(blob);
+    } catch (err) {
+      if (err?.message === 'export_cancelled') {
+        this.cleanupVideoExport(true);
+        return;
+      }
+      this.failVideoExport(err);
+    }
+  }
+
+  proto.seekVideoForExport = function (time) {
+    const target = this.clamp(time, 0, Math.max(0, this.videoTimeline.duration - 0.000001));
+    if (Math.abs(this.videoEl.currentTime - target) < 0.00005) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('video_seek_timeout')), 10000);
+      this.videoEl.addEventListener('seeked', () => {
+        clearTimeout(timeout);
+        resolve();
+      }, { once: true });
+      this.videoEl.currentTime = target;
+    });
+  }
+
+  proto.cancelVideoExport = async function (showMessage = true) {
+    if (!this.isVideoExporting) return;
+    this.isVideoExporting = false;
+    this.videoEl.pause();
+    this.videoEl.playbackRate = 1;
+    if (showMessage) this.showStatus(this.videoEditorStatus, 'Exportación cancelada.', 'warning');
+    this.videoExportTitle.innerHTML = '<i class="fa-solid fa-ban"></i> Exportación cancelada';
+    this.videoExportSummary.textContent = 'No se descargó ningún archivo.';
+    this.btnCancelVideoExport.classList.add('hidden');
+    this.btnCloseVideoExportModal.classList.remove('hidden');
+    this.cleanupVideoExport(true);
+  }
+
+  proto.failVideoExport = function (err) {
+    console.error('Video export failed:', err);
+    const messages = {
+      webcodecs_codec_unsupported: 'No hay un codec WebM compatible para este video.',
+      video_seek_timeout: 'No se pudo leer un frame del video a tiempo.',
+      video_decode_failed: 'El navegador no pudo decodificar el video.',
+    };
+    const message = messages[err?.message] || 'La exportación falló. Revisá espacio libre y permisos.';
+    this.showStatus(this.videoEditorStatus, message, 'error');
+    void this.cancelVideoExport(false).then(() => {
+      this.videoExportTitle.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Error de exportación';
+      this.videoExportSummary.textContent = 'La exportación falló. Probá con un tramo más corto.';
+    });
+  }
+
+  proto.cleanupVideoExport = function (keepModal = false) {
+    this.isVideoExporting = false;
+    this.videoExportFileName = '';
+    if (!keepModal) {
+      this.videoExportProgress.value = 0;
+      this.videoExportModal.classList.add('hidden');
+      this.deactivateModalFocusTrap(this.videoExportModal);
+    }
+    if (this.videoExportWakeLock) this.videoExportWakeLock.release().catch(() => {});
+    this.videoExportWakeLock = null;
+    this.updateVideoEditorUI();
+    this.updateVideoTransport();
+    if (this.isRunning && this.videoSourceFile && !this.animFrameId) this.scheduleRenderLoop();
+  }
+
+  proto.closeVideoExportModal = function () {
+    if (this.isVideoExporting) return;
+    this.videoExportModal.classList.add('hidden');
+    this.deactivateModalFocusTrap(this.videoExportModal);
+    this.videoExportProgress.value = 0;
+  }
+
+}

@@ -1,0 +1,369 @@
+import { PREVIEW_MIN_WIDTH, PREVIEW_MIN_HEIGHT, PREVIEW_QUALITY_PRESETS } from './constants.mjs';
+/** @param {import('./controller.mjs').AppController} proto */
+export function applyRenderLoopMixin(proto) {
+  proto.getSourceFrameDimensions = function () {
+    return {
+      sourceWidth: Math.max(1, this.videoEl.videoWidth || this.canvas.width || 1),
+      sourceHeight: Math.max(1, this.videoEl.videoHeight || this.canvas.height || 1),
+    };
+  }
+
+  proto.normalizeRotationDegrees = function (deg) {
+    const normalized = ((Math.round(deg / 90) * 90) % 360 + 360) % 360;
+    if (normalized === 360) return 0;
+    return normalized;
+  }
+
+  proto.getMobileAutoRotationDegrees = function (sourceWidth, sourceHeight) {
+    const shouldAutoRotate = this.isMobileViewport() && sourceWidth > sourceHeight;
+    return shouldAutoRotate ? 90 : 0;
+  }
+
+  proto.getEffectiveRotationDegrees = function (sourceWidth, sourceHeight) {
+    if (this.sourceMode === 'camera' && this.isMobileViewport()) {
+      return this.normalizeRotationDegrees(this.getMobileAutoRotationDegrees(sourceWidth, sourceHeight));
+    }
+    return this.normalizeRotationDegrees(this.rotation);
+  }
+
+  proto.getEffectiveFrameDimensions = function (sourceWidth, sourceHeight) {
+    const effectiveRotation = this.getEffectiveRotationDegrees(sourceWidth, sourceHeight);
+    const rotated = effectiveRotation === 90 || effectiveRotation === 270;
+    return {
+      width: rotated ? sourceHeight : sourceWidth,
+      height: rotated ? sourceWidth : sourceHeight,
+      effectiveRotation,
+    };
+  }
+
+  proto.getPreviewFrameDimensions = function (sourceWidth, sourceHeight) {
+    const { width: effectiveWidth, height: effectiveHeight } = this.getEffectiveFrameDimensions(sourceWidth, sourceHeight);
+    const previewPreset = this.getCurrentPreviewQualityPreset();
+    const sourcePixels = Math.max(1, effectiveWidth * effectiveHeight);
+    const pixelScale = sourcePixels > previewPreset.maxPixels
+      ? Math.sqrt(previewPreset.maxPixels / sourcePixels)
+      : 1;
+    const baseScale = Math.min(1, pixelScale, previewPreset.maxScale);
+
+    const aspect = Math.max(0.0001, effectiveWidth / effectiveHeight);
+    let width = Math.max(1, Math.round(effectiveWidth * baseScale));
+    let height = Math.max(1, Math.round(effectiveHeight * baseScale));
+
+    if (width < this.PREVIEW_MIN_WIDTH) {
+      width = this.PREVIEW_MIN_WIDTH;
+      height = Math.max(1, Math.round(width / aspect));
+    }
+    if (height < this.PREVIEW_MIN_HEIGHT) {
+      height = this.PREVIEW_MIN_HEIGHT;
+      width = Math.max(1, Math.round(height * aspect));
+    }
+
+    return { width, height, scale: width / Math.max(1, effectiveWidth) };
+  }
+
+  proto.buildResolutionLabel = function (sourceWidth, sourceHeight, previewWidth, previewHeight) {
+    const previewLabel = this.getCurrentPreviewQualityPreset().label;
+    if (sourceWidth === previewWidth && sourceHeight === previewHeight) {
+      return `${sourceWidth}×${sourceHeight} · Vista previa ${previewLabel}`;
+    }
+    return `${sourceWidth}×${sourceHeight} · Vista previa ${previewLabel} ${previewWidth}×${previewHeight}`;
+  }
+
+  proto.getDesiredPreviewCanvasMetrics = function (sourceWidth, sourceHeight) {
+    if (this.isMobileViewport()) {
+      const wrapperWidth = Math.round((this.previewWrapper && this.previewWrapper.clientWidth) || window.innerWidth || sourceWidth);
+      const wrapperHeight = Math.round((this.previewWrapper && this.previewWrapper.clientHeight) || window.innerHeight || sourceHeight);
+      return {
+        width: Math.max(this.PREVIEW_MIN_WIDTH, wrapperWidth),
+        height: Math.max(this.PREVIEW_MIN_HEIGHT, wrapperHeight),
+        scale: wrapperWidth / Math.max(1, sourceWidth),
+      };
+    }
+    return this.getPreviewFrameDimensions(sourceWidth, sourceHeight);
+  }
+
+  proto.syncPreviewCanvasMetrics = function (sourceWidth, sourceHeight, forceLabel = false) {
+    const { width, height, scale } = this.getDesiredPreviewCanvasMetrics(sourceWidth, sourceHeight);
+    const resized = this.canvas.width !== width || this.canvas.height !== height;
+    if (resized) {
+      this.canvas.width = width;
+      this.canvas.height = height;
+    }
+    if (forceLabel || resized || this.previewScale !== scale) {
+      this.resolutionInfo.textContent = this.buildResolutionLabel(sourceWidth, sourceHeight, width, height);
+    }
+    this.previewScale = scale;
+    return { width, height, scale };
+  }
+
+  proto.requestPreviewRefresh = function (forceLabel = false) {
+    if (!this.isRunning || this.videoEl.readyState < 2) return;
+    const { sourceWidth, sourceHeight } = this.getSourceFrameDimensions();
+    this.syncPreviewCanvasMetrics(sourceWidth, sourceHeight, forceLabel);
+  }
+
+  proto.scheduleRenderLoop = function () {
+    if (this.isVideoExporting) return;
+    this.animFrameId = typeof this.videoEl.requestVideoFrameCallback === 'function'
+      ? this.videoEl.requestVideoFrameCallback(this.renderLoop.bind(this))
+      : requestAnimationFrame(this.renderLoop.bind(this));
+  }
+
+  proto.cancelRenderLoop = function () {
+    if (this.animFrameId == null) return;
+    if (typeof this.videoEl.cancelVideoFrameCallback === 'function') {
+      this.videoEl.cancelVideoFrameCallback(this.animFrameId);
+    } else {
+      cancelAnimationFrame(this.animFrameId);
+    }
+    this.animFrameId = null;
+  }
+
+  proto.renderLoop = function () {
+    if (!this.isRunning || this.isVideoExporting) {
+      this.animFrameId = null;
+      return;
+    }
+    if (!this.isPageVisible) {
+      this.animFrameId = null;
+      return;
+    }
+
+    try {
+      if (this.videoEl.readyState >= 2) {
+        if (this.sourceMode === 'video') {
+          void this.syncVideoTimelineEffects();
+          if (this.videoEl.currentTime >= this.videoTimeline.trimEnd) {
+            this.videoEl.pause();
+            this.videoEl.currentTime = this.videoTimeline.trimEnd;
+          }
+        }
+        const { sourceWidth, sourceHeight } = this.getSourceFrameDimensions();
+        this.syncPreviewCanvasMetrics(sourceWidth, sourceHeight, this.frameCount % 30 === 0);
+
+        try {
+          if (this.isRecording) {
+            this.renderSourceFrameBuffer(true);
+            this.blitProcessedFrameToPreview();
+          } else {
+            this.renderProcessedFrame(this.canvas, this.ctx, 'preview');
+          }
+        } catch (renderErr) {
+          console.error('Render frame fallback error:', renderErr);
+          this.drawBaseFrame(this.ctx, this.canvas, 'preview');
+        }
+
+        // FPS
+        this.frameCount++;
+        const now = performance.now();
+        if (now - this.lastFpsTime >= 1000) {
+          this.fpsInfo.textContent = `${this.frameCount} FPS`;
+          this.frameCount = 0;
+          this.lastFpsTime = now;
+        }
+        this.updateVideoTransport();
+      }
+    } catch (err) {
+      console.error('Render loop error:', err);
+    }
+
+    this.scheduleRenderLoop();
+  }
+
+  proto.buildCanvasFilter = function () {
+    const exposureBoost = this.clamp(100 + this.imageSettings.exposure * 0.8, 35, 200);
+    const contrast = this.clamp(this.imageSettings.contrast, 50, 180);
+    const saturation = this.imageSettings.blackAndWhite
+      ? 0
+      : this.clamp(this.imageSettings.saturation, 0, 200);
+    const grayscale = this.imageSettings.blackAndWhite ? 100 : 0;
+
+    return `brightness(${exposureBoost}%) contrast(${contrast}%) saturate(${saturation}%) grayscale(${grayscale}%)`;
+  }
+
+  proto.needsAdvancedPixelAdjustments = function () {
+    const temperature = this.imageSettings.blackAndWhite ? 0 : this.imageSettings.temperature;
+    return (
+      this.imageSettings.shadows !== 0 ||
+      this.imageSettings.highlights !== 0 ||
+      this.imageSettings.detail !== 0 ||
+      temperature !== 0 ||
+      this.imageSettings.sharpness !== 0
+    );
+  }
+
+  proto.ensurePostFxBuffer = function (mode, w, h, scale) {
+    let fxCanvas;
+    let fxCtx;
+
+    if (mode === 'recording') {
+      fxCanvas = this.recordingFxCanvas;
+      fxCtx = this.recordingFxCtx;
+    } else if (mode === 'capture') {
+      fxCanvas = this.captureFxCanvas;
+      fxCtx = this.captureFxCtx;
+    } else {
+      fxCanvas = this.postFxCanvas;
+      fxCtx = this.postFxCtx;
+    }
+
+    if (!fxCanvas) {
+      fxCanvas = document.createElement('canvas');
+      fxCtx = fxCanvas.getContext('2d', { willReadFrequently: true });
+
+      if (mode === 'recording') {
+        this.recordingFxCanvas = fxCanvas;
+        this.recordingFxCtx = fxCtx;
+      } else if (mode === 'capture') {
+        this.captureFxCanvas = fxCanvas;
+        this.captureFxCtx = fxCtx;
+      } else {
+        this.postFxCanvas = fxCanvas;
+        this.postFxCtx = fxCtx;
+      }
+    }
+
+    const pw = Math.max(320, Math.round(w * scale));
+    const ph = Math.max(180, Math.round(h * scale));
+
+    if (fxCanvas.width !== pw || fxCanvas.height !== ph) {
+      fxCanvas.width = pw;
+      fxCanvas.height = ph;
+    }
+    return { pw, ph, fxCanvas, fxCtx };
+  }
+
+  proto.drawBaseFrame = function (targetCtx, targetCanvas, mode = 'preview') {
+    const { sourceWidth, sourceHeight } = this.getSourceFrameDimensions();
+    const effectiveRotation = this.getEffectiveRotationDegrees(sourceWidth, sourceHeight);
+    const rotated = effectiveRotation === 90 || effectiveRotation === 270;
+    const orientedWidth = rotated ? sourceHeight : sourceWidth;
+    const orientedHeight = rotated ? sourceWidth : sourceHeight;
+    const scaleX = targetCanvas.width / Math.max(1, orientedWidth);
+    const scaleY = targetCanvas.height / Math.max(1, orientedHeight);
+    const useCover = mode === 'preview' && this.isMobileViewport();
+    const frameScale = useCover ? Math.max(scaleX, scaleY) : Math.min(scaleX, scaleY);
+    const drawWidth = Math.max(1, Math.round(sourceWidth * frameScale));
+    const drawHeight = Math.max(1, Math.round(sourceHeight * frameScale));
+
+    targetCtx.save();
+    targetCtx.filter = this.buildCanvasFilter();
+    targetCtx.translate(targetCanvas.width / 2, targetCanvas.height / 2);
+    if (effectiveRotation !== 0) {
+      targetCtx.rotate((effectiveRotation * Math.PI) / 180);
+    }
+    let sx = 1;
+    let sy = 1;
+    if (this.getEffectiveFlipH()) sx = -1;
+    if (this.flipV) sy = -1;
+    if (sx !== 1 || sy !== 1) {
+      targetCtx.scale(sx, sy);
+    }
+    targetCtx.drawImage(
+      this.videoEl,
+      -drawWidth / 2,
+      -drawHeight / 2,
+      drawWidth,
+      drawHeight
+    );
+    targetCtx.restore();
+    return effectiveRotation;
+  }
+
+  proto.applyAdvancedPixelAdjustments = function (targetCanvas = this.canvas, targetCtx = this.ctx, mode = 'preview') {
+    const w = targetCanvas.width;
+    const h = targetCanvas.height;
+    if (w === 0 || h === 0) return;
+
+    let postFxScale = this.imageSettings.sharpness > 0 ? 0.78 : 0.86;
+    if (w * h > 1920 * 1080) postFxScale *= 0.92;
+    postFxScale = this.clamp(postFxScale, 0.72, 0.90);
+
+    const { pw, ph, fxCanvas, fxCtx } = this.ensurePostFxBuffer(mode, w, h, postFxScale);
+    fxCtx.drawImage(targetCanvas, 0, 0, pw, ph);
+
+    const imageData = fxCtx.getImageData(0, 0, pw, ph);
+    const data = imageData.data;
+
+    const shadows = this.imageSettings.shadows / 100;
+    const highlights = this.imageSettings.highlights / 100;
+    const detail = this.imageSettings.detail / 100;
+    const temperature = this.imageSettings.blackAndWhite ? 0 : this.imageSettings.temperature / 100;
+
+    for (let i = 0; i < data.length; i += 4) {
+      let r = data[i];
+      let g = data[i + 1];
+      let b = data[i + 2];
+
+      const luma = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+      const shadowMask = (1 - luma) * (1 - luma);
+      const highlightMask = luma * luma;
+
+      const toneShift = shadows * shadowMask * 48 + highlights * highlightMask * 48;
+      const detailShift = detail * (luma - 0.5) * 52;
+      const tempShift = temperature * 22;
+
+      r = this.clamp(Math.round(r + toneShift + detailShift + tempShift), 0, 255);
+      g = this.clamp(Math.round(g + toneShift + detailShift * 0.8), 0, 255);
+      b = this.clamp(Math.round(b + toneShift + detailShift - tempShift), 0, 255);
+
+      data[i] = r;
+      data[i + 1] = g;
+      data[i + 2] = b;
+    }
+
+    if (this.imageSettings.sharpness >= 8) {
+      this.applySharpenFilter(imageData, this.imageSettings.sharpness / 100);
+    }
+
+    fxCtx.putImageData(imageData, 0, 0);
+    targetCtx.save();
+    targetCtx.imageSmoothingEnabled = true;
+    targetCtx.drawImage(fxCanvas, 0, 0, w, h);
+    targetCtx.restore();
+  }
+
+  proto.renderProcessedFrame = function (targetCanvas, targetCtx, mode = 'preview') {
+    if (!this.videoEl || this.videoEl.readyState < 2 || targetCanvas.width === 0 || targetCanvas.height === 0) return;
+    const frameRotation = this.drawBaseFrame(targetCtx, targetCanvas, mode);
+    if (this.needsAdvancedPixelAdjustments()) {
+      this.applyAdvancedPixelAdjustments(targetCanvas, targetCtx, mode);
+    }
+
+    if (this.faceDetectionEffect) {
+      this.faceDetectionEffect.flipH = this.getEffectiveFlipH();
+      this.faceDetectionEffect.flipV = this.flipV;
+      this.faceDetectionEffect.rotationDeg = frameRotation;
+    }
+
+    if (this.blobTrackingEffect && this.blinkDetectionEffect) {
+      this.blinkDetectionEffect.setFeedbackColor(this.blobTrackingEffect.boxColor);
+      this.blobTrackingEffect.connectionColor = this.blobTrackingEffect.boxColor;
+    }
+
+    this.effectManager.processFrame(targetCtx, targetCanvas, this.videoEl);
+  }
+
+  proto.applySharpenFilter = function (imageData, amount) {
+    const { width, height, data } = imageData;
+    const src = new Uint8ClampedArray(data);
+    const rowSize = width * 4;
+    const strength = this.clamp(amount, 0, 1) * 1.2;
+
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        const idx = y * rowSize + x * 4;
+        for (let c = 0; c < 3; c++) {
+          const center = src[idx + c];
+          const north = src[idx - rowSize + c];
+          const south = src[idx + rowSize + c];
+          const west = src[idx - 4 + c];
+          const east = src[idx + 4 + c];
+          const blurred = (center * 4 + north + south + west + east) / 8;
+          data[idx + c] = this.clamp(Math.round(center + (center - blurred) * strength), 0, 255);
+        }
+      }
+    }
+  }
+
+}

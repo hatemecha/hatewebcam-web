@@ -1,1 +1,21 @@
 revision.md
+
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Build / temp artifacts
+dist/
+build/
+*.tmp

@@ -1,5 +1,5 @@
 const WEBM_MUXER_URL = 'https://esm.sh/webm-muxer@5.1.0';
-const COMMON_VIDEO_FPS = [23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60, 120];
+export const COMMON_VIDEO_FPS = [23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60, 120];
 
 export function normalizeFrameRate(value) {
   const fps = Number(value);
@@ -141,7 +141,7 @@ export async function encodeCanvasSequence({
       });
       encoder.encode(frame, { keyFrame: frameIndex % keyFrameInterval === 0 });
       frame.close();
-      // ponytail: bound the native queue; stream to disk only if long clips make memory measurable.
+      // backpressure: bound the native queue; stream to disk only if long clips make memory measurable.
       if (encoder.encodeQueueSize >= 8) await encoder.flush();
       onProgress?.(frameIndex + 1, totalFrames);
       if (frameIndex % 4 === 0) await new Promise((resolve) => setTimeout(resolve, 0));

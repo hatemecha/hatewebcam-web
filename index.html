@@ -5,6 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="hatewebcam">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' 'sha256-vvt4KWwuNr51XfE5m+hzeNEGhiOfZzG97ccfqGsPwvE=' blob: https://cdn.jsdelivr.net https://esm.sh; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' blob: data: https://cdn.jsdelivr.net https://esm.sh; base-uri 'self'; object-src 'none'">
   <title>HateWebcam Web</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
@@ -57,7 +58,7 @@
         </div>
         <div class="preview-overlay-toolbar" aria-label="Controles de vista previa">
           <label class="preview-overlay-control" for="previewQualitySelect">
-            <span class="preview-overlay-kicker"><i class="fa-solid fa-film"></i> Preview</span>
+            <span class="preview-overlay-kicker"><i class="fa-solid fa-film"></i> Vista previa</span>
             <div class="select-wrapper preview-overlay-select">
               <select id="previewQualitySelect" aria-label="Calidad de vista previa">
                 <option value="draft">Borrador</option>
@@ -72,7 +73,7 @@
           <div class="mobile-fx-backdrop hidden" id="mobileFxBackdrop"></div>
           <div class="mobile-fx-panel hidden" id="mobileFxPanel">
             <div class="mobile-fx-header">
-              <span>Effects</span>
+              <span>Efectos</span>
               <button type="button" class="mobile-fx-close" id="btnMobileFxClose" aria-label="Cerrar panel de efectos">
                 <i class="fa-solid fa-xmark"></i>
               </button>
@@ -99,7 +100,7 @@
               <button type="button" class="mobile-chip-btn" id="btnMobileBlinkToggle">Pestañeos</button>
               <button type="button" class="mobile-chip-btn" id="btnMobileColorPick">
                 <i class="fa-solid fa-eyedropper"></i>
-                <span>Pick color</span>
+                <span>Elegir color</span>
               </button>
             </div>
             <label class="mobile-inline-field face-visual-toggles">
@@ -111,7 +112,7 @@
                 </label>
                 <label class="checkbox-group">
                   <input type="checkbox" id="chkMobileFaceShowBlur">
-                  <span>Blur</span>
+                  <span>Desenfoque</span>
                 </label>
               </div>
             </label>
@@ -132,7 +133,7 @@
           <div class="mobile-hud-bottom">
             <button type="button" class="mobile-dock-btn" id="btnMobileEffectsDock" aria-controls="mobileFxPanel" aria-expanded="false">
               <i class="fa-solid fa-wand-magic-sparkles"></i>
-              <span>Effects</span>
+              <span>Efectos</span>
             </button>
             <button type="button" class="mobile-capture-btn" id="btnMobileTakePhoto" aria-label="Sacar foto">
               <i class="fa-solid fa-camera"></i>
@@ -414,7 +415,7 @@
               </label>
               <label class="checkbox-group">
                 <input type="checkbox" id="chkFaceShowBlur">
-                <span>Blur / pixelado</span>
+                <span>Desenfoque / pixelado</span>
               </label>
             </div>
             <div class="quick-inline-fields">
@@ -645,7 +646,7 @@
   <script src="js/effects/blink-detection.js?v=20260511-timer"></script>
   <script src="js/effects/face-detection.js?v=20260511-timer"></script>
   <script src="js/effects/effect-manager.js?v=20260511-timer"></script>
-  <script src="js/app.js?v=20260621-editor14"></script>
+  <script type="module" src="js/app.js?v=20260621-split1"></script>
 </body>
 
 </html>
