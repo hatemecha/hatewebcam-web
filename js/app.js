@@ -2316,12 +2316,8 @@
         syncPreviewCanvasMetrics(sourceWidth, sourceHeight, frameCount % 30 === 0);
 
         try {
-          if (isRecording || isVideoExporting) {
-            copyFrameToRecordingCanvas();
-            ctx.drawImage(recordingCanvas, 0, 0, canvas.width, canvas.height);
-          } else {
-            renderProcessedFrame(canvas, ctx, 'preview');
-          }
+          renderSourceFrameBuffer(isRecording || isVideoExporting);
+          blitProcessedFrameToPreview();
         } catch (renderErr) {
           console.error('Render frame fallback error:', renderErr);
           drawBaseFrame(ctx, canvas, 'preview');
@@ -3385,13 +3381,15 @@
     }
   }
 
-  function copyFrameToRecordingCanvas() {
-    if (!recordingCanvas || !recordingCtx || videoEl.readyState < 2) return;
+  function renderSourceFrameBuffer(applyQualityEnhancer = false) {
+    if (videoEl.readyState < 2) return;
 
     ensureRecordingCanvas();
+    if (!recordingCanvas || !recordingCtx) return;
+
     renderProcessedFrame(recordingCanvas, recordingCtx, 'recording');
 
-    if (imageSettings.qualityEnhancer) {
+    if (applyQualityEnhancer && imageSettings.qualityEnhancer) {
       const enhancerBuffer = ensureRecordingEnhancerBuffer(recordingCanvas.width, recordingCanvas.height);
       if (recordingEnhancerCtx) {
         recordingEnhancerCtx.clearRect(0, 0, enhancerBuffer.width, enhancerBuffer.height);
@@ -3406,6 +3404,15 @@
         );
       }
     }
+  }
+
+  function blitProcessedFrameToPreview() {
+    if (!recordingCanvas || recordingCanvas.width === 0 || canvas.width === 0) return;
+    ctx.drawImage(recordingCanvas, 0, 0, canvas.width, canvas.height);
+  }
+
+  function copyFrameToRecordingCanvas() {
+    renderSourceFrameBuffer(true);
   }
 
   async function buildPhotoBlobFromCanvas(baseCanvas, enhancerEnabled, enhancerStrength) {

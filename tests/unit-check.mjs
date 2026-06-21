@@ -3,6 +3,10 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
+import {
+  getProcessingFrameDimensions,
+  getPreviewFrameDimensions,
+} from '../js/preview-metrics.mjs';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -180,10 +184,31 @@ function checkVideoTimelineIntervals() {
   assert.equal(timeline.activeAt(6).length, 0);
 }
 
+function checkPreviewProcessingResolutionContract() {
+  const sourceWidth = 1920;
+  const sourceHeight = 1080;
+  const processing = getProcessingFrameDimensions(sourceWidth, sourceHeight);
+  const draftPreview = getPreviewFrameDimensions(sourceWidth, sourceHeight, 'draft');
+  const fullPreview = getPreviewFrameDimensions(sourceWidth, sourceHeight, 'full');
+
+  assert.equal(processing.width, sourceWidth, 'processing width must match source');
+  assert.equal(processing.height, sourceHeight, 'processing height must match source');
+  assert.equal(fullPreview.width, sourceWidth, 'full preview must match source');
+  assert.equal(fullPreview.height, sourceHeight, 'full preview must match source');
+  assert.ok(draftPreview.width < processing.width, 'draft preview must downscale display width');
+  assert.ok(draftPreview.height < processing.height, 'draft preview must downscale display height');
+  assert.notDeepEqual(
+    [draftPreview.width, draftPreview.height],
+    [fullPreview.width, fullPreview.height],
+    'preview quality must still change display resolution'
+  );
+}
+
 await checkCameraStreamCleanup();
 checkCameraPreservesSupportedFps();
 checkReusableMorphologyBuffers();
 checkBlinkDetectionUsesRefinedEyeLandmarks();
 checkFaceDetectionUsesRefinedEyeLandmarks();
 checkVideoTimelineIntervals();
+checkPreviewProcessingResolutionContract();
 console.log('Unit check passed.');
