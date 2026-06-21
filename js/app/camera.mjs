@@ -1,9 +1,56 @@
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyCameraMixin(proto) {
   proto.setCameraPlaceholderMessage = function (message) {
+    if (this.placeholderCameraMessage) {
+      this.placeholderCameraMessage.textContent = message;
+      return;
+    }
     if (!this.placeholder) return;
-    const msg = this.placeholder.querySelector('div');
+    const msg = this.placeholder.querySelector('#previewPlaceholderCameraMessage, .preview-placeholder-camera div');
     if (msg) msg.textContent = message;
+  }
+
+  proto.setVideoPlaceholderLoadingMessage = function (message) {
+    if (this.placeholderLoadingMessage) {
+      this.placeholderLoadingMessage.textContent = message;
+    }
+  }
+
+  proto.updatePreviewPlaceholder = function () {
+    if (!this.placeholder) return;
+    const inVideoMode = this.sourceMode === 'video';
+    const hasVideo = !!this.videoSourceFile;
+    const isLoading = !!this.videoPlaceholderLoading;
+    const showPlaceholder = inVideoMode ? !hasVideo : !this.isRunning;
+
+    this.placeholder.classList.toggle('hidden', !showPlaceholder);
+    this.placeholder.classList.toggle('is-solid', inVideoMode && showPlaceholder);
+    this.previewWrapper?.classList.toggle('is-empty', inVideoMode && showPlaceholder);
+
+    if (this.placeholderCamera) {
+      this.placeholderCamera.classList.toggle('hidden', inVideoMode);
+    }
+    if (this.placeholderVideo) {
+      this.placeholderVideo.classList.toggle('hidden', !inVideoMode || hasVideo || isLoading);
+    }
+    if (this.placeholderLoading) {
+      this.placeholderLoading.classList.toggle('hidden', !inVideoMode || hasVideo || !isLoading);
+    }
+
+    if (inVideoMode && showPlaceholder) {
+      this.clearPreviewCanvas?.();
+    }
+  }
+
+  proto.showVideoPlaceholderLoading = function (message = 'Leyendo metadata del video...') {
+    this.videoPlaceholderLoading = true;
+    this.setVideoPlaceholderLoadingMessage(message);
+    this.updatePreviewPlaceholder();
+  }
+
+  proto.hideVideoPlaceholderLoading = function () {
+    this.videoPlaceholderLoading = false;
+    this.updatePreviewPlaceholder();
   }
 
   proto.getCameraStartErrorMessage = function (error, wasAutoStart = false) {
@@ -36,7 +83,7 @@ export function applyCameraMixin(proto) {
       this.cancelRenderLoop();
       this.btnToggleCamera.innerHTML = '<i class="fa-solid fa-play"></i> Encender Cámara';
       this.btnToggleCamera.classList.remove('active');
-      this.placeholder.classList.remove('hidden');
+      this.updatePreviewPlaceholder();
       this.resolutionInfo.textContent = '—';
       this.fpsInfo.textContent = '—';
       this.updateCaptureButtons();
@@ -49,7 +96,7 @@ export function applyCameraMixin(proto) {
       const ok = await this.cameraManager.start(this.videoEl, requestedDeviceId);
       if (ok) {
         this.isRunning = true;
-        this.placeholder.classList.add('hidden');
+        this.updatePreviewPlaceholder();
         this.btnToggleCamera.innerHTML = '<i class="fa-solid fa-stop"></i> Apagar Cámara';
         this.btnToggleCamera.classList.add('active');
 
@@ -75,8 +122,8 @@ export function applyCameraMixin(proto) {
         void this.refreshCameraDevices(this.preferredDeviceId);
       } else {
         const message = this.getCameraStartErrorMessage(this.cameraManager.lastError, forceStart);
-        this.placeholder.classList.remove('hidden');
         this.setCameraPlaceholderMessage(message);
+        this.updatePreviewPlaceholder();
         this.showStatus(this.captureStatus, message, 'warning');
       }
       this.updateCaptureButtons();

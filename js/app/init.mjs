@@ -59,6 +59,7 @@ export function applyInitMixin(proto) {
     this.updateProfilesList();
     this.bindEvents();
     this.bindTimelinePaletteDrag();
+    this.bindEditorSplitters();
     this.bindQuickDetectorEvents();
     this.bindImageControlEvents();
     this.syncMobileViewportState();

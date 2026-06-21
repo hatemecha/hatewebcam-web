@@ -1,9 +1,69 @@
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyEventsMixin(proto) {
+  proto.bindEditorSplitters = function () {
+    const root = document.documentElement;
+    const savedLayout = this.loadJsonStorage('hatewebcam-editor-layout', {});
+    const applySize = (axis, size) => {
+      const horizontal = axis === 'horizontal';
+      const min = horizontal ? 240 : 250;
+      const max = horizontal ? Math.max(min, window.innerHeight - 260) : Math.max(min, window.innerWidth - 420);
+      const value = Math.round(this.clamp(Number(size) || min, min, max));
+      root.style.setProperty(horizontal ? '--editor-timeline-h' : '--editor-inspector-w', `${value}px`);
+      return value;
+    };
+    const saveSize = (axis, value) => {
+      savedLayout[axis] = value;
+      this.saveJsonStorage('hatewebcam-editor-layout', savedLayout);
+    };
+    const bind = (splitter, axis) => {
+      if (!splitter) return;
+      if (savedLayout[axis]) applySize(axis, savedLayout[axis]);
+      splitter.addEventListener('pointerdown', (event) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        splitter.setPointerCapture(event.pointerId);
+        document.body.classList.add('is-resizing-editor');
+        document.body.dataset.resizeAxis = axis;
+      });
+      splitter.addEventListener('pointermove', (event) => {
+        if (!splitter.hasPointerCapture(event.pointerId)) return;
+        applySize(axis, axis === 'horizontal' ? window.innerHeight - event.clientY : window.innerWidth - event.clientX);
+      });
+      splitter.addEventListener('pointerup', (event) => {
+        if (!splitter.hasPointerCapture(event.pointerId)) return;
+        splitter.releasePointerCapture(event.pointerId);
+        document.body.classList.remove('is-resizing-editor');
+        delete document.body.dataset.resizeAxis;
+        const property = axis === 'horizontal' ? '--editor-timeline-h' : '--editor-inspector-w';
+        saveSize(axis, parseInt(root.style.getPropertyValue(property), 10));
+      });
+      splitter.addEventListener('keydown', (event) => {
+        const direction = axis === 'horizontal'
+          ? ({ ArrowUp: 1, ArrowDown: -1 }[event.key] || 0)
+          : ({ ArrowLeft: 1, ArrowRight: -1 }[event.key] || 0);
+        if (!direction) return;
+        event.preventDefault();
+        const pane = axis === 'horizontal' ? this.timelineSplitter?.nextElementSibling : this.videoInspector;
+        const current = axis === 'horizontal' ? pane?.getBoundingClientRect().height : pane?.getBoundingClientRect().width;
+        saveSize(axis, applySize(axis, current + direction * 20));
+      });
+      splitter.addEventListener('dblclick', () => {
+        delete savedLayout[axis];
+        root.style.removeProperty(axis === 'horizontal' ? '--editor-timeline-h' : '--editor-inspector-w');
+        this.saveJsonStorage('hatewebcam-editor-layout', savedLayout);
+      });
+    };
+    bind(this.inspectorSplitter, 'vertical');
+    bind(this.timelineSplitter, 'horizontal');
+  }
+
   proto.bindEvents = function () {
     this.btnWebcamMode.addEventListener('click', () => this.setSourceMode('camera'));
     this.btnVideoMode.addEventListener('click', () => this.setSourceMode('video'));
     this.btnChooseVideo.addEventListener('click', () => this.videoFileInput.click());
+    if (this.btnPreviewImportVideo) {
+      this.btnPreviewImportVideo.addEventListener('click', () => this.videoFileInput.click());
+    }
     if (this.videoEffectType) {
       this.videoEffectType.addEventListener('change', () => {
         this.updateEffectTrackHighlight();
@@ -23,10 +83,6 @@ export function applyEventsMixin(proto) {
     this.btnVideoPlay.addEventListener('click', () => { void this.toggleVideoPlayback(); });
     this.btnVideoForward.addEventListener('click', () => this.jumpVideo(5));
     this.btnVideoEnd.addEventListener('click', () => this.seekVideo(this.videoTimeline.trimEnd));
-    this.btnVideoMute.addEventListener('click', () => {
-      this.videoEl.muted = !this.videoEl.muted;
-      this.updateVideoMuteButton();
-    });
     this.videoSeek.addEventListener('input', () => this.seekVideo(this.videoSeek.value));
     this.videoTrimStart.addEventListener('change', () => {
       this.pushTimelineHistory();
@@ -132,9 +188,9 @@ export function applyEventsMixin(proto) {
     this.chkFlipV.addEventListener('change', this.onTransformChange.bind(this));
     this.rotationSelect.addEventListener('change', this.onTransformChange.bind(this));
 
-    this.chkBlobTracking.addEventListener('change', () => { void this.toggleEffect('blob'); });
-    this.chkFaceDetection.addEventListener('change', () => { void this.toggleEffect('face'); });
-    this.chkBlinkDetection.addEventListener('change', () => { void this.toggleEffect('blink'); });
+    this.chkBlobTracking.addEventListener('change', () => { this.handleVideoDetectorToggle('blob'); });
+    this.chkFaceDetection.addEventListener('change', () => { this.handleVideoDetectorToggle('face'); });
+    this.chkBlinkDetection.addEventListener('change', () => { this.handleVideoDetectorToggle('blink'); });
 
     this.btnColorPick.addEventListener('click', this.enableColorPick.bind(this));
     if (this.btnToggleAdvancedOptions) this.btnToggleAdvancedOptions.addEventListener('click', this.toggleAdvancedOptions.bind(this));

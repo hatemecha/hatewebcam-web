@@ -330,8 +330,17 @@ export function applyStorageMixin(proto) {
     if (this.inpFaceQuickLabel && document.activeElement !== this.inpFaceQuickLabel) {
       this.inpFaceQuickLabel.value = this.quickDetectorSettings.faceLabelText;
     }
+    if (this.colorPickSection) {
+      const showBlobControls = this.sourceMode === 'video'
+        ? this.getSelectedVideoEffectItem()?.type === 'blob'
+        : this.chkBlobTracking.checked;
+      this.colorPickSection.classList.toggle('hidden', !showBlobControls);
+    }
     if (this.faceQuickControls) {
-      this.faceQuickControls.classList.toggle('hidden', !this.chkFaceDetection.checked);
+      const showFaceControls = this.sourceMode === 'video'
+        ? this.getSelectedVideoEffectItem()?.type === 'face'
+        : this.chkFaceDetection.checked;
+      this.faceQuickControls.classList.toggle('hidden', !showFaceControls);
     }
     if (this.faceQuickColorChip) {
       this.faceQuickColorChip.classList.toggle('hidden', !showFaceBoxVisuals);
@@ -440,10 +449,28 @@ export function applyStorageMixin(proto) {
         ...item,
         config: this.snapshotVideoEffectConfig(item.type),
       });
-      void this.syncVideoTimelineEffects(true);
+      if (item.type === 'look') {
+        this.syncVideoTimelineLookNow({ force: true });
+      } else {
+        void this.syncVideoTimelineEffects(true);
+      }
     } catch (err) {
       console.warn('No se pudo actualizar el clip seleccionado:', err.message);
     }
+  }
+
+  proto.flushPendingClipConfigSync = function () {
+    if (this.saveImageSettingsTimer) {
+      clearTimeout(this.saveImageSettingsTimer);
+      this.saveImageSettingsTimer = null;
+      this.saveImageSettings();
+    }
+    if (this.syncSelectedClipConfigTimer) {
+      clearTimeout(this.syncSelectedClipConfigTimer);
+      this.syncSelectedClipConfigTimer = null;
+    }
+    this.syncLookClipConfigNow?.();
+    this.syncSelectedClipConfig();
   }
 
   proto.scheduleSyncSelectedClipConfig = function () {
@@ -516,11 +543,11 @@ export function applyStorageMixin(proto) {
   }
 
   proto.scheduleSaveImageSettings = function () {
+    this.syncLookClipConfigNow?.();
     if (this.saveImageSettingsTimer) clearTimeout(this.saveImageSettingsTimer);
     this.saveImageSettingsTimer = setTimeout(() => {
       this.saveImageSettingsTimer = null;
       this.saveImageSettings();
-      this.scheduleSyncSelectedClipConfig();
     }, 100);
   }
 
@@ -596,7 +623,7 @@ export function applyStorageMixin(proto) {
         this.updateBWDependentControls();
         this.mobileActivePreset = null;
         this.updateMobilePresetButtons(this.mobileActivePreset);
-        this.saveImageSettings();
+        this.scheduleSaveImageSettings();
       });
     }
 
@@ -659,7 +686,7 @@ export function applyStorageMixin(proto) {
         this.mobileActivePreset = null;
         this.updateMobilePresetButtons(this.mobileActivePreset);
         this.updateImageControlsUI();
-        this.saveImageSettings();
+        this.scheduleSaveImageSettings();
       });
     }
 
@@ -730,7 +757,7 @@ export function applyStorageMixin(proto) {
     this.mobileActivePreset = name;
     this.updateMobilePresetButtons(this.mobileActivePreset);
     this.updateImageControlsUI();
-    this.saveImageSettings();
+    this.scheduleSaveImageSettings();
   }
 
   proto.setAdvancedOptionsVisible = function (visible) {

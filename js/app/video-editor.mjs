@@ -31,8 +31,10 @@ export function applyLocalvideoeditorMixin(proto) {
       this.btnVideoMode.classList.add('is-active');
       this.btnWebcamMode.setAttribute('aria-selected', 'false');
       this.btnVideoMode.setAttribute('aria-selected', 'true');
-      this.setCameraPlaceholderMessage('Elegí un video para editar.');
-      this.placeholder.classList.remove('hidden');
+      this.videoPlaceholderLoading = false;
+      this.clearPreviewCanvas();
+      void this.resetVideoTimelineDetectors();
+      this.updatePreviewPlaceholder();
       this.updateVideoEditorUI();
       return;
     }
@@ -49,6 +51,7 @@ export function applyLocalvideoeditorMixin(proto) {
     this.btnVideoMode.setAttribute('aria-selected', 'false');
     this.btnWebcamMode.setAttribute('aria-selected', 'true');
     this.setCameraPlaceholderMessage('Iniciando cámara automáticamente...');
+    this.updatePreviewPlaceholder();
     void this.restoreWebcamSessionState();
     void this.toggleCamera(true);
   }
@@ -65,7 +68,7 @@ export function applyLocalvideoeditorMixin(proto) {
       if (this.webcamSessionState[type]) {
         checkbox.checked = true;
         await this.toggleEffect(type);
-        const effect = type === 'blob' ? blobTrackingEffect: type === 'face' ? faceDetectionEffect: this.blinkDetectionEffect;
+        const effect = type === 'blob' ? this.blobTrackingEffect : type === 'face' ? this.faceDetectionEffect : this.blinkDetectionEffect;
         const config = this.webcamSessionState[`${type}Config`];
         if (effect && config) effect.setConfig(config);
       }
@@ -93,12 +96,18 @@ export function applyLocalvideoeditorMixin(proto) {
     this.timelineZoom = 1;
     this.selectedVideoEffectId = '';
     this.appliedTimelineItemIds = {};
+    this.timelineDetectorSyncPromise = null;
+    this.timelineDetectorSyncForce = false;
     this.videoBaseImageSettings = null;
     this.timelineItems.innerHTML = '';
+    this.videoPlaceholderLoading = false;
     if (this.sourceMode === 'video') {
-      this.setCameraPlaceholderMessage('Elegí un video para editar.');
+      void this.resetVideoTimelineDetectors();
+      this.clearPreviewCanvas();
+      this.updatePreviewPlaceholder();
+    } else {
+      this.updatePreviewPlaceholder();
     }
-    this.placeholder.classList.remove('hidden');
   }
 
   proto.loadVideoFile = async function (file) {
@@ -115,7 +124,7 @@ export function applyLocalvideoeditorMixin(proto) {
     this.videoEl.src = this.videoObjectUrl;
     this.videoEl.muted = true;
     this.videoEl.preload = 'auto';
-    this.setCameraPlaceholderMessage('Leyendo metadata del video...');
+    this.showVideoPlaceholderLoading('Leyendo metadata del video...');
 
     try {
       await new Promise((resolve, reject) => {
@@ -140,9 +149,11 @@ export function applyLocalvideoeditorMixin(proto) {
       this.videoSourceFps = await this.detectVideoSourceFps(this.videoEl, calculateFrameRateFromMediaTimes);
       this.videoSourceAverageBitrate = calculateSourceAverageBitrate(file.size, this.videoEl.duration);
       this.videoTimeline.setDuration(this.videoEl.duration);
-      this.videoBaseImageSettings = { ...this.imageSettings };
+      this.videoBaseImageSettings = this.createVideoBaseImageSettings();
+      this.imageSettings = { ...this.videoBaseImageSettings };
       this.isRunning = true;
-      this.placeholder.classList.add('hidden');
+      this.videoPlaceholderLoading = false;
+      this.updatePreviewPlaceholder();
       this.videoSeek.max = String(this.videoEl.duration);
       this.videoTrimStart.max = String(this.videoEl.duration);
       this.videoTrimEnd.max = String(this.videoEl.duration);
@@ -158,6 +169,7 @@ export function applyLocalvideoeditorMixin(proto) {
       this.syncPreviewCanvasMetrics(this.videoEl.videoWidth, this.videoEl.videoHeight, true);
       this.scheduleRenderLoop();
       this.renderVideoTimeline();
+      await this.syncVideoTimelineEffects(true);
       this.updateVideoEditorUI();
       this.applyTimelineZoom();
       this.showStatus(this.videoEditorStatus, 'Video listo.', 'success');
@@ -165,7 +177,6 @@ export function applyLocalvideoeditorMixin(proto) {
     } catch (err) {
       console.error('Error loading video:', err);
       this.disposeVideoSource();
-      this.setCameraPlaceholderMessage('No se pudo abrir este video.');
       const message = err?.message === 'video_metadata_invalid'
         ? 'El video no contiene resolución o duración válidas.'
         : 'El navegador no puede decodificar este archivo.';
@@ -196,13 +207,88 @@ export function applyLocalvideoeditorMixin(proto) {
     return this.videoTimeline.items.find((candidate) => candidate.id === this.selectedVideoEffectId) || null;
   }
 
+  proto.isPlayheadInSelectedClip = function () {
+    const item = this.getSelectedVideoEffectItem();
+    if (!item || !this.videoSourceFile) return false;
+    const time = this.videoEl.currentTime || 0;
+    return time >= item.startTime && time < item.endTime;
+  }
+
+  proto.applyClipConfigToQuickSettings = function (item) {
+    if (!item?.config) return;
+    if (item.type === 'blob') {
+      if (item.config.boxColor) this.quickDetectorSettings.blobBoxColor = item.config.boxColor;
+      return;
+    }
+    if (item.type === 'face') {
+      const config = item.config;
+      if (config.boxColor) this.quickDetectorSettings.faceBoxColor = config.boxColor;
+      if (config.labelText != null) this.quickDetectorSettings.faceLabelText = this.normalizeFaceLabel(config.labelText);
+      if (config.showBox != null) this.quickDetectorSettings.faceShowBox = !!config.showBox;
+      if (config.showBlur != null) this.quickDetectorSettings.faceShowBlur = !!config.showBlur;
+      if (config.pixelationCellSize != null) {
+        this.quickDetectorSettings.facePixelationCellSize = this.clamp(parseInt(config.pixelationCellSize, 10) || this.quickDetectorSettings.facePixelationCellSize, 4, 48);
+      }
+      if (config.censorPaddingPercent != null) {
+        this.quickDetectorSettings.faceCensorPaddingPercent = this.clamp(parseInt(config.censorPaddingPercent, 10) || this.quickDetectorSettings.faceCensorPaddingPercent, 0, 48);
+      }
+    }
+  }
+
+  proto.updateAdjustmentsClipStatus = function () {
+    if (!this.adjustClipStatus || this.sourceMode !== 'video') return;
+    const item = this.getSelectedVideoEffectItem();
+    if (!item) {
+      this.adjustClipStatus.classList.add('hidden');
+      this.adjustClipStatus.classList.remove('is-live');
+      return;
+    }
+    const active = this.isPlayheadInSelectedClip();
+    this.adjustClipStatus.textContent = active
+      ? `Tramo ${this.formatDurationDetailed(item.startTime)} — ${this.formatDurationDetailed(item.endTime)} · Vista previa activa`
+      : `Tramo ${this.formatDurationDetailed(item.startTime)} — ${this.formatDurationDetailed(item.endTime)} · Mové el cursor al clip para previsualizar`;
+    this.adjustClipStatus.classList.toggle('is-live', active);
+    this.adjustClipStatus.classList.remove('hidden');
+  }
+
   proto.updateAdjustmentsPanelState = function () {
+    const hasVideo = !!this.videoSourceFile;
     const item = this.getSelectedVideoEffectItem();
     const hasSelection = !!item;
-    if (this.inspectorAdjustmentsEmpty) this.inspectorAdjustmentsEmpty.classList.toggle('hidden', hasSelection);
+    if (this.inspectorAdjustNoVideo) this.inspectorAdjustNoVideo.classList.toggle('hidden', hasVideo);
+    if (this.inspectorAdjustNoClip) this.inspectorAdjustNoClip.classList.toggle('hidden', !hasVideo || hasSelection);
     if (this.inspectorAdjustmentsHost) this.inspectorAdjustmentsHost.classList.toggle('hidden', !hasSelection);
     if (this.adjustContextNav) this.adjustContextNav.classList.toggle('hidden', !hasSelection);
     if (hasSelection) this.updateAdjustmentsContext();
+  }
+
+  proto.normalizeLookClipConfig = function (config = {}) {
+    const merged = { ...this.DEFAULT_IMAGE_SETTINGS, ...config };
+    return {
+      blackAndWhite: !!merged.blackAndWhite,
+      exposure: this.clamp(parseInt(merged.exposure, 10) || 0, -100, 100),
+      shadows: this.clamp(parseInt(merged.shadows, 10) || 0, -100, 100),
+      highlights: this.clamp(parseInt(merged.highlights, 10) || 0, -100, 100),
+      contrast: this.clamp(parseInt(merged.contrast, 10) || 100, 50, 180),
+      saturation: this.clamp(parseInt(merged.saturation, 10) || 100, 0, 200),
+      temperature: this.clamp(parseInt(merged.temperature, 10) || 0, -100, 100),
+      detail: this.clamp(parseInt(merged.detail, 10) || 0, -100, 100),
+      sharpness: this.clamp(parseInt(merged.sharpness, 10) || 0, 0, 100),
+    };
+  }
+
+  proto.syncLookClipConfigNow = function () {
+    if (this.sourceMode !== 'video' || !this.selectedVideoEffectId) return;
+    const item = this.videoTimeline.items.find((candidate) => candidate.id === this.selectedVideoEffectId);
+    if (!item || item.type !== 'look') return;
+    try {
+      this.videoTimeline.upsert({
+        ...item,
+        config: this.snapshotVideoEffectConfig('look'),
+      });
+    } catch (err) {
+      console.warn('No se pudo guardar el look del clip:', err.message);
+    }
   }
 
   proto.snapshotVideoEffectConfig = function (type) {
@@ -216,7 +302,7 @@ export function applyLocalvideoeditorMixin(proto) {
         qualityEnhancerStrength,
         ...lookSettings
       } = this.imageSettings;
-      return lookSettings;
+      return this.normalizeLookClipConfig(lookSettings);
     }
     if (type === 'blob') return this.blobTrackingEffect ? this.blobTrackingEffect.getConfig() : {
       boxColor: this.quickDetectorSettings.blobBoxColor,
@@ -250,14 +336,17 @@ export function applyLocalvideoeditorMixin(proto) {
       this.saveImageSettings();
       return;
     }
-    if (item.type === 'blob' && this.blobTrackingEffect) {
-      this.blobTrackingEffect.setConfig(item.config);
-    } else if (item.type === 'face' && this.faceDetectionEffect) {
-      this.faceDetectionEffect.setConfig(item.config);
+    if (item.type === 'blob') {
+      if (this.blobTrackingEffect) this.blobTrackingEffect.setConfig(item.config);
+      else this.applyClipConfigToQuickSettings(item);
+    } else if (item.type === 'face') {
+      if (this.faceDetectionEffect) this.faceDetectionEffect.setConfig(item.config);
+      else this.applyClipConfigToQuickSettings(item);
     } else if (item.type === 'blink' && this.blinkDetectionEffect) {
       this.blinkDetectionEffect.setConfig(item.config);
     }
     this.syncQuickDetectorSettingsFromEffects();
+    this.updateQuickDetectorControlsUI();
     this.renderEffectConfig();
   }
 
@@ -411,6 +500,7 @@ export function applyLocalvideoeditorMixin(proto) {
   }
 
   proto.selectVideoEffect = function (id) {
+    this.syncLookClipConfigNow();
     this.selectedVideoEffectId = id || '';
     const item = this.videoTimeline.items.find((candidate) => candidate.id === this.selectedVideoEffectId);
     if (item) {
@@ -439,9 +529,11 @@ export function applyLocalvideoeditorMixin(proto) {
   }
 
   proto.updateVideoEffectInspector = function () {
+    const hasVideo = !!this.videoSourceFile;
     const item = this.videoTimeline.items.find((candidate) => candidate.id === this.selectedVideoEffectId);
     const editing = !!item;
-    if (this.videoEffectEmptyHint) this.videoEffectEmptyHint.classList.toggle('hidden', editing);
+    if (this.videoEffectEmptyNoVideo) this.videoEffectEmptyNoVideo.classList.toggle('hidden', hasVideo);
+    if (this.videoEffectEmptyHint) this.videoEffectEmptyHint.classList.toggle('hidden', !hasVideo || editing);
     if (this.videoEffectClipMeta) this.videoEffectClipMeta.classList.toggle('hidden', !editing);
     if (item && this.videoEffectTypeLabel) {
       this.videoEffectTypeLabel.textContent = `${this.TIMELINE_EFFECT_META[item.type]?.trackLabel || item.type} · ${this.TIMELINE_EFFECT_META[item.type]?.label || item.type}`;
@@ -509,8 +601,10 @@ export function applyLocalvideoeditorMixin(proto) {
       label.classList.toggle('is-active', label.dataset.adjustContext === context);
     });
     if (this.adjustContextHelp) {
-      this.adjustContextHelp.textContent = this.ADJUST_CONTEXT_HELP[context];
+      const help = this.ADJUST_CONTEXT_VIDEO_HELP?.[context] || this.ADJUST_CONTEXT_HELP[context];
+      this.adjustContextHelp.textContent = help;
     }
+    this.updateAdjustmentsClipStatus();
     if (options.syncEffectType && this.videoEffectType) {
       this.videoEffectType.value = options.effectType || context;
       this.updateEffectTrackHighlight();
@@ -952,24 +1046,53 @@ export function applyLocalvideoeditorMixin(proto) {
     }
   }
 
+  proto.handleVideoDetectorToggle = function (type) {
+    if (this.sourceMode === 'video') {
+      void this.syncVideoTimelineEffects(true);
+      return;
+    }
+    void this.toggleEffect(type);
+  }
+
+  proto.getTimelineDetectorCheckbox = function (type) {
+    if (type === 'blob') return this.chkBlobTracking;
+    if (type === 'face') return this.chkFaceDetection;
+    return this.chkBlinkDetection;
+  }
+
+  proto.getTimelineDetectorEffect = function (type) {
+    if (type === 'blob') return this.blobTrackingEffect;
+    if (type === 'face') return this.faceDetectionEffect;
+    return this.blinkDetectionEffect;
+  }
+
+  proto.resetVideoTimelineDetectors = async function () {
+    for (const type of ['blob', 'face', 'blink']) {
+      const checkbox = this.getTimelineDetectorCheckbox(type);
+      if (checkbox?.checked) {
+        checkbox.checked = false;
+        await this.toggleEffect(type);
+      }
+      this.appliedTimelineItemIds[type] = '';
+    }
+    this.updateQuickDetectorControlsUI?.();
+    this.updateEffectsInfo();
+  }
+
   proto.setTimelineDetector = async function (type, item) {
-    const checkbox = type === 'blob' ? chkBlobTracking: type === 'face' ? chkFaceDetection: this.chkBlinkDetection;
+    const checkbox = this.getTimelineDetectorCheckbox(type);
     if (!checkbox) return;
     const shouldEnable = !!item;
     if (checkbox.checked !== shouldEnable) {
       checkbox.checked = shouldEnable;
       await this.toggleEffect(type);
     }
-    const effect = type === 'blob' ? blobTrackingEffect: type === 'face' ? faceDetectionEffect: this.blinkDetectionEffect;
+    const effect = this.getTimelineDetectorEffect(type);
     if (item && effect && typeof effect.setConfig === 'function') effect.setConfig(item.config || {});
   }
 
-  proto.syncVideoTimelineLookAt = function (mediaTime) {
-    if (this.sourceMode !== 'video' || !this.videoSourceFile) return;
-    const active = this.videoTimeline.activeAt(mediaTime);
-    const lookItem = active.find((item) => item.type === 'look');
-    if (this.appliedTimelineItemIds.look === (lookItem?.id || '')) return;
-    const operationalSettings = {
+  proto.getVideoOperationalImageSettings = function () {
+    return {
       previewQuality: this.imageSettings.previewQuality,
       jpegQuality: this.imageSettings.jpegQuality,
       videoFormat: this.imageSettings.videoFormat,
@@ -977,13 +1100,76 @@ export function applyLocalvideoeditorMixin(proto) {
       qualityEnhancer: this.imageSettings.qualityEnhancer,
       qualityEnhancerStrength: this.imageSettings.qualityEnhancerStrength,
     };
-    this.imageSettings = {
-      ...(this.videoBaseImageSettings || this.DEFAULT_IMAGE_SETTINGS),
-      ...(lookItem?.config || {}),
-      ...operationalSettings,
+  }
+
+  proto.createVideoBaseImageSettings = function () {
+    return {
+      ...this.DEFAULT_IMAGE_SETTINGS,
+      ...this.getVideoOperationalImageSettings(),
     };
-    this.appliedTimelineItemIds.look = lookItem?.id || '';
+  }
+
+  proto.applyVideoTimelineLook = function (mediaTime, options = {}) {
+    if (this.sourceMode !== 'video' || !this.videoSourceFile) return false;
+    const lookItem = this.videoTimeline.activeAt(mediaTime).find((item) => item.type === 'look');
+    const nextId = lookItem?.id || '';
+    const force = !!options.force;
+    if (!force && this.appliedTimelineItemIds.look === nextId) return false;
+
+    this.imageSettings = {
+      ...(this.videoBaseImageSettings || this.createVideoBaseImageSettings()),
+      ...(lookItem ? this.normalizeLookClipConfig(lookItem.config) : {}),
+      ...this.getVideoOperationalImageSettings(),
+    };
+    this.appliedTimelineItemIds.look = nextId;
+    this.updateImageControlsUI?.();
+    return true;
+  }
+
+  proto.syncVideoTimelineLookNow = function (options = {}) {
+    if (this.sourceMode !== 'video' || !this.videoSourceFile) return;
+    const changed = this.applyVideoTimelineLook(this.videoEl.currentTime || 0, options);
+    if (changed) this.updateEffectsInfo();
+  }
+
+  proto.syncVideoTimelineLookAt = function (mediaTime, options = {}) {
+    if (this.sourceMode !== 'video' || !this.videoSourceFile) return;
+    this.applyVideoTimelineLook(mediaTime, options);
     this.updateEffectsInfo();
+  }
+
+  proto.syncVideoTimelineDetectorsAt = async function (mediaTime, force = false) {
+    if (this.sourceMode !== 'video' || !this.videoSourceFile) return;
+    const active = this.videoTimeline.activeAt(mediaTime);
+    const byType = Object.fromEntries(active.map((item) => [item.type, item]));
+    for (const type of ['blob', 'face', 'blink']) {
+      const nextId = byType[type]?.id || '';
+      if (force || this.appliedTimelineItemIds[type] !== nextId) {
+        await this.setTimelineDetector(type, byType[type]);
+        this.appliedTimelineItemIds[type] = nextId;
+      }
+    }
+  }
+
+  proto.syncVideoTimelineDetectors = async function (force = false) {
+    if (this.sourceMode !== 'video' || !this.videoSourceFile) return;
+    this.timelineDetectorSyncForce = !!force || !!this.timelineDetectorSyncForce;
+    if (this.timelineDetectorSyncPromise) return this.timelineDetectorSyncPromise;
+
+    this.timelineDetectorSyncPromise = (async () => {
+      const shouldForce = this.timelineDetectorSyncForce;
+      this.timelineDetectorSyncForce = false;
+      await this.syncVideoTimelineDetectorsAt(this.videoEl.currentTime || 0, shouldForce);
+      this.updateEffectsInfo();
+      this.updateAdjustmentsClipStatus();
+    })().finally(() => {
+      this.timelineDetectorSyncPromise = null;
+      if (this.timelineDetectorSyncForce) {
+        void this.syncVideoTimelineDetectors();
+      }
+    });
+
+    return this.timelineDetectorSyncPromise;
   }
 
   proto.timelineDetectorIdsAt = function (mediaTime) {
@@ -1001,58 +1187,68 @@ export function applyLocalvideoeditorMixin(proto) {
 
   proto.syncVideoTimelineEffects = async function (force = false) {
     if (this.sourceMode !== 'video' || !this.videoSourceFile) return;
-    const active = this.videoTimeline.activeAt(this.videoEl.currentTime);
-    const byType = Object.fromEntries(active.map((item) => [item.type, item]));
-    if (force || this.appliedTimelineItemIds.look !== byType.look?.id) {
-      const operationalSettings = {
-        previewQuality: this.imageSettings.previewQuality,
-        jpegQuality: this.imageSettings.jpegQuality,
-        videoFormat: this.imageSettings.videoFormat,
-        captureTimerSeconds: this.imageSettings.captureTimerSeconds,
-        qualityEnhancer: this.imageSettings.qualityEnhancer,
-        qualityEnhancerStrength: this.imageSettings.qualityEnhancerStrength,
-      };
-      this.imageSettings = {
-        ...(this.videoBaseImageSettings || this.DEFAULT_IMAGE_SETTINGS),
-        ...(byType.look?.config || {}),
-        ...operationalSettings,
-      };
-      this.appliedTimelineItemIds.look = byType.look?.id || '';
-    }
-    for (const type of ['blob', 'face', 'blink']) {
-      if (force || this.appliedTimelineItemIds[type] !== byType[type]?.id) {
-        this.appliedTimelineItemIds[type] = byType[type]?.id || '';
-        await this.setTimelineDetector(type, byType[type]);
+    this.syncVideoTimelineLookNow({ force });
+    await this.syncVideoTimelineDetectors(force);
+  }
+
+  proto.updateInspectorWorkflow = function () {
+    if (!this.inspectorWorkflowSteps) return;
+    const hasVideo = !!this.videoSourceFile;
+    const hasEffects = this.videoTimeline.items.length > 0;
+    this.inspectorWorkflowSteps.querySelectorAll('[data-step]').forEach((stepEl) => {
+      const key = stepEl.dataset.step;
+      let done = false;
+      let current = false;
+      if (key === 'import') {
+        done = hasVideo;
+        current = !hasVideo;
+      } else if (key === 'effects') {
+        done = hasEffects;
+        current = hasVideo && !hasEffects;
+      } else if (key === 'export') {
+        current = hasVideo && hasEffects;
       }
-    }
-    this.updateEffectsInfo();
+      stepEl.classList.toggle('is-done', done);
+      stepEl.classList.toggle('is-current', current && !done);
+    });
   }
 
   proto.updateVideoEditorUI = function () {
     const loaded = !!this.videoSourceFile;
-    [this.btnVideoStart, this.btnVideoBack, this.btnVideoPlay, this.btnVideoForward, this.btnVideoEnd, this.btnVideoMute]
+    [this.btnVideoStart, this.btnVideoBack, this.btnVideoPlay, this.btnVideoForward, this.btnVideoEnd]
       .forEach((button) => { if (button) button.disabled = !loaded || this.isVideoExporting; });
     if (this.videoSeek) this.videoSeek.disabled = !loaded || this.isVideoExporting;
     if (this.btnExportVideo) this.btnExportVideo.disabled = !loaded || this.isVideoExporting;
     if (this.btnHeaderExportVideo) this.btnHeaderExportVideo.disabled = !loaded || this.isVideoExporting;
     if (this.videoTrimStart) this.videoTrimStart.disabled = !loaded || this.isVideoExporting;
     if (this.videoTrimEnd) this.videoTrimEnd.disabled = !loaded || this.isVideoExporting;
+    if (this.btnChooseVideo) {
+      this.btnChooseVideo.innerHTML = loaded
+        ? '<i class="fa-solid fa-folder-open"></i> Cambiar video'
+        : '<i class="fa-solid fa-folder-open"></i> Importar video';
+    }
+    if (this.videoProjectHelp) {
+      this.videoProjectHelp.textContent = loaded
+        ? 'Podés reemplazar el video o exportar cuando termines de editar.'
+        : 'Elegí el archivo con el que querés trabajar. Podés cambiarlo en cualquier momento.';
+    }
     this.timelineEffectPalette?.querySelectorAll('.timeline-palette-chip').forEach((chip) => {
       chip.disabled = !loaded || this.isVideoExporting;
     });
     this.updateVideoEffectInspector();
+    this.updateAdjustmentsPanelState();
+    this.updateInspectorWorkflow();
     this.updateEditorHistoryButtons();
     if (!loaded) {
       if (this.videoFileMeta) this.videoFileMeta.textContent = 'Ningún archivo cargado';
-      if (this.videoExportDetails) this.videoExportDetails.textContent = 'Cargá un video para exportar.';
+      if (this.videoExportDetails) this.videoExportDetails.textContent = 'Importá un video para habilitar la exportación.';
       if (this.sourceMode === 'video') {
-        this.setCameraPlaceholderMessage('Elegí un video para editar.');
-        this.placeholder.classList.remove('hidden');
+        this.updatePreviewPlaceholder();
       }
       this.updateTimelineHint();
       return;
     }
-    this.placeholder.classList.add('hidden');
+    this.updatePreviewPlaceholder();
     if (this.videoExportDetails) {
       const bitrate = this.getRecommendedVideoBitrate(this.videoEl.videoWidth, this.videoEl.videoHeight, this.videoSourceFps);
       const exportLabel = typeof VideoEncoder !== 'undefined' ? 'WebM · WebCodecs' : 'WebCodecs no disponible';
@@ -1069,7 +1265,6 @@ export function applyLocalvideoeditorMixin(proto) {
     this.btnVideoPlay.innerHTML = this.videoEl.paused
       ? '<i class="fa-solid fa-play"></i>'
       : '<i class="fa-solid fa-pause"></i>';
-    this.updateVideoMuteButton();
     if (duration > 0) this.timelinePlayhead.style.left = `${this.clamp((this.videoEl.currentTime / duration) * 100, 0, 100)}%`;
     if (this.isVideoExporting) {
       const range = Math.max(0.001, this.videoTimeline.trimEnd - this.videoTimeline.trimStart);
@@ -1105,24 +1300,13 @@ export function applyLocalvideoeditorMixin(proto) {
     this.seekVideo((this.videoEl.currentTime || 0) + seconds);
   }
 
-  proto.updateVideoMuteButton = function () {
-    this.btnVideoMute.setAttribute('aria-pressed', String(this.videoEl.muted));
-    this.btnVideoMute.setAttribute('aria-label', this.videoEl.muted ? 'Activar audio' : 'Silenciar audio');
-    this.btnVideoMute.innerHTML = this.videoEl.muted
-      ? '<i class="fa-solid fa-volume-xmark"></i>'
-      : '<i class="fa-solid fa-volume-high"></i>';
-  }
-
   proto.renderVideoExportFrame = async function (frameIndex, fps) {
     const start = this.videoTimeline.trimStart;
     const time = start + frameIndex / fps;
     await this.seekVideoForExport(time);
-    if (this.needsTimelineDetectorSync(time)) {
-      await this.syncVideoTimelineEffects(true);
-    } else {
-      this.syncVideoTimelineLookAt(time);
-    }
-    this.renderSourceFrameBuffer(true);
+    this.applyVideoTimelineLook(time, { force: true });
+    await this.syncVideoTimelineDetectorsAt(time, true);
+    this.renderSourceFrameBuffer(!!this.imageSettings.qualityEnhancer);
   }
 
   proto.runVideoExportViaWebCodecs = async function () {
@@ -1185,6 +1369,13 @@ export function applyLocalvideoeditorMixin(proto) {
 
     try {
       this.ensureRecordingCanvas();
+      this.flushPendingClipConfigSync();
+      this.appliedTimelineItemIds = {
+        look: '',
+        blob: '',
+        face: '',
+        blink: '',
+      };
       this.isVideoExporting = true;
       this.videoExportProgress.value = 0;
       this.videoExportTitle.innerHTML = '<i class="fa-solid fa-file-export"></i> Exportando video';

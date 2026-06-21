@@ -9,6 +9,12 @@ export function setupDom(app) {
   app.captureCountdownValue = $('#captureCountdownValue');
   app.ctx = app.canvas.getContext('2d', { alpha: false }) || app.canvas.getContext('2d');
   app.placeholder = $('#previewPlaceholder');
+  app.placeholderCamera = $('#previewPlaceholderCamera');
+  app.placeholderVideo = $('#previewPlaceholderVideo');
+  app.placeholderLoading = $('#previewPlaceholderLoading');
+  app.placeholderCameraMessage = $('#previewPlaceholderCameraMessage');
+  app.placeholderLoadingMessage = $('#previewPlaceholderLoadingMessage');
+  app.btnPreviewImportVideo = $('#btnPreviewImportVideo');
   app.resolutionInfo = $('#resolutionInfo');
   app.fpsInfo = $('#fpsInfo');
   app.effectsInfo = $('#effectsInfo');
@@ -24,7 +30,6 @@ export function setupDom(app) {
   app.btnVideoPlay = $('#btnVideoPlay');
   app.btnVideoForward = $('#btnVideoForward');
   app.btnVideoEnd = $('#btnVideoEnd');
-  app.btnVideoMute = $('#btnVideoMute');
   app.videoSeek = $('#videoSeek');
   app.videoTimeLabel = $('#videoTimeLabel');
   app.videoTimelineEl = $('#videoTimeline');
@@ -74,8 +79,14 @@ export function setupDom(app) {
   app.btnEditorUndo = $('#btnEditorUndo');
   app.btnEditorRedo = $('#btnEditorRedo');
   app.videoInspector = $('#videoInspector');
+  app.inspectorSplitter = $('#inspectorSplitter');
+  app.timelineSplitter = $('#timelineSplitter');
   app.inspectorAdjustmentsHost = $('#inspectorAdjustmentsHost');
-  app.inspectorAdjustmentsEmpty = $('#inspectorAdjustmentsEmpty');
+  app.inspectorAdjustNoVideo = $('#inspectorAdjustNoVideo');
+  app.inspectorAdjustNoClip = $('#inspectorAdjustNoClip');
+  app.inspectorWorkflowSteps = $('#inspectorWorkflowSteps');
+  app.videoProjectHelp = $('#videoProjectHelp');
+  app.videoEffectEmptyNoVideo = $('#videoEffectEmptyNoVideo');
   app.effectsControlsSlot = $('#effectsControlsSlot');
   app.videoEffectEmptyHint = $('#videoEffectEmptyHint');
   app.inspectorTabs = document.querySelectorAll('.video-inspector-tab');
@@ -159,6 +170,7 @@ export function setupDom(app) {
   app.effectConfigBlink = $('#effectConfigBlink');
   app.adjustContextNav = $('#adjustContextNav');
   app.adjustContextHelp = $('#adjustContextHelp');
+  app.adjustClipStatus = $('#adjustClipStatus');
   app.profileSelect = $('#profileSelect');
   app.btnSaveProfile = $('#btnSaveProfile');
   app.btnDeleteProfile = $('#btnDeleteProfile');

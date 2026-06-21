@@ -13,6 +13,7 @@ import {
   DETECTOR_DEFAULT_BOX_COLOR,
   DEFAULT_QUICK_DETECTOR_SETTINGS,
   ADJUST_CONTEXT_HELP,
+  ADJUST_CONTEXT_VIDEO_HELP,
   STORAGE_KEY,
   PROFILES_KEY,
   PREVIEW_QUALITY_PRESETS,
@@ -50,6 +51,7 @@ export class AppController {
     this.DETECTOR_DEFAULT_BOX_COLOR = DETECTOR_DEFAULT_BOX_COLOR;
     this.DEFAULT_QUICK_DETECTOR_SETTINGS = DEFAULT_QUICK_DETECTOR_SETTINGS;
     this.ADJUST_CONTEXT_HELP = ADJUST_CONTEXT_HELP;
+    this.ADJUST_CONTEXT_VIDEO_HELP = ADJUST_CONTEXT_VIDEO_HELP;
     this.STORAGE_KEY = STORAGE_KEY;
     this.PROFILES_KEY = PROFILES_KEY;
     this.PREVIEW_QUALITY_PRESETS = PREVIEW_QUALITY_PRESETS;
@@ -108,6 +110,7 @@ export class AppController {
     this.sourceMode = 'camera';
     this.videoObjectUrl = '';
     this.videoSourceFile = null;
+    this.videoPlaceholderLoading = false;
     this.videoSourceFps = 30;
     this.videoSourceAverageBitrate = 0;
     this.videoTimeline = new VideoTimeline();
@@ -120,6 +123,8 @@ export class AppController {
     this.paletteDragState = null;
     this.timelineDragGhost = null;
     this.appliedTimelineItemIds = {};
+    this.timelineDetectorSyncPromise = null;
+    this.timelineDetectorSyncForce = false;
     this.videoBaseImageSettings = null;
     this.isVideoExporting = false;
     this.videoExportFileName = '';

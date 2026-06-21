@@ -82,6 +82,14 @@ export function applyRenderLoopMixin(proto) {
     return this.getPreviewFrameDimensions(sourceWidth, sourceHeight);
   }
 
+  proto.clearPreviewCanvas = function () {
+    if (!this.ctx || !this.canvas) return;
+    const width = Math.max(1, this.canvas.width || 1);
+    const height = Math.max(1, this.canvas.height || 1);
+    this.ctx.fillStyle = '#000';
+    this.ctx.fillRect(0, 0, width, height);
+  }
+
   proto.syncPreviewCanvasMetrics = function (sourceWidth, sourceHeight, forceLabel = false) {
     const { width, height, scale } = this.getDesiredPreviewCanvasMetrics(sourceWidth, sourceHeight);
     const resized = this.canvas.width !== width || this.canvas.height !== height;
@@ -132,7 +140,8 @@ export function applyRenderLoopMixin(proto) {
     try {
       if (this.videoEl.readyState >= 2) {
         if (this.sourceMode === 'video') {
-          void this.syncVideoTimelineEffects();
+          this.syncVideoTimelineLookNow();
+          void this.syncVideoTimelineDetectors();
           if (this.videoEl.currentTime >= this.videoTimeline.trimEnd) {
             this.videoEl.pause();
             this.videoEl.currentTime = this.videoTimeline.trimEnd;
@@ -170,7 +179,17 @@ export function applyRenderLoopMixin(proto) {
     this.scheduleRenderLoop();
   }
 
+  proto.isNeutralLookProcessing = function () {
+    const settings = this.imageSettings;
+    return !settings.blackAndWhite
+      && settings.exposure === 0
+      && settings.contrast === 100
+      && settings.saturation === 100
+      && !this.needsAdvancedPixelAdjustments();
+  }
+
   proto.buildCanvasFilter = function () {
+    if (this.isNeutralLookProcessing()) return 'none';
     const exposureBoost = this.clamp(100 + this.imageSettings.exposure * 0.8, 35, 200);
     const contrast = this.clamp(this.imageSettings.contrast, 50, 180);
     const saturation = this.imageSettings.blackAndWhite

@@ -10,7 +10,7 @@
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
     integrity="sha384-t1nt8BQoYMLFN5p42tRAtuAAFQaCQODekUVeKKZrEnEyp4H2R0RHFz0KWpmj7i8g" crossorigin="anonymous">
-  <link rel="stylesheet" href="index.css?v=20260621-editor10">
+  <link rel="stylesheet" href="index.css?v=20260621-editor12">
 </head>
 
 <body>
@@ -49,8 +49,24 @@
         <video id="videoElement" class="preview-source-video" autoplay playsinline muted></video>
         <canvas id="previewCanvas"></canvas>
         <div class="preview-placeholder" id="previewPlaceholder">
-          <i class="fa-solid fa-video fa-2x"></i>
-          <div>Iniciando cámara automáticamente...</div>
+          <div class="preview-placeholder-view preview-placeholder-camera" id="previewPlaceholderCamera">
+            <i class="fa-solid fa-video fa-2x"></i>
+            <div id="previewPlaceholderCameraMessage">Iniciando cámara automáticamente...</div>
+          </div>
+          <div class="preview-placeholder-view preview-placeholder-video hidden" id="previewPlaceholderVideo">
+            <div class="preview-import-card">
+              <i class="fa-solid fa-clapperboard fa-2x" aria-hidden="true"></i>
+              <p class="preview-import-title">Importá un video para editar</p>
+              <p class="preview-import-hint">MP4, WebM u otro formato compatible con tu navegador</p>
+              <button type="button" class="btn primary preview-import-btn" id="btnPreviewImportVideo">
+                <i class="fa-solid fa-folder-open"></i> Importar video
+              </button>
+            </div>
+          </div>
+          <div class="preview-placeholder-view preview-placeholder-loading hidden" id="previewPlaceholderLoading">
+            <i class="fa-solid fa-spinner fa-spin fa-2x" aria-hidden="true"></i>
+            <div id="previewPlaceholderLoadingMessage">Leyendo metadata del video...</div>
+          </div>
         </div>
         <div class="capture-countdown hidden" id="captureCountdown" role="status" aria-live="assertive">
           <div class="capture-countdown-value" id="captureCountdownValue">5</div>
@@ -149,6 +165,7 @@
         <span id="fpsInfo">—</span>
         <span id="effectsInfo">Sin detectores</span>
       </div>
+      <div class="editor-splitter editor-splitter-horizontal video-only hidden" id="timelineSplitter" role="separator" aria-label="Cambiar altura de la línea de tiempo" aria-orientation="horizontal" tabindex="0"></div>
       <section class="video-timeline-shell video-only hidden" id="videoTimelineShell" aria-label="Editor de video">
         <div class="video-editor-toolbar">
           <div class="video-tool-group" role="group" aria-label="Herramientas">
@@ -166,7 +183,6 @@
             <button type="button" class="btn btn-icon" id="btnVideoForward" aria-label="+5 s"><i class="fa-solid fa-forward"></i></button>
             <button type="button" class="btn btn-icon" id="btnVideoEnd" aria-label="Final"><i class="fa-solid fa-forward-step"></i></button>
             <span class="mono video-time-readout" id="videoTimeLabel">00:00 / 00:00</span>
-            <button type="button" class="btn btn-icon" id="btnVideoMute" aria-label="Audio" aria-pressed="true"><i class="fa-solid fa-volume-xmark"></i></button>
           </div>
           <div class="video-timeline-controls" aria-label="Timeline">
             <label class="timeline-snap-toggle" title="Imán">
@@ -237,40 +253,52 @@
         <input type="range" id="videoSeek" class="visually-hidden" min="0" max="0" step="0.01" value="0" aria-label="Posición del video" tabindex="-1">
       </section>
 
+      <div class="editor-splitter editor-splitter-vertical video-only hidden" id="inspectorSplitter" role="separator" aria-label="Cambiar ancho del inspector" aria-orientation="vertical" tabindex="0"></div>
       <aside class="video-inspector video-only hidden" id="videoInspector" aria-label="Inspector de video">
         <div class="video-inspector-tabs" role="tablist" aria-label="Secciones del inspector">
-          <button type="button" class="video-inspector-tab is-active" id="tabInspectorProject" role="tab" aria-selected="true" aria-controls="inspectorPanelProject" data-tab="project">Proyecto</button>
-          <button type="button" class="video-inspector-tab" id="tabInspectorEffect" role="tab" aria-selected="false" aria-controls="inspectorPanelEffect" data-tab="effect">Clip</button>
-          <button type="button" class="video-inspector-tab" id="tabInspectorAdjust" role="tab" aria-selected="false" aria-controls="inspectorPanelAdjust" data-tab="adjust">Ajustes</button>
+          <button type="button" class="video-inspector-tab is-active" id="tabInspectorProject" role="tab" aria-selected="true" aria-controls="inspectorPanelProject" data-tab="project" title="Importar y exportar">Proyecto</button>
+          <button type="button" class="video-inspector-tab" id="tabInspectorEffect" role="tab" aria-selected="false" aria-controls="inspectorPanelEffect" data-tab="effect" title="Duración del efecto seleccionado">Clip</button>
+          <button type="button" class="video-inspector-tab" id="tabInspectorAdjust" role="tab" aria-selected="false" aria-controls="inspectorPanelAdjust" data-tab="adjust" title="Opciones del efecto activo">Ajustes</button>
         </div>
         <div class="video-inspector-panels">
           <div class="video-inspector-panel is-active" id="inspectorPanelProject" role="tabpanel" aria-labelledby="tabInspectorProject">
             <div class="panel-section">
-              <div class="section-title accent"><i class="fa-solid fa-file-video"></i> Archivo</div>
+              <div class="section-title accent"><i class="fa-solid fa-route"></i> Cómo editar</div>
+              <ol class="inspector-workflow-steps" id="inspectorWorkflowSteps">
+                <li data-step="import" class="is-current">Importá un video</li>
+                <li data-step="effects">Arrastrá efectos a la timeline</li>
+                <li data-step="export">Exportá el resultado</li>
+              </ol>
+            </div>
+            <div class="panel-section">
+              <div class="section-title accent"><i class="fa-solid fa-file-video"></i> Video</div>
+              <div class="help-text" id="videoProjectHelp">Elegí el archivo con el que querés trabajar. Podés cambiarlo en cualquier momento.</div>
               <input type="file" id="videoFileInput" accept="video/*" class="hidden">
-              <button type="button" class="btn primary" id="btnChooseVideo"><i class="fa-solid fa-folder-open"></i> Elegir video</button>
+              <button type="button" class="btn primary" id="btnChooseVideo"><i class="fa-solid fa-folder-open"></i> Importar video</button>
               <div class="video-file-meta mono" id="videoFileMeta">Ningún archivo cargado</div>
               <div class="status-msg hidden" id="videoEditorStatus" role="status" aria-live="polite"></div>
               <div class="spacer-8"></div>
               <div class="section-title"><i class="fa-solid fa-file-export"></i> Exportación</div>
               <div class="help-text">Se procesa localmente en resolución original. La preview no cambia la calidad final.</div>
-              <div class="video-export-summary mono" id="videoExportDetails">Cargá un video para exportar.</div>
+              <div class="video-export-summary mono" id="videoExportDetails">Importá un video para habilitar la exportación.</div>
               <button type="button" class="btn primary" id="btnExportVideo" disabled><i class="fa-solid fa-download"></i> Exportar video</button>
             </div>
           </div>
           <div class="video-inspector-panel" id="inspectorPanelEffect" role="tabpanel" aria-labelledby="tabInspectorEffect" hidden>
             <div class="panel-section">
               <div class="section-title accent"><i class="fa-solid fa-layer-group"></i> Clip seleccionado</div>
-              <div class="help-text" id="videoEffectEmptyHint">Arrastrá un efecto a la timeline. Al seleccionarlo acá ves su duración; los ajustes se guardan solos mientras editás.</div>
+              <div class="help-text" id="videoEffectEmptyNoVideo">Importá un video primero. Después arrastrá Look, Color, Caras u Ojos a la timeline.</div>
+              <div class="help-text hidden" id="videoEffectEmptyHint">Hacé click en un clip de la timeline para ver cuándo empieza y termina. Los ajustes visuales están en la pestaña Ajustes.</div>
               <div class="timeline-clip-meta hidden" id="videoEffectClipMeta">
                 <div class="timeline-clip-type" id="videoEffectTypeLabel">—</div>
+                <div class="help-text inspector-clip-note">Mové o estirá el clip en la timeline, o editá los tiempos acá abajo.</div>
                 <div class="video-time-grid timeline-values">
-                  <label><span>Inicio</span><input type="number" id="videoEffectStart" min="0" step="0.01" value="0"></label>
-                  <label><span>Fin</span><input type="number" id="videoEffectEnd" min="0" step="0.01" value="0"></label>
+                  <label><span>Desde</span><input type="number" id="videoEffectStart" min="0" step="0.01" value="0"></label>
+                  <label><span>Hasta</span><input type="number" id="videoEffectEnd" min="0" step="0.01" value="0"></label>
                 </div>
                 <div class="mono timeline-clip-duration" id="videoEffectDurationLabel">0.00 s</div>
                 <div class="btn-row">
-                  <button type="button" class="btn" id="btnOpenEffectAdjust"><i class="fa-solid fa-sliders"></i> Ir a ajustes</button>
+                  <button type="button" class="btn" id="btnOpenEffectAdjust"><i class="fa-solid fa-sliders"></i> Editar ajustes</button>
                   <button type="button" class="btn danger" id="btnDeleteVideoEffect">Eliminar clip</button>
                 </div>
               </div>
@@ -283,13 +311,17 @@
             </div>
           </div>
           <div class="video-inspector-panel" id="inspectorPanelAdjust" role="tabpanel" aria-labelledby="tabInspectorAdjust" hidden>
-            <div class="panel-section inspector-adjust-empty" id="inspectorAdjustmentsEmpty">
+            <div class="panel-section inspector-adjust-empty" id="inspectorAdjustNoVideo">
               <div class="section-title accent"><i class="fa-solid fa-sliders"></i> Ajustes</div>
-              <div class="help-text">Todavía no hay ningún clip seleccionado.</div>
+              <div class="help-text">Importá un video para empezar. Los ajustes aparecen cuando seleccionás un clip de efecto en la timeline.</div>
+            </div>
+            <div class="panel-section inspector-adjust-empty hidden" id="inspectorAdjustNoClip">
+              <div class="section-title accent"><i class="fa-solid fa-sliders"></i> Ajustes</div>
+              <div class="help-text">Seleccioná un clip en la timeline para editar sus opciones acá.</div>
               <ol class="inspector-adjust-steps">
-                <li>Arrastrá Look, Color, Caras u Ojos a la timeline.</li>
-                <li>Seleccioná el clip para ver sus opciones acá.</li>
-                <li>Mové o estirá el clip en la timeline para cambiar cuándo aplica.</li>
+                <li>Arrastrá Look, Color, Caras u Ojos desde la barra de arriba.</li>
+                <li>Hacé click en el clip para abrir sus ajustes.</li>
+                <li>Usá la pestaña Clip si querés cambiar solo la duración.</li>
               </ol>
               <div class="help-text section-note">Los cambios se aplican al instante; no hace falta guardar nada.</div>
             </div>
@@ -352,12 +384,14 @@
           <button type="button" class="adjust-context-tab" role="tab" data-adjust-context="blink">Ojos</button>
         </div>
         <div class="help-text" id="adjustContextHelp"></div>
+        <div class="adjust-clip-status mono video-only hidden" id="adjustClipStatus"></div>
       </div>
 
       <!-- Quick Filter -->
       <div class="panel-section adjust-context-group" data-adjust-context="look">
         <div class="section-title accent"><i class="fa-solid fa-wand-magic-sparkles"></i> Filtro rápido</div>
-        <div class="help-text">Elegí un look rápido. Si querés ajustar cada detalle, abrí las opciones avanzadas.</div>
+        <div class="help-text adjust-webcam-help">Elegí un look rápido. Si querés ajustar cada detalle, abrí las opciones avanzadas.</div>
+        <div class="help-text adjust-video-help video-only hidden">Presets y filtros del clip LOOK seleccionado. Previsualizá moviendo el cursor dentro de su tramo.</div>
         <div class="preset-grid">
           <button type="button" class="btn preset-btn" data-preset="natural">Natural</button>
           <button type="button" class="btn preset-btn" data-preset="vivid">Vivo</button>
@@ -373,9 +407,10 @@
       <!-- Blob / color -->
       <div class="panel-section adjust-context-group" data-adjust-context="blob">
         <div class="section-title accent"><i class="fa-solid fa-palette"></i> Tracking de color</div>
-        <div class="help-text">Activá el detector y elegí qué color seguir en la preview.</div>
+        <div class="help-text adjust-webcam-help">Activá el detector y elegí qué color seguir en la preview.</div>
+        <div class="help-text adjust-video-help video-only hidden">Configurá el tracking de color del clip. El detector se enciende solo dentro de su tramo en la timeline.</div>
         <div class="quick-detector">
-          <div class="quick-detector-row">
+          <div class="quick-detector-row adjust-detector-toggle">
             <label class="checkbox-group">
               <input type="checkbox" id="chkBlobTracking">
               <span>Detectar objetos por color</span>
@@ -399,9 +434,10 @@
       <!-- Face -->
       <div class="panel-section adjust-context-group" data-adjust-context="face">
         <div class="section-title accent"><i class="fa-solid fa-face-smile"></i> Detección de caras</div>
-        <div class="help-text">Activá el detector y personalizá cómo se muestran las caras.</div>
+        <div class="help-text adjust-webcam-help">Activá el detector y personalizá cómo se muestran las caras.</div>
+        <div class="help-text adjust-video-help video-only hidden">Personalizá recuadro, blur y etiqueta del clip CARAS. La detección se activa sola cuando el cursor entra en su tramo.</div>
         <div class="quick-detector">
-          <div class="quick-detector-row">
+          <div class="quick-detector-row adjust-detector-toggle">
             <label class="checkbox-group">
               <input type="checkbox" id="chkFaceDetection">
               <span>Detectar caras</span>
@@ -436,9 +472,10 @@
       <!-- Blink -->
       <div class="panel-section adjust-context-group" data-adjust-context="blink">
         <div class="section-title accent"><i class="fa-solid fa-eye"></i> Detección de pestañeos</div>
-        <div class="help-text">Activá el detector para marcar pestañeos en la preview.</div>
+        <div class="help-text adjust-webcam-help">Activá el detector para marcar pestañeos en la preview.</div>
+        <div class="help-text adjust-video-help video-only hidden">Ajustá el detector del clip OJOS. Se activa solo dentro de su tramo en la timeline.</div>
         <div class="quick-detector">
-          <div class="quick-detector-row">
+          <div class="quick-detector-row adjust-detector-toggle">
             <label class="checkbox-group">
               <input type="checkbox" id="chkBlinkDetection">
               <span>Detectar pestañeos</span>

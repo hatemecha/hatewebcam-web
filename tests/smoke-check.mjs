@@ -54,6 +54,8 @@ const requiredHtmlFragments = [
   'id="btnExportVideo"',
   'id="btnHeaderExportVideo"',
   'id="videoInspector"',
+  'id="inspectorSplitter"',
+  'id="timelineSplitter"',
   'id="btnToolSelect"',
   'id="timelinePlayheadHandle"',
   'js/editor-history.js',
