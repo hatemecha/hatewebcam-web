@@ -163,6 +163,14 @@ function checkFaceDetectionUsesRefinedEyeLandmarks() {
   assert.equal(effect.processIntervalMs, 30, 'face analysis must refresh near video frame rate');
   assert.equal(effect.boxSmoothing, 0.5, 'face boxes must respond without excessive lag');
   assert.equal(effect.detectionHoldMs, 120, 'short gaps may be held without leaving stale boxes');
+  assert.equal(effect.showBox, true, 'face boxes must be enabled by default');
+  assert.equal(effect.showBlur, false, 'face blur must be opt-in');
+  effect.setConfig({ visualMode: 'hybrid' });
+  assert.equal(effect.showBox, true, 'hybrid mode must keep box enabled');
+  assert.equal(effect.showBlur, true, 'hybrid mode must keep blur enabled');
+  assert.equal(effect.getConfig().visualMode, 'hybrid', 'legacy visualMode must stay compatible');
+  effect.setConfig({ showBox: false, showBlur: true });
+  assert.equal(effect.getConfig().visualMode, 'pixelate', 'blur-only mode must map to pixelate');
 }
 
 function checkVideoTimelineIntervals() {
@@ -182,6 +190,24 @@ function checkVideoTimelineIntervals() {
   timeline.upsert({ ...look, startTime: 3, endTime: 6 });
   timeline.remove(face.id);
   assert.equal(timeline.activeAt(6).length, 0);
+}
+
+function checkEditorHistoryUndoRedo() {
+  const EditorHistory = loadClass('js/editor-history.js', 'EditorHistory');
+  const VideoTimeline = loadClass('js/video-timeline.js', 'VideoTimeline');
+  const history = new EditorHistory();
+  const timeline = new VideoTimeline(12);
+  timeline.setTrim(1, 11);
+  timeline.add('look', 2, 5, { contrast: 110 });
+  history.push(timeline);
+  timeline.setTrim(2, 10);
+  timeline.items[0].startTime = 3;
+  assert.ok(history.undo(timeline));
+  assert.equal(timeline.trimStart, 1);
+  assert.equal(timeline.items[0].startTime, 2);
+  assert.ok(history.redo(timeline));
+  assert.equal(timeline.trimStart, 2);
+  assert.equal(timeline.items[0].startTime, 3);
 }
 
 function checkPreviewProcessingResolutionContract() {
@@ -210,5 +236,6 @@ checkReusableMorphologyBuffers();
 checkBlinkDetectionUsesRefinedEyeLandmarks();
 checkFaceDetectionUsesRefinedEyeLandmarks();
 checkVideoTimelineIntervals();
+checkEditorHistoryUndoRedo();
 checkPreviewProcessingResolutionContract();
 console.log('Unit check passed.');

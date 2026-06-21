@@ -17,7 +17,8 @@ class FaceDetection {
         this.maxFaces = 2;
         this.processIntervalMs = 30;
         this.boxSmoothing = 0.5;
-        this.visualMode = 'box';
+        this.showBox = true;
+        this.showBlur = false;
         this.pixelationCellSize = 14;
         this.censorPaddingPercent = 18;
         this.detectionHoldMs = 120;
@@ -146,12 +147,31 @@ class FaceDetection {
         return 'box';
     }
 
+    _applyVisualMode(value) {
+        const mode = this._normalizeVisualMode(value);
+        this.showBox = mode === 'box' || mode === 'hybrid';
+        this.showBlur = mode === 'pixelate' || mode === 'hybrid';
+        this._ensureVisualEnabled();
+    }
+
+    _getVisualMode() {
+        if (this.showBox && this.showBlur) return 'hybrid';
+        if (this.showBlur) return 'pixelate';
+        return 'box';
+    }
+
+    _ensureVisualEnabled() {
+        if (!this.showBox && !this.showBlur) {
+            this.showBox = true;
+        }
+    }
+
     _isBoxVisualMode() {
-        return this.visualMode === 'box' || this.visualMode === 'hybrid';
+        return this.showBox;
     }
 
     _isPixelVisualMode() {
-        return this.visualMode === 'pixelate' || this.visualMode === 'hybrid';
+        return this.showBlur;
     }
 
     _measureFace(landmarks) {
@@ -415,7 +435,9 @@ class FaceDetection {
             processIntervalMs: this.processIntervalMs,
             boxSmoothing: this.boxSmoothing,
             rotationDeg: this.rotationDeg,
-            visualMode: this.visualMode,
+            showBox: this.showBox,
+            showBlur: this.showBlur,
+            visualMode: this._getVisualMode(),
             pixelationCellSize: this.pixelationCellSize,
             censorPaddingPercent: this.censorPaddingPercent,
             detectionHoldMs: this.detectionHoldMs,
@@ -440,7 +462,10 @@ class FaceDetection {
             this.boxSmoothing = Math.max(0, Math.min(0.95, Number(config.boxSmoothing)));
         }
         if (config.rotationDeg != null) this.rotationDeg = config.rotationDeg;
-        if (config.visualMode != null) this.visualMode = this._normalizeVisualMode(config.visualMode);
+        if (config.showBox != null) this.showBox = !!config.showBox;
+        if (config.showBlur != null) this.showBlur = !!config.showBlur;
+        if (config.visualMode != null) this._applyVisualMode(config.visualMode);
+        this._ensureVisualEnabled();
         if (config.pixelationCellSize != null) {
             this.pixelationCellSize = Math.max(4, Math.min(48, Math.round(config.pixelationCellSize)));
         }
