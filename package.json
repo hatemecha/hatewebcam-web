@@ -4,6 +4,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node tests/smoke-check.mjs"
+    "test": "node tests/smoke-check.mjs && node tests/unit-check.mjs"
   }
 }

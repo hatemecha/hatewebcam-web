@@ -47,6 +47,8 @@ class BlobTracking {
         this._workW = 0;
         this._workH = 0;
         this._mask = null;
+        this._morphBufferA = null;
+        this._morphBufferB = null;
         this._visited = null;
         this._queue = null;
     }
@@ -103,6 +105,8 @@ class BlobTracking {
         const size = w * h;
         if (!this._mask || this._mask.length !== size) {
             this._mask = new Uint8Array(size);
+            this._morphBufferA = new Uint8Array(size);
+            this._morphBufferB = new Uint8Array(size);
             this._visited = new Uint8Array(size);
             this._queue = new Int32Array(size);
         }
@@ -113,16 +117,6 @@ class BlobTracking {
             this._tempCanvas.width = w;
             this._tempCanvas.height = h;
         }
-    }
-
-    _isHueInRange(hue) {
-        const minH = this.hsvMin[0];
-        const maxH = this.hsvMax[0];
-        if (minH <= maxH) {
-            return hue >= minH && hue <= maxH;
-        }
-        // Wrapped range around 0/180 (e.g. red tones)
-        return hue >= minH || hue <= maxH;
     }
 
     /**
@@ -188,14 +182,23 @@ class BlobTracking {
         }
 
         let processedMask = mask;
+        let outputMask = this._morphBufferA;
         if (this.erodeIterations > 0) {
             for (let i = 0; i < this.erodeIterations; i++) {
-                processedMask = this._erode(processedMask, sw, sh);
+                this._erode(processedMask, outputMask, sw, sh);
+                processedMask = outputMask;
+                outputMask = outputMask === this._morphBufferA
+                    ? this._morphBufferB
+                    : this._morphBufferA;
             }
         }
         if (this.dilateIterations > 0) {
             for (let i = 0; i < this.dilateIterations; i++) {
-                processedMask = this._dilate(processedMask, sw, sh);
+                this._dilate(processedMask, outputMask, sw, sh);
+                processedMask = outputMask;
+                outputMask = outputMask === this._morphBufferA
+                    ? this._morphBufferB
+                    : this._morphBufferA;
             }
         }
 
@@ -210,7 +213,7 @@ class BlobTracking {
             .sort((a, bObj) => bObj.area - a.area)
             .slice(0, this.maxObjects);
 
-        this.centroids = [];
+        this.centroids.length = 0;
 
         const scaleX = w / sw;
         const scaleY = h / sh;
@@ -285,8 +288,8 @@ class BlobTracking {
     /**
      * Simple 3x3 erode (shrink white regions)
      */
-    _erode(mask, w, h) {
-        const out = new Uint8Array(w * h);
+    _erode(mask, out, w, h) {
+        out.fill(0);
         for (let y = 1; y < h - 1; y++) {
             for (let x = 1; x < w - 1; x++) {
                 let allWhite = true;
@@ -299,14 +302,13 @@ class BlobTracking {
                 out[y * w + x] = allWhite ? 255 : 0;
             }
         }
-        return out;
     }
 
     /**
      * Simple 3x3 dilate (grow white regions)
      */
-    _dilate(mask, w, h) {
-        const out = new Uint8Array(w * h);
+    _dilate(mask, out, w, h) {
+        out.fill(0);
         for (let y = 1; y < h - 1; y++) {
             for (let x = 1; x < w - 1; x++) {
                 let anyWhite = false;
@@ -319,7 +321,6 @@ class BlobTracking {
                 out[y * w + x] = anyWhite ? 255 : 0;
             }
         }
-        return out;
     }
 
     /**
@@ -461,6 +462,6 @@ class BlobTracking {
     reset() {
         this.leftActive = false;
         this.rightActive = false;
-        this.centroids = [];
+        this.centroids.length = 0;
     }
 }

@@ -19,10 +19,6 @@ class EffectManager {
         }
     }
 
-    clearEffects() {
-        this.effects = [];
-    }
-
     /**
      * Process frame through all active effects in order
      * @param {CanvasRenderingContext2D} ctx
@@ -39,13 +35,4 @@ class EffectManager {
         }
     }
 
-    getActiveEffects() {
-        return [...this.effects];
-    }
-
-    resetAll() {
-        for (const effect of this.effects) {
-            if (effect.reset) effect.reset();
-        }
-    }
 }

@@ -134,14 +134,25 @@ class CameraManager {
   }
 
   async _startWithConstraints(constraints, deviceId = null) {
-    this.stream = await navigator.mediaDevices.getUserMedia(constraints);
-    this.videoElement.srcObject = this.stream;
-    await this.videoElement.play();
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    this.stream = stream;
+    this.videoElement.srcObject = stream;
 
-    const [track] = this.stream.getVideoTracks();
-    const settings = track ? track.getSettings() : {};
-    this.currentDeviceId = deviceId || settings.deviceId || null;
-    this.running = true;
+    try {
+      await this.videoElement.play();
+
+      const [track] = stream.getVideoTracks();
+      const settings = track ? track.getSettings() : {};
+      this.currentDeviceId = deviceId || settings.deviceId || null;
+      this.running = true;
+    } catch (error) {
+      stream.getTracks().forEach((track) => track.stop());
+      if (this.stream === stream) this.stream = null;
+      if (this.videoElement?.srcObject === stream) this.videoElement.srcObject = null;
+      this.currentDeviceId = null;
+      this.running = false;
+      throw error;
+    }
   }
 
   /**
@@ -156,6 +167,7 @@ class CameraManager {
       this.videoElement.srcObject = null;
     }
     this.running = false;
+    this.currentDeviceId = null;
   }
 
   /**
@@ -163,20 +175,13 @@ class CameraManager {
    */
   async switchCamera(deviceId) {
     if (this.running && this.videoElement) {
-      await this.start(this.videoElement, deviceId);
+      return this.start(this.videoElement, deviceId);
     }
+    return false;
   }
 
   isRunning() {
     return this.running;
-  }
-
-  getVideoWidth() {
-    return this.videoElement ? this.videoElement.videoWidth : 0;
-  }
-
-  getVideoHeight() {
-    return this.videoElement ? this.videoElement.videoHeight : 0;
   }
 
   getStreamSettings() {

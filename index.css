@@ -129,24 +129,6 @@ body {
   font-size: 11px;
 }
 
-.status-indicator {
-  margin-left: auto;
-  font-family: var(--mono);
-  font-size: 10px;
-  color: var(--gray-dim);
-  letter-spacing: 0.5px;
-}
-
-.status-indicator.active {
-  color: var(--red);
-}
-
-.status-indicator i {
-  font-size: 6px;
-  vertical-align: middle;
-  margin-right: 2px;
-}
-
 /* ─── Preview ─── */
 .preview-area {
   flex: 1;
@@ -1148,8 +1130,7 @@ input[type="range"]:disabled {
   }
 
   .header-bar .logo .beta-tag,
-  .header-links a,
-  .status-indicator {
+  .header-links a {
     font-size: 11px;
   }
 
@@ -1336,8 +1317,7 @@ input[type="range"]:disabled {
     font-size: 13px;
   }
 
-  .header-links a,
-  .status-indicator {
+  .header-links a {
     font-size: 12px;
   }
 

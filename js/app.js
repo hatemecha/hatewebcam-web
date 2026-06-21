@@ -24,7 +24,6 @@
     : { alpha: false, desynchronized: true };
   const ctx = canvas.getContext('2d', previewContextOptions) || canvas.getContext('2d');
   const placeholder = $('#previewPlaceholder');
-  const statusIndicator = $('#statusIndicator');
   const resolutionInfo = $('#resolutionInfo');
   const fpsInfo = $('#fpsInfo');
   const effectsInfo = $('#effectsInfo');
@@ -1236,8 +1235,6 @@
       animFrameId = null;
       btnToggleCamera.innerHTML = '<i class="fa-solid fa-play"></i> Encender Cámara';
       btnToggleCamera.classList.remove('active');
-      statusIndicator.innerHTML = '<i class="fa-solid fa-circle fa-xs"></i> APAGADO';
-      statusIndicator.classList.remove('active');
       placeholder.classList.remove('hidden');
       resolutionInfo.textContent = '—';
       fpsInfo.textContent = '—';
@@ -1254,8 +1251,6 @@
         placeholder.classList.add('hidden');
         btnToggleCamera.innerHTML = '<i class="fa-solid fa-stop"></i> Apagar Cámara';
         btnToggleCamera.classList.add('active');
-        statusIndicator.innerHTML = '<i class="fa-solid fa-circle fa-xs"></i> EN VIVO';
-        statusIndicator.classList.add('active');
 
         videoEl.addEventListener('loadedmetadata', () => {
           const { sourceWidth, sourceHeight } = getSourceFrameDimensions();
@@ -1612,51 +1607,45 @@
     );
   }
 
-  function ensurePostFxBuffers(workspace, w, h, scale) {
-    if (!workspace.canvas) {
-      workspace.canvas = document.createElement('canvas');
-      workspace.ctx = workspace.canvas.getContext('2d', { willReadFrequently: true });
+  function ensurePostFxBuffer(mode, w, h, scale) {
+    let fxCanvas;
+    let fxCtx;
+
+    if (mode === 'recording') {
+      fxCanvas = recordingFxCanvas;
+      fxCtx = recordingFxCtx;
+    } else if (mode === 'capture') {
+      fxCanvas = captureFxCanvas;
+      fxCtx = captureFxCtx;
+    } else {
+      fxCanvas = postFxCanvas;
+      fxCtx = postFxCtx;
+    }
+
+    if (!fxCanvas) {
+      fxCanvas = document.createElement('canvas');
+      fxCtx = fxCanvas.getContext('2d', { willReadFrequently: true });
+
+      if (mode === 'recording') {
+        recordingFxCanvas = fxCanvas;
+        recordingFxCtx = fxCtx;
+      } else if (mode === 'capture') {
+        captureFxCanvas = fxCanvas;
+        captureFxCtx = fxCtx;
+      } else {
+        postFxCanvas = fxCanvas;
+        postFxCtx = fxCtx;
+      }
     }
 
     const pw = Math.max(320, Math.round(w * scale));
     const ph = Math.max(180, Math.round(h * scale));
 
-    if (workspace.canvas.width !== pw || workspace.canvas.height !== ph) {
-      workspace.canvas.width = pw;
-      workspace.canvas.height = ph;
+    if (fxCanvas.width !== pw || fxCanvas.height !== ph) {
+      fxCanvas.width = pw;
+      fxCanvas.height = ph;
     }
-    return { pw, ph, fxCanvas: workspace.canvas, fxCtx: workspace.ctx };
-  }
-
-  function getFxWorkspace(mode) {
-    if (mode === 'recording') {
-      return {
-        canvas: recordingFxCanvas,
-        ctx: recordingFxCtx,
-        commit(nextCanvas, nextCtx) {
-          recordingFxCanvas = nextCanvas;
-          recordingFxCtx = nextCtx;
-        },
-      };
-    }
-    if (mode === 'capture') {
-      return {
-        canvas: captureFxCanvas,
-        ctx: captureFxCtx,
-        commit(nextCanvas, nextCtx) {
-          captureFxCanvas = nextCanvas;
-          captureFxCtx = nextCtx;
-        },
-      };
-    }
-    return {
-      canvas: postFxCanvas,
-      ctx: postFxCtx,
-      commit(nextCanvas, nextCtx) {
-        postFxCanvas = nextCanvas;
-        postFxCtx = nextCtx;
-      },
-    };
+    return { pw, ph, fxCanvas, fxCtx };
   }
 
   function drawBaseFrame(targetCtx, targetCanvas, mode = 'preview') {
@@ -1705,9 +1694,7 @@
     if (w * h > 1920 * 1080) postFxScale *= 0.92;
     postFxScale = clamp(postFxScale, 0.72, 0.90);
 
-    const workspace = getFxWorkspace(mode);
-    const { pw, ph, fxCanvas, fxCtx } = ensurePostFxBuffers(workspace, w, h, postFxScale);
-    workspace.commit(fxCanvas, fxCtx);
+    const { pw, ph, fxCanvas, fxCtx } = ensurePostFxBuffer(mode, w, h, postFxScale);
     fxCtx.drawImage(targetCanvas, 0, 0, pw, ph);
 
     const imageData = fxCtx.getImageData(0, 0, pw, ph);
