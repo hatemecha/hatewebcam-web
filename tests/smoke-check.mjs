@@ -7,6 +7,7 @@ const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const javascriptFiles = [
   'js/app.js',
+  'js/video-export.mjs',
   'js/video-timeline.js',
   'js/editor-history.js',
   'js/camera.js',
@@ -61,6 +62,10 @@ for (const file of javascriptFiles) {
 }
 
 const html = readFileSync(resolve(rootDir, 'index.html'), 'utf8');
+const appJs = readFileSync(resolve(rootDir, 'js/app.js'), 'utf8');
+if (!appJs.includes("import('./video-export.mjs')")) {
+  fail("app.js must import video-export.mjs from the same directory");
+}
 for (const fragment of requiredHtmlFragments) {
   if (!html.includes(fragment)) {
     fail(`index.html is missing ${fragment}`);

@@ -64,7 +64,7 @@ http://localhost:8080
 3. Configura un look o detector y agrégalo al tramo marcado.
 4. Exporta; un modal bloquea la edición hasta iniciar la descarga final.
 
-La exportación es local, sin audio, conserva la resolución original y tarda aproximadamente lo mismo que el tramo elegido. El codec final depende del navegador.
+La exportación es local, WebM y sin audio. En Chrome o Edge actualizado conserva la resolución y los FPS originales, usando el bitrate promedio de entrada como referencia mínima.
 
 ## Verificación
 

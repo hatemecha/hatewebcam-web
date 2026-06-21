@@ -248,7 +248,7 @@
   let videoObjectUrl = '';
   let videoSourceFile = null;
   let videoSourceFps = 30;
-  let lastExportFrameTime = 0;
+  let videoSourceAverageBitrate = 0;
   let videoTimeline = new VideoTimeline();
   let editorHistory = typeof EditorHistory !== 'undefined' ? new EditorHistory() : null;
   let editorTool = 'select';
@@ -268,11 +268,8 @@
   let appliedTimelineItemIds = {};
   let videoBaseImageSettings = null;
   let isVideoExporting = false;
-  let videoExportRecorder = null;
-  let videoExportChunks = [];
   let videoExportFileName = '';
   let videoExportWakeLock = null;
-  let videoExportPausedByVisibility = false;
   let webcamSessionState = null;
 
   const DEFAULT_IMAGE_SETTINGS = {
@@ -293,6 +290,7 @@
     qualityEnhancerStrength: 35,
   };
   const DEFAULT_CAMERA_FPS = 30;
+  const COMMON_VIDEO_FPS = [23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60, 120];
   const DEFAULT_PREVIEW_QUALITY = 'balanced';
   const PREVIEW_QUALITY_PRESETS = Object.freeze({
     draft: { label: 'Borrador', maxPixels: 432 * 243, maxScale: 0.45 },
@@ -1216,7 +1214,7 @@
     videoObjectUrl = '';
     videoSourceFile = null;
     videoSourceFps = 30;
-    lastExportFrameTime = 0;
+    videoSourceAverageBitrate = 0;
     videoEl.removeAttribute('src');
     videoEl.load();
     videoTimeline = new VideoTimeline();
@@ -1263,13 +1261,14 @@
         videoEl.addEventListener('error', failed, { once: true });
         videoEl.load();
       });
-      if (!Number.isFinite(videoEl.duration) || videoEl.duration <= 0 || !videoEl.videoWidth) {
+      if (!Number.isFinite(videoEl.duration) || videoEl.duration <= 0 || !videoEl.videoWidth || !videoEl.videoHeight) {
         throw new Error('video_metadata_invalid');
       }
       videoEl.currentTime = Math.min(0.001, videoEl.duration);
-      void videoEl.play().then(() => videoEl.pause()).catch(() => {});
 
-      videoSourceFps = await detectVideoSourceFps(videoEl);
+      const { calculateFrameRateFromMediaTimes, calculateSourceAverageBitrate } = await import('./video-export.mjs');
+      videoSourceFps = await detectVideoSourceFps(videoEl, calculateFrameRateFromMediaTimes);
+      videoSourceAverageBitrate = calculateSourceAverageBitrate(file.size, videoEl.duration);
       videoTimeline.setDuration(videoEl.duration);
       videoBaseImageSettings = { ...imageSettings };
       isRunning = true;
@@ -1283,7 +1282,7 @@
       videoTrimEnd.value = videoEl.duration.toFixed(2);
       videoEffectStart.value = '0';
       videoEffectEnd.value = videoEl.duration.toFixed(2);
-      videoFileMeta.textContent = `${file.name} · ${formatBytes(file.size)} · ${videoEl.videoWidth}×${videoEl.videoHeight} · ${formatDurationDetailed(videoEl.duration)} · ${videoSourceFps} FPS`;
+      videoFileMeta.textContent = `${file.name} · ${formatBytes(file.size)} · ${videoEl.videoWidth}×${videoEl.videoHeight} · ${formatDurationDetailed(videoEl.duration)} · ${formatVideoFps(videoSourceFps)} FPS · ${formatVideoBitrate(videoSourceAverageBitrate)} estimado`;
       frameCount = 0;
       lastFpsTime = performance.now();
       syncPreviewCanvasMetrics(videoEl.videoWidth, videoEl.videoHeight, true);
@@ -1297,7 +1296,10 @@
       console.error('Error loading video:', err);
       disposeVideoSource();
       setCameraPlaceholderMessage('No se pudo abrir este video.');
-      showStatus(videoEditorStatus, 'El navegador no puede decodificar este archivo.', 'error');
+      const message = err?.message === 'video_metadata_invalid'
+        ? 'El video no contiene resolución o duración válidas.'
+        : 'El navegador no puede decodificar este archivo.';
+      showStatus(videoEditorStatus, message, 'error');
       updateVideoEditorUI();
     }
   }
@@ -2098,6 +2100,41 @@
     if (item && effect && typeof effect.setConfig === 'function') effect.setConfig(item.config || {});
   }
 
+  function syncVideoTimelineLookAt(mediaTime) {
+    if (sourceMode !== 'video' || !videoSourceFile) return;
+    const active = videoTimeline.activeAt(mediaTime);
+    const lookItem = active.find((item) => item.type === 'look');
+    if (appliedTimelineItemIds.look === (lookItem?.id || '')) return;
+    const operationalSettings = {
+      previewQuality: imageSettings.previewQuality,
+      jpegQuality: imageSettings.jpegQuality,
+      videoFormat: imageSettings.videoFormat,
+      captureTimerSeconds: imageSettings.captureTimerSeconds,
+      qualityEnhancer: imageSettings.qualityEnhancer,
+      qualityEnhancerStrength: imageSettings.qualityEnhancerStrength,
+    };
+    imageSettings = {
+      ...(videoBaseImageSettings || DEFAULT_IMAGE_SETTINGS),
+      ...(lookItem?.config || {}),
+      ...operationalSettings,
+    };
+    appliedTimelineItemIds.look = lookItem?.id || '';
+    updateEffectsInfo();
+  }
+
+  function timelineDetectorIdsAt(mediaTime) {
+    const active = videoTimeline.activeAt(mediaTime);
+    return Object.fromEntries(['blob', 'face', 'blink'].map((type) => {
+      const item = active.find((entry) => entry.type === type);
+      return [type, item?.id || ''];
+    }));
+  }
+
+  function needsTimelineDetectorSync(mediaTime) {
+    const ids = timelineDetectorIdsAt(mediaTime);
+    return ['blob', 'face', 'blink'].some((type) => appliedTimelineItemIds[type] !== ids[type]);
+  }
+
   async function syncVideoTimelineEffects(force = false) {
     if (sourceMode !== 'video' || !videoSourceFile) return;
     const active = videoTimeline.activeAt(videoEl.currentTime);
@@ -2152,9 +2189,10 @@
       return;
     }
     placeholder.classList.add('hidden');
-    const profile = typeof MediaRecorder !== 'undefined' ? getRecordingProfile() : null;
     if (videoExportDetails) {
-      videoExportDetails.textContent = `${videoEl.videoWidth}×${videoEl.videoHeight} · ${videoSourceFps} FPS · ${profile ? profile.extension.toUpperCase() : 'sin encoder compatible'} · sin audio`;
+      const bitrate = getRecommendedVideoBitrate(videoEl.videoWidth, videoEl.videoHeight, videoSourceFps);
+      const exportLabel = typeof VideoEncoder !== 'undefined' ? 'WebM · WebCodecs' : 'WebCodecs no disponible';
+      videoExportDetails.textContent = `${videoEl.videoWidth}×${videoEl.videoHeight} · ${formatVideoFps(videoSourceFps)} FPS · ${formatVideoBitrate(bitrate)} · ${exportLabel} · sin audio`;
     }
     updateTimelineHint();
   }
@@ -2211,36 +2249,78 @@
       : '<i class="fa-solid fa-volume-high"></i>';
   }
 
+  async function renderVideoExportFrame(frameIndex, fps) {
+    const start = videoTimeline.trimStart;
+    const time = start + frameIndex / fps;
+    await seekVideoForExport(time);
+    if (needsTimelineDetectorSync(time)) {
+      await syncVideoTimelineEffects(true);
+    } else {
+      syncVideoTimelineLookAt(time);
+    }
+    renderSourceFrameBuffer(true);
+  }
+
+  async function runVideoExportViaWebCodecs() {
+    const { calculateExportBitrate, calculateExportFrameCount, encodeCanvasSequence } = await import('./video-export.mjs');
+    const fps = getVideoExportFps();
+    const start = videoTimeline.trimStart;
+    const end = videoTimeline.trimEnd;
+    const totalFrames = calculateExportFrameCount(end - start, fps);
+    ensureRecordingCanvas();
+
+    const baseName = videoSourceFile.name.replace(/\.[^.]+$/, '') || 'hatewebcam-video';
+    videoExportFileName = `${baseName}-editado.webm`;
+
+    return encodeCanvasSequence({
+      canvas: recordingCanvas,
+      width: recordingCanvas.width,
+      height: recordingCanvas.height,
+      fps,
+      totalFrames,
+      duration: end - start,
+      bitrate: calculateExportBitrate(
+        videoSourceAverageBitrate,
+        recordingCanvas.width,
+        recordingCanvas.height,
+        fps,
+        imageSettings.qualityEnhancer
+      ),
+      renderFrame: (frameIndex) => renderVideoExportFrame(frameIndex, fps),
+      onProgress: (done, total) => {
+        videoExportProgress.value = done / total;
+        const remainingSec = Math.max(0, (total - done) / fps);
+        videoExportSummary.textContent = `Exportando ${Math.round((done / total) * 100)}% · ${formatVideoFps(fps)} FPS · ${formatDurationDetailed(remainingSec)} restantes`;
+      },
+      shouldCancel: () => !isVideoExporting,
+    });
+  }
+
+  async function finalizeVideoExportBlob(blob) {
+    downloadBlob(blob, videoExportFileName);
+    showStatus(videoEditorStatus, 'Exportación terminada y guardada.', 'success');
+    videoExportProgress.value = 1;
+    videoExportTitle.innerHTML = '<i class="fa-solid fa-circle-check"></i> Exportación terminada';
+    videoExportSummary.textContent = `${videoExportFileName} · ${formatBytes(blob.size)} · descarga iniciada`;
+    btnCancelVideoExport.classList.add('hidden');
+    btnCloseVideoExportModal.classList.remove('hidden');
+    cleanupVideoExport(true);
+  }
+
   async function startVideoExport() {
     if (!videoSourceFile || isVideoExporting) return;
-    if (typeof MediaRecorder === 'undefined' || typeof canvas.captureStream !== 'function') {
+    if (typeof HTMLCanvasElement === 'undefined') {
       showStatus(videoEditorStatus, 'Este navegador no puede exportar el video.', 'error');
       return;
     }
-    const profile = getRecordingProfile();
-    if (!profile) {
-      showStatus(videoEditorStatus, 'No hay un formato de salida compatible.', 'error');
+
+    if (typeof VideoEncoder === 'undefined' || typeof VideoFrame === 'undefined') {
+      showStatus(videoEditorStatus, 'La exportación requiere Chrome o Edge actualizado con WebCodecs.', 'error');
       return;
     }
 
     try {
-      const baseName = videoSourceFile.name.replace(/\.[^.]+$/, '') || 'hatewebcam-video';
-      videoExportFileName = `${baseName}-editado.${profile.extension}`;
-      videoExportChunks = [];
       ensureRecordingCanvas();
-      copyFrameToRecordingCanvas();
-      const exportFps = getVideoExportFps();
-      lastExportFrameTime = 0;
-      const exportStream = recordingCanvas.captureStream(exportFps);
-      videoExportRecorder = new MediaRecorder(exportStream, {
-        mimeType: profile.mimeType,
-        videoBitsPerSecond: getRecommendedVideoBitrate(recordingCanvas.width, recordingCanvas.height, exportFps),
-      });
-      videoExportRecorder.ondataavailable = (event) => {
-        if (event.data?.size) videoExportChunks.push(event.data);
-      };
-      videoExportRecorder.onerror = (event) => failVideoExport(event.error || new Error('media_recorder_failed'));
-      videoExportRecorder.onstop = completeVideoExport;
       isVideoExporting = true;
       videoExportProgress.value = 0;
       videoExportTitle.innerHTML = '<i class="fa-solid fa-file-export"></i> Exportando video';
@@ -2249,74 +2329,40 @@
       btnCloseVideoExportModal.classList.add('hidden');
       videoExportModal.classList.remove('hidden');
       updateVideoEditorUI();
-      if (Math.abs(videoEl.currentTime - videoTimeline.trimStart) > 0.001) {
-        videoEl.currentTime = videoTimeline.trimStart;
-        await new Promise((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('video_seek_timeout')), 5000);
-          videoEl.addEventListener('seeked', () => {
-            clearTimeout(timeout);
-            resolve();
-          }, { once: true });
-        });
-      }
-      await syncVideoTimelineEffects(true);
-      copyFrameToRecordingCanvas();
+      cancelRenderLoop();
       if ('wakeLock' in navigator) {
         videoExportWakeLock = await navigator.wakeLock.request('screen').catch(() => null);
       }
-      videoExportRecorder.start(1000);
-      await videoEl.play();
-      if (!animFrameId) scheduleRenderLoop();
+
+      const blob = await runVideoExportViaWebCodecs();
+      await finalizeVideoExportBlob(blob);
     } catch (err) {
-      if (err.name !== 'AbortError') failVideoExport(err);
+      if (err?.message === 'export_cancelled') {
+        cleanupVideoExport(true);
+        return;
+      }
+      failVideoExport(err);
     }
   }
 
-  function stopVideoExport() {
-    if (!isVideoExporting) return;
-    isVideoExporting = false;
-    videoEl.pause();
-    if (videoExportRecorder?.state && videoExportRecorder.state !== 'inactive') videoExportRecorder.stop();
-  }
-
-  function stopVideoExportAtRangeEnd() {
-    if (!isVideoExporting) return;
-    const frameSlack = 1 / getVideoExportFps();
-    if (videoEl.ended || videoEl.currentTime >= videoTimeline.trimEnd - frameSlack) {
-      stopVideoExport();
-    }
-  }
-
-  async function completeVideoExport() {
-    try {
-      if (videoExportChunks.length === 0) throw new Error('empty_video_export');
-      // ponytail: Blob export is the reliable browser path; stream to disk only if long clips make memory measurable.
-      const blob = new Blob(videoExportChunks, { type: videoExportRecorder?.mimeType || 'video/webm' });
-      downloadBlob(blob, videoExportFileName);
-      showStatus(videoEditorStatus, 'Exportación terminada y guardada.', 'success');
-      videoExportProgress.value = 1;
-      videoExportTitle.innerHTML = '<i class="fa-solid fa-circle-check"></i> Exportación terminada';
-      videoExportSummary.textContent = `${videoExportFileName} · ${formatBytes(blob.size)} · descarga iniciada`;
-    } catch (err) {
-      console.error('Video export finalization failed:', err);
-      showStatus(videoEditorStatus, 'No se pudo completar el archivo.', 'error');
-      videoExportTitle.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Error de exportación';
-      videoExportSummary.textContent = 'No se pudo generar el archivo. Probá con un tramo más corto.';
-    } finally {
-      btnCancelVideoExport.classList.add('hidden');
-      btnCloseVideoExportModal.classList.remove('hidden');
-      cleanupVideoExport(true);
-    }
+  function seekVideoForExport(time) {
+    const target = clamp(time, 0, Math.max(0, videoTimeline.duration - 0.000001));
+    if (Math.abs(videoEl.currentTime - target) < 0.00005) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('video_seek_timeout')), 10000);
+      videoEl.addEventListener('seeked', () => {
+        clearTimeout(timeout);
+        resolve();
+      }, { once: true });
+      videoEl.currentTime = target;
+    });
   }
 
   async function cancelVideoExport(showMessage = true) {
-    if (!isVideoExporting && !videoExportRecorder) return;
+    if (!isVideoExporting) return;
     isVideoExporting = false;
     videoEl.pause();
-    if (videoExportRecorder?.state && videoExportRecorder.state !== 'inactive') {
-      videoExportRecorder.onstop = null;
-      videoExportRecorder.stop();
-    }
+    videoEl.playbackRate = 1;
     if (showMessage) showStatus(videoEditorStatus, 'Exportación cancelada.', 'warning');
     videoExportTitle.innerHTML = '<i class="fa-solid fa-ban"></i> Exportación cancelada';
     videoExportSummary.textContent = 'No se descargó ningún archivo.';
@@ -2327,7 +2373,13 @@
 
   function failVideoExport(err) {
     console.error('Video export failed:', err);
-    showStatus(videoEditorStatus, 'La exportación falló. Revisá espacio libre y permisos.', 'error');
+    const messages = {
+      webcodecs_codec_unsupported: 'No hay un codec WebM compatible para este video.',
+      video_seek_timeout: 'No se pudo leer un frame del video a tiempo.',
+      video_decode_failed: 'El navegador no pudo decodificar el video.',
+    };
+    const message = messages[err?.message] || 'La exportación falló. Revisá espacio libre y permisos.';
+    showStatus(videoEditorStatus, message, 'error');
     void cancelVideoExport(false).then(() => {
       videoExportTitle.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Error de exportación';
       videoExportSummary.textContent = 'La exportación falló. Probá con un tramo más corto.';
@@ -2336,8 +2388,6 @@
 
   function cleanupVideoExport(keepModal = false) {
     isVideoExporting = false;
-    videoExportRecorder = null;
-    videoExportChunks = [];
     videoExportFileName = '';
     if (!keepModal) {
       videoExportProgress.value = 0;
@@ -2345,9 +2395,9 @@
     }
     if (videoExportWakeLock) videoExportWakeLock.release().catch(() => {});
     videoExportWakeLock = null;
-    videoExportPausedByVisibility = false;
     updateVideoEditorUI();
     updateVideoTransport();
+    if (isRunning && videoSourceFile && !animFrameId) scheduleRenderLoop();
   }
 
   function closeVideoExportModal() {
@@ -2549,8 +2599,6 @@
     timelineTrimEndHandle.addEventListener('pointerdown', (event) => beginTrimDrag(event, 'end'));
     videoEl.addEventListener('play', updateVideoTransport);
     videoEl.addEventListener('pause', updateVideoTransport);
-    videoEl.addEventListener('timeupdate', stopVideoExportAtRangeEnd);
-    videoEl.addEventListener('ended', stopVideoExportAtRangeEnd);
     videoEl.addEventListener('seeked', () => {
       updateVideoTransport();
       void syncVideoTimelineEffects();
@@ -2693,21 +2741,7 @@
 
   function onVisibilityChange() {
     isPageVisible = document.visibilityState !== 'hidden';
-    if (isVideoExporting && videoExportRecorder) {
-      if (!isPageVisible && videoExportRecorder.state === 'recording') {
-        videoExportPausedByVisibility = true;
-        videoExportRecorder.pause();
-        videoEl.pause();
-        showStatus(videoEditorStatus, 'Exportación pausada: volvé a esta pestaña.', 'warning');
-        videoExportSummary.textContent = 'Exportación pausada. Volvé a esta pestaña para continuar.';
-      } else if (isPageVisible && videoExportPausedByVisibility && videoExportRecorder.state === 'paused') {
-        videoExportPausedByVisibility = false;
-        videoExportRecorder.resume();
-        void videoEl.play();
-        hideStatus(videoEditorStatus);
-        updateVideoTransport();
-      }
-    }
+    if (isVideoExporting) return;
     if (!isRunning) return;
 
     if (!isPageVisible) {
@@ -3065,6 +3099,7 @@
   }
 
   function scheduleRenderLoop() {
+    if (isVideoExporting) return;
     animFrameId = typeof videoEl.requestVideoFrameCallback === 'function'
       ? videoEl.requestVideoFrameCallback(renderLoop)
       : requestAnimationFrame(renderLoop);
@@ -3081,7 +3116,11 @@
   }
 
   function renderLoop() {
-    if (!isRunning || !isPageVisible) {
+    if (!isRunning || isVideoExporting) {
+      animFrameId = null;
+      return;
+    }
+    if (!isPageVisible) {
       animFrameId = null;
       return;
     }
@@ -3091,29 +3130,20 @@
         if (sourceMode === 'video') {
           void syncVideoTimelineEffects();
           if (videoEl.currentTime >= videoTimeline.trimEnd) {
-            if (isVideoExporting) stopVideoExport();
-            else {
-              videoEl.pause();
-              videoEl.currentTime = videoTimeline.trimEnd;
-            }
+            videoEl.pause();
+            videoEl.currentTime = videoTimeline.trimEnd;
           }
-        }
-        if (isVideoExporting && typeof videoEl.requestVideoFrameCallback !== 'function') {
-          const exportFps = getVideoExportFps();
-          const now = performance.now();
-          const minDelta = 1000 / exportFps;
-          if (now - lastExportFrameTime < minDelta * 0.9) {
-            scheduleRenderLoop();
-            return;
-          }
-          lastExportFrameTime = now;
         }
         const { sourceWidth, sourceHeight } = getSourceFrameDimensions();
         syncPreviewCanvasMetrics(sourceWidth, sourceHeight, frameCount % 30 === 0);
 
         try {
-          renderSourceFrameBuffer(isRecording || isVideoExporting);
-          blitProcessedFrameToPreview();
+          if (isRecording) {
+            renderSourceFrameBuffer(true);
+            blitProcessedFrameToPreview();
+          } else {
+            renderProcessedFrame(canvas, ctx, 'preview');
+          }
         } catch (renderErr) {
           console.error('Render frame fallback error:', renderErr);
           drawBaseFrame(ctx, canvas, 'preview');
@@ -4166,7 +4196,32 @@
   function normalizeVideoFps(value) {
     const fps = Number(value);
     if (!Number.isFinite(fps) || fps <= 0) return null;
-    return clamp(Math.round(fps), 1, 240);
+    return clamp(Math.round(fps * 1000) / 1000, 1, 240);
+  }
+
+  function snapVideoSourceFps(value) {
+    const fps = normalizeVideoFps(value);
+    if (!fps) return null;
+    let best = fps;
+    let bestDiff = Infinity;
+    for (const candidate of COMMON_VIDEO_FPS) {
+      const diff = Math.abs(fps - candidate);
+      if (diff < bestDiff && diff <= 0.08) {
+        bestDiff = diff;
+        best = candidate;
+      }
+    }
+    return best;
+  }
+
+  function formatVideoFps(value) {
+    const fps = normalizeVideoFps(value);
+    if (!fps) return '—';
+    return Number.isInteger(fps) ? String(fps) : fps.toFixed(3).replace(/\.?0+$/, '');
+  }
+
+  function formatVideoBitrate(value) {
+    return `${(Math.max(0, Number(value) || 0) / 1_000_000).toFixed(1)} Mbps`;
   }
 
   function getVideoExportFps() {
@@ -4179,37 +4234,47 @@
     const track = stream.getVideoTracks()[0];
     const settingsFps = Number(track?.getSettings?.().frameRate);
     stream.getTracks().forEach((t) => t.stop());
-    return normalizeVideoFps(settingsFps);
+    return snapVideoSourceFps(settingsFps);
   }
 
-  function probeVideoFrameRate(video) {
+  function probeVideoFrameRate(video, calculateFrameRate) {
     if (typeof video.requestVideoFrameCallback !== 'function') return Promise.resolve(null);
     const savedTime = video.currentTime;
     const wasPaused = video.paused;
     let frameCount = 0;
     let callbackId = null;
-    const startedAt = performance.now();
+    const mediaTimes = [];
 
     return new Promise((resolve) => {
+      let settled = false;
+      const timeout = setTimeout(() => finish(calculateFrameRate(mediaTimes)), 3500);
       const finish = (fps) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
         if (callbackId != null && typeof video.cancelVideoFrameCallback === 'function') {
           video.cancelVideoFrameCallback(callbackId);
         }
         video.pause();
         video.currentTime = savedTime;
         if (!wasPaused) void video.play().catch(() => {});
-        resolve(normalizeVideoFps(fps));
+        resolve(snapVideoSourceFps(fps));
       };
 
-      const onFrame = () => {
+      const onFrame = (_now, metadata) => {
         frameCount += 1;
-        const elapsedMs = performance.now() - startedAt;
-        if (elapsedMs >= 900 && frameCount >= 6) {
-          finish(frameCount / (elapsedMs / 1000));
+        if (metadata && Number.isFinite(metadata.mediaTime)) {
+          const previousTime = mediaTimes.at(-1);
+          if (previousTime == null || metadata.mediaTime - previousTime > 0.0005) {
+            mediaTimes.push(metadata.mediaTime);
+          }
+        }
+        if (mediaTimes.length >= 25) {
+          finish(calculateFrameRate(mediaTimes));
           return;
         }
-        if (elapsedMs >= 2800) {
-          finish(frameCount >= 2 ? frameCount / (elapsedMs / 1000) : null);
+        if (frameCount >= 120) {
+          finish(calculateFrameRate(mediaTimes));
           return;
         }
         callbackId = video.requestVideoFrameCallback(onFrame);
@@ -4220,19 +4285,19 @@
     });
   }
 
-  async function detectVideoSourceFps(video) {
+  async function detectVideoSourceFps(video, calculateFrameRate) {
+    const probed = await probeVideoFrameRate(video, calculateFrameRate);
+    if (probed) return probed;
+
     const fromStream = readFpsFromCaptureStream(video);
     if (fromStream) return fromStream;
 
     const quality = video.getVideoPlaybackQuality?.();
     if (quality && video.currentTime > 0.2) {
       const measured = quality.totalVideoFrames / video.currentTime;
-      const normalized = normalizeVideoFps(measured);
+      const normalized = snapVideoSourceFps(measured);
       if (normalized) return normalized;
     }
-
-    const probed = await probeVideoFrameRate(video);
-    if (probed) return probed;
 
     return DEFAULT_CAMERA_FPS;
   }
@@ -4243,7 +4308,7 @@
     const safeFps = clamp(normalizeVideoFps(fps) || DEFAULT_CAMERA_FPS, 1, 240);
     const bitsPerPixelFrame = imageSettings.qualityEnhancer ? 0.22 : 0.18;
     const estimate = Math.round(safeWidth * safeHeight * safeFps * bitsPerPixelFrame);
-    return clamp(estimate, 8000000, 80000000);
+    return Math.max(videoSourceAverageBitrate, clamp(estimate, 8000000, 80000000));
   }
 
   function drawEnhancedFrameToContext(targetCtx, sourceCanvas, width, height, strengthPct, forExport = false) {

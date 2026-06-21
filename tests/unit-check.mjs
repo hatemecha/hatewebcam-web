@@ -7,6 +7,16 @@ import {
   getProcessingFrameDimensions,
   getPreviewFrameDimensions,
 } from '../js/preview-metrics.mjs';
+import {
+  calculateExportBitrate,
+  calculateExportFrameCount,
+  calculateFrameRateFromMediaTimes,
+  calculateFrameTimestampUs,
+  calculateSourceAverageBitrate,
+  getWebmMuxerCodec,
+  normalizeFrameRate,
+  snapFrameRate,
+} from '../js/video-export.mjs';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -230,6 +240,30 @@ function checkPreviewProcessingResolutionContract() {
   );
 }
 
+function checkVideoExportTimingAndQuality() {
+  for (const fps of [23.976, 24, 25, 29.97, 30, 59.94, 60]) {
+    const duration = 10;
+    const frameCount = calculateExportFrameCount(duration, fps);
+    const encodedDuration = calculateFrameTimestampUs(frameCount, fps) / 1_000_000;
+    assert.ok(Math.abs(encodedDuration - duration) <= 1 / fps, `${fps} FPS duration must stay within one frame`);
+    assert.equal(calculateFrameTimestampUs(1, fps), Math.round(1_000_000 / fps));
+  }
+
+  assert.equal(calculateSourceAverageBitrate(10_000_000, 10), 8_000_000);
+  assert.equal(calculateSourceAverageBitrate(0, 10), 0);
+  assert.equal(calculateExportBitrate(12_000_000, 1920, 1080, 30), 12_000_000);
+  assert.ok(calculateExportBitrate(1_000_000, 3840, 2160, 60) > 1_000_000);
+  assert.equal(getWebmMuxerCodec('vp09.00.10.08'), 'V_VP9');
+  assert.equal(getWebmMuxerCodec('vp8'), 'V_VP8');
+  assert.equal(normalizeFrameRate('24'), 24);
+  assert.equal(normalizeFrameRate(0), null);
+  assert.equal(snapFrameRate(23.98), 23.976);
+  assert.equal(snapFrameRate(24.04), 24);
+  assert.equal(calculateFrameRateFromMediaTimes([0, 1 / 24, 2 / 24, 3 / 24]), 24);
+  assert.equal(calculateFrameRateFromMediaTimes([0, 1 / 24, 2 / 24, 2 / 24, 3 / 24]), 24);
+  assert.equal(calculateFrameRateFromMediaTimes([0]), null);
+}
+
 await checkCameraStreamCleanup();
 checkCameraPreservesSupportedFps();
 checkReusableMorphologyBuffers();
@@ -238,4 +272,5 @@ checkFaceDetectionUsesRefinedEyeLandmarks();
 checkVideoTimelineIntervals();
 checkEditorHistoryUndoRedo();
 checkPreviewProcessingResolutionContract();
+checkVideoExportTimingAndQuality();
 console.log('Unit check passed.');
