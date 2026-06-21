@@ -104,11 +104,11 @@
             <div class="mobile-color-row">
               <label class="mobile-color-chip">
                 <span>Obj</span>
-                <input type="color" id="inpMobileBlobColor" value="#00ffff" aria-label="Color tracking objetos">
+                <input type="color" id="inpMobileBlobColor" value="#ff2222" aria-label="Color tracking objetos">
               </label>
               <label class="mobile-color-chip" id="mobileFaceColorChip">
                 <span>Cara</span>
-                <input type="color" id="inpMobileFaceColor" value="#e53935" aria-label="Color tracking caras">
+                <input type="color" id="inpMobileFaceColor" value="#ff2222" aria-label="Color tracking caras">
               </label>
             </div>
             <div class="mobile-face-label-wrap" id="mobileFaceLabelWrap">
@@ -200,7 +200,7 @@
       <!-- Basic Detectors -->
       <div class="panel-section">
         <div class="section-title accent"><i class="fa-solid fa-crosshairs"></i> Detectores</div>
-        <div class="help-text">Activá los detectores que necesites. El color del recuadro y el texto principal quedan accesibles acá mismo.</div>
+        <div class="help-text">Activá una función y completá el paso que aparece debajo.</div>
 
         <div class="quick-detector">
           <div class="quick-detector-row">
@@ -208,11 +208,18 @@
               <input type="checkbox" id="chkBlobTracking">
               <span><i class="fa-solid fa-palette fa-fw"></i> Detectar objetos por color</span>
             </label>
-            <label class="quick-color-chip" title="Color del recuadro del blob">
-              <span class="quick-chip-label">Recuadro</span>
+          </div>
+          <div class="quick-detector-extra hidden" id="colorPickSection">
+            <div class="quick-action-copy"><strong>Elegí qué color seguir</strong><span>Presioná el botón y después tocá ese color en el video.</span></div>
+            <button type="button" class="btn primary" id="btnColorPick">
+              <i class="fa-solid fa-eyedropper"></i> Elegir color en el video
+            </button>
+            <label class="quick-color-chip" title="Solo cambia el aspecto del recuadro">
+              <span class="quick-chip-label">Color del recuadro</span>
               <span class="color-swatch" id="blobQuickColorSwatch"></span>
-              <input type="color" id="inpBlobQuickColor" value="#00ffff" aria-label="Color del recuadro del blob">
+              <input type="color" id="inpBlobQuickColor" value="#ff2222" aria-label="Color visual del recuadro">
             </label>
+            <div class="status-msg hidden" id="colorPickStatus" role="status" aria-live="polite"></div>
           </div>
         </div>
 
@@ -238,7 +245,7 @@
               <label class="quick-color-chip" id="faceQuickColorChip" title="Color del recuadro de caras">
                 <span class="quick-chip-label">Recuadro</span>
                 <span class="color-swatch" id="faceQuickColorSwatch"></span>
-                <input type="color" id="inpFaceQuickColor" value="#e53935" aria-label="Color del recuadro de caras">
+                <input type="color" id="inpFaceQuickColor" value="#ff2222" aria-label="Color del recuadro de caras">
               </label>
             </div>
             <div id="faceQuickLabelWrap">
@@ -256,15 +263,6 @@
             </label>
           </div>
         </div>
-      </div>
-
-      <!-- Color Pick -->
-      <div class="panel-section hidden" id="colorPickSection">
-        <div class="help-text">Hacé click en el video para elegir qué color detectar.</div>
-        <button type="button" class="btn" id="btnColorPick">
-          <i class="fa-solid fa-eyedropper"></i> Elegir color del video
-        </button>
-        <div class="status-msg hidden" id="colorPickStatus" role="status" aria-live="polite"></div>
       </div>
 
       <!-- Advanced Toggle -->

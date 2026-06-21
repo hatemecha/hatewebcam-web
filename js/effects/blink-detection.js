@@ -19,10 +19,10 @@ class BlinkDetection {
         this.leftBlinkDetected = false;
         this.rightBlinkDetected = false;
         this.showDebug = true;
-        this.feedbackColor = '#00ff00';
+        this.feedbackColor = '#ff2222';
         this.processIntervalMs = 35;
-        this.minClosedFrames = 1;
-        this._earSmoothing = 0.45;
+        this.minClosedFrames = 2;
+        this._earSmoothing = 0.7;
 
         // Callback
         this.blinkCallback = null;

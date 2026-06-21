@@ -18,7 +18,7 @@ class BlobTracking {
         this.dilateIterations = 0;
 
         // Visualization
-        this.boxColor = '#00ffff';
+        this.boxColor = '#ff2222';
         this.boxThickness = 2;
         this.showCoordinates = true;
         this.showCentroid = false;
@@ -29,7 +29,7 @@ class BlobTracking {
         // Connection state (from blink detection)
         this.leftActive = false;
         this.rightActive = false;
-        this.connectionColor = '#00ff00';
+        this.connectionColor = '#ff2222';
         this.connectionThickness = 1;
 
         // Centroids for connections
@@ -40,6 +40,9 @@ class BlobTracking {
 
         // Process on a downscaled copy for better performance
         this.processScale = 0.45;
+        this.detectionHoldMs = 180;
+        this.detectionSmoothing = 0.6;
+        this._trackedBlobs = [];
 
         // Internal processing buffers
         this._tempCanvas = document.createElement('canvas');
@@ -112,11 +115,56 @@ class BlobTracking {
         }
 
         if (this._workW !== w || this._workH !== h) {
+            this._trackedBlobs.length = 0;
             this._workW = w;
             this._workH = h;
             this._tempCanvas.width = w;
             this._tempCanvas.height = h;
         }
+    }
+
+    _stabilizeBlobs(blobs, now = performance.now()) {
+        const usedPrevious = new Set();
+        const keep = this.detectionSmoothing;
+        const next = blobs.map((blob) => {
+            let bestIndex = -1;
+            let bestDistance = Infinity;
+
+            for (let i = 0; i < this._trackedBlobs.length; i++) {
+                if (usedPrevious.has(i)) continue;
+                const previous = this._trackedBlobs[i];
+                const distance = Math.hypot(blob.cx - previous.cx, blob.cy - previous.cy);
+                const maxDistance = Math.max(12, blob.width, blob.height, previous.width, previous.height) * 1.5;
+                if (distance <= maxDistance && distance < bestDistance) {
+                    bestIndex = i;
+                    bestDistance = distance;
+                }
+            }
+
+            if (bestIndex < 0) return { ...blob, lastSeen: now };
+
+            usedPrevious.add(bestIndex);
+            const previous = this._trackedBlobs[bestIndex];
+            const smooth = (key) => previous[key] * keep + blob[key] * (1 - keep);
+            return {
+                ...blob,
+                x: smooth('x'),
+                y: smooth('y'),
+                width: smooth('width'),
+                height: smooth('height'),
+                cx: smooth('cx'),
+                cy: smooth('cy'),
+                lastSeen: now,
+            };
+        });
+
+        for (let i = 0; i < this._trackedBlobs.length; i++) {
+            const previous = this._trackedBlobs[i];
+            if (!usedPrevious.has(i) && now - previous.lastSeen <= this.detectionHoldMs) next.push(previous);
+        }
+
+        this._trackedBlobs = next.slice(0, this.maxObjects);
+        return this._trackedBlobs;
     }
 
     /**
@@ -127,7 +175,8 @@ class BlobTracking {
         const h = canvas.height;
         if (w === 0 || h === 0) return;
 
-        const scale = Math.max(0.2, Math.min(1, this.processScale || 1));
+        const requestedScale = Math.max(0.1, Math.min(1, this.processScale || 1));
+        const scale = Math.min(requestedScale, Math.sqrt(120000 / (w * h)));
         const sw = Math.max(48, Math.round(w * scale));
         const sh = Math.max(48, Math.round(h * scale));
 
@@ -208,10 +257,10 @@ class BlobTracking {
         const minAreaScaled = this.minArea * areaScale;
         const maxAreaScaled = this.maxArea * areaScale;
 
-        const filtered = blobs
+        const filtered = this._stabilizeBlobs(blobs
             .filter((bObj) => bObj.area >= minAreaScaled && bObj.area <= maxAreaScaled)
             .sort((a, bObj) => bObj.area - a.area)
-            .slice(0, this.maxObjects);
+            .slice(0, this.maxObjects));
 
         this.centroids.length = 0;
 
@@ -463,5 +512,6 @@ class BlobTracking {
         this.leftActive = false;
         this.rightActive = false;
         this.centroids.length = 0;
+        this._trackedBlobs.length = 0;
     }
 }

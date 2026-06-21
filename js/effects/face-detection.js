@@ -10,17 +10,17 @@ class FaceDetection {
         this._lastProcessTs = 0;
 
         // Visualization
-        this.boxColor = '#e53935';
+        this.boxColor = '#ff2222';
         this.boxThickness = 2;
         this.labelText = 'CARA';
         this.showLandmarks = false;
         this.maxFaces = 2;
         this.processIntervalMs = 30;
-        this.boxSmoothing = 0.55;
+        this.boxSmoothing = 0.82;
         this.visualMode = 'box';
         this.pixelationCellSize = 14;
         this.censorPaddingPercent = 18;
-        this.detectionHoldMs = 120;
+        this.detectionHoldMs = 220;
         this.matchDistanceMultiplier = 1.9;
         this.sameFaceOverlapRatio = 0.62;
         this.sameFaceCenterRatio = 0.38;
@@ -65,7 +65,7 @@ class FaceDetection {
 
             this.faceMesh.setOptions({
                 maxNumFaces: this.maxFaces,
-                refineLandmarks: false,
+                refineLandmarks: true,
                 minDetectionConfidence: 0.5,
                 minTrackingConfidence: 0.5,
             });

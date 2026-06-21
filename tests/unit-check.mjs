@@ -75,8 +75,58 @@ function checkReusableMorphologyBuffers() {
   assert.equal(effect._morphBufferA, firstBuffer, 'same dimensions must reuse buffers');
   effect.reset();
   assert.equal(effect.centroids, centroids, 'reset must reuse the centroids array');
+
+  effect.setColorFromPixel(255, 0, 0);
+  assert.deepEqual(Array.from(effect.hsvMin), [150, 195, 195], 'red selection must wrap the hue range');
+  assert.deepEqual(Array.from(effect.hsvMax), [30, 255, 255]);
+
+  const blob = { x: 0, y: 0, width: 20, height: 20, area: 400, cx: 10, cy: 10 };
+  effect._stabilizeBlobs([blob], 0);
+  const smoothed = effect._stabilizeBlobs([{ ...blob, x: 10, cx: 20 }], 30);
+  assert.equal(smoothed[0].x, 4, 'box movement must be smoothed');
+  assert.equal(effect._stabilizeBlobs([], 100).length, 1, 'short detection gaps must not flicker');
+  assert.equal(effect._stabilizeBlobs([], 220).length, 0, 'stale detections must disappear');
+}
+
+function checkBlinkDetectionUsesRefinedEyeLandmarks() {
+  let options;
+  class FaceMesh {
+    setOptions(value) { options = value; }
+    onResults() {}
+    initialize() { return Promise.resolve(); }
+  }
+  const BlinkDetection = loadClass('js/effects/blink-detection.js', 'BlinkDetection', {
+    console,
+    FaceMesh,
+  });
+
+  const effect = new BlinkDetection();
+  assert.equal(options.refineLandmarks, true, 'blink detection needs refined eye landmarks');
+  assert.equal(effect.minClosedFrames, 2, 'one noisy frame must not trigger a blink');
+  assert.equal(effect._earSmoothing, 0.7, 'eye movement must be smoothed');
+}
+
+function checkFaceDetectionUsesRefinedEyeLandmarks() {
+  let options;
+  class FaceMesh {
+    setOptions(value) { options = value; }
+    onResults() {}
+    initialize() { return Promise.resolve(); }
+  }
+  const FaceDetection = loadClass('js/effects/face-detection.js', 'FaceDetection', {
+    console,
+    document: { createElement: () => ({ getContext: () => ({}) }) },
+    FaceMesh,
+  });
+
+  const effect = new FaceDetection();
+  assert.equal(options.refineLandmarks, true, 'shared face landmarks must preserve blink accuracy');
+  assert.equal(effect.boxSmoothing, 0.82, 'face boxes must keep the stable smoothing default');
+  assert.equal(effect.detectionHoldMs, 220, 'short detection gaps must not hide face effects');
 }
 
 await checkCameraStreamCleanup();
 checkReusableMorphologyBuffers();
+checkBlinkDetectionUsesRefinedEyeLandmarks();
+checkFaceDetectionUsesRefinedEyeLandmarks();
 console.log('Unit check passed.');

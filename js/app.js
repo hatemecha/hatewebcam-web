@@ -6,23 +6,12 @@
 
   // ─── DOM ───
   const $ = (s) => document.querySelector(s);
-  const MOBILE_RENDER_SAFE_MODE = (() => {
-    const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
-    const isMobileUa = /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
-    const isMobileViewport = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-      ? window.matchMedia('(max-width: 900px)').matches
-      : false;
-    return isMobileUa || isMobileViewport;
-  })();
   const videoEl = $('#videoElement');
   const canvas = $('#previewCanvas');
   const previewWrapper = $('#previewWrapper');
   const captureCountdown = $('#captureCountdown');
   const captureCountdownValue = $('#captureCountdownValue');
-  const previewContextOptions = MOBILE_RENDER_SAFE_MODE
-    ? { alpha: false }
-    : { alpha: false, desynchronized: true };
-  const ctx = canvas.getContext('2d', previewContextOptions) || canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { alpha: false }) || canvas.getContext('2d');
   const placeholder = $('#previewPlaceholder');
   const resolutionInfo = $('#resolutionInfo');
   const fpsInfo = $('#fpsInfo');
@@ -220,9 +209,10 @@
     'OpenGL error checking is disabled',
     'GL version: 3.0 (OpenGL ES 3.0',
   ];
+  const DETECTOR_DEFAULT_BOX_COLOR = '#ff2222';
   const DEFAULT_QUICK_DETECTOR_SETTINGS = {
-    blobBoxColor: '#00ffff',
-    faceBoxColor: '#e53935',
+    blobBoxColor: DETECTOR_DEFAULT_BOX_COLOR,
+    faceBoxColor: DETECTOR_DEFAULT_BOX_COLOR,
     faceLabelText: 'CARA',
     faceVisualMode: 'box',
     facePixelationCellSize: 14,
@@ -649,6 +639,22 @@
     return true;
   }
 
+  function migrateDetectorStabilityDefaults(cfg) {
+    if (cfg.detectorStabilityDefaultV1 === true) return false;
+    const face = cfg.effectSettings?.face;
+    const blink = cfg.effectSettings?.blink;
+    if (face?.boxSmoothing === 0.55 && face?.detectionHoldMs === 120) {
+      face.boxSmoothing = 0.82;
+      face.detectionHoldMs = 220;
+    }
+    if (blink?.minClosedFrames === 1 && blink?.earSmoothing === 0.45) {
+      blink.minClosedFrames = 2;
+      blink.earSmoothing = 0.7;
+    }
+    cfg.detectorStabilityDefaultV1 = true;
+    return true;
+  }
+
   function loadImageSettings(cfg) {
     const saved = cfg.imageSettings || {};
     imageSettings = {
@@ -991,6 +997,9 @@
       saveConfig(cfg);
     }
     if (migrateDetectorLatencyDefaults(cfg)) {
+      saveConfig(cfg);
+    }
+    if (migrateDetectorStabilityDefaults(cfg)) {
       saveConfig(cfg);
     }
     if (typeof cfg.flipH === 'boolean') flipH = cfg.flipH;
@@ -1800,11 +1809,23 @@
     const y = Math.round((e.clientY - rect.top) * (canvas.height / rect.height));
 
     if (x >= 0 && x < canvas.width && y >= 0 && y < canvas.height) {
-      const pixel = ctx.getImageData(x, y, 1, 1).data;
-      blobTrackingEffect.setColorFromPixel(pixel[0], pixel[1], pixel[2]);
+      const sampleX = clamp(x - 2, 0, Math.max(0, canvas.width - 5));
+      const sampleY = clamp(y - 2, 0, Math.max(0, canvas.height - 5));
+      const sampleWidth = Math.min(5, canvas.width);
+      const sampleHeight = Math.min(5, canvas.height);
+      const pixels = ctx.getImageData(sampleX, sampleY, sampleWidth, sampleHeight).data;
+      const color = [0, 0, 0];
+      for (let i = 0; i < pixels.length; i += 4) {
+        color[0] += pixels[i];
+        color[1] += pixels[i + 1];
+        color[2] += pixels[i + 2];
+      }
+      const pixelCount = pixels.length / 4;
+      blobTrackingEffect.setColorFromPixel(...color.map(value => Math.round(value / pixelCount)));
       colorPickMode = false;
       canvas.classList.remove('color-pick-mode');
-      showStatus(colorPickStatus, '✓ Color seleccionado', 'success');
+      showStatus(colorPickStatus, 'Color seleccionado. Ya podés mover el objeto.', 'success');
+      saveActiveEffectSettings();
       renderEffectConfig();
       setTimeout(() => hideStatus(colorPickStatus), 2500);
     }
