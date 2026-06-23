@@ -35,21 +35,99 @@ export function getWebmMuxerCodec(codec) {
   return typeof codec === 'string' && codec.startsWith('vp09') ? 'V_VP9' : codec === 'vp8' ? 'V_VP8' : null;
 }
 
-async function pickVideoCodec(width, height, fps, bitrate) {
+function formatProgressFps(value) {
+  const fps = normalizeFrameRate(value);
+  if (!fps) return '?';
+  return Number.isInteger(fps) ? String(fps) : fps.toFixed(3).replace(/\.?0+$/, '');
+}
+
+function formatObservedDuration(seconds) {
+  const safeSeconds = Math.max(0, Math.round(Number(seconds) || 0));
+  const minutes = Math.floor(safeSeconds / 60);
+  const restSeconds = safeSeconds % 60;
+  if (minutes <= 0) return `${restSeconds}s`;
+  return `${minutes}:${String(restSeconds).padStart(2, '0')}`;
+}
+
+export function formatObservedExportProgress({
+  done = 0,
+  total = 0,
+  startedAt = 0,
+  now = 0,
+  fps = 0,
+} = {}) {
+  const safeTotal = Math.max(1, Number(total) || 1);
+  const safeDone = Math.min(safeTotal, Math.max(0, Number(done) || 0));
+  const progress = safeDone / safeTotal;
+  const percent = Math.round(progress * 100);
+  const elapsedSec = Math.max(0, (Number(now) - Number(startedAt)) / 1000);
+  const observedFps = elapsedSec >= 1.2 && safeDone >= 2 ? safeDone / elapsedSec : 0;
+  if (!observedFps || safeDone < safeTotal * 0.03) {
+    return `Exportando ${percent}% · ${formatProgressFps(fps)} FPS · midiendo velocidad real`;
+  }
+  const remainingSec = (safeTotal - safeDone) / observedFps;
+  return `Exportando ${percent}% · ${formatProgressFps(fps)} FPS · ~${formatObservedDuration(remainingSec)} restantes`;
+}
+
+export async function diagnoseVideoExportSupport({
+  width = 1,
+  height = 1,
+  fps = 30,
+  bitrate = 8_000_000,
+  VideoEncoderImpl = globalThis.VideoEncoder,
+  VideoFrameImpl = globalThis.VideoFrame,
+} = {}) {
+  const diagnosis = {
+    supported: false,
+    webCodecs: typeof VideoEncoderImpl !== 'undefined',
+    videoFrame: typeof VideoFrameImpl !== 'undefined',
+    codec: '',
+    muxerCodec: '',
+    reason: '',
+  };
+
+  if (!diagnosis.webCodecs) {
+    diagnosis.reason = 'webcodecs_unavailable';
+    return diagnosis;
+  }
+  if (!diagnosis.videoFrame) {
+    diagnosis.reason = 'videoframe_unavailable';
+    return diagnosis;
+  }
+  if (typeof VideoEncoderImpl.isConfigSupported !== 'function') {
+    diagnosis.reason = 'webcodecs_config_unavailable';
+    return diagnosis;
+  }
+
   for (const codec of ['vp09.00.10.08', 'vp09.00.10.10', 'vp8']) {
-    const support = await VideoEncoder.isConfigSupported({
-      codec,
-      width,
-      height,
-      bitrate,
-      framerate: fps,
-      bitrateMode: 'variable',
-      latencyMode: 'quality',
-    });
+    let support;
+    try {
+      support = await VideoEncoderImpl.isConfigSupported({
+        codec,
+        width,
+        height,
+        bitrate,
+        framerate: fps,
+        bitrateMode: 'variable',
+        latencyMode: 'quality',
+      });
+    } catch {
+      support = { supported: false };
+    }
     if (support.supported) {
-      return { codec: support.config.codec, muxerCodec: getWebmMuxerCodec(codec) };
+      diagnosis.supported = true;
+      diagnosis.codec = support.config?.codec || codec;
+      diagnosis.muxerCodec = getWebmMuxerCodec(codec);
+      return diagnosis;
     }
   }
+  diagnosis.reason = 'webcodecs_codec_unsupported';
+  return diagnosis;
+}
+
+async function pickVideoCodec(width, height, fps, bitrate) {
+  const diagnosis = await diagnoseVideoExportSupport({ width, height, fps, bitrate });
+  if (diagnosis.supported) return { codec: diagnosis.codec, muxerCodec: diagnosis.muxerCodec };
   throw new Error('webcodecs_codec_unsupported');
 }
 

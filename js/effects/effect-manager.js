@@ -25,10 +25,10 @@ class EffectManager {
      * @param {HTMLCanvasElement} canvas
      * @param {HTMLVideoElement} video - for effects that need raw video
      */
-    processFrame(ctx, canvas, video) {
+    processFrame(ctx, canvas, video, renderProfile = null) {
         for (const effect of this.effects) {
             try {
-                effect.processFrame(ctx, canvas, video);
+                effect.processFrame(ctx, canvas, video, renderProfile);
             } catch (err) {
                 console.error(`Error en efecto ${effect.getName ? effect.getName() : 'desconocido'}:`, err);
             }

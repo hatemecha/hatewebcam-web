@@ -3,13 +3,7 @@ import { PREVIEW_QUALITY_PRESETS, normalizePreviewQuality } from './constants.mj
 export function applyStorageMixin(proto) {
 
   proto.loadJsonStorage = function (key, fallbackValue) {
-    try {
-      const raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : fallbackValue;
-    } catch (err) {
-      console.warn(`HateWebcam: no se pudo leer ${key} desde localStorage.`, err);
-      return fallbackValue;
-    }
+    return this.settingsStore.loadJson(key, fallbackValue);
   }
 
   proto.notifyStorageUnavailable = function (err) {
@@ -20,13 +14,7 @@ export function applyStorageMixin(proto) {
   }
 
   proto.saveJsonStorage = function (key, value) {
-    try {
-      localStorage.setItem(key, JSON.stringify(value));
-      return true;
-    } catch (err) {
-      this.notifyStorageUnavailable(err);
-      return false;
-    }
+    return this.settingsStore.saveJson(key, value);
   }
 
   proto.loadConfig = function () {

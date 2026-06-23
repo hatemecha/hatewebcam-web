@@ -283,30 +283,14 @@ export function applyCaptureMixin(proto) {
   }
 
   proto.ensureRecordingCanvas = function () {
-    if (!this.recordingCanvas) {
-      this.recordingCanvas = document.createElement('canvas');
-      this.recordingCtx = this.recordingCanvas.getContext('2d', { willReadFrequently: false });
-    }
-
     const { sourceWidth, sourceHeight } = this.getSourceFrameDimensions();
     const { width: recordingWidth, height: recordingHeight } = this.getEffectiveFrameDimensions(sourceWidth, sourceHeight);
-    if (this.recordingCanvas.width !== recordingWidth || this.recordingCanvas.height !== recordingHeight) {
-      this.recordingCanvas.width = recordingWidth;
-      this.recordingCanvas.height = recordingHeight;
-    }
-
+    this.renderEngine.ensureRecordingCanvas(recordingWidth, recordingHeight);
     return this.recordingCanvas;
   }
 
   proto.ensureRecordingEnhancerBuffer = function (width, height) {
-    if (!this.recordingEnhancerCanvas) {
-      this.recordingEnhancerCanvas = document.createElement('canvas');
-      this.recordingEnhancerCtx = this.recordingEnhancerCanvas.getContext('2d', { willReadFrequently: false });
-    }
-    if (this.recordingEnhancerCanvas.width !== width || this.recordingEnhancerCanvas.height !== height) {
-      this.recordingEnhancerCanvas.width = width;
-      this.recordingEnhancerCanvas.height = height;
-    }
+    this.renderEngine.ensureRecordingEnhancerBuffer(width, height);
     return this.recordingEnhancerCanvas;
   }
 
@@ -458,13 +442,13 @@ export function applyCaptureMixin(proto) {
     }
   }
 
-  proto.renderSourceFrameBuffer = function (applyQualityEnhancer = false) {
+  proto.renderSourceFrameBuffer = function (applyQualityEnhancer = false, mode = 'recording') {
     if (this.videoEl.readyState < 2) return;
 
     this.ensureRecordingCanvas();
     if (!this.recordingCanvas || !this.recordingCtx) return;
 
-    this.renderProcessedFrame(this.recordingCanvas, this.recordingCtx, 'recording');
+    this.renderProcessedFrame(this.recordingCanvas, this.recordingCtx, mode);
 
     if (applyQualityEnhancer && this.imageSettings.qualityEnhancer) {
       const enhancerBuffer = this.ensureRecordingEnhancerBuffer(this.recordingCanvas.width, this.recordingCanvas.height);
@@ -477,7 +461,7 @@ export function applyCaptureMixin(proto) {
           this.recordingCanvas.width,
           this.recordingCanvas.height,
           this.imageSettings.qualityEnhancerStrength,
-          false
+          mode === 'export'
         );
       }
     }

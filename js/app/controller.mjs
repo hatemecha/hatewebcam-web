@@ -36,9 +36,19 @@ import { applyUIHelpersMixin } from './ui-helpers.mjs';
 import { applyProfilesMixin } from './profiles.mjs';
 import { applyCaptureMixin } from './capture.mjs';
 import { applyModalfocusmanagementMixin } from './modal-focus.mjs';
+import { RenderEngine } from './render-engine.mjs';
+import { SettingsStore } from './settings-store.mjs';
+import { TimelineView } from './timeline-view.mjs';
+import { VideoExportSession } from './video-export-session.mjs';
 
 export class AppController {
   constructor() {
+    this.renderEngine = new RenderEngine();
+    this.renderEngine.attachLegacyAccessors(this);
+    this.settingsStore = new SettingsStore({ onError: (err) => this.notifyStorageUnavailable(err) });
+    this.timelineView = new TimelineView({ formatTime: (seconds) => this.formatDurationDetailed(seconds) });
+    this.videoExportSession = new VideoExportSession();
+    this.videoExportSession.attachLegacyAccessors(this);
     this.modalFocusState = new WeakMap();
     this.TIMELINE_EFFECT_META = TIMELINE_EFFECT_META;
     this.DEFAULT_TIMELINE_EFFECT_DURATION = DEFAULT_TIMELINE_EFFECT_DURATION;
@@ -84,10 +94,6 @@ export class AppController {
     this.currentRecordingBitrate = 6000000;
     this.currentRecordingFps = 30;
     this.pendingCapture = null;
-    this.recordingCanvas = null;
-    this.recordingCtx = null;
-    this.recordingEnhancerCanvas = null;
-    this.recordingEnhancerCtx = null;
     this.lastRecordingDurationSec = 0;
     this.previewScale = 1;
     this.photoPreviewRenderToken = 0;
@@ -95,12 +101,6 @@ export class AppController {
     this.photoCountdownTimer = null;
     this.photoCountdownRemaining = 0;
     this.isPhotoCountdownActive = false;
-    this.postFxCanvas = null;
-    this.postFxCtx = null;
-    this.captureFxCanvas = null;
-    this.captureFxCtx = null;
-    this.recordingFxCanvas = null;
-    this.recordingFxCtx = null;
     this.preferredDeviceId = null;
     this.faceMeshScriptLoadPromise = null;
     this.mediaPipeConsoleFilterInstalled = false;

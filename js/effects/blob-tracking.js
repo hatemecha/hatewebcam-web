@@ -173,7 +173,7 @@ class BlobTracking {
     /**
      * Process frame — detect blobs and draw overlays
      */
-    processFrame(ctx, canvas) {
+    processFrame(ctx, canvas, video, renderProfile = null) {
         const w = canvas.width;
         const h = canvas.height;
         if (w === 0 || h === 0) return;
@@ -185,9 +185,12 @@ class BlobTracking {
         const sw = Math.max(48, Math.round(w * scale));
         const sh = Math.max(48, Math.round(h * scale));
         const now = performance.now();
+        const processIntervalMs = Math.max(0, Math.round(
+            renderProfile?.detectorIntervalMs ?? renderProfile?.detectorInterval ?? this.processIntervalMs
+        ));
         const dimensionsChanged = this._workW !== sw || this._workH !== sh;
 
-        if (dimensionsChanged || now - this._lastProcessTs >= this.processIntervalMs) {
+        if (dimensionsChanged || processIntervalMs === 0 || now - this._lastProcessTs >= processIntervalMs) {
             this._lastProcessTs = now;
             this._ensureBuffers(sw, sh);
 

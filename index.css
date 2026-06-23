@@ -2159,6 +2159,14 @@ body.video-mode[data-editor-tool="trim"] .timeline-trim-handle,
   line-height: 1.6;
 }
 
+.video-export-diagnostics {
+  margin-top: 6px;
+  color: var(--gray-dim);
+  font-size: 10px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .video-time-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

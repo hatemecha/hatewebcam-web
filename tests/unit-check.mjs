@@ -14,12 +14,16 @@ import {
   calculateFrameRateFromMediaTimes,
   calculateFrameTimestampUs,
   calculateSourceAverageBitrate,
+  diagnoseVideoExportSupport,
   formatExportDebugInfo,
+  formatObservedExportProgress,
   getWebmMuxerCodec,
   normalizeFrameRate,
   snapFrameRate,
   shouldAppendFinalFrame,
 } from '../js/video-export.mjs';
+import { RENDER_PROFILES } from '../js/app/render-engine.mjs';
+import { calculateTimelineTickInterval } from '../js/app/timeline-view.mjs';
 import { applyLocalvideoeditorMixin } from '../js/app/video-editor.mjs';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -143,6 +147,12 @@ function checkReusableMorphologyBuffers() {
   now = 150;
   effect.processFrame(fakeContext, { width: 1600, height: 900 });
   assert.deepEqual([effect._workW, effect._workH], workSize, 'preview quality must not change detector resolution');
+  const previewAnalysisCount = analysisCount;
+  now = 151;
+  effect.processFrame(fakeContext, { width: 1600, height: 900 }, null, RENDER_PROFILES.preview);
+  assert.equal(analysisCount, previewAnalysisCount, 'preview profile must keep detector throttling');
+  effect.processFrame(fakeContext, { width: 1600, height: 900 }, null, RENDER_PROFILES.export);
+  assert.equal(analysisCount, previewAnalysisCount + 1, 'export profile must force per-frame analysis');
 }
 
 function checkBlinkDetectionUsesRefinedEyeLandmarks() {
@@ -319,6 +329,63 @@ function checkVideoExportTimingAndQuality() {
   );
 }
 
+async function checkVideoExportDiagnostics() {
+  const noWebCodecs = await diagnoseVideoExportSupport({
+    VideoEncoderImpl: undefined,
+    VideoFrameImpl: class VideoFrame {},
+  });
+  assert.equal(noWebCodecs.supported, false);
+  assert.equal(noWebCodecs.reason, 'webcodecs_unavailable');
+
+  const noVideoFrame = await diagnoseVideoExportSupport({
+    VideoEncoderImpl: class VideoEncoder {},
+    VideoFrameImpl: undefined,
+  });
+  assert.equal(noVideoFrame.supported, false);
+  assert.equal(noVideoFrame.reason, 'videoframe_unavailable');
+
+  class UnsupportedEncoder {
+    static async isConfigSupported(config) {
+      return { supported: false, config };
+    }
+  }
+  const unsupported = await diagnoseVideoExportSupport({
+    VideoEncoderImpl: UnsupportedEncoder,
+    VideoFrameImpl: class VideoFrame {},
+  });
+  assert.equal(unsupported.supported, false);
+  assert.equal(unsupported.reason, 'webcodecs_codec_unsupported');
+
+  class Vp8Encoder {
+    static async isConfigSupported(config) {
+      return { supported: config.codec === 'vp8', config };
+    }
+  }
+  const supported = await diagnoseVideoExportSupport({
+    width: 1920,
+    height: 1080,
+    fps: 30,
+    bitrate: 12_000_000,
+    VideoEncoderImpl: Vp8Encoder,
+    VideoFrameImpl: class VideoFrame {},
+  });
+  assert.equal(supported.supported, true);
+  assert.equal(supported.codec, 'vp8');
+  assert.equal(supported.muxerCodec, 'V_VP8');
+}
+
+function checkObservedExportProgressAndTimelineTicks() {
+  assert.equal(calculateTimelineTickInterval(60, 180), 30, 'narrow timelines need sparse labels');
+  assert.equal(calculateTimelineTickInterval(60, 720), 10, 'wide timelines can show denser labels');
+
+  const early = formatObservedExportProgress({ done: 1, total: 100, startedAt: 0, now: 500, fps: 30 });
+  assert.ok(!early.includes('restantes'), 'early progress must not fake an ETA');
+  assert.ok(early.includes('midiendo velocidad real'));
+
+  const observed = formatObservedExportProgress({ done: 50, total: 100, startedAt: 0, now: 5000, fps: 30 });
+  assert.ok(observed.includes('~5s restantes'), 'ETA must use observed processing speed');
+}
+
 await checkCameraStreamCleanup();
 checkCameraPreservesSupportedFps();
 checkReusableMorphologyBuffers();
@@ -329,4 +396,6 @@ checkTimelineClipSnappingHelper();
 checkEditorHistoryUndoRedo();
 checkPreviewProcessingResolutionContract();
 checkVideoExportTimingAndQuality();
+await checkVideoExportDiagnostics();
+checkObservedExportProgressAndTimelineTicks();
 console.log('Unit check passed.');

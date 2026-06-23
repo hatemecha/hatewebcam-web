@@ -391,10 +391,13 @@ class FaceDetection {
         ctx.textBaseline = 'alphabetic';
     }
 
-    processFrame(ctx, canvas, video) {
+    processFrame(ctx, canvas, video, renderProfile = null) {
         if (this.ready && !this._processing && video && video.readyState >= 2) {
             const now = performance.now();
-            if (now - this._lastProcessTs >= this.processIntervalMs) {
+            const processIntervalMs = Math.max(0, Math.round(
+                renderProfile?.detectorIntervalMs ?? renderProfile?.detectorInterval ?? this.processIntervalMs
+            ));
+            if (processIntervalMs === 0 || now - this._lastProcessTs >= processIntervalMs) {
                 this._lastProcessTs = now;
                 this._processing = true;
                 this.faceMesh.send({ image: video }).catch(() => {

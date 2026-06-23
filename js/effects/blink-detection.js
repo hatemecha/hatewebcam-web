@@ -194,10 +194,13 @@ class BlinkDetection {
      * Process frame — sends to MediaPipe for async processing  
      * Drawing is done from cached results
      */
-    processFrame(ctx, canvas, video) {
+    processFrame(ctx, canvas, video, renderProfile = null) {
+        const processIntervalMs = Math.max(0, Math.round(
+            renderProfile?.detectorIntervalMs ?? renderProfile?.detectorInterval ?? this.processIntervalMs
+        ));
         if (this.landmarkSource) {
             const now = performance.now();
-            if (now - this._lastProcessTs < this.processIntervalMs) return;
+            if (processIntervalMs !== 0 && now - this._lastProcessTs < processIntervalMs) return;
             this._lastProcessTs = now;
             this._processExternalLandmarks();
             return;
@@ -206,7 +209,7 @@ class BlinkDetection {
         // Send frame to MediaPipe (throttled)
         if (this.ready && !this._faceMeshProcessing && video && video.readyState >= 2) {
             const now = performance.now();
-            if (now - this._lastProcessTs < this.processIntervalMs) return;
+            if (processIntervalMs !== 0 && now - this._lastProcessTs < processIntervalMs) return;
             this._lastProcessTs = now;
             this._faceMeshProcessing = true;
             this.faceMesh.send({ image: video }).catch(() => {

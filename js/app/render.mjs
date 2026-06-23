@@ -212,44 +212,7 @@ export function applyRenderLoopMixin(proto) {
   }
 
   proto.ensurePostFxBuffer = function (mode, w, h, scale) {
-    let fxCanvas;
-    let fxCtx;
-
-    if (mode === 'recording') {
-      fxCanvas = this.recordingFxCanvas;
-      fxCtx = this.recordingFxCtx;
-    } else if (mode === 'capture') {
-      fxCanvas = this.captureFxCanvas;
-      fxCtx = this.captureFxCtx;
-    } else {
-      fxCanvas = this.postFxCanvas;
-      fxCtx = this.postFxCtx;
-    }
-
-    if (!fxCanvas) {
-      fxCanvas = document.createElement('canvas');
-      fxCtx = fxCanvas.getContext('2d', { willReadFrequently: true });
-
-      if (mode === 'recording') {
-        this.recordingFxCanvas = fxCanvas;
-        this.recordingFxCtx = fxCtx;
-      } else if (mode === 'capture') {
-        this.captureFxCanvas = fxCanvas;
-        this.captureFxCtx = fxCtx;
-      } else {
-        this.postFxCanvas = fxCanvas;
-        this.postFxCtx = fxCtx;
-      }
-    }
-
-    const pw = Math.max(320, Math.round(w * scale));
-    const ph = Math.max(180, Math.round(h * scale));
-
-    if (fxCanvas.width !== pw || fxCanvas.height !== ph) {
-      fxCanvas.width = pw;
-      fxCanvas.height = ph;
-    }
-    return { pw, ph, fxCanvas, fxCtx };
+    return this.renderEngine.ensurePostFxBuffer(mode, w, h, scale);
   }
 
   proto.drawBaseFrame = function (targetCtx, targetCanvas, mode = 'preview') {
@@ -294,9 +257,9 @@ export function applyRenderLoopMixin(proto) {
     const h = targetCanvas.height;
     if (w === 0 || h === 0) return;
 
-    let postFxScale = this.imageSettings.sharpness > 0 ? 0.78 : 0.86;
-    if (w * h > 1920 * 1080) postFxScale *= 0.92;
-    postFxScale = this.clamp(postFxScale, 0.72, 0.90);
+    let postFxScale = mode === 'export' ? 1 : (this.imageSettings.sharpness > 0 ? 0.78 : 0.86);
+    if (mode !== 'export' && w * h > 1920 * 1080) postFxScale *= 0.92;
+    postFxScale = mode === 'export' ? 1 : this.clamp(postFxScale, 0.72, 0.90);
 
     const { pw, ph, fxCanvas, fxCtx } = this.ensurePostFxBuffer(mode, w, h, postFxScale);
     fxCtx.drawImage(targetCanvas, 0, 0, pw, ph);
@@ -360,7 +323,8 @@ export function applyRenderLoopMixin(proto) {
       this.blobTrackingEffect.connectionColor = this.blobTrackingEffect.boxColor;
     }
 
-    this.effectManager.processFrame(targetCtx, targetCanvas, this.videoEl);
+    const profileName = mode === 'preview' && this.isMobileViewport() ? 'mobile' : mode;
+    this.effectManager.processFrame(targetCtx, targetCanvas, this.videoEl, this.renderEngine.getProfile(profileName));
   }
 
   proto.applySharpenFilter = function (imageData, amount) {

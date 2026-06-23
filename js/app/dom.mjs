@@ -53,6 +53,7 @@ export function setupDom(app) {
   app.btnOpenEffectAdjust = $('#btnOpenEffectAdjust');
   app.btnDeleteVideoEffect = $('#btnDeleteVideoEffect');
   app.videoExportDetails = $('#videoExportDetails');
+  app.videoExportDiagnostics = $('#videoExportDiagnostics');
   app.videoExportModal = $('#videoExportModal');
   app.videoExportTitle = $('#videoExportTitle');
   app.videoExportSummary = $('#videoExportSummary');
