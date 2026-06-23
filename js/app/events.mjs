@@ -180,7 +180,7 @@ export function applyEventsMixin(proto) {
     this.videoEl.addEventListener('seeked', () => {
       this.updateVideoTransport();
       void this.syncVideoTimelineEffects();
-      if (!this.animFrameId && this.isRunning) this.scheduleRenderLoop();
+      this.refreshPausedVideoPreview();
     });
     this.btnToggleCamera.addEventListener('click', () => this.toggleCamera(false));
     this.cameraSelect.addEventListener('change', this.onCameraChange.bind(this));

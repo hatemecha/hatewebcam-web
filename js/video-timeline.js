@@ -1,6 +1,8 @@
 /** Small, dependency-free timeline model used by the local video editor. */
 class VideoTimeline {
   static TYPES = ['look', 'blob', 'face', 'blink'];
+  static MARKER_KINDS = ['manual', 'beat', 'bar', 'section'];
+  static MARKER_SOURCES = ['user', 'edit-assist'];
 
   constructor(duration = 0) {
     this.duration = Math.max(0, Number(duration) || 0);
@@ -65,21 +67,37 @@ class VideoTimeline {
     this.items = this.items.filter((item) => item.id !== id);
   }
 
+  addMarker(marker = {}) {
+    const saved = this.#marker(marker);
+    this.markers.push(saved);
+    this.markers.sort((a, b) => a.time - b.time);
+    return saved;
+  }
+
+  addMarkers(markers = []) {
+    return markers.map((marker) => this.addMarker(marker));
+  }
+
+  clearMarkersBySource(source) {
+    const markerSource = VideoTimeline.MARKER_SOURCES.includes(source) ? source : 'user';
+    this.markers = this.markers.filter((marker) => (marker.source || 'user') !== markerSource);
+  }
+
+  getMarkersBySource(source) {
+    const markerSource = VideoTimeline.MARKER_SOURCES.includes(source) ? source : 'user';
+    return this.markers.filter((marker) => (marker.source || 'user') === markerSource);
+  }
+
   toggleMarker(time, threshold = 0.08) {
     const markerTime = this.#time(time);
     const maxDelta = Math.max(0, Number(threshold) || 0);
-    const existingIndex = this.markers.findIndex((marker) => Math.abs(marker.time - markerTime) <= maxDelta);
+    const existingIndex = this.markers.findIndex((marker) => (marker.source || 'user') === 'user' && Math.abs(marker.time - markerTime) <= maxDelta);
     if (existingIndex !== -1) {
       const [removed] = this.markers.splice(existingIndex, 1);
       return { action: 'removed', marker: removed };
     }
 
-    const marker = {
-      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
-      time: markerTime,
-    };
-    this.markers.push(marker);
-    this.markers.sort((a, b) => a.time - b.time);
+    const marker = this.addMarker({ time: markerTime });
     return { action: 'added', marker };
   }
 
@@ -108,5 +126,19 @@ class VideoTimeline {
   #time(value) {
     const number = Number(value);
     return Math.min(this.duration, Math.max(0, Number.isFinite(number) ? number : 0));
+  }
+
+  #marker(marker) {
+    const kind = VideoTimeline.MARKER_KINDS.includes(marker.kind) ? marker.kind : 'manual';
+    const source = VideoTimeline.MARKER_SOURCES.includes(marker.source) ? marker.source : 'user';
+    const strength = Number(marker.strength);
+    return {
+      id: marker.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`),
+      time: this.#time(marker.time),
+      kind,
+      source,
+      strength: Number.isFinite(strength) ? Math.min(1, Math.max(0, strength)) : 1,
+      label: marker.label || (kind === 'manual' ? 'Marcador' : kind === 'bar' ? 'Compás' : 'Beat'),
+    };
   }
 }

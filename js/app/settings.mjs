@@ -421,6 +421,7 @@ export function applyStorageMixin(proto) {
   }
 
   proto.scheduleSaveActiveEffectSettings = function () {
+    this.refreshPausedVideoPreview?.();
     if (this.saveEffectSettingsTimer) clearTimeout(this.saveEffectSettingsTimer);
     this.saveEffectSettingsTimer = setTimeout(() => {
       this.saveEffectSettingsTimer = null;
@@ -443,6 +444,7 @@ export function applyStorageMixin(proto) {
       } else {
         void this.syncVideoTimelineEffects(true);
       }
+      this.refreshPausedVideoPreview?.();
     } catch (err) {
       console.warn('No se pudo actualizar el clip seleccionado:', err.message);
     }
@@ -519,11 +521,16 @@ export function applyStorageMixin(proto) {
       : 'auto';
     this.imageSettings.editorExportFormat = ['auto', 'mp4', 'webm'].includes(this.imageSettings.editorExportFormat)
       ? this.imageSettings.editorExportFormat
-      : 'auto';
+      : 'webm';
     this.imageSettings.editorExportMode = ['full', 'effects-chroma'].includes(this.imageSettings.editorExportMode)
       ? this.imageSettings.editorExportMode
       : 'full';
+    this.imageSettings.experimentalExportFeatures = !!this.imageSettings.experimentalExportFeatures;
     this.imageSettings.editorCopyAudio = this.imageSettings.editorCopyAudio !== false;
+    if (!this.imageSettings.experimentalExportFeatures) {
+      this.imageSettings.editorExportFormat = 'webm';
+      this.imageSettings.editorCopyAudio = false;
+    }
     this.imageSettings.effectsExportChroma = ['green', 'blue'].includes(this.imageSettings.effectsExportChroma)
       ? this.imageSettings.effectsExportChroma
       : 'green';
@@ -543,6 +550,7 @@ export function applyStorageMixin(proto) {
 
   proto.scheduleSaveImageSettings = function () {
     this.syncLookClipConfigNow?.();
+    this.refreshPausedVideoPreview?.();
     if (this.saveImageSettingsTimer) clearTimeout(this.saveImageSettingsTimer);
     this.saveImageSettingsTimer = setTimeout(() => {
       this.saveImageSettingsTimer = null;
@@ -575,6 +583,7 @@ export function applyStorageMixin(proto) {
     if (this.videoExportModeSelect) this.videoExportModeSelect.value = this.imageSettings.editorExportMode;
     if (this.editorExportFormatSelect) this.editorExportFormatSelect.value = this.imageSettings.editorExportFormat;
     if (this.chkEditorCopyAudio) this.chkEditorCopyAudio.checked = !!this.imageSettings.editorCopyAudio;
+    if (this.chkExperimentalExportFeatures) this.chkExperimentalExportFeatures.checked = !!this.imageSettings.experimentalExportFeatures;
     if (this.effectsExportChromaSelect) this.effectsExportChromaSelect.value = this.imageSettings.effectsExportChroma;
     if (this.previewQualitySelect) this.previewQualitySelect.value = normalizePreviewQuality(this.imageSettings.previewQuality);
     if (this.captureTimerSelect) this.captureTimerSelect.value = String(this.imageSettings.captureTimerSeconds);
@@ -660,7 +669,19 @@ export function applyStorageMixin(proto) {
 
     if (this.editorExportFormatSelect) {
       this.editorExportFormatSelect.addEventListener('change', (e) => {
-        this.imageSettings.editorExportFormat = ['auto', 'mp4', 'webm'].includes(e.target.value) ? e.target.value : 'auto';
+        this.imageSettings.editorExportFormat = ['auto', 'mp4', 'webm'].includes(e.target.value) ? e.target.value : 'webm';
+        this.updateVideoEditorUI?.();
+        this.saveImageSettings();
+      });
+    }
+
+    if (this.chkExperimentalExportFeatures) {
+      this.chkExperimentalExportFeatures.addEventListener('change', (e) => {
+        this.imageSettings.experimentalExportFeatures = !!e.target.checked;
+        if (!this.imageSettings.experimentalExportFeatures) {
+          this.imageSettings.editorExportFormat = 'webm';
+          this.imageSettings.editorCopyAudio = false;
+        }
         this.updateVideoEditorUI?.();
         this.saveImageSettings();
       });
@@ -718,6 +739,7 @@ export function applyStorageMixin(proto) {
           editorExportFormat: this.imageSettings.editorExportFormat,
           editorExportMode: this.imageSettings.editorExportMode,
           editorCopyAudio: this.imageSettings.editorCopyAudio,
+          experimentalExportFeatures: this.imageSettings.experimentalExportFeatures,
           effectsExportChroma: this.imageSettings.effectsExportChroma,
           previewQuality: this.imageSettings.previewQuality,
           qualityEnhancer: this.imageSettings.qualityEnhancer,

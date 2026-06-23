@@ -41,6 +41,7 @@ import { RenderEngine } from './render-engine.mjs';
 import { SettingsStore } from './settings-store.mjs';
 import { TimelineView } from './timeline-view.mjs';
 import { VideoExportSession } from './video-export-session.mjs';
+import { EditAssistController } from './edit-assist-controller.mjs';
 
 export class AppController {
   constructor() {
@@ -50,6 +51,7 @@ export class AppController {
     this.timelineView = new TimelineView({ formatTime: (seconds) => this.formatDurationDetailed(seconds) });
     this.videoExportSession = new VideoExportSession();
     this.videoExportSession.attachLegacyAccessors(this);
+    this.editAssist = new EditAssistController(this);
     this.modalFocusState = new WeakMap();
     this.TIMELINE_EFFECT_META = TIMELINE_EFFECT_META;
     this.DEFAULT_TIMELINE_EFFECT_DURATION = DEFAULT_TIMELINE_EFFECT_DURATION;
@@ -122,6 +124,8 @@ export class AppController {
     this.timelineZoom = 1;
     this.timelineHistorySuspended = false;
     this.selectedVideoEffectId = '';
+    this.selectedVideoEffectIds = new Set();
+    this.timelineClipboard = null;
     this.paletteDragState = null;
     this.timelineDragGhost = null;
     this.appliedTimelineItemIds = {};

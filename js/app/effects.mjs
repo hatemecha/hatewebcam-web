@@ -6,6 +6,7 @@ export function applyEffectsMixin(proto) {
   }
 
   proto.toggleEffect = async function (type) {
+    const quiet = !!this.suppressEffectSideEffects;
     if (type === 'blob') {
       if (this.chkBlobTracking.checked) {
         if (!this.blobTrackingEffect) {
@@ -25,23 +26,25 @@ export function applyEffectsMixin(proto) {
         if (this.blinkDetectionEffect) this.blinkDetectionEffect.setBlinkCallback(null);
         if (this.colorPickSection) this.colorPickSection.classList.add('hidden');
       }
-      this.syncQuickDetectorSettingsFromEffects();
-      this.saveActiveEffectSettings();
-      this.renderEffectConfig();
-      this.updateEffectsInfo();
+      if (!quiet) {
+        this.syncQuickDetectorSettingsFromEffects();
+        this.saveActiveEffectSettings();
+        this.renderEffectConfig();
+        this.updateEffectsInfo();
+      }
       return;
     }
 
     if (type === 'face') {
       const requestId = ++this.faceLoadRequestId;
       if (this.chkFaceDetection.checked) {
-        this.showStatus(this.captureStatus, 'Cargando detector de caras...', 'info');
+        if (!quiet) this.showStatus(this.captureStatus, 'Cargando detector de caras...', 'info');
         this.chkFaceDetection.disabled = true;
         try {
           await this.ensureFaceMeshLoaded();
         } catch (err) {
           console.error('No se pudo cargar MediaPipe Face Mesh:', err);
-          this.showStatus(this.captureStatus, 'No se pudo cargar el detector de caras', 'error');
+          if (!quiet) this.showStatus(this.captureStatus, 'No se pudo cargar el detector de caras', 'error');
           this.chkFaceDetection.checked = false;
         } finally {
           this.chkFaceDetection.disabled = false;
@@ -60,7 +63,7 @@ export function applyEffectsMixin(proto) {
           this.applyQuickDetectorSettingsToEffects();
         }
         this.syncBlinkLandmarkSource();
-        if (!this.isRecording) {
+        if (!quiet && !this.isRecording) {
           setTimeout(() => this.hideStatus(this.captureStatus), 1200);
         }
       } else {
@@ -71,13 +74,13 @@ export function applyEffectsMixin(proto) {
     } else if (type === 'blink') {
       const requestId = ++this.blinkLoadRequestId;
       if (this.chkBlinkDetection.checked) {
-        this.showStatus(this.captureStatus, 'Cargando detector de pestañeos...', 'info');
+        if (!quiet) this.showStatus(this.captureStatus, 'Cargando detector de pestañeos...', 'info');
         this.chkBlinkDetection.disabled = true;
         try {
           await this.ensureFaceMeshLoaded();
         } catch (err) {
           console.error('No se pudo cargar MediaPipe Face Mesh:', err);
-          this.showStatus(this.captureStatus, 'No se pudo cargar el detector de pestañeos', 'error');
+          if (!quiet) this.showStatus(this.captureStatus, 'No se pudo cargar el detector de pestañeos', 'error');
           this.chkBlinkDetection.checked = false;
         } finally {
           this.chkBlinkDetection.disabled = false;
@@ -98,7 +101,7 @@ export function applyEffectsMixin(proto) {
         } else {
           this.blinkDetectionEffect.setBlinkCallback(null);
         }
-        if (!this.isRecording) {
+        if (!quiet && !this.isRecording) {
           setTimeout(() => this.hideStatus(this.captureStatus), 1200);
         }
       } else {
@@ -107,10 +110,12 @@ export function applyEffectsMixin(proto) {
       }
     }
 
-    this.syncQuickDetectorSettingsFromEffects();
-    this.saveActiveEffectSettings();
-    this.renderEffectConfig();
-    this.updateEffectsInfo();
+    if (!quiet) {
+      this.syncQuickDetectorSettingsFromEffects();
+      this.saveActiveEffectSettings();
+      this.renderEffectConfig();
+      this.updateEffectsInfo();
+    }
   }
 
   proto.updateEffectsInfo = function () {

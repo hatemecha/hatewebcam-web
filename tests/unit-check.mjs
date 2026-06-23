@@ -26,8 +26,11 @@ import {
 } from '../js/video-export.mjs';
 import { RENDER_PROFILES } from '../js/app/render-engine.mjs';
 import { calculateTimelineTickInterval } from '../js/app/timeline-view.mjs';
+import { DEFAULT_IMAGE_SETTINGS } from '../js/app/constants.mjs';
 import { applyEffectsMixin } from '../js/app/effects.mjs';
+import { applyRenderLoopMixin } from '../js/app/render.mjs';
 import { applyLocalvideoeditorMixin } from '../js/app/video-editor.mjs';
+import { estimateTempoFromSamples, extractMediaAudioSamples } from '../js/audio-tempo-analyzer.mjs';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -252,10 +255,92 @@ function checkVideoTimelineIntervals() {
   const added = timeline.toggleMarker(5.123, 0.08);
   assert.equal(added.action, 'added');
   assert.equal(timeline.markers[0].time, 5.123);
+  assert.equal(timeline.markers[0].kind, 'manual');
+  assert.equal(timeline.markers[0].source, 'user');
   assert.ok(timeline.getSnapPoints().includes(5.123), 'markers must be timeline snap points');
+  timeline.addMarkers([
+    { time: 6, kind: 'beat', source: 'edit-assist', strength: 0.8, label: 'Beat' },
+    { time: 8, kind: 'bar', source: 'edit-assist', strength: 0.9, label: 'Compás' },
+  ]);
+  assert.equal(timeline.getMarkersBySource('edit-assist').length, 2);
+  assert.ok(timeline.getSnapPoints().includes(8), 'edit-assist markers must be timeline snap points');
+  timeline.clearMarkersBySource('edit-assist');
+  assert.equal(timeline.getMarkersBySource('edit-assist').length, 0);
+  assert.equal(timeline.getMarkersBySource('user').length, 1, 'clearing edit-assist markers must keep user markers');
   const removed = timeline.toggleMarker(5.16, 0.08);
   assert.equal(removed.action, 'removed');
   assert.equal(timeline.markers.length, 0);
+}
+
+function checkAudioTempoAnalyzer() {
+  const sampleRate = 44100;
+  const duration = 8;
+  const samples = new Float32Array(sampleRate * duration);
+  for (let beat = 0; beat < duration * 2; beat++) {
+    const start = Math.round(beat * 0.5 * sampleRate);
+    for (let index = 0; index < 900; index++) {
+      samples[start + index] = Math.max(samples[start + index] || 0, 1 - index / 900);
+    }
+  }
+  const result = estimateTempoFromSamples(samples, sampleRate);
+  assert.ok(Math.abs(result.bpm - 120) <= 2, `120 BPM pulses should be detected, got ${result.bpm}`);
+  assert.ok(result.confidence > 0.3, 'clear pulses should produce usable confidence');
+  assert.ok(result.beats.length >= 14, 'clear pulses should produce beat markers');
+
+  const silent = estimateTempoFromSamples(new Float32Array(sampleRate * 2), sampleRate);
+  assert.equal(silent.bpm, 0);
+  assert.equal(silent.confidence, 0);
+  assert.equal(silent.beats.length, 0);
+}
+
+async function checkMediaAudioExtraction() {
+  const sampleRate = 44100;
+  const frames = sampleRate;
+  const channels = 2;
+  const data = new Float32Array(frames * channels);
+  for (let beat = 0; beat < 2; beat++) {
+    const start = Math.round(beat * 0.5 * sampleRate);
+    for (let index = 0; index < 900; index++) {
+      const value = 1 - index / 900;
+      data[(start + index) * channels] = value;
+      data[(start + index) * channels + 1] = value;
+    }
+  }
+  class FakeSample {
+    constructor() {
+      this.sampleRate = sampleRate;
+      this.numberOfFrames = frames;
+      this.numberOfChannels = channels;
+      this.closed = false;
+    }
+    allocationSize() { return data.byteLength; }
+    copyTo(destination) { destination.set(data); }
+    close() { this.closed = true; }
+  }
+  class BlobSource {
+    constructor(file) { this.file = file; }
+  }
+  class Input {
+    constructor() { this.disposed = false; }
+    async canRead() { return true; }
+    async getPrimaryAudioTrack() { return {}; }
+    dispose() { this.disposed = true; }
+  }
+  class AudioSampleSink {
+    async *samples() { yield new FakeSample(); }
+  }
+  const extracted = await extractMediaAudioSamples(new Blob(['video']), {
+    mediaModule: { Input, BlobSource, ALL_FORMATS: [], AudioSampleSink },
+  });
+  assert.equal(extracted.sampleRate, sampleRate);
+  assert.equal(extracted.samples.length, frames);
+  assert.ok(extracted.samples.some((value) => value > 0.9), 'decoded media samples must be mixed to mono');
+}
+
+function checkStableExportDefaults() {
+  assert.equal(DEFAULT_IMAGE_SETTINGS.editorExportFormat, 'webm');
+  assert.equal(DEFAULT_IMAGE_SETTINGS.editorCopyAudio, false);
+  assert.equal(DEFAULT_IMAGE_SETTINGS.experimentalExportFeatures, false);
 }
 
 function checkTimelineClipSnappingHelper() {
@@ -290,6 +375,314 @@ function checkTimelineClipSnappingHelper() {
     { top: 'calc(2 * 20%)', height: '20%' },
     'timeline clips must fill the full effect row height'
   );
+}
+
+function checkTimelineMarkerIntervalsForInsertion() {
+  const VideoTimeline = loadClass('js/video-timeline.js', 'VideoTimeline');
+  const timeline = new VideoTimeline(10);
+  timeline.addMarkers([
+    { time: 1, kind: 'beat', source: 'edit-assist' },
+    { time: 1.5, kind: 'beat', source: 'edit-assist' },
+    { time: 2, kind: 'beat', source: 'edit-assist' },
+  ]);
+  const app = {
+    videoTimeline: timeline,
+    videoEl: { currentTime: 0 },
+    chkTimelineSnap: { checked: true },
+    timelineZoom: 1,
+    DEFAULT_TIMELINE_EFFECT_DURATION: 3,
+    clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
+  };
+  applyLocalvideoeditorMixin(app);
+  assert.deepEqual(
+    app.resolveTimelineInsertionTimes({ type: 'blob', anchorTime: 1.2, duration: 3 }),
+    { startTime: 1, endTime: 1.5 },
+    'new clips dropped on tempo markers should fill the marker interval'
+  );
+}
+
+function checkTimelineClipboardBasics() {
+  const VideoTimeline = loadClass('js/video-timeline.js', 'VideoTimeline');
+  const timeline = new VideoTimeline(10);
+  const look = timeline.add('look', 1, 2, { contrast: 120 });
+  const app = {
+    videoTimeline: timeline,
+    videoSourceFile: {},
+    videoEl: { currentTime: 5 },
+    selectedVideoEffectId: look.id,
+    selectedVideoEffectIds: new Set([look.id]),
+    timelineHistorySuspended: false,
+    editorHistory: { push() {} },
+    clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
+    updateEditorHistoryButtons() {},
+    renderVideoTimeline() {},
+    updateVideoEffectInspector() {},
+    syncVideoTimelineEffects() {},
+    showStatus() {},
+  };
+  applyLocalvideoeditorMixin(app);
+  app.copySelectedVideoEffects(false);
+  app.pasteVideoEffects(false);
+  assert.equal(timeline.items.length, 2, 'paste should add a copied clip');
+  assert.equal(timeline.items[1].startTime, 5);
+  assert.equal(timeline.items[1].endTime, 6);
+  assert.deepEqual(timeline.items[1].config, { contrast: 120 });
+}
+
+async function checkSequentialExportAdvance() {
+  let pauseCalls = 0;
+  const app = {
+    videoExportPlayback: { playbackRate: 4 },
+    videoEl: {
+      currentTime: 0,
+      ended: false,
+      playbackRate: 4,
+      pause() { pauseCalls += 1; },
+    },
+    isVideoExporting: true,
+    seekCalls: 0,
+    playCalls: 0,
+    waitCalls: 0,
+  };
+  applyLocalvideoeditorMixin(app);
+  app.seekVideoForExport = async () => { app.seekCalls += 1; };
+  app.waitForExportVideoFrame = async () => { app.waitCalls += 1; };
+  app.playVideoUntilExportTime = async () => { app.playCalls += 1; };
+  await app.advanceVideoForExport(0, 24, 0);
+  await app.advanceVideoForExport(1 / 24, 24, 1);
+  app.videoEl.currentTime = 1 / 24;
+  await app.advanceVideoForExport(1 / 24, 24, 2);
+  app.videoEl.currentTime = 0.2;
+  await app.advanceVideoForExport(2 / 24, 24, 3);
+  assert.equal(app.seekCalls, 1, 'only the first export frame should require an absolute seek');
+  assert.equal(app.playCalls, 1, 'later frames should advance sequentially');
+  assert.equal(app.waitCalls, 0, 'sequential export should not wait for an extra frame after every step');
+  assert.equal(app.videoExportSkippedFrames, 1, 'overshot frames should be reused instead of forcing a late seek');
+  assert.equal(app.videoExportPlayback.playbackRate, 1, 'overshot export playback must fall back to realtime');
+  assert.equal(app.videoEl.playbackRate, 1, 'overshot export playback must update the video element rate');
+  assert.equal(pauseCalls, 1, 'overshot export playback must pause before reusing the current frame');
+}
+
+async function checkExportPlaybackPausesAtTarget() {
+  let pauseCalls = 0;
+  const app = {
+    isVideoExporting: true,
+    videoExportPlayback: { playbackRate: 4 },
+    videoEl: {
+      currentTime: 1,
+      ended: false,
+      playbackRate: 1,
+      pause() { pauseCalls += 1; },
+      play: async () => {},
+      addEventListener() {},
+      removeEventListener() {},
+    },
+  };
+  applyLocalvideoeditorMixin(app);
+  await app.playVideoUntilExportTime(1, 0.01);
+  assert.equal(pauseCalls, 1, 'export playback must pause as soon as the target frame is reached');
+}
+
+async function checkExportSeekFallsBackWhenSeekedIsMissing() {
+  let currentTime = 4;
+  let waited = false;
+  let fastSeekCalled = false;
+  const app = {
+    videoTimeline: { duration: 10 },
+    videoEl: {
+      readyState: 2,
+      get currentTime() { return currentTime; },
+      set currentTime(value) { currentTime = value; },
+      fastSeek() { fastSeekCalled = true; },
+      addEventListener() {},
+      removeEventListener() {},
+    },
+    clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
+  };
+  applyLocalvideoeditorMixin(app);
+  app.waitForExportVideoFrame = async () => { waited = true; };
+  await app.seekVideoForExport(0);
+  assert.equal(currentTime, 0);
+  assert.equal(fastSeekCalled, false, 'export seek must request exact timestamps instead of fastSeek keyframes');
+  assert.equal(waited, true, 'export seek should continue if the media time lands but seeked is not emitted');
+}
+
+function checkVideoSeekAvoidsExactDuration() {
+  let currentTime = 0;
+  let scheduled = 0;
+  const app = {
+    videoSourceFile: {},
+    isVideoExporting: false,
+    videoTimeline: { trimStart: 0, trimEnd: 10, duration: 10 },
+    videoEl: {
+      duration: 10,
+      get currentTime() { return currentTime; },
+      set currentTime(value) { currentTime = value; },
+    },
+    animFrameId: null,
+    clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
+    updateVideoTransport() {},
+    scheduleRenderLoop() { scheduled += 1; },
+  };
+  applyLocalvideoeditorMixin(app);
+  app.seekVideo(10);
+  assert.ok(currentTime < 10, 'timeline-end seeks must avoid the exact media duration');
+  assert.ok(Math.abs(currentTime - 9.999) < 1e-9, 'timeline-end seeks should land on the playable final timestamp');
+  assert.equal(scheduled, 1);
+}
+
+function checkPausedVideoPreviewUsesAnimationFrame() {
+  const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+  const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
+  let rafCalls = 0;
+  let cancelled = 0;
+  globalThis.requestAnimationFrame = () => { rafCalls += 1; return 41; };
+  globalThis.cancelAnimationFrame = (id) => { cancelled = id; };
+  try {
+    const app = {
+      canvas: { width: 1, height: 1 },
+      ctx: {},
+      frameCount: 0,
+      isPageVisible: true,
+      isRunning: true,
+      isVideoExporting: false,
+      lastFpsTime: performance.now(),
+      sourceMode: 'video',
+      videoTimeline: { trimEnd: 10, duration: 10 },
+      videoEl: {
+        currentTime: 0,
+        paused: true,
+        readyState: 2,
+        requestVideoFrameCallback() { throw new Error('paused video should not wait for a video frame'); },
+        cancelVideoFrameCallback() {},
+      },
+      fpsInfo: { textContent: '' },
+    };
+    applyRenderLoopMixin(app);
+    app.syncVideoTimelineLookNow = () => {};
+    app.syncVideoTimelineDetectors = () => {};
+    app.syncPreviewCanvasMetrics = () => {};
+    app.renderProcessedFrame = () => {};
+    app.updateVideoTransport = () => {};
+    app.scheduleRenderLoop();
+    assert.equal(app.animFrameType, 'animation');
+    assert.equal(rafCalls, 1);
+    app.cancelRenderLoop();
+    assert.equal(cancelled, 41);
+    rafCalls = 0;
+    app.animFrameId = 43;
+    app.animFrameType = 'animation';
+    app.refreshPausedVideoPreview();
+    assert.equal(cancelled, 43, 'paused preview refresh must cancel stale renders after seeked');
+    assert.equal(rafCalls, 1, 'paused preview refresh must schedule one fresh render after seeked');
+    let scheduled = 0;
+    app.animFrameId = 42;
+    app.animFrameType = 'animation';
+    app.scheduleRenderLoop = () => { scheduled += 1; };
+    app.videoEl.currentTime = 10;
+    let pauseCalls = 0;
+    app.videoEl.pause = () => { pauseCalls += 1; };
+    app.renderLoop();
+    assert.equal(app.animFrameId, null);
+    assert.equal(scheduled, 0, 'paused video preview should render once, not spin forever');
+    assert.equal(app.videoEl.currentTime, 10, 'paused video preview at the end must not re-seek every render');
+    assert.equal(pauseCalls, 0, 'paused video preview at the end must not pause repeatedly');
+  } finally {
+    globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+    globalThis.cancelAnimationFrame = originalCancelAnimationFrame;
+  }
+}
+
+async function checkVideoPlaybackRestartsFromEnd() {
+  let currentTime = 9.999;
+  let cancelled = 0;
+  let scheduled = 0;
+  const app = {
+    videoSourceFile: {},
+    isVideoExporting: false,
+    animFrameId: 77,
+    videoTimeline: { trimStart: 0, trimEnd: 10, duration: 10 },
+    videoEl: {
+      paused: true,
+      duration: 10,
+      get currentTime() { return currentTime; },
+      set currentTime(value) { currentTime = value; },
+      play: async () => {},
+    },
+    clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
+    cancelRenderLoop() { cancelled += 1; this.animFrameId = null; },
+    scheduleRenderLoop() { scheduled += 1; this.animFrameId = 78; },
+    updateVideoTransport() {},
+    showStatus() {},
+  };
+  applyLocalvideoeditorMixin(app);
+  await app.toggleVideoPlayback();
+  assert.equal(cancelled, 1, 'playing from the end must cancel stale preview renders');
+  assert.equal(currentTime, 0, 'playing from the end must return to trim start');
+  assert.equal(scheduled, 1, 'playing from the end must schedule a fresh render');
+}
+
+async function checkExportPlaybackRateRestores() {
+  const app = {
+    videoEl: {
+      playbackRate: 1.25,
+      muted: false,
+      readyState: 2,
+      currentTime: 0,
+      duration: 10,
+      pause() {},
+      addEventListener() {},
+      removeEventListener() {},
+    },
+    videoTimeline: { duration: 10 },
+    clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
+    videoExportSession: {
+      stop() {},
+      releaseWakeLock: async () => {},
+    },
+    videoExportProgress: { value: 0 },
+    videoExportModal: { classList: { add() {} } },
+    isRunning: false,
+    videoSourceFile: null,
+    updateVideoEditorUI() {},
+    updateVideoTransport() {},
+    deactivateModalFocusTrap() {},
+    waitForExportVideoFrame: async () => {},
+  };
+  applyLocalvideoeditorMixin(app);
+  app.updateVideoEditorUI = () => {};
+  app.updateVideoTransport = () => {};
+  await app.prepareSequentialVideoExport(0);
+  assert.equal(app.videoEl.playbackRate, 4, 'sequential export should decode faster than realtime');
+  assert.equal(app.videoEl.muted, true);
+  app.cleanupVideoExport(false);
+  assert.equal(app.videoEl.playbackRate, 1.25, 'export cleanup must restore original playbackRate');
+  assert.equal(app.videoEl.muted, false, 'export cleanup must restore muted state');
+}
+
+async function checkExportTimelineDetectorToggleIsQuiet() {
+  const calls = [];
+  const effect = {};
+  const app = {
+    isVideoExporting: true,
+    chkBlobTracking: { checked: true },
+    chkFaceDetection: { checked: false },
+    chkBlinkDetection: { checked: false },
+    blobTrackingEffect: effect,
+    blinkDetectionEffect: { setBlinkCallback: () => calls.push('blink-callback') },
+    effectManager: { removeEffect(removed) { assert.equal(removed, effect); calls.push('remove'); } },
+    colorPickSection: { classList: { add() { calls.push('color-ui'); }, remove() {} } },
+    syncQuickDetectorSettingsFromEffects() { calls.push('sync-settings'); },
+    saveActiveEffectSettings() { calls.push('save-settings'); },
+    renderEffectConfig() { calls.push('render-config'); },
+    updateEffectsInfo() { calls.push('effects-info'); },
+  };
+  applyEffectsMixin(app);
+  applyLocalvideoeditorMixin(app);
+  await app.setTimelineDetector('blob', null);
+  assert.equal(app.chkBlobTracking.checked, false);
+  assert.equal(app.blobTrackingEffect, null);
+  assert.deepEqual(calls, ['remove', 'blink-callback', 'color-ui'], 'export detector toggles must skip storage and heavy UI refresh');
 }
 
 function checkEditorHistoryUndoRedo() {
@@ -552,6 +945,33 @@ async function checkEffectsOnlyExportSkipsBaseRender() {
   assert.equal(app.effectsOnlyCalls, 1);
 }
 
+async function checkExportFrameProgressThrottlesInnerStages() {
+  const calls = [];
+  const app = {
+    videoTimeline: { trimStart: 0 },
+    imageSettings: {
+      editorExportMode: 'full',
+      qualityEnhancer: false,
+    },
+    videoExportTotalFrames: 10,
+    updateVideoExportProgress(done, total, fps, meta) {
+      calls.push(meta);
+    },
+    applyVideoTimelineLook() {},
+    syncVideoTimelineDetectorsAt: async () => {},
+    renderSourceFrameBuffer() {},
+  };
+  applyLocalvideoeditorMixin(app);
+  app.updateVideoExportProgress = (done, total, fps, meta) => { calls.push(meta); };
+  app.advanceVideoForExport = async () => {};
+  await app.renderVideoExportFrame(1, 30, { mode: 'full' });
+  const byStage = Object.fromEntries(calls.map((meta) => [meta.stage, meta]));
+  assert.equal(byStage.decode.force, true, 'decode remains the single forced frame progress update');
+  assert.equal(byStage.look.force, undefined, 'look progress must use throttled UI updates');
+  assert.equal(byStage.detectors.force, undefined, 'detector progress must use throttled UI updates');
+  assert.equal(byStage.canvas.force, undefined, 'canvas progress must use throttled UI updates');
+}
+
 function checkObservedExportProgressAndTimelineTicks() {
   assert.equal(calculateTimelineTickInterval(60, 180), 30, 'narrow timelines need sparse labels');
   assert.equal(calculateTimelineTickInterval(60, 720), 10, 'wide timelines can show denser labels');
@@ -561,7 +981,8 @@ function checkObservedExportProgressAndTimelineTicks() {
   assert.ok(early.includes('midiendo velocidad real'));
 
   const observed = formatObservedExportProgress({ done: 50, total: 100, startedAt: 0, now: 5000, fps: 30 });
-  assert.ok(observed.includes('~5s restantes'), 'ETA must use observed processing speed');
+  assert.ok(observed.includes('10 fps reales'), 'progress must show observed export speed');
+  assert.ok(observed.includes('5s transcurridos'), 'progress must show elapsed time instead of fake ETA');
 }
 
 await checkCameraStreamCleanup();
@@ -571,7 +992,20 @@ checkBlinkDetectionUsesRefinedEyeLandmarks();
 await checkBlinkCallbackClearsWhenBlobDisabled();
 checkFaceDetectionUsesRefinedEyeLandmarks();
 checkVideoTimelineIntervals();
+checkAudioTempoAnalyzer();
+await checkMediaAudioExtraction();
+checkStableExportDefaults();
 checkTimelineClipSnappingHelper();
+checkTimelineMarkerIntervalsForInsertion();
+checkTimelineClipboardBasics();
+await checkSequentialExportAdvance();
+await checkExportPlaybackPausesAtTarget();
+await checkExportSeekFallsBackWhenSeekedIsMissing();
+checkVideoSeekAvoidsExactDuration();
+checkPausedVideoPreviewUsesAnimationFrame();
+await checkVideoPlaybackRestartsFromEnd();
+await checkExportPlaybackRateRestores();
+await checkExportTimelineDetectorToggleIsQuiet();
 checkEditorHistoryUndoRedo();
 checkPreviewProcessingResolutionContract();
 checkVideoExportTimingAndQuality();
@@ -579,5 +1013,6 @@ await checkVideoExportDiagnostics();
 checkEditorExportFormatHelpers();
 checkPaletteDropUsesEffectTypeRow();
 await checkEffectsOnlyExportSkipsBaseRender();
+await checkExportFrameProgressThrottlesInnerStages();
 checkObservedExportProgressAndTimelineTicks();
 console.log('Unit check passed.');

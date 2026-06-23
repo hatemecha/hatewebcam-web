@@ -112,19 +112,29 @@ export function applyRenderLoopMixin(proto) {
 
   proto.scheduleRenderLoop = function () {
     if (this.isVideoExporting) return;
-    this.animFrameId = typeof this.videoEl.requestVideoFrameCallback === 'function'
+    const useVideoFrame = typeof this.videoEl.requestVideoFrameCallback === 'function'
+      && !(this.sourceMode === 'video' && this.videoEl.paused);
+    this.animFrameType = useVideoFrame ? 'video' : 'animation';
+    this.animFrameId = useVideoFrame
       ? this.videoEl.requestVideoFrameCallback(this.renderLoop.bind(this))
       : requestAnimationFrame(this.renderLoop.bind(this));
   }
 
   proto.cancelRenderLoop = function () {
     if (this.animFrameId == null) return;
-    if (typeof this.videoEl.cancelVideoFrameCallback === 'function') {
+    if (this.animFrameType !== 'animation' && typeof this.videoEl.cancelVideoFrameCallback === 'function') {
       this.videoEl.cancelVideoFrameCallback(this.animFrameId);
     } else {
       cancelAnimationFrame(this.animFrameId);
     }
     this.animFrameId = null;
+    this.animFrameType = '';
+  }
+
+  proto.refreshPausedVideoPreview = function () {
+    if (this.sourceMode !== 'video' || !this.videoEl?.paused || this.isVideoExporting) return;
+    this.cancelRenderLoop();
+    this.scheduleRenderLoop();
   }
 
   proto.renderLoop = function () {
@@ -142,9 +152,10 @@ export function applyRenderLoopMixin(proto) {
         if (this.sourceMode === 'video') {
           this.syncVideoTimelineLookNow();
           void this.syncVideoTimelineDetectors();
-          if (this.videoEl.currentTime >= this.videoTimeline.trimEnd) {
+          const trimEnd = this.getVideoPlayableEnd?.(this.videoTimeline.trimEnd) ?? this.videoTimeline.trimEnd;
+          if (!this.videoEl.paused && this.videoEl.currentTime >= trimEnd) {
             this.videoEl.pause();
-            this.videoEl.currentTime = this.videoTimeline.trimEnd;
+            this.videoEl.currentTime = trimEnd;
           }
         }
         const { sourceWidth, sourceHeight } = this.getSourceFrameDimensions();
@@ -176,6 +187,11 @@ export function applyRenderLoopMixin(proto) {
       console.error('Render loop error:', err);
     }
 
+    if (this.sourceMode === 'video' && this.videoEl.paused) {
+      this.animFrameId = null;
+      this.animFrameType = '';
+      return;
+    }
     this.scheduleRenderLoop();
   }
 

@@ -62,6 +62,7 @@ export function applyInitMixin(proto) {
     this.bindEditorSplitters();
     this.bindQuickDetectorEvents();
     this.bindImageControlEvents();
+    this.editAssist?.bind();
     this.syncMobileViewportState();
     this.setMobileFxPanelVisible(false);
     this.updateCaptureButtons();

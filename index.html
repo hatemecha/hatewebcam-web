@@ -278,8 +278,21 @@
               <div class="video-file-meta mono" id="videoFileMeta">Ningún archivo cargado</div>
               <div class="status-msg hidden" id="videoEditorStatus" role="status" aria-live="polite"></div>
               <div class="spacer-8"></div>
+              <div class="section-title"><i class="fa-solid fa-wave-square"></i> Asistencia de edición</div>
+              <div class="help-text">Detecta pulsos aproximados para ayudarte a sincronizar efectos. Podés mover o borrar marcadores manualmente.</div>
+              <button type="button" class="btn" id="btnEditAssistAnalyze"><i class="fa-solid fa-wave-square"></i> Analizar audio</button>
+              <div class="edit-assist-result mono" id="editAssistResult">Importá un video para analizar su audio.</div>
+              <div class="btn-row edit-assist-actions">
+                <button type="button" class="btn" id="btnEditAssistBeat" disabled>Cada beat</button>
+                <button type="button" class="btn" id="btnEditAssistEvery2" disabled>Cada 2</button>
+                <button type="button" class="btn" id="btnEditAssistEvery4" disabled>Cada 4</button>
+              </div>
+              <button type="button" class="btn" id="btnEditAssistClear" disabled><i class="fa-solid fa-eraser"></i> Limpiar Edit Assist</button>
+              <div class="status-msg hidden" id="editAssistStatus" role="status" aria-live="polite"></div>
+              <div class="spacer-8"></div>
               <div class="section-title"><i class="fa-solid fa-file-export"></i> Exportación</div>
               <div class="help-text">Se procesa localmente en resolución original. La preview no cambia la calidad final.</div>
+              <div class="video-export-summary mono" id="editorStableExportDetails">Estable: WebM · sin audio</div>
               <div class="slider-label"><span>Salida del editor</span></div>
               <div class="select-wrapper">
                 <select id="videoExportModeSelect">
@@ -288,19 +301,26 @@
                 </select>
               </div>
               <div class="spacer-8"></div>
-              <div class="slider-label"><span>Formato de exportación</span></div>
-              <div class="select-wrapper">
-                <select id="editorExportFormatSelect">
-                  <option value="auto">Automático (WebM rápido)</option>
-                  <option value="mp4">MP4 (Premiere, puede ser lento)</option>
-                  <option value="webm">WebM</option>
-                </select>
-              </div>
-              <div class="spacer-8"></div>
               <label class="checkbox-group">
-                <input type="checkbox" id="chkEditorCopyAudio">
-                <span>Copiar audio original si es compatible</span>
+                <input type="checkbox" id="chkExperimentalExportFeatures">
+                <span>Mostrar opciones experimentales</span>
               </label>
+              <div id="editorExperimentalExportGroup" class="hidden">
+                <div class="spacer-8"></div>
+                <div class="slider-label"><span>Formato de exportación</span></div>
+                <div class="select-wrapper">
+                  <select id="editorExportFormatSelect">
+                    <option value="webm">WebM</option>
+                    <option value="auto">Automático</option>
+                    <option value="mp4">MP4 (Premiere, puede ser lento)</option>
+                  </select>
+                </div>
+                <div class="spacer-8"></div>
+                <label class="checkbox-group">
+                  <input type="checkbox" id="chkEditorCopyAudio">
+                  <span>Copiar audio original si es compatible</span>
+                </label>
+              </div>
               <div class="spacer-8"></div>
               <div id="effectsExportChromaGroup" class="hidden">
                 <div class="slider-label"><span>Chroma</span></div>

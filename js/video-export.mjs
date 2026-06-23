@@ -115,6 +115,14 @@ function formatProgressFps(value) {
   return Number.isInteger(fps) ? String(fps) : fps.toFixed(3).replace(/\.?0+$/, '');
 }
 
+function formatObservedFps(value) {
+  const fps = Number(value);
+  if (!Number.isFinite(fps) || fps <= 0) return '?';
+  if (fps < 1) return fps.toFixed(2);
+  if (fps < 10) return fps.toFixed(1);
+  return Math.round(fps).toString();
+}
+
 function formatObservedDuration(seconds) {
   const safeSeconds = Math.max(0, Math.round(Number(seconds) || 0));
   const minutes = Math.floor(safeSeconds / 60);
@@ -137,10 +145,9 @@ export function formatObservedExportProgress({
   const elapsedSec = Math.max(0, (Number(now) - Number(startedAt)) / 1000);
   const observedFps = elapsedSec >= 1.2 && safeDone >= 2 ? safeDone / elapsedSec : 0;
   if (!observedFps || safeDone < safeTotal * 0.03) {
-    return `Exportando ${percent}% · ${formatProgressFps(fps)} FPS · midiendo velocidad real`;
+    return `Exportando ${percent}% · salida ${formatProgressFps(fps)} FPS · midiendo velocidad real`;
   }
-  const remainingSec = (safeTotal - safeDone) / observedFps;
-  return `Exportando ${percent}% · ${formatProgressFps(fps)} FPS · ~${formatObservedDuration(remainingSec)} restantes`;
+  return `Exportando ${percent}% · ${formatObservedFps(observedFps)} fps reales · ${formatObservedDuration(elapsedSec)} transcurridos`;
 }
 
 async function testVideoCodecSupport(VideoEncoderImpl, config) {
