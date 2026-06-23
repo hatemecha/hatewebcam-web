@@ -57,6 +57,7 @@ export function setupDom(app) {
   app.videoExportTitle = $('#videoExportTitle');
   app.videoExportSummary = $('#videoExportSummary');
   app.videoExportProgress = $('#videoExportProgress');
+  app.videoExportDebug = $('#videoExportDebug');
   app.btnExportVideo = $('#btnExportVideo');
   app.btnHeaderExportVideo = $('#btnHeaderExportVideo');
   app.btnCancelVideoExport = $('#btnCancelVideoExport');

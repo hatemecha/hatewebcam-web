@@ -9,14 +9,18 @@ import {
 } from '../js/preview-metrics.mjs';
 import {
   calculateExportBitrate,
+  calculateFrameDurationUs,
   calculateExportFrameCount,
   calculateFrameRateFromMediaTimes,
   calculateFrameTimestampUs,
   calculateSourceAverageBitrate,
+  formatExportDebugInfo,
   getWebmMuxerCodec,
   normalizeFrameRate,
   snapFrameRate,
+  shouldAppendFinalFrame,
 } from '../js/video-export.mjs';
+import { applyLocalvideoeditorMixin } from '../js/app/video-editor.mjs';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -120,6 +124,10 @@ function checkReusableMorphologyBuffers() {
   assert.equal(smoothed[0].x, 6.5, 'box movement must stay responsive without jittering');
   assert.equal(effect._stabilizeBlobs([], 100).length, 1, 'short detection gaps must not flicker');
   assert.equal(effect._stabilizeBlobs([], 220).length, 0, 'stale detections must disappear');
+  effect.setConfig({ labelSize: 99 });
+  assert.equal(effect.getConfig().labelSize, 32, 'blob label size must clamp high values');
+  effect.setConfig({ labelSize: 2 });
+  assert.equal(effect.getConfig().labelSize, 8, 'blob label size must clamp low values');
 
   effect.processFrame(fakeContext, { width: 100, height: 100 });
   now = 20;
@@ -175,6 +183,10 @@ function checkFaceDetectionUsesRefinedEyeLandmarks() {
   assert.equal(effect.detectionHoldMs, 120, 'short gaps may be held without leaving stale boxes');
   assert.equal(effect.showBox, true, 'face boxes must be enabled by default');
   assert.equal(effect.showBlur, false, 'face blur must be opt-in');
+  effect.setConfig({ labelSize: 99 });
+  assert.equal(effect.getConfig().labelSize, 32, 'face label size must clamp high values');
+  effect.setConfig({ labelSize: 2 });
+  assert.equal(effect.getConfig().labelSize, 8, 'face label size must clamp low values');
   effect.setConfig({ visualMode: 'hybrid' });
   assert.equal(effect.showBox, true, 'hybrid mode must keep box enabled');
   assert.equal(effect.showBlur, true, 'hybrid mode must keep blur enabled');
@@ -194,12 +206,44 @@ function checkVideoTimelineIntervals() {
   assert.deepEqual(Array.from(timeline.activeAt(6), (item) => item.type), ['look', 'face']);
   assert.deepEqual(Array.from(timeline.activeAt(8), (item) => item.type), ['face'], 'end boundaries must be exclusive');
   assert.throws(() => timeline.add('look', 7, 9), /superponer/);
+  timeline.add('look', 8, 9, { contrast: 90 });
   assert.throws(() => timeline.add('blink', 0, 3), /dentro del recorte/);
   assert.throws(() => timeline.setTrim(4, 16), /fuera del nuevo recorte/);
 
   timeline.upsert({ ...look, startTime: 3, endTime: 6 });
   timeline.remove(face.id);
   assert.equal(timeline.activeAt(6).length, 0);
+}
+
+function checkTimelineClipSnappingHelper() {
+  const app = {
+    videoTimeline: {
+      trimStart: 0,
+      trimEnd: 10,
+      duration: 10,
+      items: [{ id: 'a', type: 'blob', startTime: 1, endTime: 4 }],
+    },
+    videoEl: { currentTime: 6 },
+    chkTimelineSnap: { checked: true },
+    timelineZoom: 1,
+    clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
+  };
+  applyLocalvideoeditorMixin(app);
+  assert.deepEqual(
+    app.resolveTimelineClipTimes({ type: 'blob', startTime: 4.04, endTime: 7.04 }),
+    { startTime: 4, endTime: 7 },
+    'new clips must snap to the nearest same-track edge'
+  );
+  assert.deepEqual(
+    app.resolveTimelineClipTimes({ type: 'face', startTime: 5.9, endTime: 7.9 }),
+    { startTime: 6, endTime: 8 },
+    'new clips must snap to the playhead when it is closer'
+  );
+  assert.deepEqual(
+    app.getTimelineRowStyle(2),
+    { top: 'calc(2 * 20%)', height: '20%' },
+    'timeline clips must fill the full effect row height'
+  );
 }
 
 function checkEditorHistoryUndoRedo() {
@@ -247,6 +291,7 @@ function checkVideoExportTimingAndQuality() {
     const encodedDuration = calculateFrameTimestampUs(frameCount, fps) / 1_000_000;
     assert.ok(Math.abs(encodedDuration - duration) <= 1 / fps, `${fps} FPS duration must stay within one frame`);
     assert.equal(calculateFrameTimestampUs(1, fps), Math.round(1_000_000 / fps));
+    assert.ok(calculateFrameDurationUs(0, fps) > 0, `${fps} FPS frame duration must be positive`);
   }
 
   assert.equal(calculateSourceAverageBitrate(10_000_000, 10), 8_000_000);
@@ -262,6 +307,16 @@ function checkVideoExportTimingAndQuality() {
   assert.equal(calculateFrameRateFromMediaTimes([0, 1 / 24, 2 / 24, 3 / 24]), 24);
   assert.equal(calculateFrameRateFromMediaTimes([0, 1 / 24, 2 / 24, 2 / 24, 3 / 24]), 24);
   assert.equal(calculateFrameRateFromMediaTimes([0]), null);
+  assert.equal(shouldAppendFinalFrame(10, 30, 300), false, 'exact frame-grid exports must not append a duplicate final frame');
+  assert.equal(shouldAppendFinalFrame(10.01, 30, 300), true, 'non-grid durations may append a final duration marker');
+  assert.equal(
+    formatExportDebugInfo({ stage: 'encode', done: 3, total: 10, fps: 30, time: 0.1, width: 640, height: 360, queueSize: 2 }),
+    'stage:encode · frame:3/10 · fps:30 · t:0.100s · 640x360 · queue:2'
+  );
+  assert.equal(
+    formatExportDebugInfo({ stage: 'seek-fallback', done: 579, total: 590, fps: 30, time: 19.3, width: 576, height: 576, note: 'frames_reutilizados:1' }),
+    'stage:seek-fallback · frame:579/590 · fps:30 · t:19.300s · 576x576 · queue:0 · frames_reutilizados:1'
+  );
 }
 
 await checkCameraStreamCleanup();
@@ -270,6 +325,7 @@ checkReusableMorphologyBuffers();
 checkBlinkDetectionUsesRefinedEyeLandmarks();
 checkFaceDetectionUsesRefinedEyeLandmarks();
 checkVideoTimelineIntervals();
+checkTimelineClipSnappingHelper();
 checkEditorHistoryUndoRedo();
 checkPreviewProcessingResolutionContract();
 checkVideoExportTimingAndQuality();

@@ -19,3 +19,7 @@ Thumbs.db
 dist/
 build/
 *.tmp
+
+.omx
+
+todo.md

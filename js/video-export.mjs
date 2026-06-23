@@ -80,6 +80,37 @@ export function calculateFrameTimestampUs(frameIndex, fps) {
   return Math.round(((Number(frameIndex) || 0) / Math.max(1, Number(fps) || 1)) * 1_000_000);
 }
 
+export function calculateFrameDurationUs(frameIndex, fps) {
+  return Math.max(1, calculateFrameTimestampUs(frameIndex + 1, fps) - calculateFrameTimestampUs(frameIndex, fps));
+}
+
+export function shouldAppendFinalFrame(duration, fps, totalFrames) {
+  const finalTimestamp = Math.round(Math.max(0, Number(duration) || 0) * 1_000_000);
+  const encodedEnd = calculateFrameTimestampUs(Math.max(1, Number(totalFrames) || 1), fps);
+  return finalTimestamp > encodedEnd;
+}
+
+export function formatExportDebugInfo({
+  stage = 'idle',
+  done = 0,
+  total = 0,
+  fps = 0,
+  time = 0,
+  width = 0,
+  height = 0,
+  queueSize = 0,
+  note = '',
+} = {}) {
+  const safeTotal = Math.max(0, Number(total) || 0);
+  const safeDone = Math.max(0, Number(done) || 0);
+  const frame = safeTotal ? `${Math.min(safeDone, safeTotal)}/${safeTotal}` : `${safeDone}/?`;
+  const fpsText = Number.isFinite(Number(fps)) && Number(fps) > 0 ? Number(fps).toFixed(3).replace(/\.?0+$/, '') : '?';
+  const timeText = Number.isFinite(Number(time)) ? Number(time).toFixed(3) : '?';
+  const sizeText = width && height ? `${width}x${height}` : '?x?';
+  const noteText = note ? ` · ${note}` : '';
+  return `stage:${stage} · frame:${frame} · fps:${fpsText} · t:${timeText}s · ${sizeText} · queue:${Math.max(0, Number(queueSize) || 0)}${noteText}`;
+}
+
 /**
  * Encodes a canvas sequence to WebM with explicit frame timestamps (microseconds).
  * Playback speed matches source fps regardless of how fast frames are rendered.
@@ -134,25 +165,27 @@ export async function encodeCanvasSequence({
       await renderFrame(frameIndex);
       if (encoderError) throw encoderError;
       const timestamp = calculateFrameTimestampUs(frameIndex, safeFps);
-      const duration = calculateFrameTimestampUs(frameIndex + 1, safeFps) - timestamp;
       const frame = new VideoFrame(canvas, {
         timestamp,
-        duration,
+        duration: calculateFrameDurationUs(frameIndex, safeFps),
       });
       encoder.encode(frame, { keyFrame: frameIndex % keyFrameInterval === 0 });
       frame.close();
       // backpressure: bound the native queue; stream to disk only if long clips make memory measurable.
       if (encoder.encodeQueueSize >= 8) await encoder.flush();
-      onProgress?.(frameIndex + 1, totalFrames);
+      onProgress?.(frameIndex + 1, totalFrames, {
+        stage: 'encode',
+        queueSize: encoder.encodeQueueSize,
+      });
       if (frameIndex % 4 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
     }
     const finalTimestamp = Math.round(Math.max(0, Number(duration) || 0) * 1_000_000);
-    const lastFrameTimestamp = calculateFrameTimestampUs(Math.max(0, totalFrames - 1), safeFps);
-    if (finalTimestamp > lastFrameTimestamp) {
+    if (shouldAppendFinalFrame(duration, safeFps, totalFrames)) {
       const finalFrame = new VideoFrame(canvas, { timestamp: finalTimestamp });
       encoder.encode(finalFrame);
       finalFrame.close();
     }
+    onProgress?.(totalFrames, totalFrames, { stage: 'mux', queueSize: encoder.encodeQueueSize, force: true });
     await encoder.flush();
     if (encoderError) throw encoderError;
   } finally {

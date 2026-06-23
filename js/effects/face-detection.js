@@ -13,6 +13,7 @@ class FaceDetection {
         this.boxColor = '#ff2222';
         this.boxThickness = 2;
         this.labelText = 'CARA';
+        this.labelSize = 12;
         this.showLandmarks = false;
         this.maxFaces = 2;
         this.processIntervalMs = 30;
@@ -375,13 +376,19 @@ class FaceDetection {
         ctx.strokeRect(x, y, width, height);
 
         const label = this._normalizeLabel(this.labelText);
-        ctx.font = '11px "Courier New", monospace';
+        const labelSize = this._normalizeLabelSize(this.labelSize);
+        const padX = Math.max(4, Math.round(labelSize * 0.42));
+        const labelHeight = Math.max(14, Math.round(labelSize * 1.45));
+        ctx.font = `600 ${labelSize}px "Cascadia Mono", "Segoe UI Mono", "SFMono-Regular", Menlo, Consolas, monospace`;
+        ctx.textBaseline = 'middle';
         const tm = ctx.measureText(label);
-        ctx.fillStyle = this.boxColor;
-        const labelY = Math.max(0, y - 16);
-        ctx.fillRect(x, labelY, tm.width + 8, 16);
+        const labelW = tm.width + padX * 2;
+        const labelY = Math.max(0, y - labelHeight - 2);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
+        ctx.fillRect(x, labelY, labelW, labelHeight);
         ctx.fillStyle = '#fff';
-        ctx.fillText(label, x + 4, labelY + 12);
+        ctx.fillText(label, x + padX, labelY + labelHeight / 2);
+        ctx.textBaseline = 'alphabetic';
     }
 
     processFrame(ctx, canvas, video) {
@@ -430,6 +437,7 @@ class FaceDetection {
             boxColor: this.boxColor,
             boxThickness: this.boxThickness,
             labelText: this.labelText,
+            labelSize: this.labelSize,
             showLandmarks: this.showLandmarks,
             maxFaces: this.maxFaces,
             processIntervalMs: this.processIntervalMs,
@@ -450,6 +458,7 @@ class FaceDetection {
         if (config.boxColor) this.boxColor = config.boxColor;
         if (config.boxThickness != null) this.boxThickness = config.boxThickness;
         if (config.labelText != null) this.labelText = this._normalizeLabel(config.labelText);
+        if (config.labelSize != null) this.labelSize = this._normalizeLabelSize(config.labelSize);
         if (config.showLandmarks != null) this.showLandmarks = config.showLandmarks;
         if (config.maxFaces != null) {
             this.maxFaces = config.maxFaces;
@@ -487,6 +496,11 @@ class FaceDetection {
         const label = String(value || '').trim();
         if (!label) return 'CARA';
         return label.slice(0, 28);
+    }
+
+    _normalizeLabelSize(value) {
+        const size = Math.round(Number(value) || 12);
+        return Math.max(8, Math.min(32, size));
     }
 
     reset() { this._faces = []; }

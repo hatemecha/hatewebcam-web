@@ -22,6 +22,7 @@ class BlobTracking {
         this.boxThickness = 2;
         this.showCoordinates = true;
         this.showCentroid = false;
+        this.labelSize = 12;
 
         // Detection mode
         this.detectionMode = 'manual'; // 'manual', 'lights', 'shadows'
@@ -293,14 +294,19 @@ class BlobTracking {
 
             if (this.showCoordinates) {
                 const text = `X:${cx} Y:${cy}`;
-                ctx.font = '11px "Courier New", monospace';
+                const labelSize = this._normalizeLabelSize(this.labelSize);
+                const padX = Math.max(4, Math.round(labelSize * 0.42));
+                const labelHeight = Math.max(14, Math.round(labelSize * 1.45));
+                ctx.font = `600 ${labelSize}px "Cascadia Mono", "Segoe UI Mono", "SFMono-Regular", Menlo, Consolas, monospace`;
+                ctx.textBaseline = 'middle';
                 const tm = ctx.measureText(text);
-                const th = 14;
-                const labelY = Math.max(0, y - th - 2);
-                ctx.fillStyle = 'rgba(0,0,0,0.7)';
-                ctx.fillRect(x, labelY, tm.width + 6, th + 2);
+                const labelW = tm.width + padX * 2;
+                const labelY = Math.max(0, y - labelHeight - 2);
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
+                ctx.fillRect(x, labelY, labelW, labelHeight);
                 ctx.fillStyle = '#ffffff';
-                ctx.fillText(text, x + 3, labelY + th - 2);
+                ctx.fillText(text, x + padX, labelY + labelHeight / 2);
+                ctx.textBaseline = 'alphabetic';
             }
 
             if (this.showCentroid) {
@@ -494,6 +500,7 @@ class BlobTracking {
             boxThickness: this.boxThickness,
             showCoordinates: this.showCoordinates,
             showCentroid: this.showCentroid,
+            labelSize: this.labelSize,
             tolerance: this._tolerance,
             detectionMode: this.detectionMode,
             processScale: this.processScale,
@@ -513,6 +520,7 @@ class BlobTracking {
         if (config.boxThickness != null) this.boxThickness = config.boxThickness;
         if (config.showCoordinates != null) this.showCoordinates = config.showCoordinates;
         if (config.showCentroid != null) this.showCentroid = config.showCentroid;
+        if (config.labelSize != null) this.labelSize = this._normalizeLabelSize(config.labelSize);
         if (config.tolerance != null) this._tolerance = config.tolerance;
         if (config.detectionMode) this.detectionMode = config.detectionMode;
         if (config.processScale != null) this.processScale = config.processScale;
@@ -527,5 +535,10 @@ class BlobTracking {
         this.centroids.length = 0;
         this._trackedBlobs.length = 0;
         this._lastProcessTs = -Infinity;
+    }
+
+    _normalizeLabelSize(value) {
+        const size = Math.round(Number(value) || 12);
+        return Math.max(8, Math.min(32, size));
     }
 }

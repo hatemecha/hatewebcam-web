@@ -86,6 +86,7 @@ export function applyEffectConfigUIMixin(proto) {
         <div style="height:6px"></div>
         <label class="checkbox-group"><input type="checkbox" id="chkShowCoords" ${bt.showCoordinates ? 'checked' : ''}><span>Mostrar posición (X, Y)</span></label>
         <label class="checkbox-group"><input type="checkbox" id="chkShowCentroid" ${bt.showCentroid ? 'checked' : ''}><span>Mostrar punto central</span></label>
+        ${this.slider('sldBlobLabelSize', 'valBlobLabelSize', 'Tamaño del texto', bt.labelSize || 12, 8, 32)}
         ${this.slider('sldThickness', 'valThickness', 'Grosor del recuadro', bt.boxThickness, 1, 8)}
       </div>
     `);
@@ -120,6 +121,7 @@ export function applyEffectConfigUIMixin(proto) {
       this.bindSlider(el, 'sldBlobProcessScale', 'valBlobProcessScale', v => {
         bt.processScale = this.clamp(v / 100, 0.25, 1);
       });
+      this.bindSlider(el, 'sldBlobLabelSize', 'valBlobLabelSize', v => bt.labelSize = this.clamp(Math.round(v), 8, 32));
       this.bindSlider(el, 'sldThickness', 'valThickness', v => bt.boxThickness = v);
 
       const inpColor = el.querySelector('#inpBoxColor');
@@ -177,6 +179,7 @@ export function applyEffectConfigUIMixin(proto) {
             <input type="color" id="inpFaceColor" value="${faceBoxColor}">
           </label>
           <div style="height:6px"></div>
+          ${this.slider('sldFaceLabelSize', 'valFaceLabelSize', 'Tamaño del texto', fd.labelSize || 12, 8, 32)}
           ${this.slider('sldFaceThickness', 'valFaceThickness', 'Grosor del recuadro', fd.boxThickness, 1, 8)}
         </div>
         <label class="checkbox-group"><input type="checkbox" id="chkShowLandmarks" ${fd.showLandmarks ? 'checked' : ''}><span>Mostrar puntos faciales</span></label>
@@ -241,6 +244,7 @@ export function applyEffectConfigUIMixin(proto) {
         this.quickDetectorSettings.faceCensorPaddingPercent = v;
         this.scheduleSaveQuickDetectorSettings();
       });
+      this.bindSlider(el, 'sldFaceLabelSize', 'valFaceLabelSize', v => fd.labelSize = this.clamp(Math.round(v), 8, 32));
       this.bindSlider(el, 'sldFaceThickness', 'valFaceThickness', v => fd.boxThickness = v);
       this.bindSlider(el, 'sldFaceInterval', 'valFaceInterval', v => {
         fd.processIntervalMs = this.clamp(Math.round(v), 16, 80);
