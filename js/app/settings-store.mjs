@@ -9,7 +9,10 @@ export class SettingsStore {
       const raw = this.storage?.getItem(key);
       return raw ? JSON.parse(raw) : fallbackValue;
     } catch (err) {
-      console.warn(`HateWebcam: no se pudo leer ${key} desde localStorage.`, err);
+      console.warn(
+        `HateWebcam: no se pudo leer ${key} desde localStorage.`,
+        err,
+      );
       return fallbackValue;
     }
   }

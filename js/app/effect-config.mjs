@@ -3,24 +3,32 @@ export function applyEffectConfigUIMixin(proto) {
   proto.renderEffectConfig = function () {
     if (this.effectConfigBlob) {
       this.effectConfigBlob.innerHTML = '';
-      if (this.blobTrackingEffect) this.effectConfigBlob.appendChild(this.buildBlobConfig());
+      if (this.blobTrackingEffect)
+        this.effectConfigBlob.appendChild(this.buildBlobConfig());
     }
     if (this.effectConfigFace) {
       this.effectConfigFace.innerHTML = '';
-      if (this.faceDetectionEffect) this.effectConfigFace.appendChild(this.buildFaceConfig());
+      if (this.faceDetectionEffect)
+        this.effectConfigFace.appendChild(this.buildFaceConfig());
     }
     if (this.effectConfigBlink) {
       this.effectConfigBlink.innerHTML = '';
-      if (this.blinkDetectionEffect) this.effectConfigBlink.appendChild(this.buildBlinkConfig());
+      if (this.blinkDetectionEffect)
+        this.effectConfigBlink.appendChild(this.buildBlinkConfig());
     }
-  }
+  };
 
   // --- Blob Tracking Config ---
   proto.buildBlobConfig = function () {
     const bt = this.blobTrackingEffect;
-    const boxColor = this.normalizeHexColor(bt.boxColor, this.DEFAULT_QUICK_DETECTOR_SETTINGS.blobBoxColor);
+    const boxColor = this.normalizeHexColor(
+      bt.boxColor,
+      this.DEFAULT_QUICK_DETECTOR_SETTINGS.blobBoxColor,
+    );
     bt.boxColor = boxColor;
-    const el = this.createSection('Detector de objetos por color', `
+    const el = this.createSection(
+      'Detector de objetos por color',
+      `
       <div class="config-block">
         <div class="config-block-title">¿Qué detectar?</div>
         <div class="help-text">Elegí si querés buscar un color específico, zonas de mucha luz o zonas oscuras.</div>
@@ -89,44 +97,68 @@ export function applyEffectConfigUIMixin(proto) {
         ${this.slider('sldBlobLabelSize', 'valBlobLabelSize', 'Tamaño del texto', bt.labelSize || 12, 8, 32)}
         ${this.slider('sldThickness', 'valThickness', 'Grosor del recuadro', bt.boxThickness, 1, 8)}
       </div>
-    `);
+    `,
+    );
 
     requestAnimationFrame(() => {
       // Mode radios
-      el.querySelectorAll('input[name="detMode"]').forEach(r => {
+      el.querySelectorAll('input[name="detMode"]').forEach((r) => {
         r.addEventListener('change', (e) => {
           bt.detectionMode = e.target.value;
-          el.querySelector('#cfgColorBlock').style.display = bt.detectionMode === 'manual' ? '' : 'none';
-          el.querySelectorAll('.radio-option').forEach(o => o.classList.remove('selected'));
+          el.querySelector('#cfgColorBlock').style.display =
+            bt.detectionMode === 'manual' ? '' : 'none';
+          el.querySelectorAll('.radio-option').forEach((o) =>
+            o.classList.remove('selected'),
+          );
           e.target.closest('.radio-option').classList.add('selected');
           this.scheduleSaveActiveEffectSettings();
         });
       });
 
-      this.bindSlider(el, 'sldTolerance', 'valTolerance', v => bt._tolerance = v);
+      this.bindSlider(
+        el,
+        'sldTolerance',
+        'valTolerance',
+        (v) => (bt._tolerance = v),
+      );
 
       const btnAdv = el.querySelector('#btnAdvancedHsv');
       const hsvAdv = el.querySelector('#hsvAdvanced');
       btnAdv.addEventListener('click', () => hsvAdv.classList.toggle('hidden'));
 
-      this.bindSlider(el, 'sldHMin', 'valHMin', v => bt.hsvMin[0] = v);
-      this.bindSlider(el, 'sldSMin', 'valSMin', v => bt.hsvMin[1] = v);
-      this.bindSlider(el, 'sldVMin', 'valVMin', v => bt.hsvMin[2] = v);
-      this.bindSlider(el, 'sldHMax', 'valHMax', v => bt.hsvMax[0] = v);
-      this.bindSlider(el, 'sldSMax', 'valSMax', v => bt.hsvMax[1] = v);
-      this.bindSlider(el, 'sldVMax', 'valVMax', v => bt.hsvMax[2] = v);
-      this.bindSlider(el, 'sldMaxObj', 'valMaxObj', v => bt.maxObjects = v);
-      this.bindSlider(el, 'sldMinArea', 'valMinArea', v => bt.minArea = v);
-      this.bindSlider(el, 'sldErode', 'valErode', v => bt.erodeIterations = v);
-      this.bindSlider(el, 'sldBlobProcessScale', 'valBlobProcessScale', v => {
+      this.bindSlider(el, 'sldHMin', 'valHMin', (v) => (bt.hsvMin[0] = v));
+      this.bindSlider(el, 'sldSMin', 'valSMin', (v) => (bt.hsvMin[1] = v));
+      this.bindSlider(el, 'sldVMin', 'valVMin', (v) => (bt.hsvMin[2] = v));
+      this.bindSlider(el, 'sldHMax', 'valHMax', (v) => (bt.hsvMax[0] = v));
+      this.bindSlider(el, 'sldSMax', 'valSMax', (v) => (bt.hsvMax[1] = v));
+      this.bindSlider(el, 'sldVMax', 'valVMax', (v) => (bt.hsvMax[2] = v));
+      this.bindSlider(el, 'sldMaxObj', 'valMaxObj', (v) => (bt.maxObjects = v));
+      this.bindSlider(el, 'sldMinArea', 'valMinArea', (v) => (bt.minArea = v));
+      this.bindSlider(
+        el,
+        'sldErode',
+        'valErode',
+        (v) => (bt.erodeIterations = v),
+      );
+      this.bindSlider(el, 'sldBlobProcessScale', 'valBlobProcessScale', (v) => {
         bt.processScale = this.clamp(v / 100, 0.25, 1);
       });
-      this.bindSlider(el, 'sldBlobLabelSize', 'valBlobLabelSize', v => bt.labelSize = this.clamp(Math.round(v), 8, 32));
-      this.bindSlider(el, 'sldThickness', 'valThickness', v => bt.boxThickness = v);
+      this.bindSlider(
+        el,
+        'sldBlobLabelSize',
+        'valBlobLabelSize',
+        (v) => (bt.labelSize = this.clamp(Math.round(v), 8, 32)),
+      );
+      this.bindSlider(
+        el,
+        'sldThickness',
+        'valThickness',
+        (v) => (bt.boxThickness = v),
+      );
 
       const inpColor = el.querySelector('#inpBoxColor');
       const swatch = el.querySelector('#boxColorSwatch');
-      inpColor.addEventListener('input', e => {
+      inpColor.addEventListener('input', (e) => {
         bt.boxColor = e.target.value;
         this.quickDetectorSettings.blobBoxColor = e.target.value;
         swatch.style.background = e.target.value;
@@ -135,27 +167,32 @@ export function applyEffectConfigUIMixin(proto) {
         this.scheduleSaveActiveEffectSettings();
       });
 
-      el.querySelector('#chkShowCoords').addEventListener('change', e => {
+      el.querySelector('#chkShowCoords').addEventListener('change', (e) => {
         bt.showCoordinates = e.target.checked;
         this.scheduleSaveActiveEffectSettings();
       });
-      el.querySelector('#chkShowCentroid').addEventListener('change', e => {
+      el.querySelector('#chkShowCentroid').addEventListener('change', (e) => {
         bt.showCentroid = e.target.checked;
         this.scheduleSaveActiveEffectSettings();
       });
     });
 
     return el;
-  }
+  };
 
   // --- Face Detection Config ---
   proto.buildFaceConfig = function () {
     const fd = this.faceDetectionEffect;
     const showBoxVisuals = fd.showBox !== false;
     const showPixelVisuals = !!fd.showBlur;
-    const faceBoxColor = this.normalizeHexColor(fd.boxColor, this.DEFAULT_QUICK_DETECTOR_SETTINGS.faceBoxColor);
+    const faceBoxColor = this.normalizeHexColor(
+      fd.boxColor,
+      this.DEFAULT_QUICK_DETECTOR_SETTINGS.faceBoxColor,
+    );
     fd.boxColor = faceBoxColor;
-    const el = this.createSection('Detector de caras', `
+    const el = this.createSection(
+      'Detector de caras',
+      `
       <div class="config-block">
         <div class="config-block-title">Configuración</div>
         <div class="help-text">Activá recuadro, blur/pixelado o ambos a la vez sobre cada cara detectada.</div>
@@ -191,7 +228,8 @@ export function applyEffectConfigUIMixin(proto) {
         ${this.slider('sldFaceSmoothing', 'valFaceSmoothing', 'Suavizado del recuadro (%)', Math.round((fd.boxSmoothing || 0) * 100), 0, 95)}
         ${this.slider('sldFaceHold', 'valFaceHold', 'Retención al perder cara (ms)', fd.detectionHoldMs, 80, 300, 10)}
       </div>
-    `);
+    `,
+    );
 
     requestAnimationFrame(() => {
       const chkAdvFaceShowBox = el.querySelector('#chkAdvFaceShowBox');
@@ -203,16 +241,20 @@ export function applyEffectConfigUIMixin(proto) {
         const showBlur = !!fd.showBlur;
         if (chkAdvFaceShowBox) chkAdvFaceShowBox.checked = showBox;
         if (chkAdvFaceShowBlur) chkAdvFaceShowBlur.checked = showBlur;
-        if (faceBoxControls) faceBoxControls.classList.toggle('hidden', !showBox);
-        if (facePixelControls) facePixelControls.classList.toggle('hidden', !showBlur);
+        if (faceBoxControls)
+          faceBoxControls.classList.toggle('hidden', !showBox);
+        if (facePixelControls)
+          facePixelControls.classList.toggle('hidden', !showBlur);
       };
 
       const onAdvFaceVisualChange = (changed) => {
         let showBox = chkAdvFaceShowBox?.checked ?? fd.showBox;
         let showBlur = chkAdvFaceShowBlur?.checked ?? fd.showBlur;
         if (!showBox && !showBlur) {
-          if (changed === 'box' && chkAdvFaceShowBox) chkAdvFaceShowBox.checked = true;
-          if (changed === 'blur' && chkAdvFaceShowBlur) chkAdvFaceShowBlur.checked = true;
+          if (changed === 'box' && chkAdvFaceShowBox)
+            chkAdvFaceShowBox.checked = true;
+          if (changed === 'blur' && chkAdvFaceShowBlur)
+            chkAdvFaceShowBlur.checked = true;
           showBox = chkAdvFaceShowBox?.checked ?? true;
           showBlur = chkAdvFaceShowBlur?.checked ?? false;
         }
@@ -227,49 +269,69 @@ export function applyEffectConfigUIMixin(proto) {
         this.scheduleSaveActiveEffectSettings();
       };
 
-      if (chkAdvFaceShowBox) chkAdvFaceShowBox.addEventListener('change', () => onAdvFaceVisualChange('box'));
-      if (chkAdvFaceShowBlur) chkAdvFaceShowBlur.addEventListener('change', () => onAdvFaceVisualChange('blur'));
+      if (chkAdvFaceShowBox)
+        chkAdvFaceShowBox.addEventListener('change', () =>
+          onAdvFaceVisualChange('box'),
+        );
+      if (chkAdvFaceShowBlur)
+        chkAdvFaceShowBlur.addEventListener('change', () =>
+          onAdvFaceVisualChange('blur'),
+        );
 
-      this.bindSlider(el, 'sldMaxFaces', 'valMaxFaces', v => {
+      this.bindSlider(el, 'sldMaxFaces', 'valMaxFaces', (v) => {
         fd.maxFaces = v;
         if (fd.faceMesh) fd.faceMesh.setOptions({ maxNumFaces: v });
       });
-      this.bindSlider(el, 'sldFacePixelation', 'valFacePixelation', v => {
+      this.bindSlider(el, 'sldFacePixelation', 'valFacePixelation', (v) => {
         fd.pixelationCellSize = v;
         this.quickDetectorSettings.facePixelationCellSize = v;
         this.scheduleSaveQuickDetectorSettings();
       });
-      this.bindSlider(el, 'sldFacePadding', 'valFacePadding', v => {
+      this.bindSlider(el, 'sldFacePadding', 'valFacePadding', (v) => {
         fd.censorPaddingPercent = v;
         this.quickDetectorSettings.faceCensorPaddingPercent = v;
         this.scheduleSaveQuickDetectorSettings();
       });
-      this.bindSlider(el, 'sldFaceLabelSize', 'valFaceLabelSize', v => fd.labelSize = this.clamp(Math.round(v), 8, 32));
-      this.bindSlider(el, 'sldFaceThickness', 'valFaceThickness', v => fd.boxThickness = v);
-      this.bindSlider(el, 'sldFaceInterval', 'valFaceInterval', v => {
+      this.bindSlider(
+        el,
+        'sldFaceLabelSize',
+        'valFaceLabelSize',
+        (v) => (fd.labelSize = this.clamp(Math.round(v), 8, 32)),
+      );
+      this.bindSlider(
+        el,
+        'sldFaceThickness',
+        'valFaceThickness',
+        (v) => (fd.boxThickness = v),
+      );
+      this.bindSlider(el, 'sldFaceInterval', 'valFaceInterval', (v) => {
         fd.processIntervalMs = this.clamp(Math.round(v), 16, 80);
       });
-      this.bindSlider(el, 'sldFaceSmoothing', 'valFaceSmoothing', v => {
+      this.bindSlider(el, 'sldFaceSmoothing', 'valFaceSmoothing', (v) => {
         fd.boxSmoothing = this.clamp(v / 100, 0, 0.95);
       });
-      this.bindSlider(el, 'sldFaceHold', 'valFaceHold', v => {
+      this.bindSlider(el, 'sldFaceHold', 'valFaceHold', (v) => {
         fd.detectionHoldMs = this.clamp(Math.round(v), 80, 300);
       });
 
       const inpLabel = el.querySelector('#inpFaceLabel');
       if (inpLabel) {
         inpLabel.value = fd.labelText || 'CARA';
-        inpLabel.addEventListener('input', e => {
+        inpLabel.addEventListener('input', (e) => {
           const value = String(e.target.value || '').slice(0, 28);
           fd.labelText = value;
           this.quickDetectorSettings.faceLabelText = value || 'CARA';
-          if (this.inpFaceQuickLabel && document.activeElement !== this.inpFaceQuickLabel) {
-            this.inpFaceQuickLabel.value = this.quickDetectorSettings.faceLabelText;
+          if (
+            this.inpFaceQuickLabel &&
+            document.activeElement !== this.inpFaceQuickLabel
+          ) {
+            this.inpFaceQuickLabel.value =
+              this.quickDetectorSettings.faceLabelText;
           }
           this.scheduleSaveQuickDetectorSettings();
           this.scheduleSaveActiveEffectSettings();
         });
-        inpLabel.addEventListener('blur', e => {
+        inpLabel.addEventListener('blur', (e) => {
           const normalized = this.normalizeFaceLabel(e.target.value);
           fd.labelText = normalized;
           this.quickDetectorSettings.faceLabelText = normalized;
@@ -283,7 +345,7 @@ export function applyEffectConfigUIMixin(proto) {
       const inpColor = el.querySelector('#inpFaceColor');
       const swatch = el.querySelector('#faceColorSwatch');
       if (inpColor && swatch) {
-        inpColor.addEventListener('input', e => {
+        inpColor.addEventListener('input', (e) => {
           fd.boxColor = e.target.value;
           this.quickDetectorSettings.faceBoxColor = e.target.value;
           swatch.style.background = e.target.value;
@@ -293,7 +355,7 @@ export function applyEffectConfigUIMixin(proto) {
         });
       }
 
-      el.querySelector('#chkShowLandmarks').addEventListener('change', e => {
+      el.querySelector('#chkShowLandmarks').addEventListener('change', (e) => {
         fd.showLandmarks = e.target.checked;
         this.scheduleSaveActiveEffectSettings();
       });
@@ -301,42 +363,49 @@ export function applyEffectConfigUIMixin(proto) {
     });
 
     return el;
-  }
+  };
 
   // --- Blink Detection Config ---
   proto.buildBlinkConfig = function () {
     const bd = this.blinkDetectionEffect;
-    const el = this.createSection('Detección de pestañeos', `
+    const el = this.createSection(
+      'Detección de pestañeos',
+      `
       <div class="config-block">
         <div class="config-block-title">Configuración</div>
         <div class="help-text">Cuando cerrás un ojo, se dibujan líneas entre los objetos detectados. Necesitás tener el detector de objetos activado para ver las conexiones.</div>
-        ${this.slider('sldEar', 'valEar', 'Sensibilidad (cuanto más alto, más fácil detectar)', bd.eyeArThreshold, 0.10, 0.40, 0.01)}
+        ${this.slider('sldEar', 'valEar', 'Sensibilidad (cuanto más alto, más fácil detectar)', bd.eyeArThreshold, 0.1, 0.4, 0.01)}
         ${this.slider('sldBlinkInterval', 'valBlinkInterval', 'Intervalo de análisis (ms)', bd.processIntervalMs, 16, 80)}
         ${this.slider('sldBlinkClosedFrames', 'valBlinkClosedFrames', 'Frames cerrados mínimos', bd.minClosedFrames, 1, 4)}
         ${this.slider('sldBlinkSmoothing', 'valBlinkSmoothing', 'Suavizado del párpado (%)', Math.round((bd._earSmoothing || 0) * 100), 0, 90)}
       </div>
-    `);
+    `,
+    );
 
     requestAnimationFrame(() => {
       const sld = el.querySelector('#sldEar');
       const val = el.querySelector('#valEar');
-      sld.addEventListener('input', e => {
+      sld.addEventListener('input', (e) => {
         bd.eyeArThreshold = parseFloat(e.target.value);
         val.textContent = bd.eyeArThreshold.toFixed(2);
         this.scheduleSaveActiveEffectSettings();
       });
-      this.bindSlider(el, 'sldBlinkInterval', 'valBlinkInterval', v => {
+      this.bindSlider(el, 'sldBlinkInterval', 'valBlinkInterval', (v) => {
         bd.processIntervalMs = this.clamp(Math.round(v), 16, 80);
       });
-      this.bindSlider(el, 'sldBlinkClosedFrames', 'valBlinkClosedFrames', v => {
-        bd.minClosedFrames = this.clamp(Math.round(v), 1, 4);
-      });
-      this.bindSlider(el, 'sldBlinkSmoothing', 'valBlinkSmoothing', v => {
+      this.bindSlider(
+        el,
+        'sldBlinkClosedFrames',
+        'valBlinkClosedFrames',
+        (v) => {
+          bd.minClosedFrames = this.clamp(Math.round(v), 1, 4);
+        },
+      );
+      this.bindSlider(el, 'sldBlinkSmoothing', 'valBlinkSmoothing', (v) => {
         bd._earSmoothing = this.clamp(v / 100, 0, 0.9);
       });
     });
 
     return el;
-  }
-
+  };
 }

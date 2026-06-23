@@ -1,8 +1,28 @@
 export const RENDER_PROFILES = Object.freeze({
-  preview: Object.freeze({ maxPixels: 1280 * 720, detectorInterval: 33, detectorIntervalMs: 33, quality: 'fast' }),
-  mobile: Object.freeze({ maxPixels: 960 * 540, detectorInterval: 66, detectorIntervalMs: 66, quality: 'low' }),
-  recording: Object.freeze({ maxPixels: Number.POSITIVE_INFINITY, detectorInterval: 33, detectorIntervalMs: 33, quality: 'best' }),
-  export: Object.freeze({ maxPixels: Number.POSITIVE_INFINITY, detectorInterval: 0, detectorIntervalMs: 0, quality: 'best' }),
+  preview: Object.freeze({
+    maxPixels: 1280 * 720,
+    detectorInterval: 33,
+    detectorIntervalMs: 33,
+    quality: 'fast',
+  }),
+  mobile: Object.freeze({
+    maxPixels: 960 * 540,
+    detectorInterval: 66,
+    detectorIntervalMs: 66,
+    quality: 'low',
+  }),
+  recording: Object.freeze({
+    maxPixels: Number.POSITIVE_INFINITY,
+    detectorInterval: 33,
+    detectorIntervalMs: 33,
+    quality: 'best',
+  }),
+  export: Object.freeze({
+    maxPixels: Number.POSITIVE_INFINITY,
+    detectorInterval: 0,
+    detectorIntervalMs: 0,
+    quality: 'best',
+  }),
 });
 
 export class RenderEngine {
@@ -36,7 +56,9 @@ export class RenderEngine {
       Object.defineProperty(target, key, {
         configurable: true,
         get: () => this[key],
-        set: (value) => { this[key] = value; },
+        set: (value) => {
+          this[key] = value;
+        },
       });
     });
   }
@@ -76,16 +98,24 @@ export class RenderEngine {
   }
 
   ensurePostFxBuffer(mode, width, height, scale) {
-    const prefix = mode === 'recording' || mode === 'export'
-      ? 'recordingFx'
-      : mode === 'capture'
-        ? 'captureFx'
-        : 'postFx';
-    const { canvas, ctx } = this.ensureCanvas(prefix, { willReadFrequently: true });
+    const prefix =
+      mode === 'recording' || mode === 'export'
+        ? 'recordingFx'
+        : mode === 'capture'
+          ? 'captureFx'
+          : 'postFx';
+    const { canvas, ctx } = this.ensureCanvas(prefix, {
+      willReadFrequently: true,
+    });
     const nextWidth = Math.max(320, Math.round(width * scale));
     const nextHeight = Math.max(180, Math.round(height * scale));
     this.resizeCanvas(canvas, nextWidth, nextHeight);
-    return { pw: canvas.width, ph: canvas.height, fxCanvas: canvas, fxCtx: ctx };
+    return {
+      pw: canvas.width,
+      ph: canvas.height,
+      fxCanvas: canvas,
+      fxCtx: ctx,
+    };
   }
 
   renderFrame({ mode = 'preview', enhancer = false, app } = {}) {

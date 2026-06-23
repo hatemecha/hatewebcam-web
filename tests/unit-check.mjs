@@ -30,23 +30,36 @@ import { DEFAULT_IMAGE_SETTINGS } from '../js/app/constants.mjs';
 import { applyEffectsMixin } from '../js/app/effects.mjs';
 import { applyRenderLoopMixin } from '../js/app/render.mjs';
 import { applyLocalvideoeditorMixin } from '../js/app/video-editor.mjs';
-import { estimateTempoFromSamples, extractMediaAudioSamples } from '../js/audio-tempo-analyzer.mjs';
+import {
+  estimateTempoFromSamples,
+  extractMediaAudioSamples,
+} from '../js/audio-tempo-analyzer.mjs';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 function loadClass(file, className, context = {}) {
   const source = readFileSync(resolve(rootDir, file), 'utf8');
   const sandbox = vm.createContext({ ...context });
-  vm.runInContext(`${source}\n;globalThis.ExportedClass = ${className};`, sandbox, {
-    filename: file,
-  });
+  vm.runInContext(
+    `${source}\n;globalThis.ExportedClass = ${className};`,
+    sandbox,
+    {
+      filename: file,
+    },
+  );
   return sandbox.ExportedClass;
 }
 
 async function checkCameraStreamCleanup() {
   let trackStopped = false;
   const stream = {
-    getTracks: () => [{ stop: () => { trackStopped = true; } }],
+    getTracks: () => [
+      {
+        stop: () => {
+          trackStopped = true;
+        },
+      },
+    ],
     getVideoTracks: () => [],
   };
   const navigator = {
@@ -61,12 +74,18 @@ async function checkCameraStreamCleanup() {
   const camera = new CameraManager();
   const video = {
     srcObject: null,
-    play: async () => { throw new Error('play_failed'); },
+    play: async () => {
+      throw new Error('play_failed');
+    },
   };
 
   const started = await camera.start(video);
   assert.equal(started, false);
-  assert.equal(trackStopped, true, 'failed playback must stop the acquired track');
+  assert.equal(
+    trackStopped,
+    true,
+    'failed playback must stop the acquired track',
+  );
   assert.equal(camera.stream, null);
   assert.equal(video.srcObject, null);
   assert.equal(camera.isRunning(), false);
@@ -81,9 +100,21 @@ function checkCameraPreservesSupportedFps() {
   const preferred = camera._buildVideoConstraints();
   const requested = camera._buildVideoConstraints(null, { fps: 30 });
 
-  assert.equal(preferred.video.frameRate.ideal, 60, 'camera should prefer 60 FPS when supported');
-  assert.equal('max' in preferred.video.frameRate, false, 'camera FPS must not be capped');
-  assert.equal(requested.video.frameRate.ideal, 30, 'an explicit camera FPS should be preserved');
+  assert.equal(
+    preferred.video.frameRate.ideal,
+    60,
+    'camera should prefer 60 FPS when supported',
+  );
+  assert.equal(
+    'max' in preferred.video.frameRate,
+    false,
+    'camera FPS must not be capped',
+  );
+  assert.equal(
+    requested.video.frameRate.ideal,
+    30,
+    'an explicit camera FPS should be preserved',
+  );
 }
 
 function checkReusableMorphologyBuffers() {
@@ -103,13 +134,17 @@ function checkReusableMorphologyBuffers() {
       getContext: () => fakeContext,
     }),
   };
-  const BlobTracking = loadClass('js/effects/blob-tracking.js', 'BlobTracking', {
-    document,
-    Uint8Array,
-    Int32Array,
-    Math,
-    performance: { now: () => now },
-  });
+  const BlobTracking = loadClass(
+    'js/effects/blob-tracking.js',
+    'BlobTracking',
+    {
+      document,
+      Uint8Array,
+      Int32Array,
+      Math,
+      performance: { now: () => now },
+    },
+  );
   const effect = new BlobTracking();
   effect._ensureBuffers(3, 3);
 
@@ -120,63 +155,145 @@ function checkReusableMorphologyBuffers() {
   assert.deepEqual(Array.from(firstBuffer), [0, 0, 0, 0, 255, 0, 0, 0, 0]);
 
   effect._ensureBuffers(3, 3);
-  assert.equal(effect._morphBufferA, firstBuffer, 'same dimensions must reuse buffers');
+  assert.equal(
+    effect._morphBufferA,
+    firstBuffer,
+    'same dimensions must reuse buffers',
+  );
   effect.reset();
-  assert.equal(effect.centroids, centroids, 'reset must reuse the centroids array');
+  assert.equal(
+    effect.centroids,
+    centroids,
+    'reset must reuse the centroids array',
+  );
 
   effect.setColorFromPixel(255, 0, 0);
-  assert.deepEqual(Array.from(effect.hsvMin), [150, 195, 195], 'red selection must wrap the hue range');
+  assert.deepEqual(
+    Array.from(effect.hsvMin),
+    [150, 195, 195],
+    'red selection must wrap the hue range',
+  );
   assert.deepEqual(Array.from(effect.hsvMax), [30, 255, 255]);
 
   const blob = { x: 0, y: 0, width: 20, height: 20, area: 400, cx: 10, cy: 10 };
   effect._stabilizeBlobs([blob], 0);
   const smoothed = effect._stabilizeBlobs([{ ...blob, x: 10, cx: 20 }], 30);
-  assert.equal(smoothed[0].x, 6.5, 'box movement must stay responsive without jittering');
-  assert.equal(effect._stabilizeBlobs([], 100).length, 1, 'short detection gaps must not flicker');
-  assert.equal(effect._stabilizeBlobs([], 220).length, 0, 'stale detections must disappear');
+  assert.equal(
+    smoothed[0].x,
+    6.5,
+    'box movement must stay responsive without jittering',
+  );
+  assert.equal(
+    effect._stabilizeBlobs([], 100).length,
+    1,
+    'short detection gaps must not flicker',
+  );
+  assert.equal(
+    effect._stabilizeBlobs([], 220).length,
+    0,
+    'stale detections must disappear',
+  );
   effect.setConfig({ labelSize: 99 });
-  assert.equal(effect.getConfig().labelSize, 32, 'blob label size must clamp high values');
+  assert.equal(
+    effect.getConfig().labelSize,
+    32,
+    'blob label size must clamp high values',
+  );
   effect.setConfig({ labelSize: 2 });
-  assert.equal(effect.getConfig().labelSize, 8, 'blob label size must clamp low values');
+  assert.equal(
+    effect.getConfig().labelSize,
+    8,
+    'blob label size must clamp low values',
+  );
 
   effect.processFrame(fakeContext, { width: 100, height: 100 });
   now = 20;
   effect.processFrame(fakeContext, { width: 100, height: 100 });
-  assert.equal(analysisCount, 1, 'blob analysis must be reused between video frames');
+  assert.equal(
+    analysisCount,
+    1,
+    'blob analysis must be reused between video frames',
+  );
   now = 50;
   effect.processFrame(fakeContext, { width: 100, height: 100 });
-  assert.equal(analysisCount, 2, 'blob analysis must resume at its configured interval');
+  assert.equal(
+    analysisCount,
+    2,
+    'blob analysis must resume at its configured interval',
+  );
 
   now = 100;
   effect.processFrame(fakeContext, { width: 640, height: 360 });
   const workSize = [effect._workW, effect._workH];
   now = 150;
   effect.processFrame(fakeContext, { width: 1600, height: 900 });
-  assert.deepEqual([effect._workW, effect._workH], workSize, 'preview quality must not change detector resolution');
+  assert.deepEqual(
+    [effect._workW, effect._workH],
+    workSize,
+    'preview quality must not change detector resolution',
+  );
   const previewAnalysisCount = analysisCount;
   now = 151;
-  effect.processFrame(fakeContext, { width: 1600, height: 900 }, null, RENDER_PROFILES.preview);
-  assert.equal(analysisCount, previewAnalysisCount, 'preview profile must keep detector throttling');
-  effect.processFrame(fakeContext, { width: 1600, height: 900 }, null, RENDER_PROFILES.export);
-  assert.equal(analysisCount, previewAnalysisCount + 1, 'export profile must force per-frame analysis');
+  effect.processFrame(
+    fakeContext,
+    { width: 1600, height: 900 },
+    null,
+    RENDER_PROFILES.preview,
+  );
+  assert.equal(
+    analysisCount,
+    previewAnalysisCount,
+    'preview profile must keep detector throttling',
+  );
+  effect.processFrame(
+    fakeContext,
+    { width: 1600, height: 900 },
+    null,
+    RENDER_PROFILES.export,
+  );
+  assert.equal(
+    analysisCount,
+    previewAnalysisCount + 1,
+    'export profile must force per-frame analysis',
+  );
 }
 
 function checkBlinkDetectionUsesRefinedEyeLandmarks() {
   let options;
   class FaceMesh {
-    setOptions(value) { options = value; }
+    setOptions(value) {
+      options = value;
+    }
     onResults() {}
-    initialize() { return Promise.resolve(); }
+    initialize() {
+      return Promise.resolve();
+    }
   }
-  const BlinkDetection = loadClass('js/effects/blink-detection.js', 'BlinkDetection', {
-    console,
-    FaceMesh,
-  });
+  const BlinkDetection = loadClass(
+    'js/effects/blink-detection.js',
+    'BlinkDetection',
+    {
+      console,
+      FaceMesh,
+    },
+  );
 
   const effect = new BlinkDetection();
-  assert.equal(options.refineLandmarks, true, 'blink detection needs refined eye landmarks');
-  assert.equal(effect.minClosedFrames, 1, 'blink response should not wait for extra frames');
-  assert.equal(effect._earSmoothing, 0.35, 'eye smoothing must prioritize low latency');
+  assert.equal(
+    options.refineLandmarks,
+    true,
+    'blink detection needs refined eye landmarks',
+  );
+  assert.equal(
+    effect.minClosedFrames,
+    1,
+    'blink response should not wait for extra frames',
+  );
+  assert.equal(
+    effect._earSmoothing,
+    0.35,
+    'eye smoothing must prioritize low latency',
+  );
 }
 
 async function checkBlinkCallbackClearsWhenBlobDisabled() {
@@ -185,9 +302,15 @@ async function checkBlinkCallbackClearsWhenBlobDisabled() {
     blobTrackingEffect: {},
     blinkDetectionEffect: {
       callback: () => {},
-      setBlinkCallback(callback) { this.callback = callback; },
+      setBlinkCallback(callback) {
+        this.callback = callback;
+      },
     },
-    effectManager: { removeEffect(effect) { assert.equal(effect, app.blobTrackingEffect); } },
+    effectManager: {
+      removeEffect(effect) {
+        assert.equal(effect, app.blobTrackingEffect);
+      },
+    },
     effectsInfo: { textContent: '' },
     colorPickSection: { classList: { add() {}, remove() {} } },
     syncQuickDetectorSettingsFromEffects() {},
@@ -198,39 +321,83 @@ async function checkBlinkCallbackClearsWhenBlobDisabled() {
   applyEffectsMixin(app);
   await app.toggleEffect('blob');
   assert.equal(app.blobTrackingEffect, null);
-  assert.equal(app.blinkDetectionEffect.callback, null, 'blink must stop calling color tracking when color detector is disabled');
+  assert.equal(
+    app.blinkDetectionEffect.callback,
+    null,
+    'blink must stop calling color tracking when color detector is disabled',
+  );
 }
 
 function checkFaceDetectionUsesRefinedEyeLandmarks() {
   let options;
   class FaceMesh {
-    setOptions(value) { options = value; }
+    setOptions(value) {
+      options = value;
+    }
     onResults() {}
-    initialize() { return Promise.resolve(); }
+    initialize() {
+      return Promise.resolve();
+    }
   }
-  const FaceDetection = loadClass('js/effects/face-detection.js', 'FaceDetection', {
-    console,
-    document: { createElement: () => ({ getContext: () => ({}) }) },
-    FaceMesh,
-  });
+  const FaceDetection = loadClass(
+    'js/effects/face-detection.js',
+    'FaceDetection',
+    {
+      console,
+      document: { createElement: () => ({ getContext: () => ({}) }) },
+      FaceMesh,
+    },
+  );
 
   const effect = new FaceDetection();
-  assert.equal(options.refineLandmarks, true, 'shared face landmarks must preserve blink accuracy');
-  assert.equal(effect.processIntervalMs, 30, 'face analysis must refresh near video frame rate');
-  assert.equal(effect.boxSmoothing, 0.5, 'face boxes must respond without excessive lag');
-  assert.equal(effect.detectionHoldMs, 120, 'short gaps may be held without leaving stale boxes');
+  assert.equal(
+    options.refineLandmarks,
+    true,
+    'shared face landmarks must preserve blink accuracy',
+  );
+  assert.equal(
+    effect.processIntervalMs,
+    30,
+    'face analysis must refresh near video frame rate',
+  );
+  assert.equal(
+    effect.boxSmoothing,
+    0.5,
+    'face boxes must respond without excessive lag',
+  );
+  assert.equal(
+    effect.detectionHoldMs,
+    120,
+    'short gaps may be held without leaving stale boxes',
+  );
   assert.equal(effect.showBox, true, 'face boxes must be enabled by default');
   assert.equal(effect.showBlur, false, 'face blur must be opt-in');
   effect.setConfig({ labelSize: 99 });
-  assert.equal(effect.getConfig().labelSize, 32, 'face label size must clamp high values');
+  assert.equal(
+    effect.getConfig().labelSize,
+    32,
+    'face label size must clamp high values',
+  );
   effect.setConfig({ labelSize: 2 });
-  assert.equal(effect.getConfig().labelSize, 8, 'face label size must clamp low values');
+  assert.equal(
+    effect.getConfig().labelSize,
+    8,
+    'face label size must clamp low values',
+  );
   effect.setConfig({ visualMode: 'hybrid' });
   assert.equal(effect.showBox, true, 'hybrid mode must keep box enabled');
   assert.equal(effect.showBlur, true, 'hybrid mode must keep blur enabled');
-  assert.equal(effect.getConfig().visualMode, 'hybrid', 'legacy visualMode must stay compatible');
+  assert.equal(
+    effect.getConfig().visualMode,
+    'hybrid',
+    'legacy visualMode must stay compatible',
+  );
   effect.setConfig({ showBox: false, showBlur: true });
-  assert.equal(effect.getConfig().visualMode, 'pixelate', 'blur-only mode must map to pixelate');
+  assert.equal(
+    effect.getConfig().visualMode,
+    'pixelate',
+    'blur-only mode must map to pixelate',
+  );
 }
 
 function checkVideoTimelineIntervals() {
@@ -240,9 +407,19 @@ function checkVideoTimelineIntervals() {
   const look = timeline.add('look', 2, 8, { contrast: 120 });
   const face = timeline.add('face', 6, 10, { visualMode: 'pixelate' });
 
-  assert.deepEqual(Array.from(timeline.activeAt(2), (item) => item.type), ['look']);
-  assert.deepEqual(Array.from(timeline.activeAt(6), (item) => item.type), ['look', 'face']);
-  assert.deepEqual(Array.from(timeline.activeAt(8), (item) => item.type), ['face'], 'end boundaries must be exclusive');
+  assert.deepEqual(
+    Array.from(timeline.activeAt(2), (item) => item.type),
+    ['look'],
+  );
+  assert.deepEqual(
+    Array.from(timeline.activeAt(6), (item) => item.type),
+    ['look', 'face'],
+  );
+  assert.deepEqual(
+    Array.from(timeline.activeAt(8), (item) => item.type),
+    ['face'],
+    'end boundaries must be exclusive',
+  );
   assert.throws(() => timeline.add('look', 7, 9), /superponer/);
   timeline.add('look', 8, 9, { contrast: 90 });
   assert.throws(() => timeline.add('blink', 0, 3), /dentro del recorte/);
@@ -257,40 +434,129 @@ function checkVideoTimelineIntervals() {
   assert.equal(timeline.markers[0].time, 5.123);
   assert.equal(timeline.markers[0].kind, 'manual');
   assert.equal(timeline.markers[0].source, 'user');
-  assert.ok(timeline.getSnapPoints().includes(5.123), 'markers must be timeline snap points');
+  assert.ok(
+    timeline.getSnapPoints().includes(5.123),
+    'markers must be timeline snap points',
+  );
   timeline.addMarkers([
-    { time: 6, kind: 'beat', source: 'edit-assist', strength: 0.8, label: 'Beat' },
-    { time: 8, kind: 'bar', source: 'edit-assist', strength: 0.9, label: 'Compás' },
+    {
+      time: 6,
+      kind: 'beat',
+      source: 'edit-assist',
+      strength: 0.8,
+      label: 'Beat',
+    },
+    {
+      time: 8,
+      kind: 'bar',
+      source: 'edit-assist',
+      strength: 0.9,
+      label: 'Compás',
+    },
   ]);
   assert.equal(timeline.getMarkersBySource('edit-assist').length, 2);
-  assert.ok(timeline.getSnapPoints().includes(8), 'edit-assist markers must be timeline snap points');
+  const duplicate = timeline.addMarker({
+    time: 6.005,
+    kind: 'beat',
+    source: 'edit-assist',
+    strength: 0.3,
+  });
+  assert.equal(
+    timeline.getMarkersBySource('edit-assist').length,
+    2,
+    'near duplicate edit-assist markers must be ignored',
+  );
+  assert.equal(duplicate.time, 6);
+  const manualSameTime = timeline.addMarker({
+    time: 6.005,
+    kind: 'manual',
+    source: 'user',
+  });
+  assert.equal(
+    manualSameTime.source,
+    'user',
+    'manual markers are distinct from edit-assist markers',
+  );
+  assert.equal(timeline.markers.length, 4);
+  assert.ok(
+    timeline.getSnapPoints().includes(8),
+    'edit-assist markers must be timeline snap points',
+  );
   timeline.clearMarkersBySource('edit-assist');
   assert.equal(timeline.getMarkersBySource('edit-assist').length, 0);
-  assert.equal(timeline.getMarkersBySource('user').length, 1, 'clearing edit-assist markers must keep user markers');
+  assert.equal(
+    timeline.getMarkersBySource('user').length,
+    2,
+    'clearing edit-assist markers must keep user markers',
+  );
   const removed = timeline.toggleMarker(5.16, 0.08);
   assert.equal(removed.action, 'removed');
-  assert.equal(timeline.markers.length, 0);
+  assert.equal(timeline.markers.length, 1);
 }
 
 function checkAudioTempoAnalyzer() {
   const sampleRate = 44100;
-  const duration = 8;
-  const samples = new Float32Array(sampleRate * duration);
-  for (let beat = 0; beat < duration * 2; beat++) {
-    const start = Math.round(beat * 0.5 * sampleRate);
-    for (let index = 0; index < 900; index++) {
-      samples[start + index] = Math.max(samples[start + index] || 0, 1 - index / 900);
+  const clickTrack = (bpm, duration = 8) => {
+    const samples = new Float32Array(sampleRate * duration);
+    const period = 60 / bpm;
+    for (let beat = 0; beat < duration / period; beat++) {
+      const start = Math.round(beat * period * sampleRate);
+      for (
+        let index = 0;
+        index < 900 && start + index < samples.length;
+        index++
+      ) {
+        samples[start + index] = Math.max(
+          samples[start + index] || 0,
+          1 - index / 900,
+        );
+      }
     }
-  }
-  const result = estimateTempoFromSamples(samples, sampleRate);
-  assert.ok(Math.abs(result.bpm - 120) <= 2, `120 BPM pulses should be detected, got ${result.bpm}`);
-  assert.ok(result.confidence > 0.3, 'clear pulses should produce usable confidence');
-  assert.ok(result.beats.length >= 14, 'clear pulses should produce beat markers');
+    return samples;
+  };
 
-  const silent = estimateTempoFromSamples(new Float32Array(sampleRate * 2), sampleRate);
+  const samples = clickTrack(120);
+  const result = estimateTempoFromSamples(samples, sampleRate);
+  assert.ok(
+    Math.abs(result.bpm - 120) <= 2,
+    `120 BPM pulses should be detected, got ${result.bpm}`,
+  );
+  assert.ok(
+    result.confidence > 0.3,
+    'clear pulses should produce usable confidence',
+  );
+  assert.ok(
+    result.beats.length >= 14,
+    'clear pulses should produce beat markers',
+  );
+
+  const slower = estimateTempoFromSamples(clickTrack(90), sampleRate);
+  assert.ok(
+    Math.abs(slower.bpm - 90) <= 2,
+    `90 BPM pulses should be detected, got ${slower.bpm}`,
+  );
+
+  const normalized = estimateTempoFromSamples(clickTrack(45), sampleRate, {
+    minBpm: 80,
+    maxBpm: 180,
+  });
+  assert.ok(
+    Math.abs(normalized.bpm - 90) <= 2,
+    `45 BPM pulses should normalize into range, got ${normalized.bpm}`,
+  );
+
+  const silent = estimateTempoFromSamples(
+    new Float32Array(sampleRate * 2),
+    sampleRate,
+  );
   assert.equal(silent.bpm, 0);
   assert.equal(silent.confidence, 0);
   assert.equal(silent.beats.length, 0);
+
+  const empty = estimateTempoFromSamples(new Float32Array(), sampleRate);
+  assert.equal(empty.bpm, 0);
+  assert.equal(empty.confidence, 0);
+  assert.equal(empty.beats.length, 0);
 }
 
 async function checkMediaAudioExtraction() {
@@ -313,28 +579,49 @@ async function checkMediaAudioExtraction() {
       this.numberOfChannels = channels;
       this.closed = false;
     }
-    allocationSize() { return data.byteLength; }
-    copyTo(destination) { destination.set(data); }
-    close() { this.closed = true; }
+    allocationSize() {
+      return data.byteLength;
+    }
+    copyTo(destination) {
+      destination.set(data);
+    }
+    close() {
+      this.closed = true;
+    }
   }
   class BlobSource {
-    constructor(file) { this.file = file; }
+    constructor(file) {
+      this.file = file;
+    }
   }
   class Input {
-    constructor() { this.disposed = false; }
-    async canRead() { return true; }
-    async getPrimaryAudioTrack() { return {}; }
-    dispose() { this.disposed = true; }
+    constructor() {
+      this.disposed = false;
+    }
+    async canRead() {
+      return true;
+    }
+    async getPrimaryAudioTrack() {
+      return {};
+    }
+    dispose() {
+      this.disposed = true;
+    }
   }
   class AudioSampleSink {
-    async *samples() { yield new FakeSample(); }
+    async *samples() {
+      yield new FakeSample();
+    }
   }
   const extracted = await extractMediaAudioSamples(new Blob(['video']), {
     mediaModule: { Input, BlobSource, ALL_FORMATS: [], AudioSampleSink },
   });
   assert.equal(extracted.sampleRate, sampleRate);
   assert.equal(extracted.samples.length, frames);
-  assert.ok(extracted.samples.some((value) => value > 0.9), 'decoded media samples must be mixed to mono');
+  assert.ok(
+    extracted.samples.some((value) => value > 0.9),
+    'decoded media samples must be mixed to mono',
+  );
 }
 
 function checkStableExportDefaults() {
@@ -351,7 +638,9 @@ function checkTimelineClipSnappingHelper() {
       duration: 10,
       markers: [{ id: 'm1', time: 2.5 }],
       items: [{ id: 'a', type: 'blob', startTime: 1, endTime: 4 }],
-      getSnapPoints() { return [this.trimStart, this.trimEnd, this.markers[0].time, 1, 4]; },
+      getSnapPoints() {
+        return [this.trimStart, this.trimEnd, this.markers[0].time, 1, 4];
+      },
     },
     videoEl: { currentTime: 6 },
     chkTimelineSnap: { checked: true },
@@ -360,20 +649,32 @@ function checkTimelineClipSnappingHelper() {
   };
   applyLocalvideoeditorMixin(app);
   assert.deepEqual(
-    app.resolveTimelineClipTimes({ type: 'blob', startTime: 4.04, endTime: 7.04 }),
+    app.resolveTimelineClipTimes({
+      type: 'blob',
+      startTime: 4.04,
+      endTime: 7.04,
+    }),
     { startTime: 4, endTime: 7 },
-    'new clips must snap to the nearest same-track edge'
+    'new clips must snap to the nearest same-track edge',
   );
   assert.deepEqual(
-    app.resolveTimelineClipTimes({ type: 'face', startTime: 5.9, endTime: 7.9 }),
+    app.resolveTimelineClipTimes({
+      type: 'face',
+      startTime: 5.9,
+      endTime: 7.9,
+    }),
     { startTime: 6, endTime: 8 },
-    'new clips must snap to the playhead when it is closer'
+    'new clips must snap to the playhead when it is closer',
   );
-  assert.equal(app.snapTimelineTime(2.46), 2.5, 'timeline cursor must snap to markers');
+  assert.equal(
+    app.snapTimelineTime(2.46),
+    2.5,
+    'timeline cursor must snap to markers',
+  );
   assert.deepEqual(
     app.getTimelineRowStyle(2),
     { top: 'calc(2 * 20%)', height: '20%' },
-    'timeline clips must fill the full effect row height'
+    'timeline clips must fill the full effect row height',
   );
 }
 
@@ -395,9 +696,13 @@ function checkTimelineMarkerIntervalsForInsertion() {
   };
   applyLocalvideoeditorMixin(app);
   assert.deepEqual(
-    app.resolveTimelineInsertionTimes({ type: 'blob', anchorTime: 1.2, duration: 3 }),
+    app.resolveTimelineInsertionTimes({
+      type: 'blob',
+      anchorTime: 1.2,
+      duration: 3,
+    }),
     { startTime: 1, endTime: 1.5 },
-    'new clips dropped on tempo markers should fill the marker interval'
+    'new clips dropped on tempo markers should fill the marker interval',
   );
 }
 
@@ -437,7 +742,9 @@ async function checkSequentialExportAdvance() {
       currentTime: 0,
       ended: false,
       playbackRate: 4,
-      pause() { pauseCalls += 1; },
+      pause() {
+        pauseCalls += 1;
+      },
     },
     isVideoExporting: true,
     seekCalls: 0,
@@ -445,22 +752,52 @@ async function checkSequentialExportAdvance() {
     waitCalls: 0,
   };
   applyLocalvideoeditorMixin(app);
-  app.seekVideoForExport = async () => { app.seekCalls += 1; };
-  app.waitForExportVideoFrame = async () => { app.waitCalls += 1; };
-  app.playVideoUntilExportTime = async () => { app.playCalls += 1; };
+  app.seekVideoForExport = async () => {
+    app.seekCalls += 1;
+  };
+  app.waitForExportVideoFrame = async () => {
+    app.waitCalls += 1;
+  };
+  app.playVideoUntilExportTime = async () => {
+    app.playCalls += 1;
+  };
   await app.advanceVideoForExport(0, 24, 0);
   await app.advanceVideoForExport(1 / 24, 24, 1);
   app.videoEl.currentTime = 1 / 24;
   await app.advanceVideoForExport(1 / 24, 24, 2);
   app.videoEl.currentTime = 0.2;
   await app.advanceVideoForExport(2 / 24, 24, 3);
-  assert.equal(app.seekCalls, 1, 'only the first export frame should require an absolute seek');
+  assert.equal(
+    app.seekCalls,
+    1,
+    'only the first export frame should require an absolute seek',
+  );
   assert.equal(app.playCalls, 1, 'later frames should advance sequentially');
-  assert.equal(app.waitCalls, 0, 'sequential export should not wait for an extra frame after every step');
-  assert.equal(app.videoExportSkippedFrames, 1, 'overshot frames should be reused instead of forcing a late seek');
-  assert.equal(app.videoExportPlayback.playbackRate, 1, 'overshot export playback must fall back to realtime');
-  assert.equal(app.videoEl.playbackRate, 1, 'overshot export playback must update the video element rate');
-  assert.equal(pauseCalls, 1, 'overshot export playback must pause before reusing the current frame');
+  assert.equal(
+    app.waitCalls,
+    0,
+    'sequential export should not wait for an extra frame after every step',
+  );
+  assert.equal(
+    app.videoExportSkippedFrames,
+    1,
+    'overshot frames should be reused instead of forcing a late seek',
+  );
+  assert.equal(
+    app.videoExportPlayback.playbackRate,
+    1,
+    'overshot export playback must fall back to realtime',
+  );
+  assert.equal(
+    app.videoEl.playbackRate,
+    1,
+    'overshot export playback must update the video element rate',
+  );
+  assert.equal(
+    pauseCalls,
+    1,
+    'overshot export playback must pause before reusing the current frame',
+  );
 }
 
 async function checkExportPlaybackPausesAtTarget() {
@@ -472,7 +809,9 @@ async function checkExportPlaybackPausesAtTarget() {
       currentTime: 1,
       ended: false,
       playbackRate: 1,
-      pause() { pauseCalls += 1; },
+      pause() {
+        pauseCalls += 1;
+      },
       play: async () => {},
       addEventListener() {},
       removeEventListener() {},
@@ -480,7 +819,11 @@ async function checkExportPlaybackPausesAtTarget() {
   };
   applyLocalvideoeditorMixin(app);
   await app.playVideoUntilExportTime(1, 0.01);
-  assert.equal(pauseCalls, 1, 'export playback must pause as soon as the target frame is reached');
+  assert.equal(
+    pauseCalls,
+    1,
+    'export playback must pause as soon as the target frame is reached',
+  );
 }
 
 async function checkExportSeekFallsBackWhenSeekedIsMissing() {
@@ -491,20 +834,36 @@ async function checkExportSeekFallsBackWhenSeekedIsMissing() {
     videoTimeline: { duration: 10 },
     videoEl: {
       readyState: 2,
-      get currentTime() { return currentTime; },
-      set currentTime(value) { currentTime = value; },
-      fastSeek() { fastSeekCalled = true; },
+      get currentTime() {
+        return currentTime;
+      },
+      set currentTime(value) {
+        currentTime = value;
+      },
+      fastSeek() {
+        fastSeekCalled = true;
+      },
       addEventListener() {},
       removeEventListener() {},
     },
     clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
   };
   applyLocalvideoeditorMixin(app);
-  app.waitForExportVideoFrame = async () => { waited = true; };
+  app.waitForExportVideoFrame = async () => {
+    waited = true;
+  };
   await app.seekVideoForExport(0);
   assert.equal(currentTime, 0);
-  assert.equal(fastSeekCalled, false, 'export seek must request exact timestamps instead of fastSeek keyframes');
-  assert.equal(waited, true, 'export seek should continue if the media time lands but seeked is not emitted');
+  assert.equal(
+    fastSeekCalled,
+    false,
+    'export seek must request exact timestamps instead of fastSeek keyframes',
+  );
+  assert.equal(
+    waited,
+    true,
+    'export seek should continue if the media time lands but seeked is not emitted',
+  );
 }
 
 function checkVideoSeekAvoidsExactDuration() {
@@ -516,18 +875,30 @@ function checkVideoSeekAvoidsExactDuration() {
     videoTimeline: { trimStart: 0, trimEnd: 10, duration: 10 },
     videoEl: {
       duration: 10,
-      get currentTime() { return currentTime; },
-      set currentTime(value) { currentTime = value; },
+      get currentTime() {
+        return currentTime;
+      },
+      set currentTime(value) {
+        currentTime = value;
+      },
     },
     animFrameId: null,
     clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
     updateVideoTransport() {},
-    scheduleRenderLoop() { scheduled += 1; },
+    scheduleRenderLoop() {
+      scheduled += 1;
+    },
   };
   applyLocalvideoeditorMixin(app);
   app.seekVideo(10);
-  assert.ok(currentTime < 10, 'timeline-end seeks must avoid the exact media duration');
-  assert.ok(Math.abs(currentTime - 9.999) < 1e-9, 'timeline-end seeks should land on the playable final timestamp');
+  assert.ok(
+    currentTime < 10,
+    'timeline-end seeks must avoid the exact media duration',
+  );
+  assert.ok(
+    Math.abs(currentTime - 9.999) < 1e-9,
+    'timeline-end seeks should land on the playable final timestamp',
+  );
   assert.equal(scheduled, 1);
 }
 
@@ -536,8 +907,13 @@ function checkPausedVideoPreviewUsesAnimationFrame() {
   const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
   let rafCalls = 0;
   let cancelled = 0;
-  globalThis.requestAnimationFrame = () => { rafCalls += 1; return 41; };
-  globalThis.cancelAnimationFrame = (id) => { cancelled = id; };
+  globalThis.requestAnimationFrame = () => {
+    rafCalls += 1;
+    return 41;
+  };
+  globalThis.cancelAnimationFrame = (id) => {
+    cancelled = id;
+  };
   try {
     const app = {
       canvas: { width: 1, height: 1 },
@@ -553,7 +929,9 @@ function checkPausedVideoPreviewUsesAnimationFrame() {
         currentTime: 0,
         paused: true,
         readyState: 2,
-        requestVideoFrameCallback() { throw new Error('paused video should not wait for a video frame'); },
+        requestVideoFrameCallback() {
+          throw new Error('paused video should not wait for a video frame');
+        },
         cancelVideoFrameCallback() {},
       },
       fpsInfo: { textContent: '' },
@@ -573,20 +951,44 @@ function checkPausedVideoPreviewUsesAnimationFrame() {
     app.animFrameId = 43;
     app.animFrameType = 'animation';
     app.refreshPausedVideoPreview();
-    assert.equal(cancelled, 43, 'paused preview refresh must cancel stale renders after seeked');
-    assert.equal(rafCalls, 1, 'paused preview refresh must schedule one fresh render after seeked');
+    assert.equal(
+      cancelled,
+      43,
+      'paused preview refresh must cancel stale renders after seeked',
+    );
+    assert.equal(
+      rafCalls,
+      1,
+      'paused preview refresh must schedule one fresh render after seeked',
+    );
     let scheduled = 0;
     app.animFrameId = 42;
     app.animFrameType = 'animation';
-    app.scheduleRenderLoop = () => { scheduled += 1; };
+    app.scheduleRenderLoop = () => {
+      scheduled += 1;
+    };
     app.videoEl.currentTime = 10;
     let pauseCalls = 0;
-    app.videoEl.pause = () => { pauseCalls += 1; };
+    app.videoEl.pause = () => {
+      pauseCalls += 1;
+    };
     app.renderLoop();
     assert.equal(app.animFrameId, null);
-    assert.equal(scheduled, 0, 'paused video preview should render once, not spin forever');
-    assert.equal(app.videoEl.currentTime, 10, 'paused video preview at the end must not re-seek every render');
-    assert.equal(pauseCalls, 0, 'paused video preview at the end must not pause repeatedly');
+    assert.equal(
+      scheduled,
+      0,
+      'paused video preview should render once, not spin forever',
+    );
+    assert.equal(
+      app.videoEl.currentTime,
+      10,
+      'paused video preview at the end must not re-seek every render',
+    );
+    assert.equal(
+      pauseCalls,
+      0,
+      'paused video preview at the end must not pause repeatedly',
+    );
   } finally {
     globalThis.requestAnimationFrame = originalRequestAnimationFrame;
     globalThis.cancelAnimationFrame = originalCancelAnimationFrame;
@@ -605,21 +1007,43 @@ async function checkVideoPlaybackRestartsFromEnd() {
     videoEl: {
       paused: true,
       duration: 10,
-      get currentTime() { return currentTime; },
-      set currentTime(value) { currentTime = value; },
+      get currentTime() {
+        return currentTime;
+      },
+      set currentTime(value) {
+        currentTime = value;
+      },
       play: async () => {},
     },
     clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
-    cancelRenderLoop() { cancelled += 1; this.animFrameId = null; },
-    scheduleRenderLoop() { scheduled += 1; this.animFrameId = 78; },
+    cancelRenderLoop() {
+      cancelled += 1;
+      this.animFrameId = null;
+    },
+    scheduleRenderLoop() {
+      scheduled += 1;
+      this.animFrameId = 78;
+    },
     updateVideoTransport() {},
     showStatus() {},
   };
   applyLocalvideoeditorMixin(app);
   await app.toggleVideoPlayback();
-  assert.equal(cancelled, 1, 'playing from the end must cancel stale preview renders');
-  assert.equal(currentTime, 0, 'playing from the end must return to trim start');
-  assert.equal(scheduled, 1, 'playing from the end must schedule a fresh render');
+  assert.equal(
+    cancelled,
+    1,
+    'playing from the end must cancel stale preview renders',
+  );
+  assert.equal(
+    currentTime,
+    0,
+    'playing from the end must return to trim start',
+  );
+  assert.equal(
+    scheduled,
+    1,
+    'playing from the end must schedule a fresh render',
+  );
 }
 
 async function checkExportPlaybackRateRestores() {
@@ -653,11 +1077,23 @@ async function checkExportPlaybackRateRestores() {
   app.updateVideoEditorUI = () => {};
   app.updateVideoTransport = () => {};
   await app.prepareSequentialVideoExport(0);
-  assert.equal(app.videoEl.playbackRate, 4, 'sequential export should decode faster than realtime');
+  assert.equal(
+    app.videoEl.playbackRate,
+    4,
+    'sequential export should decode faster than realtime',
+  );
   assert.equal(app.videoEl.muted, true);
   app.cleanupVideoExport(false);
-  assert.equal(app.videoEl.playbackRate, 1.25, 'export cleanup must restore original playbackRate');
-  assert.equal(app.videoEl.muted, false, 'export cleanup must restore muted state');
+  assert.equal(
+    app.videoEl.playbackRate,
+    1.25,
+    'export cleanup must restore original playbackRate',
+  );
+  assert.equal(
+    app.videoEl.muted,
+    false,
+    'export cleanup must restore muted state',
+  );
 }
 
 async function checkExportTimelineDetectorToggleIsQuiet() {
@@ -669,20 +1105,46 @@ async function checkExportTimelineDetectorToggleIsQuiet() {
     chkFaceDetection: { checked: false },
     chkBlinkDetection: { checked: false },
     blobTrackingEffect: effect,
-    blinkDetectionEffect: { setBlinkCallback: () => calls.push('blink-callback') },
-    effectManager: { removeEffect(removed) { assert.equal(removed, effect); calls.push('remove'); } },
-    colorPickSection: { classList: { add() { calls.push('color-ui'); }, remove() {} } },
-    syncQuickDetectorSettingsFromEffects() { calls.push('sync-settings'); },
-    saveActiveEffectSettings() { calls.push('save-settings'); },
-    renderEffectConfig() { calls.push('render-config'); },
-    updateEffectsInfo() { calls.push('effects-info'); },
+    blinkDetectionEffect: {
+      setBlinkCallback: () => calls.push('blink-callback'),
+    },
+    effectManager: {
+      removeEffect(removed) {
+        assert.equal(removed, effect);
+        calls.push('remove');
+      },
+    },
+    colorPickSection: {
+      classList: {
+        add() {
+          calls.push('color-ui');
+        },
+        remove() {},
+      },
+    },
+    syncQuickDetectorSettingsFromEffects() {
+      calls.push('sync-settings');
+    },
+    saveActiveEffectSettings() {
+      calls.push('save-settings');
+    },
+    renderEffectConfig() {
+      calls.push('render-config');
+    },
+    updateEffectsInfo() {
+      calls.push('effects-info');
+    },
   };
   applyEffectsMixin(app);
   applyLocalvideoeditorMixin(app);
   await app.setTimelineDetector('blob', null);
   assert.equal(app.chkBlobTracking.checked, false);
   assert.equal(app.blobTrackingEffect, null);
-  assert.deepEqual(calls, ['remove', 'blink-callback', 'color-ui'], 'export detector toggles must skip storage and heavy UI refresh');
+  assert.deepEqual(
+    calls,
+    ['remove', 'blink-callback', 'color-ui'],
+    'export detector toggles must skip storage and heavy UI refresh',
+  );
 }
 
 function checkEditorHistoryUndoRedo() {
@@ -711,19 +1173,49 @@ function checkPreviewProcessingResolutionContract() {
   const sourceWidth = 1920;
   const sourceHeight = 1080;
   const processing = getProcessingFrameDimensions(sourceWidth, sourceHeight);
-  const draftPreview = getPreviewFrameDimensions(sourceWidth, sourceHeight, 'draft');
-  const fullPreview = getPreviewFrameDimensions(sourceWidth, sourceHeight, 'full');
+  const draftPreview = getPreviewFrameDimensions(
+    sourceWidth,
+    sourceHeight,
+    'draft',
+  );
+  const fullPreview = getPreviewFrameDimensions(
+    sourceWidth,
+    sourceHeight,
+    'full',
+  );
 
-  assert.equal(processing.width, sourceWidth, 'processing width must match source');
-  assert.equal(processing.height, sourceHeight, 'processing height must match source');
-  assert.equal(fullPreview.width, sourceWidth, 'full preview must match source');
-  assert.equal(fullPreview.height, sourceHeight, 'full preview must match source');
-  assert.ok(draftPreview.width < processing.width, 'draft preview must downscale display width');
-  assert.ok(draftPreview.height < processing.height, 'draft preview must downscale display height');
+  assert.equal(
+    processing.width,
+    sourceWidth,
+    'processing width must match source',
+  );
+  assert.equal(
+    processing.height,
+    sourceHeight,
+    'processing height must match source',
+  );
+  assert.equal(
+    fullPreview.width,
+    sourceWidth,
+    'full preview must match source',
+  );
+  assert.equal(
+    fullPreview.height,
+    sourceHeight,
+    'full preview must match source',
+  );
+  assert.ok(
+    draftPreview.width < processing.width,
+    'draft preview must downscale display width',
+  );
+  assert.ok(
+    draftPreview.height < processing.height,
+    'draft preview must downscale display height',
+  );
   assert.notDeepEqual(
     [draftPreview.width, draftPreview.height],
     [fullPreview.width, fullPreview.height],
-    'preview quality must still change display resolution'
+    'preview quality must still change display resolution',
   );
 }
 
@@ -731,10 +1223,20 @@ function checkVideoExportTimingAndQuality() {
   for (const fps of [23.976, 24, 25, 29.97, 30, 59.94, 60]) {
     const duration = 10;
     const frameCount = calculateExportFrameCount(duration, fps);
-    const encodedDuration = calculateFrameTimestampUs(frameCount, fps) / 1_000_000;
-    assert.ok(Math.abs(encodedDuration - duration) <= 1 / fps, `${fps} FPS duration must stay within one frame`);
-    assert.equal(calculateFrameTimestampUs(1, fps), Math.round(1_000_000 / fps));
-    assert.ok(calculateFrameDurationUs(0, fps) > 0, `${fps} FPS frame duration must be positive`);
+    const encodedDuration =
+      calculateFrameTimestampUs(frameCount, fps) / 1_000_000;
+    assert.ok(
+      Math.abs(encodedDuration - duration) <= 1 / fps,
+      `${fps} FPS duration must stay within one frame`,
+    );
+    assert.equal(
+      calculateFrameTimestampUs(1, fps),
+      Math.round(1_000_000 / fps),
+    );
+    assert.ok(
+      calculateFrameDurationUs(0, fps) > 0,
+      `${fps} FPS frame duration must be positive`,
+    );
   }
 
   assert.equal(calculateSourceAverageBitrate(10_000_000, 10), 8_000_000);
@@ -747,18 +1249,50 @@ function checkVideoExportTimingAndQuality() {
   assert.equal(normalizeFrameRate(0), null);
   assert.equal(snapFrameRate(23.98), 23.976);
   assert.equal(snapFrameRate(24.04), 24);
-  assert.equal(calculateFrameRateFromMediaTimes([0, 1 / 24, 2 / 24, 3 / 24]), 24);
-  assert.equal(calculateFrameRateFromMediaTimes([0, 1 / 24, 2 / 24, 2 / 24, 3 / 24]), 24);
-  assert.equal(calculateFrameRateFromMediaTimes([0]), null);
-  assert.equal(shouldAppendFinalFrame(10, 30, 300), false, 'exact frame-grid exports must not append a duplicate final frame');
-  assert.equal(shouldAppendFinalFrame(10.01, 30, 300), true, 'non-grid durations may append a final duration marker');
   assert.equal(
-    formatExportDebugInfo({ stage: 'encode', done: 3, total: 10, fps: 30, time: 0.1, width: 640, height: 360, queueSize: 2 }),
-    'stage:encode · frame:3/10 · fps:30 · t:0.100s · 640x360 · queue:2'
+    calculateFrameRateFromMediaTimes([0, 1 / 24, 2 / 24, 3 / 24]),
+    24,
   );
   assert.equal(
-    formatExportDebugInfo({ stage: 'seek-fallback', done: 579, total: 590, fps: 30, time: 19.3, width: 576, height: 576, note: 'frames_reutilizados:1' }),
-    'stage:seek-fallback · frame:579/590 · fps:30 · t:19.300s · 576x576 · queue:0 · frames_reutilizados:1'
+    calculateFrameRateFromMediaTimes([0, 1 / 24, 2 / 24, 2 / 24, 3 / 24]),
+    24,
+  );
+  assert.equal(calculateFrameRateFromMediaTimes([0]), null);
+  assert.equal(
+    shouldAppendFinalFrame(10, 30, 300),
+    false,
+    'exact frame-grid exports must not append a duplicate final frame',
+  );
+  assert.equal(
+    shouldAppendFinalFrame(10.01, 30, 300),
+    true,
+    'non-grid durations may append a final duration marker',
+  );
+  assert.equal(
+    formatExportDebugInfo({
+      stage: 'encode',
+      done: 3,
+      total: 10,
+      fps: 30,
+      time: 0.1,
+      width: 640,
+      height: 360,
+      queueSize: 2,
+    }),
+    'stage:encode · frame:3/10 · fps:30 · t:0.100s · 640x360 · queue:2',
+  );
+  assert.equal(
+    formatExportDebugInfo({
+      stage: 'seek-fallback',
+      done: 579,
+      total: 590,
+      fps: 30,
+      time: 19.3,
+      width: 576,
+      height: 576,
+      note: 'frames_reutilizados:1',
+    }),
+    'stage:seek-fallback · frame:579/590 · fps:30 · t:19.300s · 576x576 · queue:0 · frames_reutilizados:1',
   );
 }
 
@@ -824,14 +1358,21 @@ async function checkVideoExportDiagnostics() {
     VideoFrameImpl: class VideoFrame {},
   });
   assert.equal(mp4.supported, true);
-  assert.equal(mp4.format, 'mp4', 'auto export may use MP4 when WebM is unavailable');
+  assert.equal(
+    mp4.format,
+    'mp4',
+    'auto export may use MP4 when WebM is unavailable',
+  );
   assert.equal(mp4.extension, 'mp4');
   assert.equal(mp4.mediaCodec, 'avc');
   assert.equal(mp4.audioCopySupported, true);
 
   class FastWebmAndMp4Encoder {
     static async isConfigSupported(config) {
-      return { supported: config.codec === 'vp8' || config.codec.startsWith('avc1.'), config };
+      return {
+        supported: config.codec === 'vp8' || config.codec.startsWith('avc1.'),
+        config,
+      };
     }
   }
   const autoFast = await diagnoseVideoExportSupport({
@@ -839,14 +1380,22 @@ async function checkVideoExportDiagnostics() {
     VideoEncoderImpl: FastWebmAndMp4Encoder,
     VideoFrameImpl: class VideoFrame {},
   });
-  assert.equal(autoFast.format, 'webm', 'auto export must prefer fast WebM when both containers are available');
+  assert.equal(
+    autoFast.format,
+    'webm',
+    'auto export must prefer fast WebM when both containers are available',
+  );
 
   const forcedMp4Unsupported = await diagnoseVideoExportSupport({
     requestedFormat: 'mp4',
     VideoEncoderImpl: Vp8Encoder,
     VideoFrameImpl: class VideoFrame {},
   });
-  assert.equal(forcedMp4Unsupported.supported, false, 'forced MP4 must not silently fall back');
+  assert.equal(
+    forcedMp4Unsupported.supported,
+    false,
+    'forced MP4 must not silently fall back',
+  );
 
   const effectsOnly = await diagnoseVideoExportSupport({
     requestedFormat: 'mp4',
@@ -855,15 +1404,48 @@ async function checkVideoExportDiagnostics() {
     VideoFrameImpl: class VideoFrame {},
   });
   assert.equal(effectsOnly.supported, true);
-  assert.equal(effectsOnly.format, 'webm', 'effects-only chroma export must force WebM');
+  assert.equal(
+    effectsOnly.format,
+    'webm',
+    'effects-only chroma export must force WebM',
+  );
   assert.equal(effectsOnly.audioReason, 'effects_export_has_no_audio');
 }
 
 function checkEditorExportFormatHelpers() {
-  assert.equal(chooseEditorExportFormat({ requestedFormat: 'auto', mp4Supported: true, webmSupported: true }), 'webm');
-  assert.equal(chooseEditorExportFormat({ requestedFormat: 'auto', mp4Supported: false, webmSupported: true }), 'webm');
-  assert.equal(chooseEditorExportFormat({ requestedFormat: 'mp4', mp4Supported: false, webmSupported: true }), '');
-  assert.equal(chooseEditorExportFormat({ requestedFormat: 'mp4', mode: 'effects-chroma', mp4Supported: true, webmSupported: true }), 'webm');
+  assert.equal(
+    chooseEditorExportFormat({
+      requestedFormat: 'auto',
+      mp4Supported: true,
+      webmSupported: true,
+    }),
+    'webm',
+  );
+  assert.equal(
+    chooseEditorExportFormat({
+      requestedFormat: 'auto',
+      mp4Supported: false,
+      webmSupported: true,
+    }),
+    'webm',
+  );
+  assert.equal(
+    chooseEditorExportFormat({
+      requestedFormat: 'mp4',
+      mp4Supported: false,
+      webmSupported: true,
+    }),
+    '',
+  );
+  assert.equal(
+    chooseEditorExportFormat({
+      requestedFormat: 'mp4',
+      mode: 'effects-chroma',
+      mp4Supported: true,
+      webmSupported: true,
+    }),
+    'webm',
+  );
   assert.equal(canCopyAudioCodecToFormat('aac', 'mp4'), true);
   assert.equal(canCopyAudioCodecToFormat('mp4a.40.2', 'mp4'), true);
   assert.equal(canCopyAudioCodecToFormat('opus', 'webm'), true);
@@ -898,7 +1480,11 @@ function checkPaletteDropUsesEffectTypeRow() {
   };
   app.removeTimelineDragGhost = () => {};
   app.finishPaletteDrag({ pointerId: 1, clientX: 100, clientY: 50 });
-  assert.equal(addedType, 'blob:4', 'palette drops must use the dragged effect type, not the row under the pointer');
+  assert.equal(
+    addedType,
+    'blob:4',
+    'palette drops must use the dragged effect type, not the row under the pointer',
+  );
 }
 
 async function checkEffectsOnlyExportSkipsBaseRender() {
@@ -920,7 +1506,11 @@ async function checkEffectsOnlyExportSkipsBaseRender() {
       this.progressCalls.push(meta.stage);
     },
     seekVideoForExport: async (time) => {
-      assert.equal(time, 2, 'effects-only export should seek to trim start for frame zero');
+      assert.equal(
+        time,
+        2,
+        'effects-only export should seek to trim start for frame zero',
+      );
     },
     applyVideoTimelineLook() {
       this.lookCalls += 1;
@@ -937,11 +1527,26 @@ async function checkEffectsOnlyExportSkipsBaseRender() {
   };
   applyLocalvideoeditorMixin(app);
   app.seekVideoForExport = async (time) => {
-    assert.equal(time, 2, 'effects-only export should seek to trim start for frame zero');
+    assert.equal(
+      time,
+      2,
+      'effects-only export should seek to trim start for frame zero',
+    );
   };
-  await app.renderVideoExportFrame(0, 30, { mode: 'effects-chroma', chromaColor: '#00ff00' });
-  assert.equal(app.lookCalls, 0, 'effects-only export must not render LOOK as a video base transform');
-  assert.equal(app.baseRenderCalls, 0, 'effects-only export must not call the full video-base renderer');
+  await app.renderVideoExportFrame(0, 30, {
+    mode: 'effects-chroma',
+    chromaColor: '#00ff00',
+  });
+  assert.equal(
+    app.lookCalls,
+    0,
+    'effects-only export must not render LOOK as a video base transform',
+  );
+  assert.equal(
+    app.baseRenderCalls,
+    0,
+    'effects-only export must not call the full video-base renderer',
+  );
   assert.equal(app.effectsOnlyCalls, 1);
 }
 
@@ -962,27 +1567,74 @@ async function checkExportFrameProgressThrottlesInnerStages() {
     renderSourceFrameBuffer() {},
   };
   applyLocalvideoeditorMixin(app);
-  app.updateVideoExportProgress = (done, total, fps, meta) => { calls.push(meta); };
+  app.updateVideoExportProgress = (done, total, fps, meta) => {
+    calls.push(meta);
+  };
   app.advanceVideoForExport = async () => {};
   await app.renderVideoExportFrame(1, 30, { mode: 'full' });
   const byStage = Object.fromEntries(calls.map((meta) => [meta.stage, meta]));
-  assert.equal(byStage.decode.force, true, 'decode remains the single forced frame progress update');
-  assert.equal(byStage.look.force, undefined, 'look progress must use throttled UI updates');
-  assert.equal(byStage.detectors.force, undefined, 'detector progress must use throttled UI updates');
-  assert.equal(byStage.canvas.force, undefined, 'canvas progress must use throttled UI updates');
+  assert.equal(
+    byStage.decode.force,
+    true,
+    'decode remains the single forced frame progress update',
+  );
+  assert.equal(
+    byStage.look.force,
+    undefined,
+    'look progress must use throttled UI updates',
+  );
+  assert.equal(
+    byStage.detectors.force,
+    undefined,
+    'detector progress must use throttled UI updates',
+  );
+  assert.equal(
+    byStage.canvas.force,
+    undefined,
+    'canvas progress must use throttled UI updates',
+  );
 }
 
 function checkObservedExportProgressAndTimelineTicks() {
-  assert.equal(calculateTimelineTickInterval(60, 180), 30, 'narrow timelines need sparse labels');
-  assert.equal(calculateTimelineTickInterval(60, 720), 10, 'wide timelines can show denser labels');
+  assert.equal(
+    calculateTimelineTickInterval(60, 180),
+    30,
+    'narrow timelines need sparse labels',
+  );
+  assert.equal(
+    calculateTimelineTickInterval(60, 720),
+    10,
+    'wide timelines can show denser labels',
+  );
 
-  const early = formatObservedExportProgress({ done: 1, total: 100, startedAt: 0, now: 500, fps: 30 });
-  assert.ok(!early.includes('restantes'), 'early progress must not fake an ETA');
+  const early = formatObservedExportProgress({
+    done: 1,
+    total: 100,
+    startedAt: 0,
+    now: 500,
+    fps: 30,
+  });
+  assert.ok(
+    !early.includes('restantes'),
+    'early progress must not fake an ETA',
+  );
   assert.ok(early.includes('midiendo velocidad real'));
 
-  const observed = formatObservedExportProgress({ done: 50, total: 100, startedAt: 0, now: 5000, fps: 30 });
-  assert.ok(observed.includes('10 fps reales'), 'progress must show observed export speed');
-  assert.ok(observed.includes('5s transcurridos'), 'progress must show elapsed time instead of fake ETA');
+  const observed = formatObservedExportProgress({
+    done: 50,
+    total: 100,
+    startedAt: 0,
+    now: 5000,
+    fps: 30,
+  });
+  assert.ok(
+    observed.includes('10 fps reales'),
+    'progress must show observed export speed',
+  );
+  assert.ok(
+    observed.includes('5s transcurridos'),
+    'progress must show elapsed time instead of fake ETA',
+  );
 }
 
 await checkCameraStreamCleanup();

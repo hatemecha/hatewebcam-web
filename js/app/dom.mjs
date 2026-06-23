@@ -1,13 +1,15 @@
 /** @param {import('./controller.mjs').AppController} app */
 export function setupDom(app) {
   const $ = (s) => document.querySelector(s);
-  
+
   app.videoEl = $('#videoElement');
   app.canvas = $('#previewCanvas');
   app.previewWrapper = $('#previewWrapper');
   app.captureCountdown = $('#captureCountdown');
   app.captureCountdownValue = $('#captureCountdownValue');
-  app.ctx = app.canvas.getContext('2d', { alpha: false }) || app.canvas.getContext('2d');
+  app.ctx =
+    app.canvas.getContext('2d', { alpha: false }) ||
+    app.canvas.getContext('2d');
   app.placeholder = $('#previewPlaceholder');
   app.placeholderCamera = $('#previewPlaceholderCamera');
   app.placeholderVideo = $('#previewPlaceholderVideo');
@@ -87,7 +89,9 @@ export function setupDom(app) {
   app.timelineViewport = $('#timelineViewport');
   app.timelineScroll = $('#timelineScroll');
   app.timelineTimeRuler = $('#timelineTimeRuler');
-  app.timelineTrackArea = app.videoTimelineEl ? app.videoTimelineEl.querySelector('.timeline-track-area') : null;
+  app.timelineTrackArea = app.videoTimelineEl
+    ? app.videoTimelineEl.querySelector('.timeline-track-area')
+    : null;
   app.timelineVideoClip = $('#timelineVideoClip');
   app.timelineTrimOutsideStart = $('#timelineTrimOutsideStart');
   app.timelineTrimOutsideEnd = $('#timelineTrimOutsideEnd');
@@ -134,7 +138,9 @@ export function setupDom(app) {
   app.chkPreviewPhotoEnhancer = $('#chkPreviewPhotoEnhancer');
   app.sldPreviewPhotoEnhancerStrength = $('#sldPreviewPhotoEnhancerStrength');
   app.valPreviewPhotoEnhancerStrength = $('#valPreviewPhotoEnhancerStrength');
-  app.previewPhotoEnhancerStrengthGroup = $('#previewPhotoEnhancerStrengthGroup');
+  app.previewPhotoEnhancerStrengthGroup = $(
+    '#previewPhotoEnhancerStrengthGroup',
+  );
   app.btnDownloadCapture = $('#btnDownloadCapture');
   app.btnDiscardCapture = $('#btnDiscardCapture');
   app.btnCloseCapturePreview = $('#btnCloseCapturePreview');

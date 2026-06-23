@@ -1,48 +1,66 @@
-import { PREVIEW_MIN_WIDTH, PREVIEW_MIN_HEIGHT, PREVIEW_QUALITY_PRESETS } from './constants.mjs';
+import {
+  PREVIEW_MIN_WIDTH,
+  PREVIEW_MIN_HEIGHT,
+  PREVIEW_QUALITY_PRESETS,
+} from './constants.mjs';
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyRenderLoopMixin(proto) {
   proto.getSourceFrameDimensions = function () {
     return {
-      sourceWidth: Math.max(1, this.videoEl.videoWidth || this.canvas.width || 1),
-      sourceHeight: Math.max(1, this.videoEl.videoHeight || this.canvas.height || 1),
+      sourceWidth: Math.max(
+        1,
+        this.videoEl.videoWidth || this.canvas.width || 1,
+      ),
+      sourceHeight: Math.max(
+        1,
+        this.videoEl.videoHeight || this.canvas.height || 1,
+      ),
     };
-  }
+  };
 
   proto.normalizeRotationDegrees = function (deg) {
-    const normalized = ((Math.round(deg / 90) * 90) % 360 + 360) % 360;
+    const normalized = (((Math.round(deg / 90) * 90) % 360) + 360) % 360;
     if (normalized === 360) return 0;
     return normalized;
-  }
+  };
 
   proto.getMobileAutoRotationDegrees = function (sourceWidth, sourceHeight) {
-    const shouldAutoRotate = this.isMobileViewport() && sourceWidth > sourceHeight;
+    const shouldAutoRotate =
+      this.isMobileViewport() && sourceWidth > sourceHeight;
     return shouldAutoRotate ? 90 : 0;
-  }
+  };
 
   proto.getEffectiveRotationDegrees = function (sourceWidth, sourceHeight) {
     if (this.sourceMode === 'camera' && this.isMobileViewport()) {
-      return this.normalizeRotationDegrees(this.getMobileAutoRotationDegrees(sourceWidth, sourceHeight));
+      return this.normalizeRotationDegrees(
+        this.getMobileAutoRotationDegrees(sourceWidth, sourceHeight),
+      );
     }
     return this.normalizeRotationDegrees(this.rotation);
-  }
+  };
 
   proto.getEffectiveFrameDimensions = function (sourceWidth, sourceHeight) {
-    const effectiveRotation = this.getEffectiveRotationDegrees(sourceWidth, sourceHeight);
+    const effectiveRotation = this.getEffectiveRotationDegrees(
+      sourceWidth,
+      sourceHeight,
+    );
     const rotated = effectiveRotation === 90 || effectiveRotation === 270;
     return {
       width: rotated ? sourceHeight : sourceWidth,
       height: rotated ? sourceWidth : sourceHeight,
       effectiveRotation,
     };
-  }
+  };
 
   proto.getPreviewFrameDimensions = function (sourceWidth, sourceHeight) {
-    const { width: effectiveWidth, height: effectiveHeight } = this.getEffectiveFrameDimensions(sourceWidth, sourceHeight);
+    const { width: effectiveWidth, height: effectiveHeight } =
+      this.getEffectiveFrameDimensions(sourceWidth, sourceHeight);
     const previewPreset = this.getCurrentPreviewQualityPreset();
     const sourcePixels = Math.max(1, effectiveWidth * effectiveHeight);
-    const pixelScale = sourcePixels > previewPreset.maxPixels
-      ? Math.sqrt(previewPreset.maxPixels / sourcePixels)
-      : 1;
+    const pixelScale =
+      sourcePixels > previewPreset.maxPixels
+        ? Math.sqrt(previewPreset.maxPixels / sourcePixels)
+        : 1;
     const baseScale = Math.min(1, pixelScale, previewPreset.maxScale);
 
     const aspect = Math.max(0.0001, effectiveWidth / effectiveHeight);
@@ -59,20 +77,33 @@ export function applyRenderLoopMixin(proto) {
     }
 
     return { width, height, scale: width / Math.max(1, effectiveWidth) };
-  }
+  };
 
-  proto.buildResolutionLabel = function (sourceWidth, sourceHeight, previewWidth, previewHeight) {
+  proto.buildResolutionLabel = function (
+    sourceWidth,
+    sourceHeight,
+    previewWidth,
+    previewHeight,
+  ) {
     const previewLabel = this.getCurrentPreviewQualityPreset().label;
     if (sourceWidth === previewWidth && sourceHeight === previewHeight) {
       return `${sourceWidth}×${sourceHeight} · Vista previa ${previewLabel}`;
     }
     return `${sourceWidth}×${sourceHeight} · Vista previa ${previewLabel} ${previewWidth}×${previewHeight}`;
-  }
+  };
 
   proto.getDesiredPreviewCanvasMetrics = function (sourceWidth, sourceHeight) {
     if (this.isMobileViewport()) {
-      const wrapperWidth = Math.round((this.previewWrapper && this.previewWrapper.clientWidth) || window.innerWidth || sourceWidth);
-      const wrapperHeight = Math.round((this.previewWrapper && this.previewWrapper.clientHeight) || window.innerHeight || sourceHeight);
+      const wrapperWidth = Math.round(
+        (this.previewWrapper && this.previewWrapper.clientWidth) ||
+          window.innerWidth ||
+          sourceWidth,
+      );
+      const wrapperHeight = Math.round(
+        (this.previewWrapper && this.previewWrapper.clientHeight) ||
+          window.innerHeight ||
+          sourceHeight,
+      );
       return {
         width: Math.max(this.PREVIEW_MIN_WIDTH, wrapperWidth),
         height: Math.max(this.PREVIEW_MIN_HEIGHT, wrapperHeight),
@@ -80,7 +111,7 @@ export function applyRenderLoopMixin(proto) {
       };
     }
     return this.getPreviewFrameDimensions(sourceWidth, sourceHeight);
-  }
+  };
 
   proto.clearPreviewCanvas = function () {
     if (!this.ctx || !this.canvas) return;
@@ -88,54 +119,76 @@ export function applyRenderLoopMixin(proto) {
     const height = Math.max(1, this.canvas.height || 1);
     this.ctx.fillStyle = '#000';
     this.ctx.fillRect(0, 0, width, height);
-  }
+  };
 
-  proto.syncPreviewCanvasMetrics = function (sourceWidth, sourceHeight, forceLabel = false) {
-    const { width, height, scale } = this.getDesiredPreviewCanvasMetrics(sourceWidth, sourceHeight);
-    const resized = this.canvas.width !== width || this.canvas.height !== height;
+  proto.syncPreviewCanvasMetrics = function (
+    sourceWidth,
+    sourceHeight,
+    forceLabel = false,
+  ) {
+    const { width, height, scale } = this.getDesiredPreviewCanvasMetrics(
+      sourceWidth,
+      sourceHeight,
+    );
+    const resized =
+      this.canvas.width !== width || this.canvas.height !== height;
     if (resized) {
       this.canvas.width = width;
       this.canvas.height = height;
     }
     if (forceLabel || resized || this.previewScale !== scale) {
-      this.resolutionInfo.textContent = this.buildResolutionLabel(sourceWidth, sourceHeight, width, height);
+      this.resolutionInfo.textContent = this.buildResolutionLabel(
+        sourceWidth,
+        sourceHeight,
+        width,
+        height,
+      );
     }
     this.previewScale = scale;
     return { width, height, scale };
-  }
+  };
 
   proto.requestPreviewRefresh = function (forceLabel = false) {
     if (!this.isRunning || this.videoEl.readyState < 2) return;
     const { sourceWidth, sourceHeight } = this.getSourceFrameDimensions();
     this.syncPreviewCanvasMetrics(sourceWidth, sourceHeight, forceLabel);
-  }
+  };
 
   proto.scheduleRenderLoop = function () {
     if (this.isVideoExporting) return;
-    const useVideoFrame = typeof this.videoEl.requestVideoFrameCallback === 'function'
-      && !(this.sourceMode === 'video' && this.videoEl.paused);
+    const useVideoFrame =
+      typeof this.videoEl.requestVideoFrameCallback === 'function' &&
+      !(this.sourceMode === 'video' && this.videoEl.paused);
     this.animFrameType = useVideoFrame ? 'video' : 'animation';
     this.animFrameId = useVideoFrame
       ? this.videoEl.requestVideoFrameCallback(this.renderLoop.bind(this))
       : requestAnimationFrame(this.renderLoop.bind(this));
-  }
+  };
 
   proto.cancelRenderLoop = function () {
     if (this.animFrameId == null) return;
-    if (this.animFrameType !== 'animation' && typeof this.videoEl.cancelVideoFrameCallback === 'function') {
+    if (
+      this.animFrameType !== 'animation' &&
+      typeof this.videoEl.cancelVideoFrameCallback === 'function'
+    ) {
       this.videoEl.cancelVideoFrameCallback(this.animFrameId);
     } else {
       cancelAnimationFrame(this.animFrameId);
     }
     this.animFrameId = null;
     this.animFrameType = '';
-  }
+  };
 
   proto.refreshPausedVideoPreview = function () {
-    if (this.sourceMode !== 'video' || !this.videoEl?.paused || this.isVideoExporting) return;
+    if (
+      this.sourceMode !== 'video' ||
+      !this.videoEl?.paused ||
+      this.isVideoExporting
+    )
+      return;
     this.cancelRenderLoop();
     this.scheduleRenderLoop();
-  }
+  };
 
   proto.renderLoop = function () {
     if (!this.isRunning || this.isVideoExporting) {
@@ -152,14 +205,20 @@ export function applyRenderLoopMixin(proto) {
         if (this.sourceMode === 'video') {
           this.syncVideoTimelineLookNow();
           void this.syncVideoTimelineDetectors();
-          const trimEnd = this.getVideoPlayableEnd?.(this.videoTimeline.trimEnd) ?? this.videoTimeline.trimEnd;
+          const trimEnd =
+            this.getVideoPlayableEnd?.(this.videoTimeline.trimEnd) ??
+            this.videoTimeline.trimEnd;
           if (!this.videoEl.paused && this.videoEl.currentTime >= trimEnd) {
             this.videoEl.pause();
             this.videoEl.currentTime = trimEnd;
           }
         }
         const { sourceWidth, sourceHeight } = this.getSourceFrameDimensions();
-        this.syncPreviewCanvasMetrics(sourceWidth, sourceHeight, this.frameCount % 30 === 0);
+        this.syncPreviewCanvasMetrics(
+          sourceWidth,
+          sourceHeight,
+          this.frameCount % 30 === 0,
+        );
 
         try {
           if (this.isRecording) {
@@ -193,20 +252,26 @@ export function applyRenderLoopMixin(proto) {
       return;
     }
     this.scheduleRenderLoop();
-  }
+  };
 
   proto.isNeutralLookProcessing = function () {
     const settings = this.imageSettings;
-    return !settings.blackAndWhite
-      && settings.exposure === 0
-      && settings.contrast === 100
-      && settings.saturation === 100
-      && !this.needsAdvancedPixelAdjustments();
-  }
+    return (
+      !settings.blackAndWhite &&
+      settings.exposure === 0 &&
+      settings.contrast === 100 &&
+      settings.saturation === 100 &&
+      !this.needsAdvancedPixelAdjustments()
+    );
+  };
 
   proto.buildCanvasFilter = function () {
     if (this.isNeutralLookProcessing()) return 'none';
-    const exposureBoost = this.clamp(100 + this.imageSettings.exposure * 0.8, 35, 200);
+    const exposureBoost = this.clamp(
+      100 + this.imageSettings.exposure * 0.8,
+      35,
+      200,
+    );
     const contrast = this.clamp(this.imageSettings.contrast, 50, 180);
     const saturation = this.imageSettings.blackAndWhite
       ? 0
@@ -214,10 +279,12 @@ export function applyRenderLoopMixin(proto) {
     const grayscale = this.imageSettings.blackAndWhite ? 100 : 0;
 
     return `brightness(${exposureBoost}%) contrast(${contrast}%) saturate(${saturation}%) grayscale(${grayscale}%)`;
-  }
+  };
 
   proto.needsAdvancedPixelAdjustments = function () {
-    const temperature = this.imageSettings.blackAndWhite ? 0 : this.imageSettings.temperature;
+    const temperature = this.imageSettings.blackAndWhite
+      ? 0
+      : this.imageSettings.temperature;
     return (
       this.imageSettings.shadows !== 0 ||
       this.imageSettings.highlights !== 0 ||
@@ -225,22 +292,27 @@ export function applyRenderLoopMixin(proto) {
       temperature !== 0 ||
       this.imageSettings.sharpness !== 0
     );
-  }
+  };
 
   proto.ensurePostFxBuffer = function (mode, w, h, scale) {
     return this.renderEngine.ensurePostFxBuffer(mode, w, h, scale);
-  }
+  };
 
   proto.drawBaseFrame = function (targetCtx, targetCanvas, mode = 'preview') {
     const { sourceWidth, sourceHeight } = this.getSourceFrameDimensions();
-    const effectiveRotation = this.getEffectiveRotationDegrees(sourceWidth, sourceHeight);
+    const effectiveRotation = this.getEffectiveRotationDegrees(
+      sourceWidth,
+      sourceHeight,
+    );
     const rotated = effectiveRotation === 90 || effectiveRotation === 270;
     const orientedWidth = rotated ? sourceHeight : sourceWidth;
     const orientedHeight = rotated ? sourceWidth : sourceHeight;
     const scaleX = targetCanvas.width / Math.max(1, orientedWidth);
     const scaleY = targetCanvas.height / Math.max(1, orientedHeight);
     const useCover = mode === 'preview' && this.isMobileViewport();
-    const frameScale = useCover ? Math.max(scaleX, scaleY) : Math.min(scaleX, scaleY);
+    const frameScale = useCover
+      ? Math.max(scaleX, scaleY)
+      : Math.min(scaleX, scaleY);
     const drawWidth = Math.max(1, Math.round(sourceWidth * frameScale));
     const drawHeight = Math.max(1, Math.round(sourceHeight * frameScale));
 
@@ -262,22 +334,32 @@ export function applyRenderLoopMixin(proto) {
       -drawWidth / 2,
       -drawHeight / 2,
       drawWidth,
-      drawHeight
+      drawHeight,
     );
     targetCtx.restore();
     return effectiveRotation;
-  }
+  };
 
-  proto.applyAdvancedPixelAdjustments = function (targetCanvas = this.canvas, targetCtx = this.ctx, mode = 'preview') {
+  proto.applyAdvancedPixelAdjustments = function (
+    targetCanvas = this.canvas,
+    targetCtx = this.ctx,
+    mode = 'preview',
+  ) {
     const w = targetCanvas.width;
     const h = targetCanvas.height;
     if (w === 0 || h === 0) return;
 
-    let postFxScale = mode === 'export' ? 1 : (this.imageSettings.sharpness > 0 ? 0.78 : 0.86);
+    let postFxScale =
+      mode === 'export' ? 1 : this.imageSettings.sharpness > 0 ? 0.78 : 0.86;
     if (mode !== 'export' && w * h > 1920 * 1080) postFxScale *= 0.92;
-    postFxScale = mode === 'export' ? 1 : this.clamp(postFxScale, 0.72, 0.90);
+    postFxScale = mode === 'export' ? 1 : this.clamp(postFxScale, 0.72, 0.9);
 
-    const { pw, ph, fxCanvas, fxCtx } = this.ensurePostFxBuffer(mode, w, h, postFxScale);
+    const { pw, ph, fxCanvas, fxCtx } = this.ensurePostFxBuffer(
+      mode,
+      w,
+      h,
+      postFxScale,
+    );
     fxCtx.drawImage(targetCanvas, 0, 0, pw, ph);
 
     const imageData = fxCtx.getImageData(0, 0, pw, ph);
@@ -286,7 +368,9 @@ export function applyRenderLoopMixin(proto) {
     const shadows = this.imageSettings.shadows / 100;
     const highlights = this.imageSettings.highlights / 100;
     const detail = this.imageSettings.detail / 100;
-    const temperature = this.imageSettings.blackAndWhite ? 0 : this.imageSettings.temperature / 100;
+    const temperature = this.imageSettings.blackAndWhite
+      ? 0
+      : this.imageSettings.temperature / 100;
 
     for (let i = 0; i < data.length; i += 4) {
       let r = data[i];
@@ -297,13 +381,22 @@ export function applyRenderLoopMixin(proto) {
       const shadowMask = (1 - luma) * (1 - luma);
       const highlightMask = luma * luma;
 
-      const toneShift = shadows * shadowMask * 48 + highlights * highlightMask * 48;
+      const toneShift =
+        shadows * shadowMask * 48 + highlights * highlightMask * 48;
       const detailShift = detail * (luma - 0.5) * 52;
       const tempShift = temperature * 22;
 
-      r = this.clamp(Math.round(r + toneShift + detailShift + tempShift), 0, 255);
+      r = this.clamp(
+        Math.round(r + toneShift + detailShift + tempShift),
+        0,
+        255,
+      );
       g = this.clamp(Math.round(g + toneShift + detailShift * 0.8), 0, 255);
-      b = this.clamp(Math.round(b + toneShift + detailShift - tempShift), 0, 255);
+      b = this.clamp(
+        Math.round(b + toneShift + detailShift - tempShift),
+        0,
+        255,
+      );
 
       data[i] = r;
       data[i + 1] = g;
@@ -319,19 +412,36 @@ export function applyRenderLoopMixin(proto) {
     targetCtx.imageSmoothingEnabled = true;
     targetCtx.drawImage(fxCanvas, 0, 0, w, h);
     targetCtx.restore();
-  }
+  };
 
-  proto.renderEffectsOnlyFrame = function (targetCanvas, targetCtx, chromaColor = '#00ff00', mode = 'export') {
-    if (!this.videoEl || this.videoEl.readyState < 2 || targetCanvas.width === 0 || targetCanvas.height === 0) return;
+  proto.renderEffectsOnlyFrame = function (
+    targetCanvas,
+    targetCtx,
+    chromaColor = '#00ff00',
+    mode = 'export',
+  ) {
+    if (
+      !this.videoEl ||
+      this.videoEl.readyState < 2 ||
+      targetCanvas.width === 0 ||
+      targetCanvas.height === 0
+    )
+      return;
     if (!this.effectsOnlyAnalysisCanvas) {
       this.effectsOnlyAnalysisCanvas = document.createElement('canvas');
-      this.effectsOnlyAnalysisCtx = this.effectsOnlyAnalysisCanvas.getContext('2d', { willReadFrequently: true });
+      this.effectsOnlyAnalysisCtx = this.effectsOnlyAnalysisCanvas.getContext(
+        '2d',
+        { willReadFrequently: true },
+      );
     }
     if (!this.effectsOnlyAnalysisCtx) return;
 
     const analysisCanvas = this.effectsOnlyAnalysisCanvas;
     const analysisCtx = this.effectsOnlyAnalysisCtx;
-    if (analysisCanvas.width !== targetCanvas.width || analysisCanvas.height !== targetCanvas.height) {
+    if (
+      analysisCanvas.width !== targetCanvas.width ||
+      analysisCanvas.height !== targetCanvas.height
+    ) {
       analysisCanvas.width = targetCanvas.width;
       analysisCanvas.height = targetCanvas.height;
     }
@@ -353,18 +463,31 @@ export function applyRenderLoopMixin(proto) {
     }
 
     if (this.blobTrackingEffect && this.blinkDetectionEffect) {
-      this.blinkDetectionEffect.setFeedbackColor(this.blobTrackingEffect.boxColor);
-      this.blobTrackingEffect.connectionColor = this.blobTrackingEffect.boxColor;
+      this.blinkDetectionEffect.setFeedbackColor(
+        this.blobTrackingEffect.boxColor,
+      );
+      this.blobTrackingEffect.connectionColor =
+        this.blobTrackingEffect.boxColor;
     }
 
     this.effectManager.processFrame(targetCtx, analysisCanvas, this.videoEl, {
       ...this.renderEngine.getProfile('export'),
       overlayOnly: true,
     });
-  }
+  };
 
-  proto.renderProcessedFrame = function (targetCanvas, targetCtx, mode = 'preview') {
-    if (!this.videoEl || this.videoEl.readyState < 2 || targetCanvas.width === 0 || targetCanvas.height === 0) return;
+  proto.renderProcessedFrame = function (
+    targetCanvas,
+    targetCtx,
+    mode = 'preview',
+  ) {
+    if (
+      !this.videoEl ||
+      this.videoEl.readyState < 2 ||
+      targetCanvas.width === 0 ||
+      targetCanvas.height === 0
+    )
+      return;
     const frameRotation = this.drawBaseFrame(targetCtx, targetCanvas, mode);
     if (this.needsAdvancedPixelAdjustments()) {
       this.applyAdvancedPixelAdjustments(targetCanvas, targetCtx, mode);
@@ -377,13 +500,22 @@ export function applyRenderLoopMixin(proto) {
     }
 
     if (this.blobTrackingEffect && this.blinkDetectionEffect) {
-      this.blinkDetectionEffect.setFeedbackColor(this.blobTrackingEffect.boxColor);
-      this.blobTrackingEffect.connectionColor = this.blobTrackingEffect.boxColor;
+      this.blinkDetectionEffect.setFeedbackColor(
+        this.blobTrackingEffect.boxColor,
+      );
+      this.blobTrackingEffect.connectionColor =
+        this.blobTrackingEffect.boxColor;
     }
 
-    const profileName = mode === 'preview' && this.isMobileViewport() ? 'mobile' : mode;
-    this.effectManager.processFrame(targetCtx, targetCanvas, this.videoEl, this.renderEngine.getProfile(profileName));
-  }
+    const profileName =
+      mode === 'preview' && this.isMobileViewport() ? 'mobile' : mode;
+    this.effectManager.processFrame(
+      targetCtx,
+      targetCanvas,
+      this.videoEl,
+      this.renderEngine.getProfile(profileName),
+    );
+  };
 
   proto.applySharpenFilter = function (imageData, amount) {
     const { width, height, data } = imageData;
@@ -401,10 +533,13 @@ export function applyRenderLoopMixin(proto) {
           const west = src[idx - 4 + c];
           const east = src[idx + 4 + c];
           const blurred = (center * 4 + north + south + west + east) / 8;
-          data[idx + c] = this.clamp(Math.round(center + (center - blurred) * strength), 0, 255);
+          data[idx + c] = this.clamp(
+            Math.round(center + (center - blurred) * strength),
+            0,
+            255,
+          );
         }
       }
     }
-  }
-
+  };
 }

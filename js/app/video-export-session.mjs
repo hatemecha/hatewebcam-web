@@ -27,7 +27,9 @@ export class VideoExportSession {
       Object.defineProperty(target, legacyKey, {
         configurable: true,
         get: () => this[stateKey],
-        set: (value) => { this[stateKey] = value; },
+        set: (value) => {
+          this[stateKey] = value;
+        },
       });
     });
   }

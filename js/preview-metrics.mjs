@@ -16,7 +16,11 @@ function normalizePreviewQuality(value) {
     : 'balanced';
 }
 
-function getEffectiveFrameDimensions(sourceWidth, sourceHeight, rotationDeg = 0) {
+function getEffectiveFrameDimensions(
+  sourceWidth,
+  sourceHeight,
+  rotationDeg = 0,
+) {
   const normalized = ((rotationDeg % 360) + 360) % 360;
   const rotated = normalized === 90 || normalized === 270;
   return {
@@ -25,21 +29,29 @@ function getEffectiveFrameDimensions(sourceWidth, sourceHeight, rotationDeg = 0)
   };
 }
 
-function getProcessingFrameDimensions(sourceWidth, sourceHeight, rotationDeg = 0) {
+function getProcessingFrameDimensions(
+  sourceWidth,
+  sourceHeight,
+  rotationDeg = 0,
+) {
   return getEffectiveFrameDimensions(sourceWidth, sourceHeight, rotationDeg);
 }
 
-function getPreviewFrameDimensions(sourceWidth, sourceHeight, previewQuality, rotationDeg = 0) {
-  const { width: effectiveWidth, height: effectiveHeight } = getEffectiveFrameDimensions(
-    sourceWidth,
-    sourceHeight,
-    rotationDeg
-  );
-  const previewPreset = PREVIEW_QUALITY_PRESETS[normalizePreviewQuality(previewQuality)];
+function getPreviewFrameDimensions(
+  sourceWidth,
+  sourceHeight,
+  previewQuality,
+  rotationDeg = 0,
+) {
+  const { width: effectiveWidth, height: effectiveHeight } =
+    getEffectiveFrameDimensions(sourceWidth, sourceHeight, rotationDeg);
+  const previewPreset =
+    PREVIEW_QUALITY_PRESETS[normalizePreviewQuality(previewQuality)];
   const sourcePixels = Math.max(1, effectiveWidth * effectiveHeight);
-  const pixelScale = sourcePixels > previewPreset.maxPixels
-    ? Math.sqrt(previewPreset.maxPixels / sourcePixels)
-    : 1;
+  const pixelScale =
+    sourcePixels > previewPreset.maxPixels
+      ? Math.sqrt(previewPreset.maxPixels / sourcePixels)
+      : 1;
   const baseScale = Math.min(1, pixelScale, previewPreset.maxScale);
 
   const aspect = Math.max(0.0001, effectiveWidth / effectiveHeight);

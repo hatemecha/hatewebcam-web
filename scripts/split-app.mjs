@@ -32,81 +32,279 @@ for (let i = 0; i < markers.length - 1; i++) {
 }
 
 const STATE_VARS = [
-  'blobTrackingEffect', 'faceDetectionEffect', 'blinkDetectionEffect',
-  'isRunning', 'colorPickMode', 'animFrameId', 'frameCount', 'lastFpsTime',
-  'flipH', 'flipV', 'rotation', 'mobileActivePreset',
-  'mediaRecorder', 'recordingStream', 'recordingChunks', 'isRecording',
-  'recordingStartTs', 'recordingTimer', 'currentRecordingMimeType',
-  'currentRecordingExt', 'currentRecordingBitrate', 'currentRecordingFps',
-  'pendingCapture', 'recordingCanvas', 'recordingCtx', 'recordingEnhancerCanvas',
-  'recordingEnhancerCtx', 'lastRecordingDurationSec', 'previewScale',
-  'photoPreviewRenderToken', 'previewPhotoEnhancerDebounceId', 'photoCountdownTimer',
-  'photoCountdownRemaining', 'isPhotoCountdownActive', 'postFxCanvas', 'postFxCtx',
-  'captureFxCanvas', 'captureFxCtx', 'recordingFxCanvas', 'recordingFxCtx',
-  'preferredDeviceId', 'faceMeshScriptLoadPromise', 'mediaPipeConsoleFilterInstalled',
-  'faceLoadRequestId', 'blinkLoadRequestId', 'isPageVisible', 'sourceMode',
-  'videoObjectUrl', 'videoSourceFile', 'videoSourceFps', 'videoSourceAverageBitrate',
-  'videoTimeline', 'editorHistory', 'editorTool', 'adjustmentsContext', 'timelineZoom',
-  'timelineHistorySuspended', 'selectedVideoEffectId', 'paletteDragState', 'timelineDragGhost',
-  'appliedTimelineItemIds', 'videoBaseImageSettings', 'isVideoExporting',
-  'videoExportFileName', 'videoExportWakeLock', 'webcamSessionState',
-  'imageSettings', 'quickDetectorSettings', 'saveImageSettingsTimer',
-  'saveQuickDetectorSettingsTimer', 'saveEffectSettingsTimer', 'syncSelectedClipConfigTimer',
-  'storageWarningShown', 'cameraManager', 'effectManager', 'ctx',
+  'blobTrackingEffect',
+  'faceDetectionEffect',
+  'blinkDetectionEffect',
+  'isRunning',
+  'colorPickMode',
+  'animFrameId',
+  'frameCount',
+  'lastFpsTime',
+  'flipH',
+  'flipV',
+  'rotation',
+  'mobileActivePreset',
+  'mediaRecorder',
+  'recordingStream',
+  'recordingChunks',
+  'isRecording',
+  'recordingStartTs',
+  'recordingTimer',
+  'currentRecordingMimeType',
+  'currentRecordingExt',
+  'currentRecordingBitrate',
+  'currentRecordingFps',
+  'pendingCapture',
+  'recordingCanvas',
+  'recordingCtx',
+  'recordingEnhancerCanvas',
+  'recordingEnhancerCtx',
+  'lastRecordingDurationSec',
+  'previewScale',
+  'photoPreviewRenderToken',
+  'previewPhotoEnhancerDebounceId',
+  'photoCountdownTimer',
+  'photoCountdownRemaining',
+  'isPhotoCountdownActive',
+  'postFxCanvas',
+  'postFxCtx',
+  'captureFxCanvas',
+  'captureFxCtx',
+  'recordingFxCanvas',
+  'recordingFxCtx',
+  'preferredDeviceId',
+  'faceMeshScriptLoadPromise',
+  'mediaPipeConsoleFilterInstalled',
+  'faceLoadRequestId',
+  'blinkLoadRequestId',
+  'isPageVisible',
+  'sourceMode',
+  'videoObjectUrl',
+  'videoSourceFile',
+  'videoSourceFps',
+  'videoSourceAverageBitrate',
+  'videoTimeline',
+  'editorHistory',
+  'editorTool',
+  'adjustmentsContext',
+  'timelineZoom',
+  'timelineHistorySuspended',
+  'selectedVideoEffectId',
+  'paletteDragState',
+  'timelineDragGhost',
+  'appliedTimelineItemIds',
+  'videoBaseImageSettings',
+  'isVideoExporting',
+  'videoExportFileName',
+  'videoExportWakeLock',
+  'webcamSessionState',
+  'imageSettings',
+  'quickDetectorSettings',
+  'saveImageSettingsTimer',
+  'saveQuickDetectorSettingsTimer',
+  'saveEffectSettingsTimer',
+  'syncSelectedClipConfigTimer',
+  'storageWarningShown',
+  'cameraManager',
+  'effectManager',
+  'ctx',
 ];
 
 const DOM_VARS = [
-  'videoEl', 'canvas', 'previewWrapper', 'captureCountdown', 'captureCountdownValue',
-  'placeholder', 'resolutionInfo', 'fpsInfo', 'effectsInfo', 'previewQualitySelect',
-  'btnWebcamMode', 'btnVideoMode', 'videoFileInput', 'btnChooseVideo', 'videoFileMeta',
-  'videoEditorStatus', 'btnVideoStart', 'btnVideoBack', 'btnVideoPlay', 'btnVideoForward',
-  'btnVideoEnd', 'btnVideoMute', 'videoSeek', 'videoTimeLabel', 'videoTimelineEl',
-  'timelineTrim', 'timelineTrimStartHandle', 'timelineTrimEndHandle', 'timelinePlayhead',
-  'timelineItems', 'timelineEffectPalette', 'videoEffectRangeLabel', 'videoTrimStart',
-  'videoTrimEnd', 'btnSetTrimFromPlayhead', 'btnSetTrimEndFromPlayhead', 'videoEffectType',
-  'videoEffectStart', 'videoEffectEnd', 'videoEffectClipMeta', 'videoEffectTypeLabel',
-  'videoEffectDurationLabel', 'btnOpenEffectAdjust', 'btnDeleteVideoEffect',
-  'videoExportDetails', 'videoExportModal', 'videoExportTitle', 'videoExportSummary',
-  'videoExportProgress', 'btnExportVideo', 'btnHeaderExportVideo', 'btnCancelVideoExport',
-  'btnCloseVideoExportModal', 'btnToolSelect', 'btnToolTrim', 'btnTimelineZoomIn',
-  'btnTimelineZoomOut', 'timelineZoomInput', 'timelineViewport', 'timelineScroll',
-  'timelineTimeRuler', 'timelineTrackArea', 'timelineVideoClip', 'timelineTrimOutsideStart',
-  'timelineTrimOutsideEnd', 'timelinePlayheadHandle', 'timelineHintText', 'chkTimelineSnap',
-  'btnEditorUndo', 'btnEditorRedo', 'videoInspector', 'inspectorAdjustmentsHost',
-  'inspectorAdjustmentsEmpty', 'effectsControlsSlot', 'videoEffectEmptyHint',
-  'inspectorTabs', 'inspectorPanels', 'btnToggleCamera', 'cameraSelect', 'btnTakePhoto',
-  'btnRecord', 'captureStatus', 'captureTimerSelect', 'sldJpegQuality', 'valJpegQuality',
-  'videoFormatSelect', 'chkQualityEnhancer', 'sldQualityEnhancerStrength',
-  'valQualityEnhancerStrength', 'qualityEnhancerStrengthGroup', 'capturePreviewModal',
-  'capturePreviewTitle', 'capturePreviewFilename', 'capturePreviewImage',
-  'capturePreviewVideo', 'capturePreviewInfo', 'capturePreviewPhotoTools',
-  'chkPreviewPhotoEnhancer', 'sldPreviewPhotoEnhancerStrength',
-  'valPreviewPhotoEnhancerStrength', 'previewPhotoEnhancerStrengthGroup',
-  'btnDownloadCapture', 'btnDiscardCapture', 'btnCloseCapturePreview', 'controlPanel',
-  'chkMirror', 'chkFlipV', 'rotationSelect', 'chkBlackWhite', 'sldExposure', 'valExposure',
-  'sldShadows', 'valShadows', 'sldHighlights', 'valHighlights', 'sldContrast', 'valContrast',
-  'sldSaturation', 'valSaturation', 'sldTemperature', 'valTemperature', 'sldDetail', 'valDetail',
-  'sldSharpness', 'valSharpness', 'btnResetImageAdjustments', 'presetButtons',
-  'mobilePresetButtons', 'chkBlobTracking', 'chkFaceDetection', 'chkBlinkDetection',
-  'inpBlobQuickColor', 'blobQuickColorSwatch', 'inpFaceQuickColor', 'faceQuickColorChip',
-  'faceQuickColorSwatch', 'faceQuickControls', 'faceQuickLabelWrap', 'chkFaceShowBox',
-  'chkFaceShowBlur', 'inpFaceQuickLabel', 'colorPickSection', 'btnColorPick',
-  'colorPickStatus', 'btnToggleAdvancedOptions', 'advancedToggleLabel', 'advancedOptions',
-  'effectConfigBlob', 'effectConfigFace', 'effectConfigBlink', 'adjustContextNav',
-  'adjustContextHelp', 'profileSelect', 'btnSaveProfile', 'btnDeleteProfile',
-  'profileStatus', 'btnMobileEffectsDock', 'mobileFxBackdrop', 'mobileFxPanel',
-  'btnMobileFxClose', 'btnMobileTakePhoto', 'btnMobileRecord', 'selMobileCaptureTimer',
-  'btnMobileBlobToggle', 'btnMobileFaceToggle', 'btnMobileBlinkToggle', 'btnMobileColorPick',
-  'inpMobileBlobColor', 'inpMobileFaceColor', 'mobileFaceColorChip', 'mobileFaceLabelWrap',
-  'chkMobileFaceShowBox', 'chkMobileFaceShowBlur', 'inpMobileFaceLabel',
+  'videoEl',
+  'canvas',
+  'previewWrapper',
+  'captureCountdown',
+  'captureCountdownValue',
+  'placeholder',
+  'resolutionInfo',
+  'fpsInfo',
+  'effectsInfo',
+  'previewQualitySelect',
+  'btnWebcamMode',
+  'btnVideoMode',
+  'videoFileInput',
+  'btnChooseVideo',
+  'videoFileMeta',
+  'videoEditorStatus',
+  'btnVideoStart',
+  'btnVideoBack',
+  'btnVideoPlay',
+  'btnVideoForward',
+  'btnVideoEnd',
+  'btnVideoMute',
+  'videoSeek',
+  'videoTimeLabel',
+  'videoTimelineEl',
+  'timelineTrim',
+  'timelineTrimStartHandle',
+  'timelineTrimEndHandle',
+  'timelinePlayhead',
+  'timelineItems',
+  'timelineEffectPalette',
+  'videoEffectRangeLabel',
+  'videoTrimStart',
+  'videoTrimEnd',
+  'btnSetTrimFromPlayhead',
+  'btnSetTrimEndFromPlayhead',
+  'videoEffectType',
+  'videoEffectStart',
+  'videoEffectEnd',
+  'videoEffectClipMeta',
+  'videoEffectTypeLabel',
+  'videoEffectDurationLabel',
+  'btnOpenEffectAdjust',
+  'btnDeleteVideoEffect',
+  'videoExportDetails',
+  'videoExportModal',
+  'videoExportTitle',
+  'videoExportSummary',
+  'videoExportProgress',
+  'btnExportVideo',
+  'btnHeaderExportVideo',
+  'btnCancelVideoExport',
+  'btnCloseVideoExportModal',
+  'btnToolSelect',
+  'btnToolTrim',
+  'btnTimelineZoomIn',
+  'btnTimelineZoomOut',
+  'timelineZoomInput',
+  'timelineViewport',
+  'timelineScroll',
+  'timelineTimeRuler',
+  'timelineTrackArea',
+  'timelineVideoClip',
+  'timelineTrimOutsideStart',
+  'timelineTrimOutsideEnd',
+  'timelinePlayheadHandle',
+  'timelineHintText',
+  'chkTimelineSnap',
+  'btnEditorUndo',
+  'btnEditorRedo',
+  'videoInspector',
+  'inspectorAdjustmentsHost',
+  'inspectorAdjustmentsEmpty',
+  'effectsControlsSlot',
+  'videoEffectEmptyHint',
+  'inspectorTabs',
+  'inspectorPanels',
+  'btnToggleCamera',
+  'cameraSelect',
+  'btnTakePhoto',
+  'btnRecord',
+  'captureStatus',
+  'captureTimerSelect',
+  'sldJpegQuality',
+  'valJpegQuality',
+  'videoFormatSelect',
+  'chkQualityEnhancer',
+  'sldQualityEnhancerStrength',
+  'valQualityEnhancerStrength',
+  'qualityEnhancerStrengthGroup',
+  'capturePreviewModal',
+  'capturePreviewTitle',
+  'capturePreviewFilename',
+  'capturePreviewImage',
+  'capturePreviewVideo',
+  'capturePreviewInfo',
+  'capturePreviewPhotoTools',
+  'chkPreviewPhotoEnhancer',
+  'sldPreviewPhotoEnhancerStrength',
+  'valPreviewPhotoEnhancerStrength',
+  'previewPhotoEnhancerStrengthGroup',
+  'btnDownloadCapture',
+  'btnDiscardCapture',
+  'btnCloseCapturePreview',
+  'controlPanel',
+  'chkMirror',
+  'chkFlipV',
+  'rotationSelect',
+  'chkBlackWhite',
+  'sldExposure',
+  'valExposure',
+  'sldShadows',
+  'valShadows',
+  'sldHighlights',
+  'valHighlights',
+  'sldContrast',
+  'valContrast',
+  'sldSaturation',
+  'valSaturation',
+  'sldTemperature',
+  'valTemperature',
+  'sldDetail',
+  'valDetail',
+  'sldSharpness',
+  'valSharpness',
+  'btnResetImageAdjustments',
+  'presetButtons',
+  'mobilePresetButtons',
+  'chkBlobTracking',
+  'chkFaceDetection',
+  'chkBlinkDetection',
+  'inpBlobQuickColor',
+  'blobQuickColorSwatch',
+  'inpFaceQuickColor',
+  'faceQuickColorChip',
+  'faceQuickColorSwatch',
+  'faceQuickControls',
+  'faceQuickLabelWrap',
+  'chkFaceShowBox',
+  'chkFaceShowBlur',
+  'inpFaceQuickLabel',
+  'colorPickSection',
+  'btnColorPick',
+  'colorPickStatus',
+  'btnToggleAdvancedOptions',
+  'advancedToggleLabel',
+  'advancedOptions',
+  'effectConfigBlob',
+  'effectConfigFace',
+  'effectConfigBlink',
+  'adjustContextNav',
+  'adjustContextHelp',
+  'profileSelect',
+  'btnSaveProfile',
+  'btnDeleteProfile',
+  'profileStatus',
+  'btnMobileEffectsDock',
+  'mobileFxBackdrop',
+  'mobileFxPanel',
+  'btnMobileFxClose',
+  'btnMobileTakePhoto',
+  'btnMobileRecord',
+  'selMobileCaptureTimer',
+  'btnMobileBlobToggle',
+  'btnMobileFaceToggle',
+  'btnMobileBlinkToggle',
+  'btnMobileColorPick',
+  'inpMobileBlobColor',
+  'inpMobileFaceColor',
+  'mobileFaceColorChip',
+  'mobileFaceLabelWrap',
+  'chkMobileFaceShowBox',
+  'chkMobileFaceShowBlur',
+  'inpMobileFaceLabel',
 ];
 
 const CONST_VARS = [
-  'TIMELINE_EFFECT_META', 'DEFAULT_TIMELINE_EFFECT_DURATION', 'DEFAULT_IMAGE_SETTINGS',
-  'DEFAULT_CAMERA_FPS', 'DEFAULT_PREVIEW_QUALITY', 'MEDIAPIPE_FACE_MESH_VERSION',
-  'MEDIAPIPE_FACE_MESH_SRC', 'MEDIAPIPE_CONSOLE_NOISE_PATTERNS', 'DETECTOR_DEFAULT_BOX_COLOR',
-  'DEFAULT_QUICK_DETECTOR_SETTINGS', 'ADJUST_CONTEXT_HELP', 'STORAGE_KEY', 'PROFILES_KEY',
-  'modalFocusState', 'PREVIEW_QUALITY_PRESETS', 'PREVIEW_MIN_WIDTH', 'PREVIEW_MIN_HEIGHT',
+  'TIMELINE_EFFECT_META',
+  'DEFAULT_TIMELINE_EFFECT_DURATION',
+  'DEFAULT_IMAGE_SETTINGS',
+  'DEFAULT_CAMERA_FPS',
+  'DEFAULT_PREVIEW_QUALITY',
+  'MEDIAPIPE_FACE_MESH_VERSION',
+  'MEDIAPIPE_FACE_MESH_SRC',
+  'MEDIAPIPE_CONSOLE_NOISE_PATTERNS',
+  'DETECTOR_DEFAULT_BOX_COLOR',
+  'DEFAULT_QUICK_DETECTOR_SETTINGS',
+  'ADJUST_CONTEXT_HELP',
+  'STORAGE_KEY',
+  'PROFILES_KEY',
+  'modalFocusState',
+  'PREVIEW_QUALITY_PRESETS',
+  'PREVIEW_MIN_WIDTH',
+  'PREVIEW_MIN_HEIGHT',
   'COMMON_VIDEO_FPS',
 ];
 
@@ -123,7 +321,10 @@ function toThisRefs(code) {
 
 function toProtoMethods(code) {
   let out = toThisRefs(code);
-  out = out.replace(/^(\s*)async function (\w+)\(/gm, '$1proto.$2 = async function (');
+  out = out.replace(
+    /^(\s*)async function (\w+)\(/gm,
+    '$1proto.$2 = async function (',
+  );
   out = out.replace(/^(\s*)function (\w+)\(/gm, '$1proto.$2 = function (');
   return out;
 }
@@ -132,16 +333,25 @@ function stripConstBlocks(code) {
   return code
     .replace(/^\s*const STORAGE_KEY = .*;\s*$/gm, '')
     .replace(/^\s*const PROFILES_KEY = .*;\s*$/gm, '')
-    .replace(/^\s*const TIMELINE_EFFECT_META = Object\.freeze\([\s\S]*?\);\s*$/m, '')
+    .replace(
+      /^\s*const TIMELINE_EFFECT_META = Object\.freeze\([\s\S]*?\);\s*$/m,
+      '',
+    )
     .replace(/^\s*const DEFAULT_TIMELINE_EFFECT_DURATION = .*;\s*$/gm, '')
     .replace(/^\s*const DEFAULT_IMAGE_SETTINGS = \{[\s\S]*?\};\s*$/m, '')
     .replace(/^\s*const DEFAULT_CAMERA_FPS = .*;\s*$/gm, '')
     .replace(/^\s*const DEFAULT_PREVIEW_QUALITY = .*;\s*$/gm, '')
     .replace(/^\s*const MEDIAPIPE_FACE_MESH_VERSION = .*;\s*$/gm, '')
     .replace(/^\s*const MEDIAPIPE_FACE_MESH_SRC = .*;\s*$/gm, '')
-    .replace(/^\s*const MEDIAPIPE_CONSOLE_NOISE_PATTERNS = \[[\s\S]*?\];\s*$/m, '')
+    .replace(
+      /^\s*const MEDIAPIPE_CONSOLE_NOISE_PATTERNS = \[[\s\S]*?\];\s*$/m,
+      '',
+    )
     .replace(/^\s*const DETECTOR_DEFAULT_BOX_COLOR = .*;\s*$/gm, '')
-    .replace(/^\s*const DEFAULT_QUICK_DETECTOR_SETTINGS = \{[\s\S]*?\};\s*$/m, '')
+    .replace(
+      /^\s*const DEFAULT_QUICK_DETECTOR_SETTINGS = \{[\s\S]*?\};\s*$/m,
+      '',
+    )
     .replace(/^\s*const ADJUST_CONTEXT_HELP = \{[\s\S]*?\};\s*$/m, '')
     .replace(/^\s*this\.modalFocusState = new WeakMap\(\);\s*$/gm, '');
 }
@@ -159,25 +369,27 @@ function extractInitializers(sectionLines) {
 }
 
 const sectionMap = {
-  'DOM': 'dom.mjs',
-  'Core': null,
-  'Storage': 'settings.mjs',
+  DOM: 'dom.mjs',
+  Core: null,
+  Storage: 'settings.mjs',
   'Local video editor': 'video-editor.mjs',
-  'Init': 'init.mjs',
-  'Events': 'events.mjs',
-  'Camera': 'camera.mjs',
-  'Effects': 'effects.mjs',
+  Init: 'init.mjs',
+  Events: 'events.mjs',
+  Camera: 'camera.mjs',
+  Effects: 'effects.mjs',
   'Render Loop': 'render.mjs',
   'Color Pick': 'color-pick.mjs',
   'Effect Config UI': 'effect-config.mjs',
   'UI Helpers': 'ui-helpers.mjs',
-  'Profiles': 'profiles.mjs',
-  'Capture': 'capture.mjs',
+  Profiles: 'profiles.mjs',
+  Capture: 'capture.mjs',
   'Modal focus management': 'modal-focus.mjs',
-  'Go': null,
+  Go: null,
 };
 
-writeFileSync(resolve(outDir, 'constants.mjs'), `import { PREVIEW_QUALITY_PRESETS, PREVIEW_MIN_WIDTH, PREVIEW_MIN_HEIGHT, normalizePreviewQuality } from '../preview-metrics.mjs';
+writeFileSync(
+  resolve(outDir, 'constants.mjs'),
+  `import { PREVIEW_QUALITY_PRESETS, PREVIEW_MIN_WIDTH, PREVIEW_MIN_HEIGHT, normalizePreviewQuality } from '../preview-metrics.mjs';
 import { COMMON_VIDEO_FPS } from '../video-export.mjs';
 
 export {
@@ -241,7 +453,8 @@ export const ADJUST_CONTEXT_HELP = {
 };
 export const STORAGE_KEY = 'hatewebcam_config';
 export const PROFILES_KEY = 'hatewebcam_profiles';
-`);
+`,
+);
 
 const domSection = sections.find((s) => s.header.includes('DOM'));
 const coreSection = sections.find((s) => s.header.includes('Core'));
@@ -257,21 +470,31 @@ for (const section of sections) {
   if (key === 'Go') continue;
   const converted = toProtoMethods(content);
   const mixinName = `apply${key.replace(/[^a-zA-Z0-9]+/g, '')}Mixin`;
-  const extraImports = key === 'Storage'
-    ? "import { PREVIEW_QUALITY_PRESETS, normalizePreviewQuality } from './constants.mjs';\n"
-    : key === 'Render Loop'
-      ? "import { PREVIEW_MIN_WIDTH, PREVIEW_MIN_HEIGHT, PREVIEW_QUALITY_PRESETS } from './constants.mjs';\n"
-      : '';
-  writeFileSync(resolve(outDir, file), `${extraImports}/** @param {import('./controller.mjs').AppController} proto */\nexport function ${mixinName}(proto) {\n${converted}\n}\n`);
+  const extraImports =
+    key === 'Storage'
+      ? "import { PREVIEW_QUALITY_PRESETS, normalizePreviewQuality } from './constants.mjs';\n"
+      : key === 'Render Loop'
+        ? "import { PREVIEW_MIN_WIDTH, PREVIEW_MIN_HEIGHT, PREVIEW_QUALITY_PRESETS } from './constants.mjs';\n"
+        : '';
+  writeFileSync(
+    resolve(outDir, file),
+    `${extraImports}/** @param {import('./controller.mjs').AppController} proto */\nexport function ${mixinName}(proto) {\n${converted}\n}\n`,
+  );
 }
 
 let domBody = domSection.content.join('\n');
 domBody = domBody.replace(/^\s*if \(!videoEl[\s\S]*?return;\s*$/m, '');
 domBody = toThisRefs(domBody);
-writeFileSync(resolve(outDir, 'dom.mjs'), `/** @param {import('./controller.mjs').AppController} app */\nexport function setupDom(app) {\n  const $ = (s) => document.querySelector(s);\n${domBody.replace(/\bthis\./g, 'app.')}\n}\n`);
+writeFileSync(
+  resolve(outDir, 'dom.mjs'),
+  `/** @param {import('./controller.mjs').AppController} app */\nexport function setupDom(app) {\n  const $ = (s) => document.querySelector(s);\n${domBody.replace(/\bthis\./g, 'app.')}\n}\n`,
+);
 
 const constructorLines = [...domInits, ...coreInits]
-  .map(({ name, value }) => `    this.${name} = ${value.replace(/\bvideoEl\b/g, 'null').replace(/\bcanvas\b/g, 'null')};`)
+  .map(
+    ({ name, value }) =>
+      `    this.${name} = ${value.replace(/\bvideoEl\b/g, 'null').replace(/\bcanvas\b/g, 'null')};`,
+  )
   .filter((line, idx, arr) => arr.indexOf(line) === idx);
 
 const mixinImports = Object.entries(sectionMap)
@@ -284,10 +507,15 @@ const mixinImports = Object.entries(sectionMap)
 
 const mixinCalls = Object.entries(sectionMap)
   .filter(([, file]) => file && file !== 'dom.mjs')
-  .map(([key]) => `apply${key.replace(/[^a-zA-Z0-9]+/g, '')}Mixin(AppController.prototype);`)
+  .map(
+    ([key]) =>
+      `apply${key.replace(/[^a-zA-Z0-9]+/g, '')}Mixin(AppController.prototype);`,
+  )
   .join('\n');
 
-writeFileSync(resolve(outDir, 'controller.mjs'), `${importBlock.replace("from './preview-metrics.mjs'", "from '../preview-metrics.mjs'").replace("from './video-export.mjs'", "from '../video-export.mjs'")}
+writeFileSync(
+  resolve(outDir, 'controller.mjs'),
+  `${importBlock.replace("from './preview-metrics.mjs'", "from '../preview-metrics.mjs'").replace("from './video-export.mjs'", "from '../video-export.mjs'")}
 
 import {
   TIMELINE_EFFECT_META,
@@ -347,13 +575,17 @@ ${constructorLines.join('\n')}
 }
 
 ${mixinCalls}
-`);
+`,
+);
 
-writeFileSync(resolve(root, 'js/app.js'), `${importBlock}
+writeFileSync(
+  resolve(root, 'js/app.js'),
+  `${importBlock}
 
 import { AppController } from './app/controller.mjs';
 
 new AppController().start();
-`);
+`,
+);
 
 console.log('Split complete.');

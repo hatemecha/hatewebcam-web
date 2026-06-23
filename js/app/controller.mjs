@@ -47,8 +47,12 @@ export class AppController {
   constructor() {
     this.renderEngine = new RenderEngine();
     this.renderEngine.attachLegacyAccessors(this);
-    this.settingsStore = new SettingsStore({ onError: (err) => this.notifyStorageUnavailable(err) });
-    this.timelineView = new TimelineView({ formatTime: (seconds) => this.formatDurationDetailed(seconds) });
+    this.settingsStore = new SettingsStore({
+      onError: (err) => this.notifyStorageUnavailable(err),
+    });
+    this.timelineView = new TimelineView({
+      formatTime: (seconds) => this.formatDurationDetailed(seconds),
+    });
     this.videoExportSession = new VideoExportSession();
     this.videoExportSession.attachLegacyAccessors(this);
     this.editAssist = new EditAssistController(this);
@@ -118,7 +122,8 @@ export class AppController {
     this.videoSourceFps = 30;
     this.videoSourceAverageBitrate = 0;
     this.videoTimeline = new VideoTimeline();
-    this.editorHistory = typeof EditorHistory !== 'undefined' ? new EditorHistory() : null;
+    this.editorHistory =
+      typeof EditorHistory !== 'undefined' ? new EditorHistory() : null;
     this.editorTool = 'select';
     this.adjustmentsContext = 'look';
     this.timelineZoom = 1;
@@ -147,8 +152,18 @@ export class AppController {
 
   start() {
     setupDom(this);
-    if (!this.videoEl || !this.canvas || !this.ctx || !this.btnToggleCamera || !this.cameraSelect || !this.btnTakePhoto || !this.btnRecord) {
-      console.error('HateWebcam: faltan elementos base del DOM para iniciar la app.');
+    if (
+      !this.videoEl ||
+      !this.canvas ||
+      !this.ctx ||
+      !this.btnToggleCamera ||
+      !this.cameraSelect ||
+      !this.btnTakePhoto ||
+      !this.btnRecord
+    ) {
+      console.error(
+        'HateWebcam: faltan elementos base del DOM para iniciar la app.',
+      );
       return;
     }
     this.init();

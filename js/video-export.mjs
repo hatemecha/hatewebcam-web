@@ -1,5 +1,7 @@
 const MEDIABUNNY_URL = '../vendor/mediabunny/mediabunny.min.mjs';
-export const COMMON_VIDEO_FPS = [23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60, 120];
+export const COMMON_VIDEO_FPS = [
+  23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60, 120,
+];
 
 const EXPORT_FORMATS = new Set(['auto', 'mp4', 'webm']);
 const EXPORT_MODES = new Set(['full', 'effects-chroma']);
@@ -29,9 +31,9 @@ export function normalizeFrameRate(value) {
 export function snapFrameRate(value) {
   const fps = normalizeFrameRate(value);
   if (!fps) return null;
-  const nearest = COMMON_VIDEO_FPS.reduce((best, candidate) => (
-    Math.abs(fps - candidate) < Math.abs(fps - best) ? candidate : best
-  ));
+  const nearest = COMMON_VIDEO_FPS.reduce((best, candidate) =>
+    Math.abs(fps - candidate) < Math.abs(fps - best) ? candidate : best,
+  );
   return Math.abs(fps - nearest) <= 0.08 ? nearest : fps;
 }
 
@@ -44,14 +46,19 @@ export function calculateFrameRateFromMediaTimes(mediaTimes) {
     .sort((a, b) => a - b);
   if (!deltas.length) return null;
   const middle = Math.floor(deltas.length / 2);
-  const median = deltas.length % 2
-    ? deltas[middle]
-    : (deltas[middle - 1] + deltas[middle]) / 2;
+  const median =
+    deltas.length % 2
+      ? deltas[middle]
+      : (deltas[middle - 1] + deltas[middle]) / 2;
   return snapFrameRate(1 / median);
 }
 
 export function getWebmMuxerCodec(codec) {
-  return typeof codec === 'string' && codec.startsWith('vp09') ? 'V_VP9' : codec === 'vp8' ? 'V_VP8' : null;
+  return typeof codec === 'string' && codec.startsWith('vp09')
+    ? 'V_VP9'
+    : codec === 'vp8'
+      ? 'V_VP8'
+      : null;
 }
 
 export function normalizeEditorExportFormat(value) {
@@ -74,7 +81,12 @@ export function normalizeAudioCodec(codec) {
   if (normalized === 'aac' || normalized.startsWith('mp4a.40')) return 'aac';
   if (normalized === 'opus') return 'opus';
   if (normalized === 'vorbis') return 'vorbis';
-  if (normalized === 'mp3' || normalized.startsWith('mp4a.69') || normalized.startsWith('mp4a.6b')) return 'mp3';
+  if (
+    normalized === 'mp3' ||
+    normalized.startsWith('mp4a.69') ||
+    normalized.startsWith('mp4a.6b')
+  )
+    return 'mp3';
   return normalized;
 }
 
@@ -83,7 +95,8 @@ export function canCopyAudioCodecToFormat(codec, format) {
   const container = normalizeEditorExportFormat(format);
   if (!audioCodec || container === 'auto') return false;
   if (container === 'mp4') return audioCodec === 'aac' || audioCodec === 'mp3';
-  if (container === 'webm') return audioCodec === 'opus' || audioCodec === 'vorbis';
+  if (container === 'webm')
+    return audioCodec === 'opus' || audioCodec === 'vorbis';
   return false;
 }
 
@@ -101,7 +114,8 @@ export function chooseEditorExportFormat({
   mp4Supported = false,
   webmSupported = false,
 } = {}) {
-  if (normalizeEditorExportMode(mode) === 'effects-chroma') return webmSupported ? 'webm' : '';
+  if (normalizeEditorExportMode(mode) === 'effects-chroma')
+    return webmSupported ? 'webm' : '';
   const requested = normalizeEditorExportFormat(requestedFormat);
   if (requested === 'mp4') return mp4Supported ? 'mp4' : '';
   if (requested === 'webm') return webmSupported ? 'webm' : '';
@@ -112,7 +126,9 @@ export function chooseEditorExportFormat({
 function formatProgressFps(value) {
   const fps = normalizeFrameRate(value);
   if (!fps) return '?';
-  return Number.isInteger(fps) ? String(fps) : fps.toFixed(3).replace(/\.?0+$/, '');
+  return Number.isInteger(fps)
+    ? String(fps)
+    : fps.toFixed(3).replace(/\.?0+$/, '');
 }
 
 function formatObservedFps(value) {
@@ -143,7 +159,8 @@ export function formatObservedExportProgress({
   const progress = safeDone / safeTotal;
   const percent = Math.round(progress * 100);
   const elapsedSec = Math.max(0, (Number(now) - Number(startedAt)) / 1000);
-  const observedFps = elapsedSec >= 1.2 && safeDone >= 2 ? safeDone / elapsedSec : 0;
+  const observedFps =
+    elapsedSec >= 1.2 && safeDone >= 2 ? safeDone / elapsedSec : 0;
   if (!observedFps || safeDone < safeTotal * 0.03) {
     return `Exportando ${percent}% · salida ${formatProgressFps(fps)} FPS · midiendo velocidad real`;
   }
@@ -153,10 +170,12 @@ export function formatObservedExportProgress({
 async function testVideoCodecSupport(VideoEncoderImpl, config) {
   try {
     const support = await VideoEncoderImpl.isConfigSupported(config);
-    return support?.supported ? {
-      supported: true,
-      codec: support.config?.codec || config.codec,
-    } : { supported: false, codec: config.codec };
+    return support?.supported
+      ? {
+          supported: true,
+          codec: support.config?.codec || config.codec,
+        }
+      : { supported: false, codec: config.codec };
   } catch {
     return { supported: false, codec: config.codec };
   }
@@ -170,7 +189,8 @@ async function pickSupportedVideoCodec({
   bitrate,
   VideoEncoderImpl,
 }) {
-  const candidates = format === 'mp4' ? MP4_CODEC_CANDIDATES : WEBM_CODEC_CANDIDATES;
+  const candidates =
+    format === 'mp4' ? MP4_CODEC_CANDIDATES : WEBM_CODEC_CANDIDATES;
   for (const candidate of candidates) {
     const support = await testVideoCodecSupport(VideoEncoderImpl, {
       codec: candidate.codec,
@@ -207,9 +227,10 @@ export async function diagnoseVideoExportSupport({
   VideoFrameImpl = globalThis.VideoFrame,
 } = {}) {
   const exportMode = normalizeEditorExportMode(mode);
-  const requested = exportMode === 'effects-chroma'
-    ? 'webm'
-    : normalizeEditorExportFormat(format || requestedFormat);
+  const requested =
+    exportMode === 'effects-chroma'
+      ? 'webm'
+      : normalizeEditorExportFormat(format || requestedFormat);
   const safeFps = normalizeFrameRate(fps) || 30;
   const diagnosis = {
     supported: false,
@@ -245,22 +266,26 @@ export async function diagnoseVideoExportSupport({
 
   const shouldTryMp4 = requested === 'auto' || requested === 'mp4';
   const shouldTryWebm = requested === 'auto' || requested === 'webm';
-  const mp4 = shouldTryMp4 ? await pickSupportedVideoCodec({
-    format: 'mp4',
-    width,
-    height,
-    fps: safeFps,
-    bitrate,
-    VideoEncoderImpl,
-  }) : { supported: false };
-  const webm = shouldTryWebm ? await pickSupportedVideoCodec({
-    format: 'webm',
-    width,
-    height,
-    fps: safeFps,
-    bitrate,
-    VideoEncoderImpl,
-  }) : { supported: false };
+  const mp4 = shouldTryMp4
+    ? await pickSupportedVideoCodec({
+        format: 'mp4',
+        width,
+        height,
+        fps: safeFps,
+        bitrate,
+        VideoEncoderImpl,
+      })
+    : { supported: false };
+  const webm = shouldTryWebm
+    ? await pickSupportedVideoCodec({
+        format: 'webm',
+        width,
+        height,
+        fps: safeFps,
+        bitrate,
+        VideoEncoderImpl,
+      })
+    : { supported: false };
 
   const pickedFormat = chooseEditorExportFormat({
     requestedFormat: requested,
@@ -283,7 +308,10 @@ export async function diagnoseVideoExportSupport({
   diagnosis.mimeType = getEditorExportMimeType(pickedFormat);
 
   if (!diagnosis.audioCopyRequested) {
-    diagnosis.audioReason = exportMode === 'effects-chroma' ? 'effects_export_has_no_audio' : 'audio_copy_disabled';
+    diagnosis.audioReason =
+      exportMode === 'effects-chroma'
+        ? 'effects_export_has_no_audio'
+        : 'audio_copy_disabled';
   } else if (!diagnosis.audioCodec) {
     diagnosis.audioReason = 'audio_codec_unknown';
   } else if (canCopyAudioCodecToFormat(diagnosis.audioCodec, pickedFormat)) {
@@ -295,8 +323,22 @@ export async function diagnoseVideoExportSupport({
   return diagnosis;
 }
 
-async function pickVideoCodec(width, height, fps, bitrate, requestedFormat = 'webm', mode = 'full') {
-  const diagnosis = await diagnoseVideoExportSupport({ width, height, fps, bitrate, requestedFormat, mode });
+async function pickVideoCodec(
+  width,
+  height,
+  fps,
+  bitrate,
+  requestedFormat = 'webm',
+  mode = 'full',
+) {
+  const diagnosis = await diagnoseVideoExportSupport({
+    width,
+    height,
+    fps,
+    bitrate,
+    requestedFormat,
+    mode,
+  });
   if (diagnosis.supported) return diagnosis;
   throw new Error('webcodecs_codec_unsupported');
 }
@@ -304,32 +346,58 @@ async function pickVideoCodec(width, height, fps, bitrate, requestedFormat = 'we
 export function calculateSourceAverageBitrate(fileSize, duration) {
   const bytes = Number(fileSize);
   const seconds = Number(duration);
-  return Number.isFinite(bytes) && bytes > 0 && Number.isFinite(seconds) && seconds > 0
+  return Number.isFinite(bytes) &&
+    bytes > 0 &&
+    Number.isFinite(seconds) &&
+    seconds > 0
     ? Math.round((bytes * 8) / seconds)
     : 0;
 }
 
-export function calculateExportBitrate(sourceBitrate, width, height, fps, enhanced = false) {
+export function calculateExportBitrate(
+  sourceBitrate,
+  width,
+  height,
+  fps,
+  enhanced = false,
+) {
   const safeWidth = Math.max(1, Number(width) || 1);
   const safeHeight = Math.max(1, Number(height) || 1);
   const safeFps = Math.max(1, Number(fps) || 1);
   const qualityBitrate = Math.min(
     80_000_000,
-    Math.max(8_000_000, Math.round(safeWidth * safeHeight * safeFps * (enhanced ? 0.22 : 0.18)))
+    Math.max(
+      8_000_000,
+      Math.round(safeWidth * safeHeight * safeFps * (enhanced ? 0.22 : 0.18)),
+    ),
   );
-  return Math.max(Number.isFinite(sourceBitrate) ? sourceBitrate : 0, qualityBitrate);
+  return Math.max(
+    Number.isFinite(sourceBitrate) ? sourceBitrate : 0,
+    qualityBitrate,
+  );
 }
 
 export function calculateExportFrameCount(duration, fps) {
-  return Math.max(1, Math.round(Math.max(0, Number(duration) || 0) * Math.max(1, Number(fps) || 1)));
+  return Math.max(
+    1,
+    Math.round(
+      Math.max(0, Number(duration) || 0) * Math.max(1, Number(fps) || 1),
+    ),
+  );
 }
 
 export function calculateFrameTimestampUs(frameIndex, fps) {
-  return Math.round(((Number(frameIndex) || 0) / Math.max(1, Number(fps) || 1)) * 1_000_000);
+  return Math.round(
+    ((Number(frameIndex) || 0) / Math.max(1, Number(fps) || 1)) * 1_000_000,
+  );
 }
 
 export function calculateFrameDurationUs(frameIndex, fps) {
-  return Math.max(1, calculateFrameTimestampUs(frameIndex + 1, fps) - calculateFrameTimestampUs(frameIndex, fps));
+  return Math.max(
+    1,
+    calculateFrameTimestampUs(frameIndex + 1, fps) -
+      calculateFrameTimestampUs(frameIndex, fps),
+  );
 }
 
 function calculateFrameTimestampSeconds(frameIndex, fps) {
@@ -341,8 +409,13 @@ function calculateFrameDurationSeconds(frameIndex, fps) {
 }
 
 export function shouldAppendFinalFrame(duration, fps, totalFrames) {
-  const finalTimestamp = Math.round(Math.max(0, Number(duration) || 0) * 1_000_000);
-  const encodedEnd = calculateFrameTimestampUs(Math.max(1, Number(totalFrames) || 1), fps);
+  const finalTimestamp = Math.round(
+    Math.max(0, Number(duration) || 0) * 1_000_000,
+  );
+  const encodedEnd = calculateFrameTimestampUs(
+    Math.max(1, Number(totalFrames) || 1),
+    fps,
+  );
   return finalTimestamp > encodedEnd;
 }
 
@@ -359,9 +432,18 @@ export function formatExportDebugInfo({
 } = {}) {
   const safeTotal = Math.max(0, Number(total) || 0);
   const safeDone = Math.max(0, Number(done) || 0);
-  const frame = safeTotal ? `${Math.min(safeDone, safeTotal)}/${safeTotal}` : `${safeDone}/?`;
-  const fpsText = Number.isFinite(Number(fps)) && Number(fps) > 0 ? Number(fps).toFixed(3).replace(/\.?0+$/, '') : '?';
-  const timeText = Number.isFinite(Number(time)) ? Number(time).toFixed(3) : '?';
+  const frame = safeTotal
+    ? `${Math.min(safeDone, safeTotal)}/${safeTotal}`
+    : `${safeDone}/?`;
+  const fpsText =
+    Number.isFinite(Number(fps)) && Number(fps) > 0
+      ? Number(fps)
+          .toFixed(3)
+          .replace(/\.?0+$/, '')
+      : '?';
+  const timeText = Number.isFinite(Number(time))
+    ? Number(time).toFixed(3)
+    : '?';
   const sizeText = width && height ? `${width}x${height}` : '?x?';
   const noteText = note ? ` · ${note}` : '';
   return `stage:${stage} · frame:${frame} · fps:${fpsText} · t:${timeText}s · ${sizeText} · queue:${Math.max(0, Number(queueSize) || 0)}${noteText}`;
@@ -402,7 +484,8 @@ async function prepareAudioCopy({
   }
 
   try {
-    const { Input, BlobSource, ALL_FORMATS, EncodedAudioPacketSource } = mediabunny;
+    const { Input, BlobSource, ALL_FORMATS, EncodedAudioPacketSource } =
+      mediabunny;
     const input = new Input({
       source: new BlobSource(audioSourceFile),
       formats: ALL_FORMATS,
@@ -422,7 +505,9 @@ async function prepareAudioCopy({
     if (!canCopyAudioCodecToFormat(codec, format)) {
       input.dispose();
       result.codec = codec;
-      result.reason = codec ? 'audio_codec_incompatible' : 'audio_codec_unknown';
+      result.reason = codec
+        ? 'audio_codec_incompatible'
+        : 'audio_codec_unknown';
       return result;
     }
 
@@ -448,7 +533,8 @@ async function prepareAudioCopy({
 }
 
 async function writeCopiedAudioPackets(mediabunny, audioCopy) {
-  if (!audioCopy?.enabled || !audioCopy.source || !audioCopy.track) return audioCopy;
+  if (!audioCopy?.enabled || !audioCopy.source || !audioCopy.track)
+    return audioCopy;
   const { EncodedPacketSink } = mediabunny;
   const sink = new EncodedPacketSink(audioCopy.track);
   let firstPacket = true;
@@ -466,7 +552,9 @@ async function writeCopiedAudioPackets(mediabunny, audioCopy) {
       });
       await audioCopy.source.add(
         shifted,
-        firstPacket && audioCopy.decoderConfig ? { decoderConfig: audioCopy.decoderConfig } : undefined
+        firstPacket && audioCopy.decoderConfig
+          ? { decoderConfig: audioCopy.decoderConfig }
+          : undefined,
       );
       firstPacket = false;
       copiedCount += 1;
@@ -525,15 +613,25 @@ export async function encodeCanvasSequence({
   const exportMode = normalizeEditorExportMode(mode);
   const exportDiagnosis = diagnosis?.supported
     ? diagnosis
-    : await pickVideoCodec(width, height, safeFps, bitrate, format || requestedFormat, exportMode);
-  const outputFormat = exportDiagnosis.format === 'mp4'
-    ? new Mp4OutputFormat({ fastStart: 'in-memory' })
-    : new WebMOutputFormat();
+    : await pickVideoCodec(
+        width,
+        height,
+        safeFps,
+        bitrate,
+        format || requestedFormat,
+        exportMode,
+      );
+  const outputFormat =
+    exportDiagnosis.format === 'mp4'
+      ? new Mp4OutputFormat({ fastStart: 'in-memory' })
+      : new WebMOutputFormat();
   const target = new BufferTarget();
   const output = new Output({ format: outputFormat, target });
   const keyFrameInterval = Math.max(1, Math.round(safeFps * 2));
   const videoSource = new CanvasSource(canvas, {
-    codec: exportDiagnosis.mediaCodec || (exportDiagnosis.format === 'mp4' ? 'avc' : 'vp9'),
+    codec:
+      exportDiagnosis.mediaCodec ||
+      (exportDiagnosis.format === 'mp4' ? 'avc' : 'vp9'),
     bitrate: Math.max(1, Math.round(Number(bitrate) || 8_000_000)),
     keyFrameInterval: 2,
     bitrateMode: 'variable',
@@ -562,14 +660,19 @@ export async function encodeCanvasSequence({
         format: exportDiagnosis.format,
       });
       const timestamp = calculateFrameTimestampSeconds(frameIndex, safeFps);
-      await videoSource.add(timestamp, calculateFrameDurationSeconds(frameIndex, safeFps), {
-        keyFrame: frameIndex % keyFrameInterval === 0,
-      });
+      await videoSource.add(
+        timestamp,
+        calculateFrameDurationSeconds(frameIndex, safeFps),
+        {
+          keyFrame: frameIndex % keyFrameInterval === 0,
+        },
+      );
       onProgress?.(frameIndex + 1, totalFrames, {
         stage: 'encode',
         queueSize: 0,
       });
-      if (frameIndex % 4 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
+      if (frameIndex % 4 === 0)
+        await new Promise((resolve) => setTimeout(resolve, 0));
     }
     if (shouldAppendFinalFrame(safeDuration, safeFps, totalFrames)) {
       await videoSource.add(safeDuration, 0, { keyFrame: true });
@@ -577,11 +680,19 @@ export async function encodeCanvasSequence({
     videoSource.close();
 
     if (audioCopy.enabled) {
-      onProgress?.(totalFrames, totalFrames, { stage: 'audio', queueSize: 0, force: true });
+      onProgress?.(totalFrames, totalFrames, {
+        stage: 'audio',
+        queueSize: 0,
+        force: true,
+      });
       await writeCopiedAudioPackets(mediabunny, audioCopy);
     }
 
-    onProgress?.(totalFrames, totalFrames, { stage: 'mux', queueSize: 0, force: true });
+    onProgress?.(totalFrames, totalFrames, {
+      stage: 'mux',
+      queueSize: 0,
+      force: true,
+    });
     await output.finalize();
   } catch (err) {
     try {
@@ -592,7 +703,9 @@ export async function encodeCanvasSequence({
     throw err;
   }
 
-  const blob = new Blob([target.buffer], { type: exportDiagnosis.mimeType || outputFormat.mimeType });
+  const blob = new Blob([target.buffer], {
+    type: exportDiagnosis.mimeType || outputFormat.mimeType,
+  });
   blob.exportInfo = {
     format: exportDiagnosis.format,
     extension: exportDiagnosis.extension,

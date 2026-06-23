@@ -4,6 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node tests/smoke-check.mjs && node tests/unit-check.mjs"
+    "test": "node tests/smoke-check.mjs && node tests/unit-check.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "^3.8.4"
   }
 }

@@ -15,9 +15,15 @@ export function applyInitMixin(proto) {
     }
     if (cfg.faceVisualModeDefaultV2 !== true) {
       const savedQuickDetectorSettings = cfg.quickDetectorSettings || {};
-      const legacyFlags = this.normalizeFaceVisualFlags(savedQuickDetectorSettings);
-      if (!savedQuickDetectorSettings.faceShowBox && !savedQuickDetectorSettings.faceShowBlur
-        && (!savedQuickDetectorSettings.faceVisualMode || savedQuickDetectorSettings.faceVisualMode === 'pixelate')) {
+      const legacyFlags = this.normalizeFaceVisualFlags(
+        savedQuickDetectorSettings,
+      );
+      if (
+        !savedQuickDetectorSettings.faceShowBox &&
+        !savedQuickDetectorSettings.faceShowBlur &&
+        (!savedQuickDetectorSettings.faceVisualMode ||
+          savedQuickDetectorSettings.faceVisualMode === 'pixelate')
+      ) {
         legacyFlags.showBox = true;
         legacyFlags.showBlur = false;
       }
@@ -50,9 +56,11 @@ export function applyInitMixin(proto) {
     this.updateImageControlsUI();
     this.mobileActivePreset = null;
     this.updateMobilePresetButtons(this.mobileActivePreset);
-    this.preferredDeviceId = typeof cfg.deviceId === 'string' && cfg.deviceId ? cfg.deviceId : null;
+    this.preferredDeviceId =
+      typeof cfg.deviceId === 'string' && cfg.deviceId ? cfg.deviceId : null;
     if (this.cameraSelect) {
-      this.cameraSelect.innerHTML = '<option value="">Cargando cámaras...</option>';
+      this.cameraSelect.innerHTML =
+        '<option value="">Cargando cámaras...</option>';
       this.cameraSelect.disabled = true;
     }
 
@@ -70,6 +78,5 @@ export function applyInitMixin(proto) {
     // Auto-start camera on load (if browser allows it) without blocking UI init.
     void this.toggleCamera(true);
     void this.refreshCameraDevices(this.preferredDeviceId);
-  }
-
+  };
 }

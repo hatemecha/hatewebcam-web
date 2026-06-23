@@ -93,8 +93,6 @@ La app guarda ajustes en `localStorage` del navegador:
 
 Si necesitás resetear todo, limpia esos valores desde DevTools o borra datos del sitio.
 
-
-
 ## Dependencias Runtime
 
 Están vendorizadas para que la app sea local/offline en runtime:
@@ -110,4 +108,5 @@ Están vendorizadas para que la app sea local/offline en runtime:
 - No hay backend propio en este repositorio.
 
 ---
+
 hatemecha @ alex romero

@@ -1,4 +1,9 @@
-import { PREVIEW_QUALITY_PRESETS, PREVIEW_MIN_WIDTH, PREVIEW_MIN_HEIGHT, normalizePreviewQuality } from '../preview-metrics.mjs';
+import {
+  PREVIEW_QUALITY_PRESETS,
+  PREVIEW_MIN_WIDTH,
+  PREVIEW_MIN_HEIGHT,
+  normalizePreviewQuality,
+} from '../preview-metrics.mjs';
 import { COMMON_VIDEO_FPS } from '../video-export.mjs';
 
 export {
@@ -70,7 +75,8 @@ export const ADJUST_CONTEXT_VIDEO_HELP = {
   look: 'Ajustá orientación, filtros y look del clip seleccionado. Solo se ve cuando el cursor está dentro de su tramo.',
   blob: 'Elegí color, sensibilidad y aspecto del tracking. El detector se enciende solo dentro del clip COLOR.',
   face: 'Elegí recuadro, blur, pixelado y etiqueta. La detección se enciende sola cuando el cursor entra en el clip CARAS.',
-  blink: 'Ajustá sensibilidad del detector. Se activa solo dentro del clip OJOS en la timeline.',
+  blink:
+    'Ajustá sensibilidad del detector. Se activa solo dentro del clip OJOS en la timeline.',
 };
 export const STORAGE_KEY = 'hatewebcam_config';
 export const PROFILES_KEY = 'hatewebcam_profiles';

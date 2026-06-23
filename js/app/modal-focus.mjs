@@ -16,13 +16,14 @@ export function applyModalfocusmanagementMixin(proto) {
       const rect = el.getBoundingClientRect();
       return rect.width > 0 || rect.height > 0 || el === document.activeElement;
     });
-  }
+  };
 
   proto.activateModalFocusTrap = function (modal, preferredFocus = null) {
     if (!modal || this.modalFocusState.has(modal)) return;
-    const previouslyFocused = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
     const handleKeydown = (event) => {
       if (event.key !== 'Tab') return;
       const focusable = this.getFocusableModalElements(modal);
@@ -45,13 +46,16 @@ export function applyModalfocusmanagementMixin(proto) {
     };
     modal.addEventListener('keydown', handleKeydown);
     this.modalFocusState.set(modal, { handleKeydown, previouslyFocused });
-    const focusTarget = (preferredFocus && !preferredFocus.disabled && !preferredFocus.closest('.hidden'))
-      ? preferredFocus
-      : this.getFocusableModalElements(modal)[0];
+    const focusTarget =
+      preferredFocus &&
+      !preferredFocus.disabled &&
+      !preferredFocus.closest('.hidden')
+        ? preferredFocus
+        : this.getFocusableModalElements(modal)[0];
     if (focusTarget) {
       requestAnimationFrame(() => focusTarget.focus());
     }
-  }
+  };
 
   proto.deactivateModalFocusTrap = function (modal) {
     const state = this.modalFocusState.get(modal);
@@ -61,7 +65,5 @@ export function applyModalfocusmanagementMixin(proto) {
     if (state.previouslyFocused && document.contains(state.previouslyFocused)) {
       state.previouslyFocused.focus();
     }
-  }
-
-
+  };
 }

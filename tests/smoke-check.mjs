@@ -39,10 +39,17 @@ const javascriptFiles = [
   'js/effects/blink-detection.js',
 ];
 
-const controllerConstantPattern = /(?<![.\w$])(?:TIMELINE_EFFECT_META|DEFAULT_TIMELINE_EFFECT_DURATION|DEFAULT_IMAGE_SETTINGS|DEFAULT_CAMERA_FPS|DEFAULT_PREVIEW_QUALITY|MEDIAPIPE_FACE_MESH_VERSION|MEDIAPIPE_FACE_MESH_SRC|MEDIAPIPE_CONSOLE_NOISE_PATTERNS|DETECTOR_DEFAULT_BOX_COLOR|DEFAULT_QUICK_DETECTOR_SETTINGS|ADJUST_CONTEXT_HELP|STORAGE_KEY|PROFILES_KEY|COMMON_VIDEO_FPS)\b/;
+const controllerConstantPattern =
+  /(?<![.\w$])(?:TIMELINE_EFFECT_META|DEFAULT_TIMELINE_EFFECT_DURATION|DEFAULT_IMAGE_SETTINGS|DEFAULT_CAMERA_FPS|DEFAULT_PREVIEW_QUALITY|MEDIAPIPE_FACE_MESH_VERSION|MEDIAPIPE_FACE_MESH_SRC|MEDIAPIPE_CONSOLE_NOISE_PATTERNS|DETECTOR_DEFAULT_BOX_COLOR|DEFAULT_QUICK_DETECTOR_SETTINGS|ADJUST_CONTEXT_HELP|STORAGE_KEY|PROFILES_KEY|COMMON_VIDEO_FPS)\b/;
 const controllerMethodNames = javascriptFiles
   .filter((file) => file.startsWith('js/app/'))
-  .flatMap((file) => [...readFileSync(resolve(rootDir, file), 'utf8').matchAll(/proto\.([\w$]+)\s*=/g)].map((match) => match[1]));
+  .flatMap((file) =>
+    [
+      ...readFileSync(resolve(rootDir, file), 'utf8').matchAll(
+        /proto\.([\w$]+)\s*=/g,
+      ),
+    ].map((match) => match[1]),
+  );
 
 const requiredHtmlFragments = [
   'id="videoElement"',
@@ -89,10 +96,14 @@ function fail(message) {
 }
 
 for (const file of javascriptFiles) {
-  const result = spawnSync(process.execPath, ['--check', resolve(rootDir, file)], {
-    cwd: rootDir,
-    encoding: 'utf8',
-  });
+  const result = spawnSync(
+    process.execPath,
+    ['--check', resolve(rootDir, file)],
+    {
+      cwd: rootDir,
+      encoding: 'utf8',
+    },
+  );
 
   if (result.status !== 0) {
     const output = [result.stdout, result.stderr].filter(Boolean).join('\n');
@@ -106,12 +117,19 @@ for (const file of javascriptFiles) {
   if (file !== 'js/app/dom.mjs' && /(?<![.\w$])\$\s*\(/.test(source)) {
     fail(`${file} uses the DOM helper outside dom.mjs.`);
   }
-  if (file.startsWith('js/app/') && !['js/app/constants.mjs', 'js/app/controller.mjs'].includes(file) && controllerConstantPattern.test(source)) {
+  if (
+    file.startsWith('js/app/') &&
+    !['js/app/constants.mjs', 'js/app/controller.mjs'].includes(file) &&
+    controllerConstantPattern.test(source)
+  ) {
     fail(`${file} accesses a controller constant without this.`);
   }
   for (const methodName of controllerMethodNames) {
-    const bareCallbackPattern = new RegExp(`(?:addEventListener\\([^,]+,|requestAnimationFrame\\(|requestVideoFrameCallback\\()\\s*${methodName}\\b`);
-    if (bareCallbackPattern.test(source)) fail(`${file} passes ${methodName} without binding the controller.`);
+    const bareCallbackPattern = new RegExp(
+      `(?:addEventListener\\([^,]+,|requestAnimationFrame\\(|requestVideoFrameCallback\\()\\s*${methodName}\\b`,
+    );
+    if (bareCallbackPattern.test(source))
+      fail(`${file} passes ${methodName} without binding the controller.`);
   }
 }
 
@@ -123,10 +141,13 @@ const forbiddenRuntimeFragments = [
   'webm-muxer',
 ];
 for (const file of ['index.html', ...javascriptFiles]) {
-  const source = file === 'index.html' ? html : readFileSync(resolve(rootDir, file), 'utf8');
+  const source =
+    file === 'index.html' ? html : readFileSync(resolve(rootDir, file), 'utf8');
   for (const fragment of forbiddenRuntimeFragments) {
     if (source.includes(fragment)) {
-      fail(`${file} still references runtime CDN/deprecated dependency ${fragment}`);
+      fail(
+        `${file} still references runtime CDN/deprecated dependency ${fragment}`,
+      );
     }
   }
 }
@@ -134,17 +155,33 @@ const appJs = readFileSync(resolve(rootDir, 'js/app.js'), 'utf8');
 if (!appJs.includes("import { AppController } from './app/controller.mjs'")) {
   fail('app.js must bootstrap AppController from ./app/controller.mjs');
 }
-const controllerJs = readFileSync(resolve(rootDir, 'js/app/controller.mjs'), 'utf8');
-if (!controllerJs.includes("from '../video-export.mjs'") && !controllerJs.includes("from './constants.mjs'")) {
+const controllerJs = readFileSync(
+  resolve(rootDir, 'js/app/controller.mjs'),
+  'utf8',
+);
+if (
+  !controllerJs.includes("from '../video-export.mjs'") &&
+  !controllerJs.includes("from './constants.mjs'")
+) {
   fail('controller.mjs must wire video export/constants modules');
 }
-const settingsJs = readFileSync(resolve(rootDir, 'js/app/settings.mjs'), 'utf8');
+const settingsJs = readFileSync(
+  resolve(rootDir, 'js/app/settings.mjs'),
+  'utf8',
+);
 if (settingsJs.includes('...DEFAULT_QUICK_DETECTOR_SETTINGS')) {
-  fail('settings.mjs must access DEFAULT_QUICK_DETECTOR_SETTINGS through the controller.');
+  fail(
+    'settings.mjs must access DEFAULT_QUICK_DETECTOR_SETTINGS through the controller.',
+  );
 }
-const videoEditorJs = readFileSync(resolve(rootDir, 'js/app/video-editor.mjs'), 'utf8');
+const videoEditorJs = readFileSync(
+  resolve(rootDir, 'js/app/video-editor.mjs'),
+  'utf8',
+);
 if (videoEditorJs.includes("import('./video-export.mjs')")) {
-  fail('video-editor.mjs must import video-export.mjs from its parent directory.');
+  fail(
+    'video-editor.mjs must import video-export.mjs from its parent directory.',
+  );
 }
 for (const fragment of requiredHtmlFragments) {
   if (!html.includes(fragment)) {

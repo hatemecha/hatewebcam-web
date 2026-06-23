@@ -16,9 +16,10 @@ class EditorHistory {
         type: item.type,
         startTime: item.startTime,
         endTime: item.endTime,
-        config: typeof structuredClone === 'function'
-          ? structuredClone(item.config)
-          : JSON.parse(JSON.stringify(item.config || {})),
+        config:
+          typeof structuredClone === 'function'
+            ? structuredClone(item.config)
+            : JSON.parse(JSON.stringify(item.config || {})),
       })),
     };
   }
@@ -32,12 +33,15 @@ class EditorHistory {
   restore(timeline, snapshot) {
     timeline.trimStart = snapshot.trimStart;
     timeline.trimEnd = snapshot.trimEnd;
-    timeline.markers = (snapshot.markers || []).map((marker) => ({ ...marker }));
+    timeline.markers = (snapshot.markers || []).map((marker) => ({
+      ...marker,
+    }));
     timeline.items = snapshot.items.map((item) => ({
       ...item,
-      config: typeof structuredClone === 'function'
-        ? structuredClone(item.config)
-        : JSON.parse(JSON.stringify(item.config || {})),
+      config:
+        typeof structuredClone === 'function'
+          ? structuredClone(item.config)
+          : JSON.parse(JSON.stringify(item.config || {})),
     }));
   }
 

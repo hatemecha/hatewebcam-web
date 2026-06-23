@@ -1,6 +1,12 @@
-const TICK_STEPS = Object.freeze([0.25, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600]);
+const TICK_STEPS = Object.freeze([
+  0.25, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600,
+]);
 
-export function calculateTimelineTickInterval(duration, width, minLabelPx = 72) {
+export function calculateTimelineTickInterval(
+  duration,
+  width,
+  minLabelPx = 72,
+) {
   const safeDuration = Math.max(0.001, Number(duration) || 0.001);
   const safeWidth = Math.max(1, Number(width) || 1);
   const labelWidth = Math.max(24, Number(minLabelPx) || 72);
@@ -11,7 +17,8 @@ export function calculateTimelineTickInterval(duration, width, minLabelPx = 72) 
 
 export class TimelineView {
   constructor({ formatTime, documentRef = globalThis.document } = {}) {
-    this.formatTime = formatTime || ((seconds) => `${Number(seconds || 0).toFixed(2)}s`);
+    this.formatTime =
+      formatTime || ((seconds) => `${Number(seconds || 0).toFixed(2)}s`);
     this.document = documentRef;
     this.dragGhost = null;
   }

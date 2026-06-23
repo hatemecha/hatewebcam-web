@@ -16,7 +16,9 @@ class CameraManager {
    */
   async enumerateDevices() {
     if (!navigator.mediaDevices?.enumerateDevices) {
-      this.lastError = new Error('MediaDevices API no disponible en este navegador.');
+      this.lastError = new Error(
+        'MediaDevices API no disponible en este navegador.',
+      );
       return [];
     }
 
@@ -39,7 +41,9 @@ class CameraManager {
     this.videoElement = videoElement;
 
     if (!navigator.mediaDevices?.getUserMedia) {
-      this.lastError = new Error('getUserMedia no esta disponible en este navegador.');
+      this.lastError = new Error(
+        'getUserMedia no esta disponible en este navegador.',
+      );
       return false;
     }
 
@@ -58,12 +62,18 @@ class CameraManager {
       if (deviceId) {
         try {
           if (this.stream) this.stop();
-          await this._startWithConstraints(this._buildVideoConstraints(null, opts), null);
+          await this._startWithConstraints(
+            this._buildVideoConstraints(null, opts),
+            null,
+          );
           this.lastError = null;
           return true;
         } catch (fallbackError) {
           if (!this._isExpectedCameraAccessError(fallbackError)) {
-            console.warn('Error starting camera (fallback failed):', fallbackError);
+            console.warn(
+              'Error starting camera (fallback failed):',
+              fallbackError,
+            );
           }
           this.lastError = fallbackError;
           return false;
@@ -92,17 +102,23 @@ class CameraManager {
   }
 
   _buildVideoConstraints(deviceId = null, opts = {}) {
-    const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+    const ua =
+      typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
     const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
-    const deviceMemory = typeof navigator !== 'undefined' && typeof navigator.deviceMemory === 'number'
-      ? navigator.deviceMemory
-      : 0;
-    const hardwareConcurrency = typeof navigator !== 'undefined' && typeof navigator.hardwareConcurrency === 'number'
-      ? navigator.hardwareConcurrency
-      : 0;
-    const lowPower = isMobile
-      || (deviceMemory > 0 && deviceMemory <= 4)
-      || (hardwareConcurrency > 0 && hardwareConcurrency <= 4);
+    const deviceMemory =
+      typeof navigator !== 'undefined' &&
+      typeof navigator.deviceMemory === 'number'
+        ? navigator.deviceMemory
+        : 0;
+    const hardwareConcurrency =
+      typeof navigator !== 'undefined' &&
+      typeof navigator.hardwareConcurrency === 'number'
+        ? navigator.hardwareConcurrency
+        : 0;
+    const lowPower =
+      isMobile ||
+      (deviceMemory > 0 && deviceMemory <= 4) ||
+      (hardwareConcurrency > 0 && hardwareConcurrency <= 4);
     const preferredFps = 60;
 
     const defaultWidth = lowPower ? 960 : 1280;
@@ -119,9 +135,9 @@ class CameraManager {
       video: {
         width: { ideal: width, max: maxWidth },
         height: { ideal: height, max: maxHeight },
-        frameRate: { ideal: fps }
+        frameRate: { ideal: fps },
       },
-      audio: false
+      audio: false,
     };
 
     if (deviceId) {
@@ -148,7 +164,8 @@ class CameraManager {
     } catch (error) {
       stream.getTracks().forEach((track) => track.stop());
       if (this.stream === stream) this.stream = null;
-      if (this.videoElement?.srcObject === stream) this.videoElement.srcObject = null;
+      if (this.videoElement?.srcObject === stream)
+        this.videoElement.srcObject = null;
       this.currentDeviceId = null;
       this.running = false;
       throw error;
@@ -160,7 +177,7 @@ class CameraManager {
    */
   stop() {
     if (this.stream) {
-      this.stream.getTracks().forEach(t => t.stop());
+      this.stream.getTracks().forEach((t) => t.stop());
       this.stream = null;
     }
     if (this.videoElement) {
