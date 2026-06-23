@@ -20,7 +20,7 @@ Aplicación web para usar la cámara con filtros en tiempo real, detectores visu
 - Navegador moderno (recomendado: Chrome/Edge actual).
 - Cámara disponible y permisos habilitados.
 - Servir la app desde `localhost` o `https` (no usar `file://`).
-- Conexión a internet para cargar Face Mesh desde CDN cuando se activan detectores de cara/pestañeos.
+- No requiere CDN en runtime: iconos, Face Mesh y exportación están vendorizados en `vendor/`.
 
 ## Inicio rápido
 
@@ -60,9 +60,21 @@ http://localhost:8080
 1. Abre la pestaña `Video` y elige un archivo local.
 2. Arrastra los extremos de la timeline para recortar y marca sobre ella los intervalos de efectos.
 3. Configura un look o detector y agrégalo al tramo marcado.
-4. Exporta; un modal bloquea la edición hasta iniciar la descarga final.
+4. Pulsa `M` para agregar o quitar marcadores en el playhead. Con el imán activo, trims, clips y cursor ajustan también a esos marcadores.
+5. Exporta; un modal bloquea la edición hasta iniciar la descarga final.
 
-La exportación es local, WebM y sin audio. En Chrome o Edge actualizado conserva la resolución y los FPS originales, usando el bitrate promedio de entrada como referencia mínima.
+### Grabación de cámara
+
+- Formato: automático, MP4 o WebM según lo que soporte `MediaRecorder`.
+- Las fotos se descargan en JPEG.
+
+### Exportación del editor
+
+- Modo `Video + efectos`: Auto/MP4/WebM. Auto prefiere WebM VP9/VP8 por velocidad; MP4 H.264 queda disponible como opción explícita.
+- Modo `Solo efectos chroma`: WebM con fondo verde o azul, sin audio y sin video base, pensado para componer en otro editor.
+- La resolución se mantiene en tamaño original efectivo, con FPS detectado y bitrate recomendado desde el archivo de entrada.
+- `Copiar audio original` intenta copia packet-level solo si el codec es compatible con el contenedor elegido; si no lo es, exporta sin audio e informa el motivo.
+- No se integra `ffmpeg.wasm`.
 
 ## Verificación
 
@@ -83,10 +95,13 @@ Si necesitás resetear todo, limpia esos valores desde DevTools o borra datos de
 
 
 
-## Dependencias externas
+## Dependencias Runtime
 
-- [Font Awesome](https://cdnjs.com/libraries/font-awesome) (iconos).
-- [MediaPipe Face Mesh](https://www.npmjs.com/package/@mediapipe/face_mesh) (carga dinámica desde jsDelivr, versión fijada).
+Están vendorizadas para que la app sea local/offline en runtime:
+
+- Font Awesome 6.5.1: `vendor/fontawesome/`.
+- MediaPipe Face Mesh 0.4.1633559619: `vendor/mediapipe/face_mesh/`.
+- Mediabunny 1.49.0: `vendor/mediabunny/`.
 
 ## Privacidad
 

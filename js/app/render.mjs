@@ -305,6 +305,48 @@ export function applyRenderLoopMixin(proto) {
     targetCtx.restore();
   }
 
+  proto.renderEffectsOnlyFrame = function (targetCanvas, targetCtx, chromaColor = '#00ff00', mode = 'export') {
+    if (!this.videoEl || this.videoEl.readyState < 2 || targetCanvas.width === 0 || targetCanvas.height === 0) return;
+    if (!this.effectsOnlyAnalysisCanvas) {
+      this.effectsOnlyAnalysisCanvas = document.createElement('canvas');
+      this.effectsOnlyAnalysisCtx = this.effectsOnlyAnalysisCanvas.getContext('2d', { willReadFrequently: true });
+    }
+    if (!this.effectsOnlyAnalysisCtx) return;
+
+    const analysisCanvas = this.effectsOnlyAnalysisCanvas;
+    const analysisCtx = this.effectsOnlyAnalysisCtx;
+    if (analysisCanvas.width !== targetCanvas.width || analysisCanvas.height !== targetCanvas.height) {
+      analysisCanvas.width = targetCanvas.width;
+      analysisCanvas.height = targetCanvas.height;
+    }
+
+    const frameRotation = this.drawBaseFrame(analysisCtx, analysisCanvas, mode);
+    if (this.needsAdvancedPixelAdjustments()) {
+      this.applyAdvancedPixelAdjustments(analysisCanvas, analysisCtx, mode);
+    }
+
+    targetCtx.save();
+    targetCtx.fillStyle = chromaColor;
+    targetCtx.fillRect(0, 0, targetCanvas.width, targetCanvas.height);
+    targetCtx.restore();
+
+    if (this.faceDetectionEffect) {
+      this.faceDetectionEffect.flipH = this.getEffectiveFlipH();
+      this.faceDetectionEffect.flipV = this.flipV;
+      this.faceDetectionEffect.rotationDeg = frameRotation;
+    }
+
+    if (this.blobTrackingEffect && this.blinkDetectionEffect) {
+      this.blinkDetectionEffect.setFeedbackColor(this.blobTrackingEffect.boxColor);
+      this.blobTrackingEffect.connectionColor = this.blobTrackingEffect.boxColor;
+    }
+
+    this.effectManager.processFrame(targetCtx, analysisCanvas, this.videoEl, {
+      ...this.renderEngine.getProfile('export'),
+      overlayOnly: true,
+    });
+  }
+
   proto.renderProcessedFrame = function (targetCanvas, targetCtx, mode = 'preview') {
     if (!this.videoEl || this.videoEl.readyState < 2 || targetCanvas.width === 0 || targetCanvas.height === 0) return;
     const frameRotation = this.drawBaseFrame(targetCtx, targetCanvas, mode);

@@ -7,6 +7,7 @@ class VideoTimeline {
     this.trimStart = 0;
     this.trimEnd = this.duration;
     this.items = [];
+    this.markers = [];
   }
 
   setDuration(duration) {
@@ -14,6 +15,7 @@ class VideoTimeline {
     this.trimStart = Math.min(this.trimStart, this.duration);
     this.trimEnd = this.duration;
     this.items = [];
+    this.markers = [];
   }
 
   setTrim(startTime, endTime) {
@@ -61,6 +63,37 @@ class VideoTimeline {
 
   remove(id) {
     this.items = this.items.filter((item) => item.id !== id);
+  }
+
+  toggleMarker(time, threshold = 0.08) {
+    const markerTime = this.#time(time);
+    const maxDelta = Math.max(0, Number(threshold) || 0);
+    const existingIndex = this.markers.findIndex((marker) => Math.abs(marker.time - markerTime) <= maxDelta);
+    if (existingIndex !== -1) {
+      const [removed] = this.markers.splice(existingIndex, 1);
+      return { action: 'removed', marker: removed };
+    }
+
+    const marker = {
+      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+      time: markerTime,
+    };
+    this.markers.push(marker);
+    this.markers.sort((a, b) => a.time - b.time);
+    return { action: 'added', marker };
+  }
+
+  removeMarker(id) {
+    this.markers = this.markers.filter((marker) => marker.id !== id);
+  }
+
+  getSnapPoints() {
+    return [
+      this.trimStart,
+      this.trimEnd,
+      ...this.markers.map((marker) => marker.time),
+      ...this.items.flatMap((item) => [item.startTime, item.endTime]),
+    ];
   }
 
   activeAt(time) {

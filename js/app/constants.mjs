@@ -28,6 +28,10 @@ export const DEFAULT_IMAGE_SETTINGS = {
   sharpness: 0,
   jpegQuality: 92,
   videoFormat: 'auto',
+  editorExportFormat: 'auto',
+  editorExportMode: 'full',
+  editorCopyAudio: true,
+  effectsExportChroma: 'green',
   previewQuality: 'balanced',
   captureTimerSeconds: 0,
   qualityEnhancer: false,
@@ -36,7 +40,8 @@ export const DEFAULT_IMAGE_SETTINGS = {
 export const DEFAULT_CAMERA_FPS = 30;
 export const DEFAULT_PREVIEW_QUALITY = 'balanced';
 export const MEDIAPIPE_FACE_MESH_VERSION = '0.4.1633559619';
-export const MEDIAPIPE_FACE_MESH_SRC = `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@${MEDIAPIPE_FACE_MESH_VERSION}/face_mesh.js`;
+export const MEDIAPIPE_FACE_MESH_BASE_URL = 'vendor/mediapipe/face_mesh';
+export const MEDIAPIPE_FACE_MESH_SRC = `${MEDIAPIPE_FACE_MESH_BASE_URL}/face_mesh.js`;
 export const MEDIAPIPE_CONSOLE_NOISE_PATTERNS = [
   'gl_context_webgl.cc',
   'gl_context.cc:351',

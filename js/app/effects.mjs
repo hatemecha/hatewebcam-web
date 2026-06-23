@@ -16,12 +16,13 @@ export function applyEffectsMixin(proto) {
           this.effectManager.addEffect(this.blobTrackingEffect);
         }
         if (this.blinkDetectionEffect) {
-          this.blinkDetectionEffect.setBlinkCallback((eye) => this.blobTrackingEffect.triggerConnection(eye));
+          this.blinkDetectionEffect.setBlinkCallback((eye) => this.blobTrackingEffect?.triggerConnection(eye));
         }
         if (this.colorPickSection) this.colorPickSection.classList.remove('hidden');
       } else {
         if (this.blobTrackingEffect) this.effectManager.removeEffect(this.blobTrackingEffect);
         this.blobTrackingEffect = null;
+        if (this.blinkDetectionEffect) this.blinkDetectionEffect.setBlinkCallback(null);
         if (this.colorPickSection) this.colorPickSection.classList.add('hidden');
       }
       this.syncQuickDetectorSettingsFromEffects();
@@ -93,7 +94,9 @@ export function applyEffectsMixin(proto) {
         }
         this.syncBlinkLandmarkSource();
         if (this.blobTrackingEffect) {
-          this.blinkDetectionEffect.setBlinkCallback((eye) => this.blobTrackingEffect.triggerConnection(eye));
+          this.blinkDetectionEffect.setBlinkCallback((eye) => this.blobTrackingEffect?.triggerConnection(eye));
+        } else {
+          this.blinkDetectionEffect.setBlinkCallback(null);
         }
         if (!this.isRecording) {
           setTimeout(() => this.hideStatus(this.captureStatus), 1200);

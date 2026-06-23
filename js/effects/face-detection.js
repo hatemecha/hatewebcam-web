@@ -59,10 +59,10 @@ class FaceDetection {
                 return;
             }
 
-            const faceMeshVersion = '0.4.1633559619';
+            const faceMeshBaseUrl = globalThis.HATEWEBCAM_MEDIAPIPE_FACE_MESH_BASE_URL || 'vendor/mediapipe/face_mesh';
             this.faceMesh = new FaceMesh({
                 locateFile: (file) =>
-                    `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@${faceMeshVersion}/${file}`,
+                    `${faceMeshBaseUrl}/${file}`,
             });
 
             this.faceMesh.setOptions({
@@ -414,11 +414,11 @@ class FaceDetection {
             const rect = this._getFaceRect(face, w, h, rectPadding);
             if (!rect) continue;
 
-            if (this._isPixelVisualMode()) {
+            if (this._isPixelVisualMode() && !renderProfile?.overlayOnly) {
                 this._pixelateRegion(ctx, canvas, rect);
             }
 
-            if (this._isBoxVisualMode()) {
+            if (this._isBoxVisualMode() || renderProfile?.overlayOnly) {
                 this._drawFaceBox(ctx, rect);
             }
 

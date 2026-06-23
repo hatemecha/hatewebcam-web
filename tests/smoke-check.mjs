@@ -58,11 +58,16 @@ const requiredHtmlFragments = [
   'id="btnExportVideo"',
   'id="btnHeaderExportVideo"',
   'id="videoExportDiagnostics"',
+  'id="videoExportModeSelect"',
+  'id="editorExportFormatSelect"',
+  'id="chkEditorCopyAudio"',
+  'id="effectsExportChromaSelect"',
   'id="videoInspector"',
   'id="inspectorSplitter"',
   'id="timelineSplitter"',
   'id="btnToolSelect"',
   'id="timelinePlayheadHandle"',
+  'id="timelineMarkers"',
   'js/editor-history.js',
   'id="videoExportModal"',
   'id="chkMirror"',
@@ -105,6 +110,20 @@ for (const file of javascriptFiles) {
 }
 
 const html = readFileSync(resolve(rootDir, 'index.html'), 'utf8');
+const forbiddenRuntimeFragments = [
+  'https://cdn.jsdelivr.net',
+  'https://esm.sh',
+  'https://cdnjs.cloudflare.com',
+  'webm-muxer',
+];
+for (const file of ['index.html', ...javascriptFiles]) {
+  const source = file === 'index.html' ? html : readFileSync(resolve(rootDir, file), 'utf8');
+  for (const fragment of forbiddenRuntimeFragments) {
+    if (source.includes(fragment)) {
+      fail(`${file} still references runtime CDN/deprecated dependency ${fragment}`);
+    }
+  }
+}
 const appJs = readFileSync(resolve(rootDir, 'js/app.js'), 'utf8');
 if (!appJs.includes("import { AppController } from './app/controller.mjs'")) {
   fail('app.js must bootstrap AppController from ./app/controller.mjs');

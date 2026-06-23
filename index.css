@@ -1887,6 +1887,48 @@ body.is-resizing-editor[data-resize-axis="horizontal"] {
   pointer-events: none;
 }
 
+.timeline-markers {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  pointer-events: none;
+}
+
+.timeline-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  transform: translateX(-50%);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.timeline-marker::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 2px;
+  height: 100%;
+  background: #f3d25b;
+  transform: translateX(-50%);
+}
+
+.timeline-marker::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  border: 6px solid transparent;
+  border-top: 0;
+  border-bottom-color: #f3d25b;
+  transform: translateX(-50%);
+}
+
 .timeline-item {
   position: absolute;
   display: flex;

@@ -5,11 +5,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="hatewebcam">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' 'sha256-vvt4KWwuNr51XfE5m+hzeNEGhiOfZzG97ccfqGsPwvE=' blob: https://cdn.jsdelivr.net https://esm.sh; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' blob: data: https://cdn.jsdelivr.net https://esm.sh; base-uri 'self'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' blob: data: ws://127.0.0.1:* ws://localhost:*; base-uri 'self'; object-src 'none'">
   <title>HateWebcam Web</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
-    integrity="sha384-t1nt8BQoYMLFN5p42tRAtuAAFQaCQODekUVeKKZrEnEyp4H2R0RHFz0KWpmj7i8g" crossorigin="anonymous">
+  <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css">
   <link rel="stylesheet" href="index.css?v=20260621-editor12">
 </head>
 
@@ -199,14 +198,14 @@
           </div>
         </div>
         <div class="timeline-effect-palette video-only hidden" id="timelineEffectPalette" aria-label="Efectos para arrastrar a la timeline">
-          <span class="timeline-palette-label">Arrastrá a la pista</span>
+          <span class="timeline-palette-label">Arrastrá al tiempo</span>
           <div class="timeline-palette-items" role="list">
             <button type="button" class="timeline-palette-chip" data-effect-type="look" draggable="true"><i class="fa-solid fa-wand-magic-sparkles"></i> Look</button>
             <button type="button" class="timeline-palette-chip" data-effect-type="blob" draggable="true"><i class="fa-solid fa-palette"></i> Color</button>
             <button type="button" class="timeline-palette-chip" data-effect-type="face" draggable="true"><i class="fa-solid fa-face-smile"></i> Caras</button>
             <button type="button" class="timeline-palette-chip" data-effect-type="blink" draggable="true"><i class="fa-solid fa-eye"></i> Ojos</button>
           </div>
-          <span class="timeline-palette-hint">Soltá en LOOK, COLOR, CARAS u OJOS · doble click en pista vacía = clip en el cursor</span>
+          <span class="timeline-palette-hint">Soltá sobre la timeline · doble click en pista vacía = clip en el cursor</span>
         </div>
         <div class="timeline-viewport" id="timelineViewport">
           <div class="timeline-scroll" id="timelineScroll">
@@ -235,6 +234,7 @@
                 <div class="timeline-playhead" id="timelinePlayhead">
                   <button type="button" class="timeline-playhead-handle" id="timelinePlayheadHandle" aria-label="Mover cursor de reproducción"></button>
                 </div>
+                <div class="timeline-markers" id="timelineMarkers"></div>
                 <div class="timeline-items" id="timelineItems"></div>
               </div>
             </div>
@@ -280,6 +280,37 @@
               <div class="spacer-8"></div>
               <div class="section-title"><i class="fa-solid fa-file-export"></i> Exportación</div>
               <div class="help-text">Se procesa localmente en resolución original. La preview no cambia la calidad final.</div>
+              <div class="slider-label"><span>Salida del editor</span></div>
+              <div class="select-wrapper">
+                <select id="videoExportModeSelect">
+                  <option value="full">Video + efectos</option>
+                  <option value="effects-chroma">Solo efectos chroma</option>
+                </select>
+              </div>
+              <div class="spacer-8"></div>
+              <div class="slider-label"><span>Formato de exportación</span></div>
+              <div class="select-wrapper">
+                <select id="editorExportFormatSelect">
+                  <option value="auto">Automático (WebM rápido)</option>
+                  <option value="mp4">MP4 (Premiere, puede ser lento)</option>
+                  <option value="webm">WebM</option>
+                </select>
+              </div>
+              <div class="spacer-8"></div>
+              <label class="checkbox-group">
+                <input type="checkbox" id="chkEditorCopyAudio">
+                <span>Copiar audio original si es compatible</span>
+              </label>
+              <div class="spacer-8"></div>
+              <div id="effectsExportChromaGroup" class="hidden">
+                <div class="slider-label"><span>Chroma</span></div>
+                <div class="select-wrapper">
+                  <select id="effectsExportChromaSelect">
+                    <option value="green">Verde</option>
+                    <option value="blue">Azul</option>
+                  </select>
+                </div>
+              </div>
               <div class="video-export-summary mono" id="videoExportDetails">Importá un video para habilitar la exportación.</div>
               <div class="video-export-diagnostics mono" id="videoExportDiagnostics"></div>
               <button type="button" class="btn primary" id="btnExportVideo" disabled><i class="fa-solid fa-download"></i> Exportar video</button>
@@ -503,14 +534,14 @@
         <!-- Capture Settings -->
         <div class="panel-section adjust-webcam-only">
           <div class="section-title"><i class="fa-solid fa-film"></i> Calidad de salida</div>
-          <div class="help-text photo-only">Las fotos se descargan en JPEG. Para video se intenta MP4 y, si no está disponible, se usa WebM.</div>
-          <div class="help-text video-only hidden">La exportación WebM conserva resolución, FPS y bitrate de referencia en Chrome o Edge actualizado.</div>
+          <div class="help-text photo-only">Las fotos se descargan en JPEG. La grabación de cámara intenta MP4 y, si no está disponible, usa WebM.</div>
+          <div class="help-text video-only hidden">La exportación del editor se configura en Proyecto → Exportación.</div>
           <div class="slider-group photo-only">
             <div class="slider-label"><span>Calidad foto JPEG</span><span class="value" id="valJpegQuality">92%</span></div>
             <input type="range" id="sldJpegQuality" min="60" max="100" step="1" value="92">
           </div>
-          <div class="slider-label"><span>Formato de video</span></div>
-          <div class="select-wrapper">
+          <div class="slider-label photo-only"><span>Formato de grabación</span></div>
+          <div class="select-wrapper photo-only">
             <select id="videoFormatSelect">
               <option value="auto">Automático (MP4 preferido)</option>
               <option value="mp4">MP4 (si el navegador lo soporta)</option>

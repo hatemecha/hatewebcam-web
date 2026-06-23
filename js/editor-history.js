@@ -10,6 +10,7 @@ class EditorHistory {
     return {
       trimStart: timeline.trimStart,
       trimEnd: timeline.trimEnd,
+      markers: (timeline.markers || []).map((marker) => ({ ...marker })),
       items: timeline.items.map((item) => ({
         id: item.id,
         type: item.type,
@@ -31,6 +32,7 @@ class EditorHistory {
   restore(timeline, snapshot) {
     timeline.trimStart = snapshot.trimStart;
     timeline.trimEnd = snapshot.trimEnd;
+    timeline.markers = (snapshot.markers || []).map((marker) => ({ ...marker }));
     timeline.items = snapshot.items.map((item) => ({
       ...item,
       config: typeof structuredClone === 'function'

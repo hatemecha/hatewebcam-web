@@ -37,6 +37,7 @@ export function setupDom(app) {
   app.timelineTrimStartHandle = $('#timelineTrimStartHandle');
   app.timelineTrimEndHandle = $('#timelineTrimEndHandle');
   app.timelinePlayhead = $('#timelinePlayhead');
+  app.timelineMarkers = $('#timelineMarkers');
   app.timelineItems = $('#timelineItems');
   app.timelineEffectPalette = $('#timelineEffectPalette');
   app.videoEffectRangeLabel = $('#videoEffectRangeLabel');
@@ -54,6 +55,11 @@ export function setupDom(app) {
   app.btnDeleteVideoEffect = $('#btnDeleteVideoEffect');
   app.videoExportDetails = $('#videoExportDetails');
   app.videoExportDiagnostics = $('#videoExportDiagnostics');
+  app.videoExportModeSelect = $('#videoExportModeSelect');
+  app.editorExportFormatSelect = $('#editorExportFormatSelect');
+  app.chkEditorCopyAudio = $('#chkEditorCopyAudio');
+  app.effectsExportChromaGroup = $('#effectsExportChromaGroup');
+  app.effectsExportChromaSelect = $('#effectsExportChromaSelect');
   app.videoExportModal = $('#videoExportModal');
   app.videoExportTitle = $('#videoExportTitle');
   app.videoExportSummary = $('#videoExportSummary');

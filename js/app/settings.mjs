@@ -198,12 +198,13 @@ export function applyStorageMixin(proto) {
   proto.installMediaPipeConsoleNoiseFilter = function () {
     if (this.mediaPipeConsoleFilterInstalled) return;
     this.mediaPipeConsoleFilterInstalled = true;
+    const controller = this;
 
     ['log', 'info', 'warn'].forEach((method) => {
       const original = console[method];
       if (typeof original !== 'function') return;
       console[method] = function patchedConsoleMethod(...args) {
-        if (this.shouldSuppressMediaPipeConsoleNoise(args)) return;
+        if (controller.shouldSuppressMediaPipeConsoleNoise(args)) return;
         return original.apply(this, args);
       };
     });
@@ -211,6 +212,7 @@ export function applyStorageMixin(proto) {
 
   proto.ensureFaceMeshLoaded = function () {
     this.installMediaPipeConsoleNoiseFilter();
+    globalThis.HATEWEBCAM_MEDIAPIPE_FACE_MESH_BASE_URL = this.MEDIAPIPE_FACE_MESH_BASE_URL;
 
     if (typeof FaceMesh !== 'undefined') {
       return Promise.resolve();
@@ -222,7 +224,7 @@ export function applyStorageMixin(proto) {
 
     const existing = Array.from(document.scripts).find((s) => {
       const src = s.getAttribute('src') || '';
-      return src.includes('@mediapipe/face_mesh') && src.endsWith('/face_mesh.js');
+      return src.endsWith('/face_mesh.js');
     });
 
     this.faceMeshScriptLoadPromise = new Promise((resolve, reject) => {
@@ -246,7 +248,6 @@ export function applyStorageMixin(proto) {
 
       const script = document.createElement('script');
       script.src = this.MEDIAPIPE_FACE_MESH_SRC;
-      script.crossOrigin = 'anonymous';
       script.async = true;
       script.addEventListener('load', handleLoaded, { once: true });
       script.addEventListener('error', handleError, { once: true });
@@ -516,6 +517,16 @@ export function applyStorageMixin(proto) {
     this.imageSettings.videoFormat = ['auto', 'mp4', 'webm'].includes(this.imageSettings.videoFormat)
       ? this.imageSettings.videoFormat
       : 'auto';
+    this.imageSettings.editorExportFormat = ['auto', 'mp4', 'webm'].includes(this.imageSettings.editorExportFormat)
+      ? this.imageSettings.editorExportFormat
+      : 'auto';
+    this.imageSettings.editorExportMode = ['full', 'effects-chroma'].includes(this.imageSettings.editorExportMode)
+      ? this.imageSettings.editorExportMode
+      : 'full';
+    this.imageSettings.editorCopyAudio = this.imageSettings.editorCopyAudio !== false;
+    this.imageSettings.effectsExportChroma = ['green', 'blue'].includes(this.imageSettings.effectsExportChroma)
+      ? this.imageSettings.effectsExportChroma
+      : 'green';
     this.imageSettings.previewQuality = normalizePreviewQuality(this.imageSettings.previewQuality);
     this.imageSettings.captureTimerSeconds = this.normalizeCaptureTimerSeconds(this.imageSettings.captureTimerSeconds);
     this.imageSettings.qualityEnhancer = !!this.imageSettings.qualityEnhancer;
@@ -561,6 +572,10 @@ export function applyStorageMixin(proto) {
     if (this.sldJpegQuality) this.sldJpegQuality.value = String(this.imageSettings.jpegQuality);
     if (this.valJpegQuality) this.valJpegQuality.textContent = `${this.imageSettings.jpegQuality}%`;
     if (this.videoFormatSelect) this.videoFormatSelect.value = this.imageSettings.videoFormat;
+    if (this.videoExportModeSelect) this.videoExportModeSelect.value = this.imageSettings.editorExportMode;
+    if (this.editorExportFormatSelect) this.editorExportFormatSelect.value = this.imageSettings.editorExportFormat;
+    if (this.chkEditorCopyAudio) this.chkEditorCopyAudio.checked = !!this.imageSettings.editorCopyAudio;
+    if (this.effectsExportChromaSelect) this.effectsExportChromaSelect.value = this.imageSettings.effectsExportChroma;
     if (this.previewQualitySelect) this.previewQualitySelect.value = normalizePreviewQuality(this.imageSettings.previewQuality);
     if (this.captureTimerSelect) this.captureTimerSelect.value = String(this.imageSettings.captureTimerSeconds);
     if (this.selMobileCaptureTimer) this.selMobileCaptureTimer.value = String(this.imageSettings.captureTimerSeconds);
@@ -568,6 +583,7 @@ export function applyStorageMixin(proto) {
     if (this.sldQualityEnhancerStrength) this.sldQualityEnhancerStrength.value = String(this.imageSettings.qualityEnhancerStrength);
     if (this.valQualityEnhancerStrength) this.valQualityEnhancerStrength.textContent = `${this.imageSettings.qualityEnhancerStrength}%`;
     this.updateQualityEnhancerControls();
+    this.updateEditorExportControls?.();
     this.updateBWDependentControls();
   }
 
@@ -633,6 +649,38 @@ export function applyStorageMixin(proto) {
       });
     }
 
+    if (this.videoExportModeSelect) {
+      this.videoExportModeSelect.addEventListener('change', (e) => {
+        this.imageSettings.editorExportMode = ['full', 'effects-chroma'].includes(e.target.value) ? e.target.value : 'full';
+        this.updateEditorExportControls?.();
+        this.updateVideoEditorUI?.();
+        this.saveImageSettings();
+      });
+    }
+
+    if (this.editorExportFormatSelect) {
+      this.editorExportFormatSelect.addEventListener('change', (e) => {
+        this.imageSettings.editorExportFormat = ['auto', 'mp4', 'webm'].includes(e.target.value) ? e.target.value : 'auto';
+        this.updateVideoEditorUI?.();
+        this.saveImageSettings();
+      });
+    }
+
+    if (this.chkEditorCopyAudio) {
+      this.chkEditorCopyAudio.addEventListener('change', (e) => {
+        this.imageSettings.editorCopyAudio = !!e.target.checked;
+        this.updateVideoEditorUI?.();
+        this.saveImageSettings();
+      });
+    }
+
+    if (this.effectsExportChromaSelect) {
+      this.effectsExportChromaSelect.addEventListener('change', (e) => {
+        this.imageSettings.effectsExportChroma = ['green', 'blue'].includes(e.target.value) ? e.target.value : 'green';
+        this.saveImageSettings();
+      });
+    }
+
     if (this.previewQualitySelect) {
       this.previewQualitySelect.addEventListener('change', (e) => {
         this.imageSettings.previewQuality = normalizePreviewQuality(e.target.value);
@@ -667,6 +715,10 @@ export function applyStorageMixin(proto) {
           ...this.DEFAULT_IMAGE_SETTINGS,
           jpegQuality: this.imageSettings.jpegQuality,
           videoFormat: this.imageSettings.videoFormat,
+          editorExportFormat: this.imageSettings.editorExportFormat,
+          editorExportMode: this.imageSettings.editorExportMode,
+          editorCopyAudio: this.imageSettings.editorCopyAudio,
+          effectsExportChroma: this.imageSettings.effectsExportChroma,
           previewQuality: this.imageSettings.previewQuality,
           qualityEnhancer: this.imageSettings.qualityEnhancer,
           qualityEnhancerStrength: this.imageSettings.qualityEnhancerStrength,

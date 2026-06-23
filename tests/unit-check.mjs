@@ -14,6 +14,8 @@ import {
   calculateFrameRateFromMediaTimes,
   calculateFrameTimestampUs,
   calculateSourceAverageBitrate,
+  canCopyAudioCodecToFormat,
+  chooseEditorExportFormat,
   diagnoseVideoExportSupport,
   formatExportDebugInfo,
   formatObservedExportProgress,
@@ -24,6 +26,7 @@ import {
 } from '../js/video-export.mjs';
 import { RENDER_PROFILES } from '../js/app/render-engine.mjs';
 import { calculateTimelineTickInterval } from '../js/app/timeline-view.mjs';
+import { applyEffectsMixin } from '../js/app/effects.mjs';
 import { applyLocalvideoeditorMixin } from '../js/app/video-editor.mjs';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -173,6 +176,28 @@ function checkBlinkDetectionUsesRefinedEyeLandmarks() {
   assert.equal(effect._earSmoothing, 0.35, 'eye smoothing must prioritize low latency');
 }
 
+async function checkBlinkCallbackClearsWhenBlobDisabled() {
+  const app = {
+    chkBlobTracking: { checked: false },
+    blobTrackingEffect: {},
+    blinkDetectionEffect: {
+      callback: () => {},
+      setBlinkCallback(callback) { this.callback = callback; },
+    },
+    effectManager: { removeEffect(effect) { assert.equal(effect, app.blobTrackingEffect); } },
+    effectsInfo: { textContent: '' },
+    colorPickSection: { classList: { add() {}, remove() {} } },
+    syncQuickDetectorSettingsFromEffects() {},
+    saveActiveEffectSettings() {},
+    renderEffectConfig() {},
+    updateEffectsInfo() {},
+  };
+  applyEffectsMixin(app);
+  await app.toggleEffect('blob');
+  assert.equal(app.blobTrackingEffect, null);
+  assert.equal(app.blinkDetectionEffect.callback, null, 'blink must stop calling color tracking when color detector is disabled');
+}
+
 function checkFaceDetectionUsesRefinedEyeLandmarks() {
   let options;
   class FaceMesh {
@@ -223,6 +248,14 @@ function checkVideoTimelineIntervals() {
   timeline.upsert({ ...look, startTime: 3, endTime: 6 });
   timeline.remove(face.id);
   assert.equal(timeline.activeAt(6).length, 0);
+
+  const added = timeline.toggleMarker(5.123, 0.08);
+  assert.equal(added.action, 'added');
+  assert.equal(timeline.markers[0].time, 5.123);
+  assert.ok(timeline.getSnapPoints().includes(5.123), 'markers must be timeline snap points');
+  const removed = timeline.toggleMarker(5.16, 0.08);
+  assert.equal(removed.action, 'removed');
+  assert.equal(timeline.markers.length, 0);
 }
 
 function checkTimelineClipSnappingHelper() {
@@ -231,7 +264,9 @@ function checkTimelineClipSnappingHelper() {
       trimStart: 0,
       trimEnd: 10,
       duration: 10,
+      markers: [{ id: 'm1', time: 2.5 }],
       items: [{ id: 'a', type: 'blob', startTime: 1, endTime: 4 }],
+      getSnapPoints() { return [this.trimStart, this.trimEnd, this.markers[0].time, 1, 4]; },
     },
     videoEl: { currentTime: 6 },
     chkTimelineSnap: { checked: true },
@@ -249,6 +284,7 @@ function checkTimelineClipSnappingHelper() {
     { startTime: 6, endTime: 8 },
     'new clips must snap to the playhead when it is closer'
   );
+  assert.equal(app.snapTimelineTime(2.46), 2.5, 'timeline cursor must snap to markers');
   assert.deepEqual(
     app.getTimelineRowStyle(2),
     { top: 'calc(2 * 20%)', height: '20%' },
@@ -263,15 +299,19 @@ function checkEditorHistoryUndoRedo() {
   const timeline = new VideoTimeline(12);
   timeline.setTrim(1, 11);
   timeline.add('look', 2, 5, { contrast: 110 });
+  timeline.toggleMarker(6, 0.08);
   history.push(timeline);
   timeline.setTrim(2, 10);
   timeline.items[0].startTime = 3;
+  timeline.markers[0].time = 7;
   assert.ok(history.undo(timeline));
   assert.equal(timeline.trimStart, 1);
   assert.equal(timeline.items[0].startTime, 2);
+  assert.equal(timeline.markers[0].time, 6);
   assert.ok(history.redo(timeline));
   assert.equal(timeline.trimStart, 2);
   assert.equal(timeline.items[0].startTime, 3);
+  assert.equal(timeline.markers[0].time, 7);
 }
 
 function checkPreviewProcessingResolutionContract() {
@@ -372,6 +412,144 @@ async function checkVideoExportDiagnostics() {
   assert.equal(supported.supported, true);
   assert.equal(supported.codec, 'vp8');
   assert.equal(supported.muxerCodec, 'V_VP8');
+  assert.equal(supported.format, 'webm');
+
+  class AvcEncoder {
+    static async isConfigSupported(config) {
+      return { supported: config.codec.startsWith('avc1.'), config };
+    }
+  }
+  const mp4 = await diagnoseVideoExportSupport({
+    width: 1920,
+    height: 1080,
+    fps: 30,
+    bitrate: 12_000_000,
+    requestedFormat: 'auto',
+    audioCodec: 'aac',
+    copyAudio: true,
+    VideoEncoderImpl: AvcEncoder,
+    VideoFrameImpl: class VideoFrame {},
+  });
+  assert.equal(mp4.supported, true);
+  assert.equal(mp4.format, 'mp4', 'auto export may use MP4 when WebM is unavailable');
+  assert.equal(mp4.extension, 'mp4');
+  assert.equal(mp4.mediaCodec, 'avc');
+  assert.equal(mp4.audioCopySupported, true);
+
+  class FastWebmAndMp4Encoder {
+    static async isConfigSupported(config) {
+      return { supported: config.codec === 'vp8' || config.codec.startsWith('avc1.'), config };
+    }
+  }
+  const autoFast = await diagnoseVideoExportSupport({
+    requestedFormat: 'auto',
+    VideoEncoderImpl: FastWebmAndMp4Encoder,
+    VideoFrameImpl: class VideoFrame {},
+  });
+  assert.equal(autoFast.format, 'webm', 'auto export must prefer fast WebM when both containers are available');
+
+  const forcedMp4Unsupported = await diagnoseVideoExportSupport({
+    requestedFormat: 'mp4',
+    VideoEncoderImpl: Vp8Encoder,
+    VideoFrameImpl: class VideoFrame {},
+  });
+  assert.equal(forcedMp4Unsupported.supported, false, 'forced MP4 must not silently fall back');
+
+  const effectsOnly = await diagnoseVideoExportSupport({
+    requestedFormat: 'mp4',
+    mode: 'effects-chroma',
+    VideoEncoderImpl: Vp8Encoder,
+    VideoFrameImpl: class VideoFrame {},
+  });
+  assert.equal(effectsOnly.supported, true);
+  assert.equal(effectsOnly.format, 'webm', 'effects-only chroma export must force WebM');
+  assert.equal(effectsOnly.audioReason, 'effects_export_has_no_audio');
+}
+
+function checkEditorExportFormatHelpers() {
+  assert.equal(chooseEditorExportFormat({ requestedFormat: 'auto', mp4Supported: true, webmSupported: true }), 'webm');
+  assert.equal(chooseEditorExportFormat({ requestedFormat: 'auto', mp4Supported: false, webmSupported: true }), 'webm');
+  assert.equal(chooseEditorExportFormat({ requestedFormat: 'mp4', mp4Supported: false, webmSupported: true }), '');
+  assert.equal(chooseEditorExportFormat({ requestedFormat: 'mp4', mode: 'effects-chroma', mp4Supported: true, webmSupported: true }), 'webm');
+  assert.equal(canCopyAudioCodecToFormat('aac', 'mp4'), true);
+  assert.equal(canCopyAudioCodecToFormat('mp4a.40.2', 'mp4'), true);
+  assert.equal(canCopyAudioCodecToFormat('opus', 'webm'), true);
+  assert.equal(canCopyAudioCodecToFormat('aac', 'webm'), false);
+  assert.equal(canCopyAudioCodecToFormat('opus', 'mp4'), false);
+}
+
+function checkPaletteDropUsesEffectTypeRow() {
+  let addedType = '';
+  const chip = {
+    classList: { remove() {} },
+    hasPointerCapture: () => false,
+  };
+  const app = {
+    TIMELINE_EFFECT_META: {
+      blob: { label: 'Color', trackLabel: 'COLOR', row: 2 },
+      face: { label: 'Caras', trackLabel: 'CARAS', row: 3 },
+    },
+    paletteDragState: { type: 'blob', chip, moved: true },
+    videoSourceFile: {},
+    removeTimelineDragGhost() {},
+    clearTimelineDropTargets() {},
+    updateEffectTrackHighlight() {},
+    showStatus() {},
+    hideStatus() {},
+  };
+  applyLocalvideoeditorMixin(app);
+  app.getTimelineRowFromClientY = () => 'face';
+  app.getTimelineTime = () => 4;
+  app.addTimelineEffectClip = (type, time) => {
+    addedType = `${type}:${time}`;
+  };
+  app.removeTimelineDragGhost = () => {};
+  app.finishPaletteDrag({ pointerId: 1, clientX: 100, clientY: 50 });
+  assert.equal(addedType, 'blob:4', 'palette drops must use the dragged effect type, not the row under the pointer');
+}
+
+async function checkEffectsOnlyExportSkipsBaseRender() {
+  const app = {
+    videoTimeline: { trimStart: 2 },
+    imageSettings: {
+      editorExportMode: 'effects-chroma',
+      effectsExportChroma: 'green',
+      qualityEnhancer: true,
+    },
+    videoExportTotalFrames: 1,
+    recordingCanvas: { width: 100, height: 100 },
+    recordingCtx: {},
+    progressCalls: [],
+    lookCalls: 0,
+    baseRenderCalls: 0,
+    effectsOnlyCalls: 0,
+    updateVideoExportProgress(done, total, fps, meta) {
+      this.progressCalls.push(meta.stage);
+    },
+    seekVideoForExport: async (time) => {
+      assert.equal(time, 2, 'effects-only export should seek to trim start for frame zero');
+    },
+    applyVideoTimelineLook() {
+      this.lookCalls += 1;
+    },
+    syncVideoTimelineDetectorsAt: async () => {},
+    ensureRecordingCanvas() {},
+    renderSourceFrameBuffer() {
+      this.baseRenderCalls += 1;
+    },
+    renderEffectsOnlyFrame(canvas, ctx, chromaColor) {
+      assert.equal(chromaColor, '#00ff00');
+      this.effectsOnlyCalls += 1;
+    },
+  };
+  applyLocalvideoeditorMixin(app);
+  app.seekVideoForExport = async (time) => {
+    assert.equal(time, 2, 'effects-only export should seek to trim start for frame zero');
+  };
+  await app.renderVideoExportFrame(0, 30, { mode: 'effects-chroma', chromaColor: '#00ff00' });
+  assert.equal(app.lookCalls, 0, 'effects-only export must not render LOOK as a video base transform');
+  assert.equal(app.baseRenderCalls, 0, 'effects-only export must not call the full video-base renderer');
+  assert.equal(app.effectsOnlyCalls, 1);
 }
 
 function checkObservedExportProgressAndTimelineTicks() {
@@ -390,6 +568,7 @@ await checkCameraStreamCleanup();
 checkCameraPreservesSupportedFps();
 checkReusableMorphologyBuffers();
 checkBlinkDetectionUsesRefinedEyeLandmarks();
+await checkBlinkCallbackClearsWhenBlobDisabled();
 checkFaceDetectionUsesRefinedEyeLandmarks();
 checkVideoTimelineIntervals();
 checkTimelineClipSnappingHelper();
@@ -397,5 +576,8 @@ checkEditorHistoryUndoRedo();
 checkPreviewProcessingResolutionContract();
 checkVideoExportTimingAndQuality();
 await checkVideoExportDiagnostics();
+checkEditorExportFormatHelpers();
+checkPaletteDropUsesEffectTypeRow();
+await checkEffectsOnlyExportSkipsBaseRender();
 checkObservedExportProgressAndTimelineTicks();
 console.log('Unit check passed.');

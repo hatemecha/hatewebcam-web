@@ -54,10 +54,10 @@ class BlinkDetection {
                 return;
             }
 
-            const faceMeshVersion = '0.4.1633559619';
+            const faceMeshBaseUrl = globalThis.HATEWEBCAM_MEDIAPIPE_FACE_MESH_BASE_URL || 'vendor/mediapipe/face_mesh';
             this.faceMesh = new FaceMesh({
                 locateFile: (file) => {
-                    return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@${faceMeshVersion}/${file}`;
+                    return `${faceMeshBaseUrl}/${file}`;
                 }
             });
 
