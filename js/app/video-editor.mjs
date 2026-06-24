@@ -123,6 +123,7 @@ export function applyLocalvideoeditorMixin(proto) {
     this.selectedVideoEffectId = '';
     this.selectedVideoEffectIds = new Set();
     this.timelineClipboard = null;
+    this.updateTimelineClipboardStatus();
     this.appliedTimelineItemIds = {};
     this.timelineDetectorSyncPromise = null;
     this.timelineDetectorSyncForce = false;
@@ -882,6 +883,30 @@ export function applyLocalvideoeditorMixin(proto) {
     }
     this.renderVideoTimeline();
     this.updateVideoEffectInspector();
+    this.updateAdjustmentsPanelState();
+    this.updateEffectTrackHighlight();
+  };
+
+  proto.selectVideoEffectsByType = function (type) {
+    if (!type || !this.videoSourceFile) return;
+    const ids = this.videoTimeline.items
+      .filter((item) => item.type === type)
+      .map((item) => item.id);
+    if (!ids.length) return;
+    this.selectedVideoEffectIds = new Set(ids);
+    this.selectedVideoEffectId = ids[0];
+    const item = this.getSelectedVideoEffectItem();
+    if (item) {
+      this.videoEffectType.value = item.type;
+      this.videoEffectStart.value = item.startTime.toFixed(2);
+      this.videoEffectEnd.value = item.endTime.toFixed(2);
+      this.applyVideoEffectItemConfig(item);
+    }
+    this.renderVideoTimeline();
+    this.updateVideoEffectInspector();
+    this.updateAdjustmentsPanelState();
+    this.updateEffectTrackHighlight();
+    this.setInspectorTab('effect');
   };
 
   proto.selectAllVideoEffects = function () {
@@ -891,6 +916,8 @@ export function applyLocalvideoeditorMixin(proto) {
     this.selectedVideoEffectId = this.videoTimeline.items[0]?.id || '';
     this.renderVideoTimeline();
     this.updateVideoEffectInspector();
+    this.updateAdjustmentsPanelState();
+    this.updateEffectTrackHighlight();
   };
 
   proto.getSelectedVideoEffectItems = function () {
@@ -930,6 +957,9 @@ export function applyLocalvideoeditorMixin(proto) {
       })),
     };
     if (cut) this.deleteSelectedVideoEffect();
+    this.updateTimelineClipboardStatus(
+      `Portapapeles: ${items.length} clip${items.length === 1 ? '' : 's'} ${cut ? 'cortado' : 'copiado'}. Ctrl+V pega clips, Shift+Ctrl+V pega ajustes.`,
+    );
   };
 
   proto.pasteVideoEffects = function (settingsOnly = false) {
@@ -953,6 +983,9 @@ export function applyLocalvideoeditorMixin(proto) {
         });
       });
       this.renderVideoTimeline();
+      this.updateTimelineClipboardStatus(
+        `Ajustes pegados en ${selectedItems.length} clip${selectedItems.length === 1 ? '' : 's'}.`,
+      );
       void this.syncVideoTimelineEffects(true);
       return;
     }
@@ -988,6 +1021,7 @@ export function applyLocalvideoeditorMixin(proto) {
       this.selectedVideoEffectId = newIds[0] || '';
       this.renderVideoTimeline();
       this.updateVideoEffectInspector();
+      this.updateTimelineClipboardStatus(`Clips pegados: ${newIds.length}.`);
       void this.syncVideoTimelineEffects(true);
     } catch (err) {
       this.showStatus(this.videoEditorStatus, err.message, 'error');
@@ -1019,6 +1053,12 @@ export function applyLocalvideoeditorMixin(proto) {
     if (this.btnDeleteVideoEffect)
       this.btnDeleteVideoEffect.disabled = !editing;
     if (this.btnOpenEffectAdjust) this.btnOpenEffectAdjust.disabled = !editing;
+  };
+
+  proto.updateTimelineClipboardStatus = function (message = '') {
+    if (!this.timelineClipboardStatus) return;
+    this.timelineClipboardStatus.textContent = message;
+    this.timelineClipboardStatus.classList.toggle('is-active', !!message);
   };
 
   proto.mountVideoEffectsControls = function () {
@@ -1188,6 +1228,7 @@ export function applyLocalvideoeditorMixin(proto) {
     });
     this.updateTimelineHint();
     this.updateEffectTrackHighlight();
+    if (tool !== 'cut') this.hideTimelineCutGuide();
     if (
       this.sourceMode === 'video' &&
       document
@@ -1206,7 +1247,8 @@ export function applyLocalvideoeditorMixin(proto) {
     }
     const hints = {
       select:
-        'Arrastrá efectos, mové clips o presioná M para marcar el cursor.',
+        'Arrastrá para seleccionar varios, mové clips o presioná M para marcar.',
+      cut: 'La línea roja marca el corte. Click sobre un clip de efecto.',
       trim: 'Arrastrá los bordes rojos en VIDEO.',
     };
     this.timelineHintText.textContent = hints[this.editorTool] || hints.select;
@@ -1266,9 +1308,15 @@ export function applyLocalvideoeditorMixin(proto) {
   };
 
   proto.getTimelineTrackAreaBounds = function () {
-    if (!this.timelineTrackArea) return { left: 0, width: 1 };
+    if (!this.timelineTrackArea)
+      return { left: 0, top: 0, width: 1, height: 1 };
     const rect = this.timelineTrackArea.getBoundingClientRect();
-    return { left: rect.left, width: Math.max(1, rect.width) };
+    return {
+      left: rect.left,
+      top: rect.top,
+      width: Math.max(1, rect.width),
+      height: Math.max(1, rect.height),
+    };
   };
 
   proto.snapTimelineTime = function (time) {
@@ -1497,15 +1545,85 @@ export function applyLocalvideoeditorMixin(proto) {
       return;
     }
 
-    this.seekVideo(this.getTimelineTime(event.clientX));
-
     if (
       this.editorTool === 'select' &&
       event.target.closest('.timeline-track-effects') &&
       !event.target.closest('.timeline-item')
     ) {
-      this.selectVideoEffect('');
+      this.beginTimelineBoxSelection(event);
+      return;
     }
+
+    this.seekVideo(this.getTimelineTime(event.clientX));
+  };
+
+  proto.beginTimelineBoxSelection = function (event) {
+    const bounds = this.getTimelineTrackAreaBounds();
+    const originX = this.clamp(event.clientX - bounds.left, 0, bounds.width);
+    const originY = this.clamp(event.clientY - bounds.top, 0, bounds.height);
+    let dragged = false;
+
+    const draw = (moveEvent) => {
+      const x = this.clamp(moveEvent.clientX - bounds.left, 0, bounds.width);
+      const y = this.clamp(moveEvent.clientY - bounds.top, 0, bounds.height);
+      if (Math.abs(x - originX) > 4 || Math.abs(y - originY) > 4)
+        dragged = true;
+      if (!dragged || !this.timelineSelection) return;
+      this.timelineSelection.classList.add('is-active');
+      this.timelineSelection.style.left = `${Math.min(originX, x)}px`;
+      this.timelineSelection.style.top = `${Math.min(originY, y)}px`;
+      this.timelineSelection.style.width = `${Math.abs(x - originX)}px`;
+      this.timelineSelection.style.height = `${Math.abs(y - originY)}px`;
+    };
+
+    const end = (upEvent) => {
+      document.removeEventListener('pointermove', draw);
+      document.removeEventListener('pointerup', end);
+      this.timelineSelection?.classList.remove('is-active');
+      if (!dragged) {
+        this.seekVideo(this.getTimelineTime(event.clientX));
+        this.selectVideoEffect('');
+        return;
+      }
+      const endX = this.clamp(upEvent.clientX - bounds.left, 0, bounds.width);
+      const endY = this.clamp(upEvent.clientY - bounds.top, 0, bounds.height);
+      this.selectVideoEffectsInRect(
+        Math.min(originX, endX),
+        Math.max(originX, endX),
+        Math.min(originY, endY),
+        Math.max(originY, endY),
+        bounds,
+      );
+    };
+
+    document.addEventListener('pointermove', draw);
+    document.addEventListener('pointerup', end, { once: true });
+  };
+
+  proto.selectVideoEffectsInRect = function (left, right, top, bottom, bounds) {
+    const start = (left / bounds.width) * this.videoTimeline.duration;
+    const end = (right / bounds.width) * this.videoTimeline.duration;
+    const rowHeight = bounds.height / 5;
+    const ids = this.videoTimeline.items
+      .filter((item) => {
+        const row = this.TIMELINE_EFFECT_META[item.type]?.row || 1;
+        const rowTop = (row - 1) * rowHeight;
+        const rowBottom = row * rowHeight;
+        return (
+          item.startTime <= end &&
+          item.endTime >= start &&
+          rowBottom >= top &&
+          rowTop <= bottom
+        );
+      })
+      .map((item) => item.id);
+    this.selectedVideoEffectIds = new Set(ids);
+    this.selectedVideoEffectId = ids[0] || '';
+    this.renderVideoTimeline();
+    this.updateVideoEffectInspector();
+    this.updateAdjustmentsPanelState();
+    this.updateEffectTrackHighlight();
+    if (ids.length) this.setInspectorTab('effect');
   };
 
   proto.beginTrimDrag = function (event, edge) {
@@ -1555,6 +1673,10 @@ export function applyLocalvideoeditorMixin(proto) {
       return;
     event.preventDefault();
     event.stopPropagation();
+    if (this.editorTool === 'cut') {
+      this.splitTimelineEffectClipAtEvent(event, item);
+      return;
+    }
     if (this.editorTool !== 'select')
       this.setEditorTool('select', { skipTab: true });
     if (event.shiftKey) {
@@ -1642,6 +1764,118 @@ export function applyLocalvideoeditorMixin(proto) {
     };
     document.addEventListener('pointermove', move);
     document.addEventListener('pointerup', end, { once: true });
+  };
+
+  proto.splitTimelineEffectClipAtEvent = function (event, item) {
+    try {
+      const time = this.getTimelineTime(event.clientX);
+      if (time <= item.startTime + 0.05 || time >= item.endTime - 0.05)
+        throw new Error('Elegí un punto dentro del clip.');
+      this.pushTimelineHistory();
+      const [, right] = this.videoTimeline.split(item.id, time);
+      this.selectedVideoEffectIds = new Set([right.id]);
+      this.selectedVideoEffectId = right.id;
+      this.renderVideoTimeline();
+      this.updateVideoEffectInspector();
+      this.updateAdjustmentsPanelState();
+      this.updateEffectTrackHighlight();
+      void this.syncVideoTimelineEffects(true);
+    } catch (err) {
+      this.showStatus(this.videoEditorStatus, err.message, 'error');
+    }
+  };
+
+  proto.updateTimelineCutGuide = function (event) {
+    if (
+      this.editorTool !== 'cut' ||
+      !this.videoSourceFile ||
+      this.isVideoExporting ||
+      !this.timelineCutGuide
+    ) {
+      this.hideTimelineCutGuide();
+      return;
+    }
+    const bounds = this.getTimelineTrackAreaBounds();
+    const x = this.clamp(event.clientX - bounds.left, 0, bounds.width);
+    this.timelineCutGuide.style.left = `${x}px`;
+    this.timelineCutGuide.classList.add('is-active');
+  };
+
+  proto.hideTimelineCutGuide = function () {
+    this.timelineCutGuide?.classList.remove('is-active');
+  };
+
+  proto.splitAllEffectsAtMarkers = function () {
+    if (!this.videoSourceFile || this.isVideoExporting) return;
+    const times = Array.from(
+      new Set(
+        (this.videoTimeline.markers || [])
+          .map((marker) => this.roundTimelineTime(marker.time))
+          .filter(
+            (time) =>
+              time > this.videoTimeline.trimStart &&
+              time < this.videoTimeline.trimEnd,
+          ),
+      ),
+    ).sort((a, b) => a - b);
+    if (!times.length) {
+      this.showStatus(
+        this.videoEditorStatus,
+        'No hay marcadores para cortar.',
+        'error',
+      );
+      return;
+    }
+
+    const hasCuts = times.some((time) =>
+      this.videoTimeline.items.some(
+        (item) => time > item.startTime + 0.05 && time < item.endTime - 0.05,
+      ),
+    );
+    if (!hasCuts) {
+      this.showStatus(
+        this.videoEditorStatus,
+        'Ningún efecto cruza esos marcadores.',
+        'error',
+      );
+      return;
+    }
+
+    let cuts = 0;
+    try {
+      this.pushTimelineHistory();
+      times.forEach((time) => {
+        [...this.videoTimeline.items].forEach((item) => {
+          const current = this.videoTimeline.items.find(
+            (candidate) => candidate.id === item.id,
+          );
+          if (
+            current &&
+            time > current.startTime + 0.05 &&
+            time < current.endTime - 0.05
+          ) {
+            this.videoTimeline.split(current.id, time);
+            cuts += 1;
+          }
+        });
+      });
+      if (!cuts) throw new Error('Ningún efecto cruza esos marcadores.');
+      this.selectedVideoEffectIds = new Set();
+      this.selectedVideoEffectId = '';
+      this.renderVideoTimeline();
+      this.updateVideoEffectInspector();
+      this.updateAdjustmentsPanelState();
+      this.updateEffectTrackHighlight();
+      void this.syncVideoTimelineEffects(true);
+      this.showStatus(
+        this.videoEditorStatus,
+        `Cortes creados: ${cuts}.`,
+        'success',
+      );
+      setTimeout(() => this.hideStatus(this.videoEditorStatus), 1200);
+    } catch (err) {
+      this.showStatus(this.videoEditorStatus, err.message, 'error');
+    }
   };
 
   proto.beginPlayheadDrag = function (event) {
@@ -1751,7 +1985,7 @@ export function applyLocalvideoeditorMixin(proto) {
       return;
     }
     if (event.key.toLowerCase() === 't') {
-      this.setEditorTool('trim');
+      this.setEditorTool('cut');
     }
   };
 
@@ -1978,6 +2212,8 @@ export function applyLocalvideoeditorMixin(proto) {
       this.videoTrimStart.disabled = !loaded || this.isVideoExporting;
     if (this.videoTrimEnd)
       this.videoTrimEnd.disabled = !loaded || this.isVideoExporting;
+    if (this.btnCutAtMarkers)
+      this.btnCutAtMarkers.disabled = !loaded || this.isVideoExporting;
     if (this.btnChooseVideo) {
       this.btnChooseVideo.innerHTML = loaded
         ? '<i class="fa-solid fa-folder-open"></i> Cambiar video'

@@ -365,10 +365,20 @@
                 type="button"
                 class="video-tool-btn"
                 id="btnToolTrim"
-                data-tool="trim"
-                title="Recortar (T)"
+                data-tool="cut"
+                title="Cortar clips (T)"
               >
-                <i class="fa-solid fa-scissors"></i><span>Recortar</span>
+                <i class="fa-solid fa-scissors"></i><span>Cortar</span>
+              </button>
+              <button
+                type="button"
+                class="video-tool-btn timeline-marker-cut-btn"
+                id="btnCutAtMarkers"
+                title="Cortar todos los efectos en cada marcador"
+                disabled
+              >
+                <i class="fa-solid fa-timeline"></i>
+                <span>En marcadores</span>
               </button>
             </div>
             <div class="video-transport" aria-label="Reproducción">
@@ -550,6 +560,7 @@
                     type="button"
                     class="timeline-track-label"
                     data-adjust-context="blob"
+                    data-effect-type="blob"
                     title="Ajustes de color"
                   >
                     COLOR
@@ -558,6 +569,7 @@
                     type="button"
                     class="timeline-track-label"
                     data-adjust-context="face"
+                    data-effect-type="face"
                     title="Ajustes de caras"
                   >
                     CARAS
@@ -566,6 +578,7 @@
                     type="button"
                     class="timeline-track-label"
                     data-adjust-context="blink"
+                    data-effect-type="blink"
                     title="Ajustes de ojos"
                   >
                     OJOS
@@ -626,6 +639,8 @@
                       aria-label="Mover cursor de reproducción"
                     ></button>
                   </div>
+                  <div class="timeline-cut-guide" id="timelineCutGuide"></div>
+                  <div class="timeline-selection" id="timelineSelection"></div>
                   <div class="timeline-markers" id="timelineMarkers"></div>
                   <div class="timeline-items" id="timelineItems"></div>
                 </div>
@@ -732,6 +747,10 @@
               Ajustes
             </button>
           </div>
+          <div
+            class="inspector-clipboard-status mono"
+            id="timelineClipboardStatus"
+          ></div>
           <div class="video-inspector-panels">
             <div
               class="video-inspector-panel is-active"

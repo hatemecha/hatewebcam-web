@@ -39,6 +39,7 @@ export function setupDom(app) {
   app.timelineTrimStartHandle = $('#timelineTrimStartHandle');
   app.timelineTrimEndHandle = $('#timelineTrimEndHandle');
   app.timelinePlayhead = $('#timelinePlayhead');
+  app.timelineSelection = $('#timelineSelection');
   app.timelineMarkers = $('#timelineMarkers');
   app.timelineItems = $('#timelineItems');
   app.timelineEffectPalette = $('#timelineEffectPalette');
@@ -83,6 +84,7 @@ export function setupDom(app) {
   app.btnCloseVideoExportModal = $('#btnCloseVideoExportModal');
   app.btnToolSelect = $('#btnToolSelect');
   app.btnToolTrim = $('#btnToolTrim');
+  app.btnCutAtMarkers = $('#btnCutAtMarkers');
   app.btnTimelineZoomIn = $('#btnTimelineZoomIn');
   app.btnTimelineZoomOut = $('#btnTimelineZoomOut');
   app.timelineZoomInput = $('#timelineZoom');
@@ -96,7 +98,9 @@ export function setupDom(app) {
   app.timelineTrimOutsideStart = $('#timelineTrimOutsideStart');
   app.timelineTrimOutsideEnd = $('#timelineTrimOutsideEnd');
   app.timelinePlayheadHandle = $('#timelinePlayheadHandle');
+  app.timelineCutGuide = $('#timelineCutGuide');
   app.timelineHintText = $('#timelineHintText');
+  app.timelineClipboardStatus = $('#timelineClipboardStatus');
   app.chkTimelineSnap = $('#chkTimelineSnap');
   app.btnEditorUndo = $('#btnEditorUndo');
   app.btnEditorRedo = $('#btnEditorRedo');

@@ -84,6 +84,39 @@ class VideoTimeline {
     this.items = this.items.filter((item) => item.id !== id);
   }
 
+  split(id, time, minSpan = 0.05) {
+    const index = this.items.findIndex((item) => item.id === id);
+    if (index === -1) throw new Error('Clip no encontrado.');
+    const item = this.items[index];
+    const splitTime = this.#time(time);
+    const min = Math.max(0, Number(minSpan) || 0);
+    if (splitTime <= item.startTime + min || splitTime >= item.endTime - min) {
+      throw new Error('Elegí un punto dentro del clip.');
+    }
+    const cloneConfig = (config) =>
+      typeof structuredClone === 'function'
+        ? structuredClone(config || {})
+        : JSON.parse(JSON.stringify(config || {}));
+    const left = {
+      ...item,
+      endTime: splitTime,
+      config: cloneConfig(item.config),
+    };
+    const right = {
+      ...item,
+      id:
+        typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random()}`,
+      startTime: splitTime,
+      config: cloneConfig(item.config),
+    };
+    this.items[index] = left;
+    this.items.push(right);
+    this.items.sort((a, b) => a.startTime - b.startTime);
+    return [left, right];
+  }
+
   addMarker(marker = {}, threshold = 0.01) {
     const saved = this.#marker(marker);
     const maxDelta = Math.max(0, Number(threshold) || 0);

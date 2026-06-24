@@ -429,6 +429,14 @@ function checkVideoTimelineIntervals() {
   timeline.remove(face.id);
   assert.equal(timeline.activeAt(6).length, 0);
 
+  const [left, right] = timeline.split(look.id, 4);
+  assert.equal(left.startTime, 3);
+  assert.equal(left.endTime, 4);
+  assert.equal(right.startTime, 4);
+  assert.equal(right.endTime, 6);
+  assert.equal(right.config.contrast, 120);
+  assert.throws(() => timeline.split(right.id, 4.01), /dentro del clip/);
+
   const added = timeline.toggleMarker(5.123, 0.08);
   assert.equal(added.action, 'added');
   assert.equal(timeline.markers[0].time, 5.123);
@@ -732,6 +740,42 @@ function checkTimelineClipboardBasics() {
   assert.equal(timeline.items[1].startTime, 5);
   assert.equal(timeline.items[1].endTime, 6);
   assert.deepEqual(timeline.items[1].config, { contrast: 120 });
+}
+
+function checkSplitAllEffectsAtMarkers() {
+  const VideoTimeline = loadClass('js/video-timeline.js', 'VideoTimeline');
+  const timeline = new VideoTimeline(10);
+  timeline.add('look', 0, 10, { contrast: 120 });
+  timeline.add('face', 2, 8, { showBox: true });
+  timeline.addMarker({ time: 3 });
+  timeline.addMarker({ time: 6 });
+  const app = {
+    videoTimeline: timeline,
+    videoSourceFile: {},
+    isVideoExporting: false,
+    selectedVideoEffectId: '',
+    selectedVideoEffectIds: new Set(),
+    timelineHistorySuspended: false,
+    editorHistory: { push() {} },
+    updateEditorHistoryButtons() {},
+    renderVideoTimeline() {},
+    updateVideoEffectInspector() {},
+    updateAdjustmentsPanelState() {},
+    updateEffectTrackHighlight() {},
+    syncVideoTimelineEffects() {},
+    showStatus() {},
+    hideStatus() {},
+  };
+  applyLocalvideoeditorMixin(app);
+  app.splitAllEffectsAtMarkers();
+  assert.equal(timeline.items.length, 6);
+  assert.deepEqual(
+    Array.from(
+      timeline.items,
+      (item) => `${item.type}:${item.startTime}-${item.endTime}`,
+    ),
+    ['look:0-3', 'face:2-3', 'look:3-6', 'face:3-6', 'look:6-10', 'face:6-8'],
+  );
 }
 
 async function checkSequentialExportAdvance() {
@@ -1650,6 +1694,7 @@ checkStableExportDefaults();
 checkTimelineClipSnappingHelper();
 checkTimelineMarkerIntervalsForInsertion();
 checkTimelineClipboardBasics();
+checkSplitAllEffectsAtMarkers();
 await checkSequentialExportAdvance();
 await checkExportPlaybackPausesAtTarget();
 await checkExportSeekFallsBackWhenSeekedIsMissing();

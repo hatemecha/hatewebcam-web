@@ -189,7 +189,12 @@ export function applyEventsMixin(proto) {
       );
     if (this.btnToolTrim)
       this.btnToolTrim.addEventListener('click', () =>
-        this.setEditorTool('trim'),
+        this.setEditorTool('cut'),
+      );
+    if (this.btnCutAtMarkers)
+      this.btnCutAtMarkers.addEventListener(
+        'click',
+        this.splitAllEffectsAtMarkers.bind(this),
       );
     if (this.btnTimelineZoomIn)
       this.btnTimelineZoomIn.addEventListener('click', () => {
@@ -251,7 +256,7 @@ export function applyEventsMixin(proto) {
     this.videoTimelineEl
       ?.querySelectorAll('.timeline-track-label[data-adjust-context]')
       .forEach((label) => {
-        label.addEventListener('click', () => {
+        label.addEventListener('click', (event) => {
           const context = label.dataset.adjustContext;
           const options = {};
           if (label.dataset.syncTool === 'trim') {
@@ -263,6 +268,9 @@ export function applyEventsMixin(proto) {
             options.syncEffectType = true;
             if (label.dataset.effectType)
               options.effectType = label.dataset.effectType;
+          }
+          if (label.dataset.effectType && !event.shiftKey) {
+            this.selectVideoEffectsByType(label.dataset.effectType);
           }
           this.openAdjustmentsForContext(context, options);
         });
@@ -284,6 +292,13 @@ export function applyEventsMixin(proto) {
         'pointerdown',
         this.beginTimelineSelection.bind(this),
       );
+    this.timelineTrackArea.addEventListener(
+      'pointermove',
+      this.updateTimelineCutGuide.bind(this),
+    );
+    this.timelineTrackArea.addEventListener('pointerleave', () =>
+      this.hideTimelineCutGuide(),
+    );
     this.timelineTrimStartHandle.addEventListener('pointerdown', (event) =>
       this.beginTrimDrag(event, 'start'),
     );
