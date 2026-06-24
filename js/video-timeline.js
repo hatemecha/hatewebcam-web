@@ -185,6 +185,53 @@ class VideoTimeline {
     ];
   }
 
+  toJSON() {
+    const clone = (value) =>
+      typeof structuredClone === 'function'
+        ? structuredClone(value)
+        : JSON.parse(JSON.stringify(value));
+    return {
+      trim: {
+        start: this.trimStart,
+        end: this.trimEnd,
+      },
+      items: this.items.map((item) => ({
+        ...item,
+        config: clone(item.config || {}),
+      })),
+      markers: this.markers.map((marker) => ({ ...marker })),
+    };
+  }
+
+  static fromJSON(data = {}, duration = 0) {
+    const timeline = new VideoTimeline(duration);
+    const trim = data.trim || {};
+    const trimStart = Number(trim.start ?? data.trimStart ?? 0);
+    const trimEnd = Number(trim.end ?? data.trimEnd ?? duration);
+    if (
+      Number.isFinite(trimStart) &&
+      Number.isFinite(trimEnd) &&
+      trimEnd > trimStart
+    ) {
+      timeline.setTrim(trimStart, trimEnd);
+    }
+    const clone = (value) =>
+      typeof structuredClone === 'function'
+        ? structuredClone(value || {})
+        : JSON.parse(JSON.stringify(value || {}));
+    (data.items || []).forEach((item) => {
+      timeline.upsert({
+        id: item.id,
+        type: item.type,
+        startTime: item.startTime,
+        endTime: item.endTime,
+        config: clone(item.config),
+      });
+    });
+    timeline.addMarkers(data.markers || []);
+    return timeline;
+  }
+
   activeAt(time) {
     const currentTime = this.#time(time);
     return VideoTimeline.TYPES.map((type) =>

@@ -627,13 +627,17 @@ export async function encodeCanvasSequence({
       : new WebMOutputFormat();
   const target = new BufferTarget();
   const output = new Output({ format: outputFormat, target });
-  const keyFrameInterval = Math.max(1, Math.round(safeFps * 2));
+  const keyFrameIntervalSeconds = 2;
+  const keyFrameEveryFrames = Math.max(
+    1,
+    Math.round(safeFps * keyFrameIntervalSeconds),
+  );
   const videoSource = new CanvasSource(canvas, {
     codec:
       exportDiagnosis.mediaCodec ||
       (exportDiagnosis.format === 'mp4' ? 'avc' : 'vp9'),
     bitrate: Math.max(1, Math.round(Number(bitrate) || 8_000_000)),
-    keyFrameInterval: 2,
+    keyFrameInterval: keyFrameIntervalSeconds,
     bitrateMode: 'variable',
     latencyMode: 'quality',
   });
@@ -664,7 +668,7 @@ export async function encodeCanvasSequence({
         timestamp,
         calculateFrameDurationSeconds(frameIndex, safeFps),
         {
-          keyFrame: frameIndex % keyFrameInterval === 0,
+          keyFrame: frameIndex % keyFrameEveryFrames === 0,
         },
       );
       onProgress?.(frameIndex + 1, totalFrames, {

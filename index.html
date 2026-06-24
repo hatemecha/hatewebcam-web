@@ -794,6 +794,25 @@
                 <div class="video-file-meta mono" id="videoFileMeta">
                   Ningún archivo cargado
                 </div>
+                <input
+                  type="file"
+                  id="projectFileInput"
+                  accept=".hatewebcam.json,application/json"
+                  class="hidden"
+                />
+                <div class="btn-row">
+                  <button
+                    type="button"
+                    class="btn"
+                    id="btnSaveProject"
+                    disabled
+                  >
+                    <i class="fa-solid fa-floppy-disk"></i> Guardar proyecto
+                  </button>
+                  <button type="button" class="btn" id="btnLoadProject">
+                    <i class="fa-solid fa-file-import"></i> Cargar proyecto
+                  </button>
+                </div>
                 <div
                   class="status-msg hidden"
                   id="videoEditorStatus"
@@ -813,6 +832,78 @@
                 </button>
                 <div class="edit-assist-result mono" id="editAssistResult">
                   Importá un video para analizar su audio.
+                </div>
+                <div class="edit-assist-grid">
+                  <label>
+                    <span>BPM</span>
+                    <input
+                      type="number"
+                      id="editAssistBpmInput"
+                      class="text-input"
+                      min="20"
+                      max="320"
+                      step="0.1"
+                      disabled
+                    />
+                  </label>
+                  <label>
+                    <span>Offset ms</span>
+                    <input
+                      type="number"
+                      id="editAssistOffsetInput"
+                      class="text-input"
+                      min="-5000"
+                      max="5000"
+                      step="10"
+                      value="0"
+                      disabled
+                    />
+                  </label>
+                </div>
+                <div class="btn-row edit-assist-actions">
+                  <button
+                    type="button"
+                    class="btn"
+                    id="btnEditAssistHalf"
+                    disabled
+                  >
+                    Usar mitad
+                  </button>
+                  <button
+                    type="button"
+                    class="btn"
+                    id="btnEditAssistDouble"
+                    disabled
+                  >
+                    Usar doble
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-icon"
+                    id="btnEditAssistOffsetDown"
+                    aria-label="Mover grilla 10 milisegundos antes"
+                    disabled
+                  >
+                    <i class="fa-solid fa-minus"></i>
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-icon"
+                    id="btnEditAssistOffsetUp"
+                    aria-label="Mover grilla 10 milisegundos después"
+                    disabled
+                  >
+                    <i class="fa-solid fa-plus"></i>
+                  </button>
+                </div>
+                <div class="slider-label"><span>Marcadores</span></div>
+                <div class="select-wrapper">
+                  <select id="editAssistDensitySelect" disabled>
+                    <option value="1">Cada beat</option>
+                    <option value="2">Cada 2 beats</option>
+                    <option value="4" selected>Cada 4 beats</option>
+                    <option value="8">Cada 8 beats</option>
+                  </select>
                 </div>
                 <div class="btn-row edit-assist-actions">
                   <button
@@ -838,6 +929,22 @@
                     disabled
                   >
                     Cada 4
+                  </button>
+                  <button
+                    type="button"
+                    class="btn"
+                    id="btnEditAssistEvery8"
+                    disabled
+                  >
+                    Cada 8
+                  </button>
+                  <button
+                    type="button"
+                    class="btn"
+                    id="btnEditAssistRegenerate"
+                    disabled
+                  >
+                    Regenerar
                   </button>
                 </div>
                 <button
@@ -868,6 +975,19 @@
                 >
                   Estable: WebM · sin audio
                 </div>
+                <div class="slider-label">
+                  <span>Preset de exportación</span>
+                </div>
+                <div class="select-wrapper">
+                  <select id="editorExportPresetSelect">
+                    <option value="fast">Rápido</option>
+                    <option value="balanced" selected>Balanceado</option>
+                    <option value="high">Alta calidad</option>
+                    <option value="chroma">Chroma para composición</option>
+                    <option value="experimental-mp4">Experimental MP4</option>
+                  </select>
+                </div>
+                <div class="spacer-8"></div>
                 <div class="slider-label"><span>Salida del editor</span></div>
                 <div class="select-wrapper">
                   <select id="videoExportModeSelect">
@@ -979,6 +1099,16 @@
                     id="videoEffectDurationLabel"
                   >
                     0.00 s
+                  </div>
+                  <div class="slider-label"><span>Automatización</span></div>
+                  <div class="select-wrapper">
+                    <select id="videoEffectAutomationSelect">
+                      <option value="fixed">Fija</option>
+                      <option value="beat-pulse">Pulso en beat</option>
+                      <option value="fade-in">Fade in</option>
+                      <option value="fade-out">Fade out</option>
+                      <option value="alternate-beat">Alternar cada beat</option>
+                    </select>
                   </div>
                   <div class="btn-row">
                     <button type="button" class="btn" id="btnOpenEffectAdjust">

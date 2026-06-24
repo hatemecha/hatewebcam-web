@@ -91,6 +91,12 @@ export function applyEventsMixin(proto) {
     this.btnChooseVideo.addEventListener('click', () =>
       this.videoFileInput.click(),
     );
+    this.btnSaveProject?.addEventListener('click', () =>
+      this.saveEditorProject(),
+    );
+    this.btnLoadProject?.addEventListener('click', () =>
+      this.projectFileInput?.click(),
+    );
     if (this.btnPreviewImportVideo) {
       this.btnPreviewImportVideo.addEventListener('click', () =>
         this.videoFileInput.click(),
@@ -114,6 +120,11 @@ export function applyEventsMixin(proto) {
       const [file] = this.videoFileInput.files || [];
       if (file) void this.loadVideoFile(file);
       this.videoFileInput.value = '';
+    });
+    this.projectFileInput?.addEventListener('change', () => {
+      const [file] = this.projectFileInput.files || [];
+      if (file) void this.loadEditorProjectFile(file);
+      this.projectFileInput.value = '';
     });
     this.btnVideoStart.addEventListener('click', () =>
       this.seekVideo(this.videoTimeline.trimStart),
@@ -163,6 +174,11 @@ export function applyEventsMixin(proto) {
     if (this.videoEffectEnd) {
       this.videoEffectEnd.addEventListener('change', () =>
         this.commitSelectedEffectTiming({ pushHistory: true }),
+      );
+    }
+    if (this.videoEffectAutomationSelect) {
+      this.videoEffectAutomationSelect.addEventListener('change', () =>
+        this.commitSelectedEffectAutomation(),
       );
     }
     this.btnDeleteVideoEffect.addEventListener(

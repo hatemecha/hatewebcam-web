@@ -27,6 +27,7 @@ import {
 import { RENDER_PROFILES } from '../js/app/render-engine.mjs';
 import { calculateTimelineTickInterval } from '../js/app/timeline-view.mjs';
 import { DEFAULT_IMAGE_SETTINGS } from '../js/app/constants.mjs';
+import { EditAssistController } from '../js/app/edit-assist-controller.mjs';
 import { applyEffectsMixin } from '../js/app/effects.mjs';
 import { applyRenderLoopMixin } from '../js/app/render.mjs';
 import { applyLocalvideoeditorMixin } from '../js/app/video-editor.mjs';
@@ -567,6 +568,48 @@ function checkAudioTempoAnalyzer() {
   assert.equal(empty.beats.length, 0);
 }
 
+function checkEditAssistManualControls() {
+  const VideoTimeline = loadClass('js/video-timeline.js', 'VideoTimeline');
+  const timeline = new VideoTimeline(10);
+  timeline.addMarker({ time: 3, source: 'user' });
+  const controller = new EditAssistController({
+    getSourceFile: () => ({}),
+    getTimeline: () => timeline,
+    isExporting: () => false,
+    getElements: () => ({}),
+    pushHistory() {},
+    renderTimeline() {},
+    updateTimelineHint() {},
+  });
+  controller.result = {
+    bpm: 120,
+    confidence: 0.8,
+    beats: [{ time: 0.2, strength: 1 }],
+  };
+  controller.manualBpm = 120;
+
+  controller.scaleBpm(0.5);
+  assert.equal(controller.effectiveBpm, 60, 'half BPM control should apply');
+  controller.scaleBpm(2);
+  assert.equal(controller.effectiveBpm, 120, 'double BPM control should apply');
+  controller.shiftOffset(10);
+  controller.applyMarkers(8);
+
+  const generated = timeline.getMarkersBySource('edit-assist');
+  assert.equal(controller.markerStep, 8);
+  assert.equal(generated[0].time, 0.21, 'offset should move generated grid');
+  assert.equal(generated.length, 3, 'density 8 should keep every 8th beat');
+  assert.equal(
+    timeline.getMarkersBySource('user').length,
+    1,
+    'Edit Assist must not delete manual markers',
+  );
+
+  controller.clearMarkers();
+  assert.equal(timeline.getMarkersBySource('edit-assist').length, 0);
+  assert.equal(timeline.getMarkersBySource('user').length, 1);
+}
+
 async function checkMediaAudioExtraction() {
   const sampleRate = 44100;
   const frames = sampleRate;
@@ -636,6 +679,29 @@ function checkStableExportDefaults() {
   assert.equal(DEFAULT_IMAGE_SETTINGS.editorExportFormat, 'webm');
   assert.equal(DEFAULT_IMAGE_SETTINGS.editorCopyAudio, false);
   assert.equal(DEFAULT_IMAGE_SETTINGS.experimentalExportFeatures, false);
+}
+
+function checkEditorExportPresets() {
+  const app = {
+    imageSettings: { ...DEFAULT_IMAGE_SETTINGS },
+    updateImageControlsUI() {},
+    updateVideoEditorUI() {},
+    saveImageSettings() {},
+  };
+  applyLocalvideoeditorMixin(app);
+  app.updateImageControlsUI = () => {};
+  app.updateVideoEditorUI = () => {};
+  app.saveImageSettings = () => {};
+  app.applyEditorExportPreset('experimental-mp4');
+  assert.equal(app.imageSettings.editorExportPreset, 'experimental-mp4');
+  assert.equal(app.imageSettings.experimentalExportFeatures, true);
+  assert.equal(app.imageSettings.editorExportFormat, 'mp4');
+  assert.equal(app.imageSettings.editorCopyAudio, true);
+
+  app.applyEditorExportPreset('chroma');
+  assert.equal(app.imageSettings.editorExportMode, 'effects-chroma');
+  assert.equal(app.imageSettings.editorExportFormat, 'webm');
+  assert.equal(app.imageSettings.editorCopyAudio, false);
 }
 
 function checkTimelineClipSnappingHelper() {
@@ -740,6 +806,97 @@ function checkTimelineClipboardBasics() {
   assert.equal(timeline.items[1].startTime, 5);
   assert.equal(timeline.items[1].endTime, 6);
   assert.deepEqual(timeline.items[1].config, { contrast: 120 });
+}
+
+function checkProjectJsonRoundTrip() {
+  const VideoTimeline = loadClass('js/video-timeline.js', 'VideoTimeline');
+  const timeline = new VideoTimeline(12);
+  timeline.setTrim(1, 10);
+  timeline.add('look', 2, 4, { contrast: 120 });
+  timeline.addMarker({ time: 3, kind: 'bar', source: 'edit-assist' });
+  const app = {
+    videoSourceFile: { name: 'clip.mp4', size: 1234 },
+    videoTimeline: timeline,
+    videoEl: { videoWidth: 1920, videoHeight: 1080 },
+    videoSourceFps: 29.97,
+    imageSettings: { ...DEFAULT_IMAGE_SETTINGS, editorExportMode: 'webm' },
+    editAssist: {
+      toJSON: () => ({
+        bpm: 128,
+        confidence: 0.72,
+        offset: 0.184,
+        markerStep: 4,
+        generatedAt: 1,
+      }),
+    },
+  };
+  applyLocalvideoeditorMixin(app);
+  const project = JSON.parse(JSON.stringify(app.buildEditorProjectData()));
+  assert.equal(project.version, 1);
+  assert.equal(project.source.name, 'clip.mp4');
+  assert.equal(project.trim.start, 1);
+  assert.equal(project.timeline.items.length, 1);
+  assert.equal(project.editAssist.bpm, 128);
+
+  const restored = VideoTimeline.fromJSON(
+    { ...project.timeline, trim: project.trim },
+    project.source.duration,
+  );
+  assert.equal(restored.trimStart, 1);
+  assert.equal(restored.trimEnd, 10);
+  assert.equal(restored.items[0].config.contrast, 120);
+  assert.equal(restored.markers[0].source, 'edit-assist');
+  assert.throws(() =>
+    VideoTimeline.fromJSON(
+      { items: [{ type: 'look', startTime: 4, endTime: 2 }] },
+      10,
+    ),
+  );
+}
+
+function checkBeatReactiveAutomation() {
+  const VideoTimeline = loadClass('js/video-timeline.js', 'VideoTimeline');
+  const timeline = new VideoTimeline(8);
+  timeline.addMarkers([
+    { time: 1, kind: 'beat', source: 'edit-assist' },
+    { time: 2, kind: 'beat', source: 'edit-assist' },
+  ]);
+  const app = {
+    videoTimeline: timeline,
+    DEFAULT_IMAGE_SETTINGS,
+    clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
+  };
+  applyLocalvideoeditorMixin(app);
+  const clip = {
+    startTime: 0,
+    endTime: 4,
+    config: { automation: 'beat-pulse' },
+  };
+  assert.equal(app.getTimelineAutomationIntensity(clip, 1), 1);
+  assert.ok(app.getTimelineAutomationIntensity(clip, 1.22) < 0.001);
+  assert.equal(
+    app.getTimelineAutomationIntensity(
+      { ...clip, config: { automation: 'alternate-beat' } },
+      2.1,
+    ),
+    0,
+  );
+  assert.equal(
+    app.getTimelineAutomationIntensity(
+      { ...clip, config: { automation: 'fade-in' } },
+      2,
+    ),
+    0.5,
+  );
+  assert.equal(
+    app.applyLookAutomation(
+      { ...DEFAULT_IMAGE_SETTINGS, contrast: 100 },
+      { contrast: 180, automation: 'fade-in' },
+      { startTime: 0, endTime: 4, config: { automation: 'fade-in' } },
+      2,
+    ).contrast,
+    140,
+  );
 }
 
 function checkSplitAllEffectsAtMarkers() {
@@ -908,6 +1065,38 @@ async function checkExportSeekFallsBackWhenSeekedIsMissing() {
     true,
     'export seek should continue if the media time lands but seeked is not emitted',
   );
+}
+
+async function checkExportPrepareRecoversDecodeFailure() {
+  const app = {
+    videoSourceFile: {},
+    videoExportTotalFrames: 10,
+    videoExportRecoveredSource: false,
+    videoEl: {
+      currentTime: 0,
+      muted: false,
+      playbackRate: 1,
+      pause() {},
+    },
+    seekCalls: 0,
+    recoveredAt: null,
+    getVideoExportFps: () => 24,
+    updateVideoExportProgress() {},
+  };
+  applyLocalvideoeditorMixin(app);
+  app.seekVideoForExport = async () => {
+    app.seekCalls += 1;
+    if (app.seekCalls === 1) throw new Error('video_decode_failed');
+  };
+  app.recoverVideoSourceForExport = async (time) => {
+    app.videoExportRecoveredSource = true;
+    app.recoveredAt = time;
+  };
+  await app.prepareSequentialVideoExport(2);
+  assert.equal(app.seekCalls, 2);
+  assert.equal(app.recoveredAt, 2);
+  assert.equal(app.videoEl.playbackRate, 4);
+  assert.equal(app.videoEl.muted, true);
 }
 
 function checkVideoSeekAvoidsExactDuration() {
@@ -1689,15 +1878,20 @@ await checkBlinkCallbackClearsWhenBlobDisabled();
 checkFaceDetectionUsesRefinedEyeLandmarks();
 checkVideoTimelineIntervals();
 checkAudioTempoAnalyzer();
+checkEditAssistManualControls();
 await checkMediaAudioExtraction();
 checkStableExportDefaults();
+checkEditorExportPresets();
 checkTimelineClipSnappingHelper();
 checkTimelineMarkerIntervalsForInsertion();
 checkTimelineClipboardBasics();
+checkProjectJsonRoundTrip();
+checkBeatReactiveAutomation();
 checkSplitAllEffectsAtMarkers();
 await checkSequentialExportAdvance();
 await checkExportPlaybackPausesAtTarget();
 await checkExportSeekFallsBackWhenSeekedIsMissing();
+await checkExportPrepareRecoversDecodeFailure();
 checkVideoSeekAvoidsExactDuration();
 checkPausedVideoPreviewUsesAnimationFrame();
 await checkVideoPlaybackRestartsFromEnd();

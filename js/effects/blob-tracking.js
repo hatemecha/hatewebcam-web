@@ -254,7 +254,7 @@ class BlobTracking {
           if (hue < 0) hue += 180;
         }
 
-        let match = false;
+        let match;
         if (this.detectionMode === 'lights') {
           match = val >= 200 && sat <= 50;
         } else if (this.detectionMode === 'shadows') {

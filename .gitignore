@@ -19,6 +19,8 @@ Thumbs.db
 dist/
 build/
 *.tmp
+test-results/
+playwright-report/
 
 .omx
 

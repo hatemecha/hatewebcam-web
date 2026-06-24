@@ -33,6 +33,7 @@ export const DEFAULT_IMAGE_SETTINGS = {
   sharpness: 0,
   jpegQuality: 92,
   videoFormat: 'auto',
+  editorExportPreset: 'balanced',
   editorExportFormat: 'webm',
   editorExportMode: 'full',
   editorCopyAudio: false,

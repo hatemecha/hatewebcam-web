@@ -3,12 +3,24 @@ import {
   formatObservedExportProgress,
   getEditorChromaColor,
 } from '../video-export.mjs';
+import { applyVideoEditorClipboardMixin } from './video-editor-clipboard.mjs';
+import { applyVideoEditorTimelineMixin } from './video-editor-timeline.mjs';
 
 const VIDEO_END_EPSILON = 0.001;
 const VIDEO_EXPORT_PLAYBACK_RATE = 4;
+const VIDEO_EFFECT_AUTOMATION_MODES = new Set([
+  'fixed',
+  'beat-pulse',
+  'fade-in',
+  'fade-out',
+  'alternate-beat',
+]);
 
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyLocalvideoeditorMixin(proto) {
+  applyVideoEditorTimelineMixin(proto);
+  applyVideoEditorClipboardMixin(proto);
+
   proto.setSourceMode = function (mode) {
     if (mode === this.sourceMode) return;
     if (this.isVideoExporting) return;
@@ -211,6 +223,18 @@ export function applyLocalvideoeditorMixin(proto) {
       this.videoTrimEnd.value = this.videoEl.duration.toFixed(2);
       this.videoEffectStart.value = '0';
       this.videoEffectEnd.value = this.videoEl.duration.toFixed(2);
+      const pendingProject = this.pendingEditorProject;
+      let projectMessage = '';
+      if (pendingProject) {
+        if (this.editorProjectMatchesSource(pendingProject, file)) {
+          this.applyEditorProject(pendingProject);
+          this.pendingEditorProject = null;
+          projectMessage = 'Proyecto restaurado con el video reimportado.';
+        } else {
+          projectMessage =
+            'El video no coincide con el proyecto cargado. Elegí el archivo original.';
+        }
+      }
       this.videoFileMeta.textContent = `${file.name} · ${this.formatBytes(file.size)} · ${this.videoEl.videoWidth}×${this.videoEl.videoHeight} · ${this.formatDurationDetailed(this.videoEl.duration)} · ${this.formatVideoFps(this.videoSourceFps)} FPS · ${this.formatVideoBitrate(this.videoSourceAverageBitrate)} estimado`;
       this.frameCount = 0;
       this.lastFpsTime = performance.now();
@@ -224,7 +248,11 @@ export function applyLocalvideoeditorMixin(proto) {
       await this.syncVideoTimelineEffects(true);
       this.updateVideoEditorUI();
       this.applyTimelineZoom();
-      this.showStatus(this.videoEditorStatus, 'Video listo.', 'success');
+      this.showStatus(
+        this.videoEditorStatus,
+        projectMessage || 'Video listo.',
+        projectMessage && this.pendingEditorProject ? 'warning' : 'success',
+      );
       setTimeout(() => this.hideStatus(this.videoEditorStatus), 1800);
     } catch (err) {
       console.error('Error loading video:', err);
@@ -236,6 +264,153 @@ export function applyLocalvideoeditorMixin(proto) {
       this.showStatus(this.videoEditorStatus, message, 'error');
       this.updateVideoEditorUI();
     }
+  };
+
+  proto.buildEditorProjectData = function () {
+    if (!this.videoSourceFile) return null;
+    const timeline = this.videoTimeline.toJSON();
+    return {
+      version: 1,
+      source: {
+        name: this.videoSourceFile.name,
+        size: this.videoSourceFile.size,
+        duration: this.videoTimeline.duration,
+        width: this.videoEl.videoWidth || 0,
+        height: this.videoEl.videoHeight || 0,
+        fps: this.videoSourceFps || 30,
+      },
+      trim: {
+        start: this.videoTimeline.trimStart,
+        end: this.videoTimeline.trimEnd,
+      },
+      timeline: {
+        items: timeline.items,
+        markers: timeline.markers,
+      },
+      settings: {
+        editorExport: {
+          editorExportPreset: this.imageSettings.editorExportPreset,
+          editorExportFormat: this.imageSettings.editorExportFormat,
+          editorExportMode: this.imageSettings.editorExportMode,
+          editorCopyAudio: this.imageSettings.editorCopyAudio,
+          experimentalExportFeatures:
+            this.imageSettings.experimentalExportFeatures,
+          effectsExportChroma: this.imageSettings.effectsExportChroma,
+          qualityEnhancer: this.imageSettings.qualityEnhancer,
+          qualityEnhancerStrength: this.imageSettings.qualityEnhancerStrength,
+        },
+        preview: {
+          previewQuality: this.imageSettings.previewQuality,
+        },
+      },
+      editAssist: this.editAssist?.toJSON?.() || null,
+    };
+  };
+
+  proto.saveEditorProject = function () {
+    const project = this.buildEditorProjectData();
+    if (!project) {
+      this.showStatus(
+        this.videoEditorStatus,
+        'Importá un video antes de guardar el proyecto.',
+        'warning',
+      );
+      return;
+    }
+    const blob = new Blob([`${JSON.stringify(project, null, 2)}\n`], {
+      type: 'application/json',
+    });
+    const basename =
+      this.videoSourceFile.name.replace(/\.[^.]+$/, '') || 'hatewebcam';
+    this.downloadBlob(blob, `${basename}.hatewebcam.json`);
+    this.showStatus(this.videoEditorStatus, 'Proyecto guardado.', 'success');
+  };
+
+  proto.loadEditorProjectFile = async function (file) {
+    try {
+      const project = this.normalizeEditorProject(
+        JSON.parse(await file.text()),
+      );
+      if (
+        this.videoSourceFile &&
+        this.editorProjectMatchesSource(project, this.videoSourceFile)
+      ) {
+        this.applyEditorProject(project);
+        this.pendingEditorProject = null;
+        this.showStatus(this.videoEditorStatus, 'Proyecto cargado.', 'success');
+        return;
+      }
+      this.pendingEditorProject = project;
+      this.showStatus(
+        this.videoEditorStatus,
+        'Proyecto cargado. Reimportá el video original para restaurarlo.',
+        'warning',
+      );
+    } catch (err) {
+      this.showStatus(
+        this.videoEditorStatus,
+        err?.message === 'invalid_project'
+          ? 'El archivo de proyecto no es válido.'
+          : 'No se pudo cargar el proyecto.',
+        'error',
+      );
+    }
+  };
+
+  proto.normalizeEditorProject = function (project) {
+    if (
+      !project ||
+      project.version !== 1 ||
+      !project.source ||
+      !project.timeline
+    )
+      throw new Error('invalid_project');
+    return project;
+  };
+
+  proto.editorProjectMatchesSource = function (project, file) {
+    const source = project?.source || {};
+    if (source.name && file?.name && source.name !== file.name) return false;
+    if (source.size && file?.size && source.size !== file.size) return false;
+    const projectDuration = Number(source.duration);
+    if (
+      Number.isFinite(projectDuration) &&
+      this.videoEl?.duration &&
+      Math.abs(projectDuration - this.videoEl.duration) > 0.5
+    ) {
+      return false;
+    }
+    return true;
+  };
+
+  proto.applyEditorProject = function (project) {
+    const duration = Number(project.source?.duration || this.videoEl?.duration);
+    this.videoTimeline = VideoTimeline.fromJSON(
+      {
+        ...project.timeline,
+        trim: project.trim,
+      },
+      Number.isFinite(duration) ? duration : 0,
+    );
+    const editorExport = project.settings?.editorExport || {};
+    Object.assign(this.imageSettings, {
+      ...editorExport,
+      ...(project.settings?.preview || {}),
+    });
+    this.selectedVideoEffectId = '';
+    this.selectedVideoEffectIds = new Set();
+    this.timelineClipboard = null;
+    this.editAssist?.loadMetadata?.(project.editAssist);
+    this.editorHistory?.clear();
+    this.updateEditorHistoryButtons();
+    if (this.videoTrimStart)
+      this.videoTrimStart.value = this.videoTimeline.trimStart;
+    if (this.videoTrimEnd) this.videoTrimEnd.value = this.videoTimeline.trimEnd;
+    this.updateImageControlsUI();
+    this.updateTimelineClipboardStatus();
+    this.renderVideoTimeline();
+    this.updateVideoEditorUI();
+    if (this.videoSourceFile) void this.syncVideoTimelineEffects(true);
   };
 
   proto.applyVideoTrim = function (resetSelection = true) {
@@ -362,7 +537,18 @@ export function applyLocalvideoeditorMixin(proto) {
       temperature: this.clamp(parseInt(merged.temperature, 10) || 0, -100, 100),
       detail: this.clamp(parseInt(merged.detail, 10) || 0, -100, 100),
       sharpness: this.clamp(parseInt(merged.sharpness, 10) || 0, 0, 100),
+      automation: this.normalizeClipAutomation(merged.automation),
     };
+  };
+
+  proto.normalizeClipAutomation = function (mode) {
+    return VIDEO_EFFECT_AUTOMATION_MODES.has(mode) ? mode : 'fixed';
+  };
+
+  proto.getSelectedAutomationMode = function () {
+    return this.normalizeClipAutomation(
+      this.videoEffectAutomationSelect?.value,
+    );
   };
 
   proto.syncLookClipConfigNow = function () {
@@ -397,16 +583,21 @@ export function applyLocalvideoeditorMixin(proto) {
         qualityEnhancerStrength,
         ...lookSettings
       } = this.imageSettings;
-      return this.normalizeLookClipConfig(lookSettings);
+      return {
+        ...this.normalizeLookClipConfig(lookSettings),
+        automation: this.getSelectedAutomationMode(),
+      };
     }
-    if (type === 'blob')
-      return this.blobTrackingEffect
+    if (type === 'blob') {
+      const config = this.blobTrackingEffect
         ? this.blobTrackingEffect.getConfig()
         : {
             boxColor: this.quickDetectorSettings.blobBoxColor,
           };
-    if (type === 'face')
-      return this.faceDetectionEffect
+      return { ...config, automation: this.getSelectedAutomationMode() };
+    }
+    if (type === 'face') {
+      const config = this.faceDetectionEffect
         ? this.faceDetectionEffect.getConfig()
         : {
             boxColor: this.quickDetectorSettings.faceBoxColor,
@@ -419,9 +610,14 @@ export function applyLocalvideoeditorMixin(proto) {
             censorPaddingPercent:
               this.quickDetectorSettings.faceCensorPaddingPercent,
           };
-    return this.blinkDetectionEffect
-      ? this.blinkDetectionEffect.getConfig()
-      : {};
+      return { ...config, automation: this.getSelectedAutomationMode() };
+    }
+    return {
+      ...(this.blinkDetectionEffect
+        ? this.blinkDetectionEffect.getConfig()
+        : {}),
+      automation: this.getSelectedAutomationMode(),
+    };
   };
 
   proto.applyVideoEffectItemConfig = function (item) {
@@ -439,6 +635,7 @@ export function applyLocalvideoeditorMixin(proto) {
         captureTimerSeconds,
         qualityEnhancer,
         qualityEnhancerStrength,
+        automation,
         ...lookSettings
       } = item.config;
       this.imageSettings = { ...this.imageSettings, ...lookSettings };
@@ -494,191 +691,6 @@ export function applyLocalvideoeditorMixin(proto) {
 
   proto.roundTimelineTime = function (time) {
     return Math.round((Number(time) || 0) * 1000) / 1000;
-  };
-
-  proto.resolveTimelineClipTimes = function ({
-    type,
-    startTime,
-    endTime,
-    edge = 'move',
-    itemId = '',
-  }) {
-    const minSpan = 0.05;
-    let start = this.roundTimelineTime(startTime);
-    let end = this.roundTimelineTime(endTime);
-    const span = Math.max(minSpan, end - start);
-
-    if (edge === 'move') {
-      start = this.clamp(
-        start,
-        this.videoTimeline.trimStart,
-        this.videoTimeline.trimEnd - span,
-      );
-      end = start + span;
-    } else if (edge === 'start') {
-      start = this.clamp(start, this.videoTimeline.trimStart, end - minSpan);
-    } else {
-      end = this.clamp(end, start + minSpan, this.videoTimeline.trimEnd);
-    }
-
-    if (this.chkTimelineSnap?.checked) {
-      const threshold = 0.12 / Math.max(1, this.timelineZoom);
-      const points = [
-        this.videoTimeline.trimStart,
-        this.videoTimeline.trimEnd,
-        this.videoEl.currentTime || 0,
-      ];
-      this.videoTimeline.items.forEach((item) => {
-        if (item.id === itemId || item.type !== type) return;
-        points.push(item.startTime, item.endTime);
-      });
-      this.videoTimeline.markers?.forEach((marker) => points.push(marker.time));
-      let bestDelta = threshold;
-      let bestShift = 0;
-      for (const point of points) {
-        for (const time of edge === 'move'
-          ? [start, end]
-          : [edge === 'start' ? start : end]) {
-          const delta = Math.abs(point - time);
-          if (delta < bestDelta) {
-            bestDelta = delta;
-            bestShift = point - time;
-          }
-        }
-      }
-      if (bestShift) {
-        if (edge === 'move') {
-          start += bestShift;
-          end += bestShift;
-        } else if (edge === 'start') {
-          start += bestShift;
-        } else {
-          end += bestShift;
-        }
-      }
-    }
-
-    if (edge === 'move') {
-      start = this.clamp(
-        start,
-        this.videoTimeline.trimStart,
-        this.videoTimeline.trimEnd - span,
-      );
-      end = start + span;
-    } else {
-      start = this.clamp(
-        start,
-        this.videoTimeline.trimStart,
-        this.videoTimeline.trimEnd - minSpan,
-      );
-      end = this.clamp(end, start + minSpan, this.videoTimeline.trimEnd);
-    }
-    return {
-      startTime: this.roundTimelineTime(start),
-      endTime: this.roundTimelineTime(end),
-    };
-  };
-
-  proto.getTimelineIntervalPoints = function () {
-    const points = [
-      this.videoTimeline.trimStart,
-      this.videoTimeline.trimEnd,
-      ...(this.videoTimeline.markers || []).map((marker) => marker.time),
-    ]
-      .filter(
-        (time) =>
-          Number.isFinite(Number(time)) &&
-          time >= this.videoTimeline.trimStart &&
-          time <= this.videoTimeline.trimEnd,
-      )
-      .sort((a, b) => a - b);
-    return [...new Set(points.map((time) => this.roundTimelineTime(time)))];
-  };
-
-  proto.resolveTimelineInsertionTimes = function ({
-    type,
-    anchorTime,
-    duration = this.DEFAULT_TIMELINE_EFFECT_DURATION,
-  }) {
-    const minSpan = 0.05;
-    const points = this.getTimelineIntervalPoints();
-    if (points.length >= 3) {
-      const time = this.snapTimelineTime(anchorTime);
-      const index = points.findIndex(
-        (point, pointIndex) => time >= point && time < points[pointIndex + 1],
-      );
-      const startIndex = index === -1 ? points.length - 2 : index;
-      const startTime = points[startIndex];
-      const endTime = points[startIndex + 1];
-      if (endTime - startTime >= minSpan) return { startTime, endTime };
-    }
-    const span = Math.max(
-      minSpan,
-      Math.min(
-        duration,
-        this.videoTimeline.trimEnd - this.videoTimeline.trimStart,
-      ),
-    );
-    return this.resolveTimelineClipTimes({
-      type,
-      startTime: anchorTime,
-      endTime: anchorTime + span,
-      edge: 'move',
-    });
-  };
-
-  proto.addTimelineEffectClip = async function (
-    type,
-    anchorTime,
-    duration = this.DEFAULT_TIMELINE_EFFECT_DURATION,
-  ) {
-    if (!this.videoSourceFile || !this.TIMELINE_EFFECT_META[type]) return null;
-    const placed = this.resolveTimelineInsertionTimes({
-      type,
-      anchorTime,
-      duration,
-    });
-    const { startTime, endTime } = placed;
-    if (endTime <= startTime) {
-      this.showStatus(
-        this.videoEditorStatus,
-        'No hay espacio libre en esa pista.',
-        'error',
-      );
-      return null;
-    }
-    try {
-      this.pushTimelineHistory();
-      const saved = this.videoTimeline.upsert({
-        id: crypto.randomUUID
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random()}`,
-        type,
-        startTime,
-        endTime,
-        config: this.snapshotVideoEffectConfig(type),
-      });
-      if (type === 'face' || type === 'blink') {
-        try {
-          await this.ensureFaceMeshLoaded();
-        } catch (err) {
-          console.warn('Detector preload failed:', err);
-        }
-      }
-      this.selectVideoEffect(saved.id);
-      void this.syncVideoTimelineEffects(true);
-      this.showStatus(
-        this.videoEditorStatus,
-        `${this.TIMELINE_EFFECT_META[type].label} agregado.`,
-        'success',
-      );
-      setTimeout(() => this.hideStatus(this.videoEditorStatus), 1200);
-      this.setInspectorTab('adjust');
-      return saved;
-    } catch (err) {
-      this.showStatus(this.videoEditorStatus, err.message, 'error');
-      return null;
-    }
   };
 
   proto.getTimelineRowFromClientY = function (clientY) {
@@ -841,27 +853,6 @@ export function applyLocalvideoeditorMixin(proto) {
       });
   };
 
-  proto.selectVideoEffect = function (id) {
-    this.syncLookClipConfigNow();
-    this.selectedVideoEffectId = id || '';
-    this.selectedVideoEffectIds = new Set(id ? [id] : []);
-    const item = this.videoTimeline.items.find(
-      (candidate) => candidate.id === this.selectedVideoEffectId,
-    );
-    if (item) {
-      this.videoEffectType.value = item.type;
-      this.videoEffectStart.value = item.startTime.toFixed(2);
-      this.videoEffectEnd.value = item.endTime.toFixed(2);
-      this.applyVideoEffectItemConfig(item);
-    }
-    this.renderVideoTimeline();
-    this.updateVideoEffectInspector();
-    this.updateAdjustmentsPanelState();
-    this.updateEffectTrackHighlight();
-    this.updateTimelineHint();
-    if (item) this.setInspectorTab('effect');
-  };
-
   proto.toggleVideoEffectSelection = function (id) {
     if (!id) return;
     this.selectedVideoEffectIds ||= new Set();
@@ -920,114 +911,6 @@ export function applyLocalvideoeditorMixin(proto) {
     this.updateEffectTrackHighlight();
   };
 
-  proto.getSelectedVideoEffectItems = function () {
-    const ids = this.selectedVideoEffectIds?.size
-      ? this.selectedVideoEffectIds
-      : new Set(this.selectedVideoEffectId ? [this.selectedVideoEffectId] : []);
-    return this.videoTimeline.items.filter((item) => ids.has(item.id));
-  };
-
-  proto.deleteSelectedVideoEffect = function () {
-    const items = this.getSelectedVideoEffectItems();
-    if (!items.length) return;
-    this.pushTimelineHistory();
-    items.forEach((item) => this.videoTimeline.remove(item.id));
-    this.selectedVideoEffectId = '';
-    this.selectedVideoEffectIds = new Set();
-    this.renderVideoTimeline();
-    this.updateVideoEffectInspector();
-    this.updateAdjustmentsPanelState();
-    void this.syncVideoTimelineEffects(true);
-  };
-
-  proto.copySelectedVideoEffects = function (cut = false) {
-    const items = this.getSelectedVideoEffectItems();
-    if (!items.length) return;
-    const origin = Math.min(...items.map((item) => item.startTime));
-    this.timelineClipboard = {
-      origin,
-      items: items.map((item) => ({
-        type: item.type,
-        startTime: item.startTime,
-        endTime: item.endTime,
-        config:
-          typeof structuredClone === 'function'
-            ? structuredClone(item.config || {})
-            : JSON.parse(JSON.stringify(item.config || {})),
-      })),
-    };
-    if (cut) this.deleteSelectedVideoEffect();
-    this.updateTimelineClipboardStatus(
-      `Portapapeles: ${items.length} clip${items.length === 1 ? '' : 's'} ${cut ? 'cortado' : 'copiado'}. Ctrl+V pega clips, Shift+Ctrl+V pega ajustes.`,
-    );
-  };
-
-  proto.pasteVideoEffects = function (settingsOnly = false) {
-    if (!this.timelineClipboard?.items?.length || !this.videoSourceFile) return;
-    const selectedItems = this.getSelectedVideoEffectItems();
-    if (settingsOnly) {
-      if (!selectedItems.length) return;
-      this.pushTimelineHistory();
-      selectedItems.forEach((item) => {
-        const source =
-          this.timelineClipboard.items.find(
-            (clip) => clip.type === item.type,
-          ) || this.timelineClipboard.items[0];
-        if (source.type !== item.type) return;
-        this.videoTimeline.upsert({
-          ...item,
-          config:
-            typeof structuredClone === 'function'
-              ? structuredClone(source.config || {})
-              : JSON.parse(JSON.stringify(source.config || {})),
-        });
-      });
-      this.renderVideoTimeline();
-      this.updateTimelineClipboardStatus(
-        `Ajustes pegados en ${selectedItems.length} clip${selectedItems.length === 1 ? '' : 's'}.`,
-      );
-      void this.syncVideoTimelineEffects(true);
-      return;
-    }
-
-    const anchor = this.clamp(
-      this.videoEl.currentTime || this.videoTimeline.trimStart,
-      this.videoTimeline.trimStart,
-      this.videoTimeline.trimEnd,
-    );
-    const newIds = [];
-    try {
-      this.pushTimelineHistory();
-      this.timelineClipboard.items.forEach((clip) => {
-        const offset = clip.startTime - this.timelineClipboard.origin;
-        const span = clip.endTime - clip.startTime;
-        const startTime = this.roundTimelineTime(anchor + offset);
-        const endTime = this.roundTimelineTime(startTime + span);
-        const saved = this.videoTimeline.upsert({
-          id: crypto.randomUUID
-            ? crypto.randomUUID()
-            : `${Date.now()}-${Math.random()}`,
-          type: clip.type,
-          startTime,
-          endTime,
-          config:
-            typeof structuredClone === 'function'
-              ? structuredClone(clip.config || {})
-              : JSON.parse(JSON.stringify(clip.config || {})),
-        });
-        newIds.push(saved.id);
-      });
-      this.selectedVideoEffectIds = new Set(newIds);
-      this.selectedVideoEffectId = newIds[0] || '';
-      this.renderVideoTimeline();
-      this.updateVideoEffectInspector();
-      this.updateTimelineClipboardStatus(`Clips pegados: ${newIds.length}.`);
-      void this.syncVideoTimelineEffects(true);
-    } catch (err) {
-      this.showStatus(this.videoEditorStatus, err.message, 'error');
-    }
-  };
-
   proto.updateVideoEffectInspector = function () {
     const hasVideo = !!this.videoSourceFile;
     const item = this.videoTimeline.items.find(
@@ -1050,9 +933,30 @@ export function applyLocalvideoeditorMixin(proto) {
       const duration = Math.max(0, item.endTime - item.startTime);
       this.videoEffectDurationLabel.textContent = `Duración: ${duration.toFixed(2)} s`;
     }
+    if (this.videoEffectAutomationSelect) {
+      this.videoEffectAutomationSelect.disabled = !editing;
+      this.videoEffectAutomationSelect.value = this.normalizeClipAutomation(
+        item?.config?.automation,
+      );
+    }
     if (this.btnDeleteVideoEffect)
       this.btnDeleteVideoEffect.disabled = !editing;
     if (this.btnOpenEffectAdjust) this.btnOpenEffectAdjust.disabled = !editing;
+  };
+
+  proto.commitSelectedEffectAutomation = function () {
+    const item = this.getSelectedVideoEffectItem();
+    if (!item) return;
+    this.pushTimelineHistory();
+    this.videoTimeline.upsert({
+      ...item,
+      config: {
+        ...(item.config || {}),
+        automation: this.getSelectedAutomationMode(),
+      },
+    });
+    this.renderVideoTimeline();
+    void this.syncVideoTimelineEffects(true);
   };
 
   proto.updateTimelineClipboardStatus = function (message = '') {
@@ -1218,7 +1122,7 @@ export function applyLocalvideoeditorMixin(proto) {
     }
   };
 
-  proto.setEditorTool = function (tool, options = {}) {
+  proto.setEditorTool = function (tool) {
     this.editorTool = tool;
     document.body.dataset.editorTool = tool;
     if (this.videoTimelineEl) this.videoTimelineEl.dataset.editorTool = tool;
@@ -1319,34 +1223,6 @@ export function applyLocalvideoeditorMixin(proto) {
     };
   };
 
-  proto.snapTimelineTime = function (time) {
-    if (!this.chkTimelineSnap?.checked) return time;
-    const points = new Set([
-      this.videoTimeline.trimStart,
-      this.videoTimeline.trimEnd,
-      this.videoEl.currentTime || 0,
-    ]);
-    if (typeof this.videoTimeline.getSnapPoints === 'function') {
-      this.videoTimeline.getSnapPoints().forEach((point) => points.add(point));
-    } else {
-      this.videoTimeline.items.forEach((item) => {
-        points.add(item.startTime);
-        points.add(item.endTime);
-      });
-      this.videoTimeline.markers?.forEach((marker) => points.add(marker.time));
-    }
-    let closest = time;
-    let minDelta = 0.12 / Math.max(1, this.timelineZoom);
-    points.forEach((point) => {
-      const delta = Math.abs(point - time);
-      if (delta < minDelta) {
-        minDelta = delta;
-        closest = point;
-      }
-    });
-    return closest;
-  };
-
   proto.renderTimelineRuler = function () {
     if (!this.timelineTimeRuler || !this.timelineTrackArea) return;
     const duration = Math.max(0.001, this.videoTimeline.duration);
@@ -1384,117 +1260,6 @@ export function applyLocalvideoeditorMixin(proto) {
     const rowStyle = this.getTimelineRowStyle(rowIndex);
     el.style.top = rowStyle.top;
     el.style.height = rowStyle.height;
-  };
-
-  proto.renderVideoTimeline = function () {
-    if (!this.timelineItems || !this.videoTimelineEl || !this.timelineTrackArea)
-      return;
-    const duration = Math.max(0.001, this.videoTimeline.duration);
-    const percent = (time) => `${this.clamp((time / duration) * 100, 0, 100)}%`;
-
-    if (this.timelineVideoClip) {
-      this.timelineVideoClip.style.left = '0';
-      this.timelineVideoClip.style.width = '100%';
-    }
-    this.timelineTrim.style.left = percent(this.videoTimeline.trimStart);
-    this.timelineTrim.style.width = percent(
-      this.videoTimeline.trimEnd - this.videoTimeline.trimStart,
-    );
-    this.timelineTrimStartHandle.style.left = percent(
-      this.videoTimeline.trimStart,
-    );
-    this.timelineTrimEndHandle.style.left = percent(this.videoTimeline.trimEnd);
-    if (this.timelineTrimOutsideStart) {
-      this.timelineTrimOutsideStart.style.width = percent(
-        this.videoTimeline.trimStart,
-      );
-    }
-    if (this.timelineTrimOutsideEnd) {
-      this.timelineTrimOutsideEnd.style.left = percent(
-        this.videoTimeline.trimEnd,
-      );
-      this.timelineTrimOutsideEnd.style.width = percent(
-        duration - this.videoTimeline.trimEnd,
-      );
-    }
-
-    const selectionStart = this.selectedVideoEffectId
-      ? this.clamp(
-          Number(this.videoEffectStart.value) || 0,
-          this.videoTimeline.trimStart,
-          this.videoTimeline.trimEnd,
-        )
-      : this.videoEl.currentTime || 0;
-    const selectionEnd = this.selectedVideoEffectId
-      ? this.clamp(
-          Number(this.videoEffectEnd.value) || 0,
-          selectionStart,
-          this.videoTimeline.trimEnd,
-        )
-      : selectionStart;
-    if (this.selectedVideoEffectId) {
-      this.videoEffectStart.value = selectionStart.toFixed(2);
-      this.videoEffectEnd.value = selectionEnd.toFixed(2);
-    }
-    if (this.videoEffectRangeLabel) {
-      if (this.selectedVideoEffectId) {
-        this.videoEffectRangeLabel.textContent = `${this.formatDurationDetailed(selectionStart)} — ${this.formatDurationDetailed(selectionEnd)}`;
-      } else {
-        this.videoEffectRangeLabel.textContent = `Cursor: ${this.formatDurationDetailed(this.videoEl.currentTime || 0)}`;
-      }
-    }
-    this.timelinePlayhead.style.left = percent(this.videoEl.currentTime || 0);
-
-    if (this.timelineMarkers) {
-      this.timelineMarkers.innerHTML = '';
-      (this.videoTimeline.markers || []).forEach((marker) => {
-        const markerEl = document.createElement('button');
-        markerEl.type = 'button';
-        markerEl.className = 'timeline-marker';
-        markerEl.dataset.id = marker.id;
-        markerEl.dataset.kind = marker.kind || 'manual';
-        markerEl.dataset.source = marker.source || 'user';
-        markerEl.style.left = percent(marker.time);
-        markerEl.title = `${marker.label || 'Marcador'} ${this.formatDurationDetailed(marker.time)}`;
-        markerEl.setAttribute('aria-label', markerEl.title);
-        markerEl.addEventListener('click', (event) => {
-          event.stopPropagation();
-          this.seekVideo(marker.time);
-        });
-        this.timelineMarkers.appendChild(markerEl);
-      });
-    }
-
-    this.timelineItems.innerHTML = '';
-    this.videoTimeline.items.forEach((item) => {
-      const meta = this.TIMELINE_EFFECT_META[item.type] || {
-        trackLabel: item.type,
-        row: 1,
-      };
-      const el = document.createElement('div');
-      const selectedIds = this.selectedVideoEffectIds || new Set();
-      el.className = `timeline-item${item.id === this.selectedVideoEffectId || selectedIds.has(item.id) ? ' is-selected' : ''}`;
-      el.dataset.id = item.id;
-      el.dataset.type = item.type;
-      el.innerHTML = `
-        <span class="timeline-item-handle start" aria-hidden="true"></span>
-        <span class="timeline-item-label">${meta.trackLabel}</span>
-        <span class="timeline-item-handle end" aria-hidden="true"></span>
-      `;
-      this.positionTimelineRowElement(
-        el,
-        item.startTime,
-        item.endTime,
-        meta.row,
-      );
-      el.addEventListener('pointerdown', (event) =>
-        this.beginTimelineDrag(event, item, el),
-      );
-      this.timelineItems.appendChild(el);
-    });
-    this.renderTimelineRuler();
-    this.updateEffectTrackHighlight();
-    this.editAssist?.updateUI();
   };
 
   proto.toggleTimelineMarkerAtPlayhead = function () {
@@ -2046,6 +1811,7 @@ export function applyLocalvideoeditorMixin(proto) {
       previewQuality: this.imageSettings.previewQuality,
       jpegQuality: this.imageSettings.jpegQuality,
       videoFormat: this.imageSettings.videoFormat,
+      editorExportPreset: this.imageSettings.editorExportPreset,
       editorExportFormat: this.imageSettings.editorExportFormat,
       editorExportMode: this.imageSettings.editorExportMode,
       editorCopyAudio: this.imageSettings.editorCopyAudio,
@@ -2064,6 +1830,68 @@ export function applyLocalvideoeditorMixin(proto) {
     };
   };
 
+  proto.getBeatMarkerIndexAt = function (mediaTime) {
+    const markers = (this.videoTimeline.markers || []).filter(
+      (marker) =>
+        marker.source === 'edit-assist' &&
+        (marker.kind === 'beat' || marker.kind === 'bar') &&
+        marker.time <= mediaTime,
+    );
+    return markers.length - 1;
+  };
+
+  proto.getNearestBeatDelta = function (mediaTime) {
+    let delta = Infinity;
+    (this.videoTimeline.markers || []).forEach((marker) => {
+      if (
+        marker.source !== 'edit-assist' ||
+        (marker.kind !== 'beat' && marker.kind !== 'bar')
+      )
+        return;
+      delta = Math.min(delta, Math.abs(marker.time - mediaTime));
+    });
+    return delta;
+  };
+
+  proto.getTimelineAutomationIntensity = function (item, mediaTime) {
+    const mode = this.normalizeClipAutomation(item?.config?.automation);
+    if (!item || mode === 'fixed') return 1;
+    const duration = Math.max(0.001, item.endTime - item.startTime);
+    if (mode === 'fade-in')
+      return this.clamp((mediaTime - item.startTime) / duration, 0, 1);
+    if (mode === 'fade-out')
+      return this.clamp((item.endTime - mediaTime) / duration, 0, 1);
+    if (mode === 'alternate-beat') {
+      const index = this.getBeatMarkerIndexAt(mediaTime);
+      return index === -1 || index % 2 === 0 ? 1 : 0;
+    }
+    const delta = this.getNearestBeatDelta(mediaTime);
+    if (!Number.isFinite(delta)) return 1;
+    return this.clamp(1 - delta / 0.22, 0, 1);
+  };
+
+  proto.applyLookAutomation = function (base, lookConfig, item, mediaTime) {
+    const intensity = this.getTimelineAutomationIntensity(item, mediaTime);
+    const automated = { ...lookConfig };
+    [
+      'exposure',
+      'shadows',
+      'highlights',
+      'contrast',
+      'saturation',
+      'temperature',
+      'detail',
+      'sharpness',
+    ].forEach((key) => {
+      automated[key] = Math.round(
+        Number(base[key] || 0) +
+          (Number(lookConfig[key] || 0) - Number(base[key] || 0)) * intensity,
+      );
+    });
+    automated.blackAndWhite = intensity >= 0.5 && !!lookConfig.blackAndWhite;
+    return automated;
+  };
+
   proto.applyVideoTimelineLook = function (mediaTime, options = {}) {
     if (this.sourceMode !== 'video' || !this.videoSourceFile) return false;
     const lookItem = this.videoTimeline
@@ -2073,9 +1901,19 @@ export function applyLocalvideoeditorMixin(proto) {
     const force = !!options.force;
     if (!force && this.appliedTimelineItemIds.look === nextId) return false;
 
+    const baseSettings =
+      this.videoBaseImageSettings || this.createVideoBaseImageSettings();
+    const lookConfig = lookItem
+      ? this.applyLookAutomation(
+          baseSettings,
+          this.normalizeLookClipConfig(lookItem.config),
+          lookItem,
+          mediaTime,
+        )
+      : {};
     this.imageSettings = {
-      ...(this.videoBaseImageSettings || this.createVideoBaseImageSettings()),
-      ...(lookItem ? this.normalizeLookClipConfig(lookItem.config) : {}),
+      ...baseSettings,
+      ...lookConfig,
       ...this.getVideoOperationalImageSettings(),
     };
     this.appliedTimelineItemIds.look = nextId;
@@ -2104,7 +1942,15 @@ export function applyLocalvideoeditorMixin(proto) {
   ) {
     if (this.sourceMode !== 'video' || !this.videoSourceFile) return;
     const active = this.videoTimeline.activeAt(mediaTime);
-    const byType = Object.fromEntries(active.map((item) => [item.type, item]));
+    const byType = Object.fromEntries(
+      active
+        .filter(
+          (item) =>
+            item.type === 'look' ||
+            this.getTimelineAutomationIntensity(item, mediaTime) > 0.1,
+        )
+        .map((item) => [item.type, item]),
+    );
     for (const type of ['blob', 'face', 'blink']) {
       const nextId = byType[type]?.id || '';
       if (force || this.appliedTimelineItemIds[type] !== nextId) {
@@ -2208,6 +2054,10 @@ export function applyLocalvideoeditorMixin(proto) {
       this.btnExportVideo.disabled = !canExport || this.isVideoExporting;
     if (this.btnHeaderExportVideo)
       this.btnHeaderExportVideo.disabled = !canExport || this.isVideoExporting;
+    if (this.btnSaveProject)
+      this.btnSaveProject.disabled = !loaded || this.isVideoExporting;
+    if (this.btnLoadProject)
+      this.btnLoadProject.disabled = this.isVideoExporting;
     if (this.videoTrimStart)
       this.videoTrimStart.disabled = !loaded || this.isVideoExporting;
     if (this.videoTrimEnd)
@@ -2289,6 +2139,11 @@ export function applyLocalvideoeditorMixin(proto) {
     }
     if (this.videoExportModeSelect)
       this.videoExportModeSelect.value = this.imageSettings.editorExportMode;
+    if (this.editorExportPresetSelect) {
+      this.editorExportPresetSelect.value =
+        this.imageSettings.editorExportPreset || 'balanced';
+      this.editorExportPresetSelect.disabled = this.isVideoExporting;
+    }
     if (this.chkExperimentalExportFeatures) {
       this.chkExperimentalExportFeatures.checked = experimental;
       this.chkExperimentalExportFeatures.disabled = this.isVideoExporting;
@@ -2324,6 +2179,67 @@ export function applyLocalvideoeditorMixin(proto) {
       this.effectsExportChromaSelect.disabled =
         !effectsOnly || this.isVideoExporting;
     }
+  };
+
+  proto.applyEditorExportPreset = function (preset) {
+    const value = [
+      'fast',
+      'balanced',
+      'high',
+      'chroma',
+      'experimental-mp4',
+    ].includes(preset)
+      ? preset
+      : 'balanced';
+    const presets = {
+      fast: {
+        editorExportMode: 'full',
+        experimentalExportFeatures: false,
+        editorExportFormat: 'webm',
+        editorCopyAudio: false,
+        qualityEnhancer: false,
+        qualityEnhancerStrength: 20,
+      },
+      balanced: {
+        editorExportMode: 'full',
+        experimentalExportFeatures: false,
+        editorExportFormat: 'webm',
+        editorCopyAudio: false,
+        qualityEnhancer: false,
+        qualityEnhancerStrength: 35,
+      },
+      high: {
+        editorExportMode: 'full',
+        experimentalExportFeatures: false,
+        editorExportFormat: 'webm',
+        editorCopyAudio: false,
+        qualityEnhancer: true,
+        qualityEnhancerStrength: 55,
+      },
+      chroma: {
+        editorExportMode: 'effects-chroma',
+        experimentalExportFeatures: false,
+        editorExportFormat: 'webm',
+        editorCopyAudio: false,
+        effectsExportChroma: 'green',
+        qualityEnhancer: false,
+        qualityEnhancerStrength: 35,
+      },
+      'experimental-mp4': {
+        editorExportMode: 'full',
+        experimentalExportFeatures: true,
+        editorExportFormat: 'mp4',
+        editorCopyAudio: true,
+        qualityEnhancer: false,
+        qualityEnhancerStrength: 35,
+      },
+    };
+    Object.assign(this.imageSettings, presets[value], {
+      editorExportPreset: value,
+    });
+    this.updateImageControlsUI();
+    this.updateVideoEditorUI();
+    this.saveImageSettings();
   };
 
   proto.formatVideoExportDiagnosis = function (diagnosis, bitrate) {
@@ -2482,6 +2398,9 @@ export function applyLocalvideoeditorMixin(proto) {
             note: err?.message || err?.name || 'seek_failed',
           },
         );
+        if (this.canRecoverVideoExportSeek(err)) {
+          await this.recoverVideoSourceForExport(time);
+        }
         await this.seekVideoForExport(time);
       }
     }
@@ -2720,6 +2639,7 @@ export function applyLocalvideoeditorMixin(proto) {
         face: '',
         blink: '',
       };
+      this.videoExportRecoveredSource = false;
       this.videoExportSession.start(0);
       this.videoExportProgress.value = 0;
       this.videoExportTitle.innerHTML =
@@ -2798,6 +2718,74 @@ export function applyLocalvideoeditorMixin(proto) {
     });
   };
 
+  proto.canRecoverVideoExportSeek = function (err) {
+    return (
+      !this.videoExportRecoveredSource &&
+      ['video_decode_failed', 'video_seek_timeout'].includes(err?.message)
+    );
+  };
+
+  proto.recoverVideoSourceForExport = async function (time) {
+    if (!this.videoSourceFile) throw new Error('video_decode_failed');
+    this.videoExportRecoveredSource = true;
+    this.updateVideoExportProgress(
+      0,
+      this.videoExportTotalFrames || 0,
+      this.getVideoExportFps(),
+      {
+        stage: 'source-reload',
+        time,
+        force: true,
+        note: 'recargando_video',
+      },
+    );
+
+    const previousUrl = this.videoObjectUrl;
+    const nextUrl = URL.createObjectURL(this.videoSourceFile);
+    try {
+      await new Promise((resolve, reject) => {
+        let timeout = null;
+        const cleanup = () => {
+          clearTimeout(timeout);
+          this.videoEl.removeEventListener('loadedmetadata', loaded);
+          this.videoEl.removeEventListener('error', failed);
+        };
+        const loaded = () => {
+          cleanup();
+          resolve();
+        };
+        const failed = () => {
+          cleanup();
+          reject(new Error('video_decode_failed'));
+        };
+        timeout = setTimeout(() => {
+          cleanup();
+          reject(new Error('video_seek_timeout'));
+        }, 5000);
+        this.videoEl.addEventListener('loadedmetadata', loaded, {
+          once: true,
+        });
+        this.videoEl.addEventListener('error', failed, { once: true });
+        this.videoEl.pause();
+        this.videoEl.srcObject = null;
+        this.videoEl.src = nextUrl;
+        this.videoEl.muted = true;
+        this.videoEl.preload = 'auto';
+        this.videoEl.load();
+      });
+      if (previousUrl && previousUrl !== nextUrl)
+        URL.revokeObjectURL(previousUrl);
+      this.videoObjectUrl = nextUrl;
+    } catch (err) {
+      URL.revokeObjectURL(nextUrl);
+      if (previousUrl) {
+        this.videoEl.src = previousUrl;
+        this.videoEl.load();
+      }
+      throw err;
+    }
+  };
+
   proto.prepareSequentialVideoExport = async function (startTime) {
     this.videoExportPlayback = {
       originalPlaybackRate: this.videoEl.playbackRate || 1,
@@ -2807,7 +2795,13 @@ export function applyLocalvideoeditorMixin(proto) {
     this.videoEl.muted = true;
     this.videoEl.playbackRate = this.videoExportPlayback.playbackRate;
     this.videoEl.pause();
-    await this.seekVideoForExport(startTime);
+    try {
+      await this.seekVideoForExport(startTime);
+    } catch (err) {
+      if (!this.canRecoverVideoExportSeek(err)) throw err;
+      await this.recoverVideoSourceForExport(startTime);
+      await this.seekVideoForExport(startTime);
+    }
   };
 
   proto.advanceVideoForExport = async function (
@@ -2979,6 +2973,7 @@ export function applyLocalvideoeditorMixin(proto) {
     this.videoExportSession.stop();
     this.videoExportFileName = '';
     this.videoExportDiagnosis = null;
+    this.videoExportRecoveredSource = false;
     if (this.videoExportPlayback) {
       this.videoEl.pause();
       this.videoEl.playbackRate =

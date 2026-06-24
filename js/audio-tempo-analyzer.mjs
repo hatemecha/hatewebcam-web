@@ -275,7 +275,6 @@ export async function analyzeAudioTempoWithAudioContext(file, options = {}) {
 }
 
 export async function analyzeAudioTempo(file, options = {}) {
-  let mediaError = null;
   try {
     const { samples, sampleRate } = await extractMediaAudioSamples(
       file,
@@ -283,12 +282,10 @@ export async function analyzeAudioTempo(file, options = {}) {
     );
     return estimateTempoFromSamples(samples, sampleRate, options);
   } catch (err) {
-    mediaError = err;
-  }
-
-  try {
-    return await analyzeAudioTempoWithAudioContext(file, options);
-  } catch {
-    throw mediaError || new Error('audio_decode_failed');
+    try {
+      return await analyzeAudioTempoWithAudioContext(file, options);
+    } catch {
+      throw err || new Error('audio_decode_failed');
+    }
   }
 }

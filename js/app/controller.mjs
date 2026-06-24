@@ -55,7 +55,33 @@ export class AppController {
     });
     this.videoExportSession = new VideoExportSession();
     this.videoExportSession.attachLegacyAccessors(this);
-    this.editAssist = new EditAssistController(this);
+    this.editAssist = new EditAssistController({
+      getSourceFile: () => this.videoSourceFile,
+      getTimeline: () => this.videoTimeline,
+      isExporting: () => this.isVideoExporting,
+      getElements: () => ({
+        analyzeButton: this.btnEditAssistAnalyze,
+        beatButton: this.btnEditAssistBeat,
+        every2Button: this.btnEditAssistEvery2,
+        every4Button: this.btnEditAssistEvery4,
+        every8Button: this.btnEditAssistEvery8,
+        halfButton: this.btnEditAssistHalf,
+        doubleButton: this.btnEditAssistDouble,
+        offsetDownButton: this.btnEditAssistOffsetDown,
+        offsetUpButton: this.btnEditAssistOffsetUp,
+        regenerateButton: this.btnEditAssistRegenerate,
+        clearButton: this.btnEditAssistClear,
+        bpmInput: this.editAssistBpmInput,
+        offsetInput: this.editAssistOffsetInput,
+        densitySelect: this.editAssistDensitySelect,
+        result: this.editAssistResult,
+        status: this.editAssistStatus,
+      }),
+      pushHistory: () => this.pushTimelineHistory(),
+      renderTimeline: () => this.renderVideoTimeline(),
+      showStatus: (el, message, type) => this.showStatus(el, message, type),
+      updateTimelineHint: () => this.updateTimelineHint(),
+    });
     this.modalFocusState = new WeakMap();
     this.TIMELINE_EFFECT_META = TIMELINE_EFFECT_META;
     this.DEFAULT_TIMELINE_EFFECT_DURATION = DEFAULT_TIMELINE_EFFECT_DURATION;
@@ -137,6 +163,7 @@ export class AppController {
     this.timelineDetectorSyncPromise = null;
     this.timelineDetectorSyncForce = false;
     this.videoBaseImageSettings = null;
+    this.pendingEditorProject = null;
     this.isVideoExporting = false;
     this.videoExportFileName = '';
     this.videoExportWakeLock = null;

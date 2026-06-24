@@ -24,7 +24,10 @@ export function setupDom(app) {
   app.btnWebcamMode = $('#btnWebcamMode');
   app.btnVideoMode = $('#btnVideoMode');
   app.videoFileInput = $('#videoFileInput');
+  app.projectFileInput = $('#projectFileInput');
   app.btnChooseVideo = $('#btnChooseVideo');
+  app.btnSaveProject = $('#btnSaveProject');
+  app.btnLoadProject = $('#btnLoadProject');
   app.videoFileMeta = $('#videoFileMeta');
   app.videoEditorStatus = $('#videoEditorStatus');
   app.btnVideoStart = $('#btnVideoStart');
@@ -51,6 +54,7 @@ export function setupDom(app) {
   app.videoEffectType = $('#videoEffectType');
   app.videoEffectStart = $('#videoEffectStart');
   app.videoEffectEnd = $('#videoEffectEnd');
+  app.videoEffectAutomationSelect = $('#videoEffectAutomationSelect');
   app.videoEffectClipMeta = $('#videoEffectClipMeta');
   app.videoEffectTypeLabel = $('#videoEffectTypeLabel');
   app.videoEffectDurationLabel = $('#videoEffectDurationLabel');
@@ -58,6 +62,7 @@ export function setupDom(app) {
   app.btnDeleteVideoEffect = $('#btnDeleteVideoEffect');
   app.videoExportDetails = $('#videoExportDetails');
   app.videoExportDiagnostics = $('#videoExportDiagnostics');
+  app.editorExportPresetSelect = $('#editorExportPresetSelect');
   app.videoExportModeSelect = $('#videoExportModeSelect');
   app.editorExportFormatSelect = $('#editorExportFormatSelect');
   app.chkEditorCopyAudio = $('#chkEditorCopyAudio');
@@ -70,7 +75,16 @@ export function setupDom(app) {
   app.btnEditAssistBeat = $('#btnEditAssistBeat');
   app.btnEditAssistEvery2 = $('#btnEditAssistEvery2');
   app.btnEditAssistEvery4 = $('#btnEditAssistEvery4');
+  app.btnEditAssistEvery8 = $('#btnEditAssistEvery8');
+  app.btnEditAssistHalf = $('#btnEditAssistHalf');
+  app.btnEditAssistDouble = $('#btnEditAssistDouble');
+  app.btnEditAssistOffsetDown = $('#btnEditAssistOffsetDown');
+  app.btnEditAssistOffsetUp = $('#btnEditAssistOffsetUp');
+  app.btnEditAssistRegenerate = $('#btnEditAssistRegenerate');
   app.btnEditAssistClear = $('#btnEditAssistClear');
+  app.editAssistBpmInput = $('#editAssistBpmInput');
+  app.editAssistOffsetInput = $('#editAssistOffsetInput');
+  app.editAssistDensitySelect = $('#editAssistDensitySelect');
   app.editAssistResult = $('#editAssistResult');
   app.editAssistStatus = $('#editAssistStatus');
   app.videoExportModal = $('#videoExportModal');

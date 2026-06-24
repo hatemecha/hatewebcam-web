@@ -1,7 +1,4 @@
-import {
-  PREVIEW_QUALITY_PRESETS,
-  normalizePreviewQuality,
-} from './constants.mjs';
+import { normalizePreviewQuality } from './constants.mjs';
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyStorageMixin(proto) {
   proto.loadJsonStorage = function (key, fallbackValue) {
@@ -236,8 +233,10 @@ export function applyStorageMixin(proto) {
     const controller = this;
 
     ['log', 'info', 'warn'].forEach((method) => {
+      // eslint-disable-next-line no-console
       const original = console[method];
       if (typeof original !== 'function') return;
+      // eslint-disable-next-line no-console
       console[method] = function patchedConsoleMethod(...args) {
         if (controller.shouldSuppressMediaPipeConsoleNoise(args)) return;
         return original.apply(this, args);
@@ -680,6 +679,15 @@ export function applyStorageMixin(proto) {
     )
       ? this.imageSettings.videoFormat
       : 'auto';
+    this.imageSettings.editorExportPreset = [
+      'fast',
+      'balanced',
+      'high',
+      'chroma',
+      'experimental-mp4',
+    ].includes(this.imageSettings.editorExportPreset)
+      ? this.imageSettings.editorExportPreset
+      : 'balanced';
     this.imageSettings.editorExportFormat = ['auto', 'mp4', 'webm'].includes(
       this.imageSettings.editorExportFormat,
     )
@@ -780,6 +788,9 @@ export function applyStorageMixin(proto) {
       this.valJpegQuality.textContent = `${this.imageSettings.jpegQuality}%`;
     if (this.videoFormatSelect)
       this.videoFormatSelect.value = this.imageSettings.videoFormat;
+    if (this.editorExportPresetSelect)
+      this.editorExportPresetSelect.value =
+        this.imageSettings.editorExportPreset;
     if (this.videoExportModeSelect)
       this.videoExportModeSelect.value = this.imageSettings.editorExportMode;
     if (this.editorExportFormatSelect)
@@ -905,6 +916,12 @@ export function applyStorageMixin(proto) {
       });
     }
 
+    if (this.editorExportPresetSelect) {
+      this.editorExportPresetSelect.addEventListener('change', (e) => {
+        this.applyEditorExportPreset(e.target.value);
+      });
+    }
+
     if (this.editorExportFormatSelect) {
       this.editorExportFormatSelect.addEventListener('change', (e) => {
         this.imageSettings.editorExportFormat = [
@@ -987,6 +1004,7 @@ export function applyStorageMixin(proto) {
           ...this.DEFAULT_IMAGE_SETTINGS,
           jpegQuality: this.imageSettings.jpegQuality,
           videoFormat: this.imageSettings.videoFormat,
+          editorExportPreset: this.imageSettings.editorExportPreset,
           editorExportFormat: this.imageSettings.editorExportFormat,
           editorExportMode: this.imageSettings.editorExportMode,
           editorCopyAudio: this.imageSettings.editorCopyAudio,

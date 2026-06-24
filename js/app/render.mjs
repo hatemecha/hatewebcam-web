@@ -1,8 +1,3 @@
-import {
-  PREVIEW_MIN_WIDTH,
-  PREVIEW_MIN_HEIGHT,
-  PREVIEW_QUALITY_PRESETS,
-} from './constants.mjs';
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyRenderLoopMixin(proto) {
   proto.getSourceFrameDimensions = function () {

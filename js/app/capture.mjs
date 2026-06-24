@@ -1222,8 +1222,8 @@ export function applyCaptureMixin(proto) {
     ];
 
     const desired = this.imageSettings.videoFormat || 'auto';
-    let mimeType = '';
-    let extension = 'webm';
+    let mimeType;
+    let extension;
     let fallbackMessage = '';
 
     if (desired === 'mp4') {
