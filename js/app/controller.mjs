@@ -58,7 +58,7 @@ export class AppController {
     this.uiController.attachLegacyAccessors(this);
     this.renderController = new RenderController();
     this.renderController.attachLegacyAccessors(this);
-    this.cameraController = new CameraController();
+    this.cameraController = new CameraController(this);
     this.cameraController.attachLegacyAccessors(this);
     this.effectsController = new EffectsController(
       DEFAULT_QUICK_DETECTOR_SETTINGS,
@@ -66,9 +66,9 @@ export class AppController {
     this.effectsController.attachLegacyAccessors(this);
     this.captureController = new CaptureController();
     this.captureController.attachLegacyAccessors(this);
-    this.videoEditorController = new VideoEditorController();
+    this.videoEditorController = new VideoEditorController(this);
     this.videoEditorController.attachLegacyAccessors(this);
-    this.exportController = new ExportController();
+    this.exportController = new ExportController(this);
     this.exportController.attachLegacyAccessors(this);
     this.settingsStore = new SettingsStore({
       onError: (err) => this.notifyStorageUnavailable(err),

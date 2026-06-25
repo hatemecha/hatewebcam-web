@@ -84,7 +84,7 @@ export function applyLocalvideoeditorMixin(proto) {
     this.setCameraPlaceholderMessage('Iniciando cámara automáticamente...');
     this.updatePreviewPlaceholder();
     void this.restoreWebcamSessionState();
-    void this.toggleCamera(true);
+    void this.cameraController.start();
   };
 
   proto.restoreWebcamSessionState = async function () {
@@ -119,7 +119,7 @@ export function applyLocalvideoeditorMixin(proto) {
   };
 
   proto.disposeVideoSource = function () {
-    if (this.isVideoExporting) this.cancelVideoExport();
+    if (this.isVideoExporting) this.exportController.cancel();
     this.videoEl.pause();
     this.cancelRenderLoop();
     this.isRunning = false;
@@ -3001,7 +3001,7 @@ export function applyLocalvideoeditorMixin(proto) {
       messages[err?.message] ||
       'La exportación falló. Revisá espacio libre y permisos.';
     this.showStatus(this.videoEditorStatus, message, 'error');
-    void this.cancelVideoExport(false).then(() => {
+    void this.exportController.cancel(false).then(() => {
       this.videoExportTitle.innerHTML =
         '<i class="fa-solid fa-triangle-exclamation"></i> Error de exportación';
       const detail = err?.message || err?.name || 'error_desconocido';

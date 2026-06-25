@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -19,6 +19,12 @@ function listJavascriptFiles(dir = 'js') {
 }
 
 const javascriptFiles = listJavascriptFiles();
+const htmlTemplateFiles = [
+  'templates/video-editor.html',
+  'templates/webcam-controls.html',
+  'templates/export-modal.html',
+  'templates/capture-modal.html',
+];
 
 const controllerConstantPattern =
   /(?<![.\w$])(?:TIMELINE_EFFECT_META|DEFAULT_TIMELINE_EFFECT_DURATION|DEFAULT_IMAGE_SETTINGS|DEFAULT_CAMERA_FPS|DEFAULT_PREVIEW_QUALITY|MEDIAPIPE_FACE_MESH_VERSION|MEDIAPIPE_FACE_MESH_SRC|MEDIAPIPE_CONSOLE_NOISE_PATTERNS|DETECTOR_DEFAULT_BOX_COLOR|DEFAULT_QUICK_DETECTOR_SETTINGS|ADJUST_CONTEXT_HELP|STORAGE_KEY|PROFILES_KEY|COMMON_VIDEO_FPS)\b/;
@@ -124,13 +130,23 @@ for (const file of javascriptFiles) {
 }
 
 const html = readFileSync(resolve(rootDir, 'index.html'), 'utf8');
+const htmlBundle = [
+  html,
+  ...htmlTemplateFiles.map((file) => {
+    const path = resolve(rootDir, file);
+    if (!existsSync(path)) {
+      fail(`missing template ${file}`);
+    }
+    return readFileSync(path, 'utf8');
+  }),
+].join('\n');
 const forbiddenRuntimeFragments = [
   'https://cdn.jsdelivr.net',
   'https://esm.sh',
   'https://cdnjs.cloudflare.com',
   'webm-muxer',
 ];
-for (const file of ['index.html', ...javascriptFiles]) {
+for (const file of ['index.html', ...htmlTemplateFiles, ...javascriptFiles]) {
   const source =
     file === 'index.html' ? html : readFileSync(resolve(rootDir, file), 'utf8');
   for (const fragment of forbiddenRuntimeFragments) {
@@ -139,6 +155,16 @@ for (const file of ['index.html', ...javascriptFiles]) {
         `${file} still references runtime CDN/deprecated dependency ${fragment}`,
       );
     }
+  }
+}
+for (const fragment of [
+  'id="videoEditorTemplateSlot"',
+  'id="webcamControlsTemplateSlot"',
+  'id="exportModalTemplateSlot"',
+  'id="captureModalTemplateSlot"',
+]) {
+  if (!html.includes(fragment)) {
+    fail(`index.html is missing template mount ${fragment}`);
   }
 }
 const appJs = readFileSync(resolve(rootDir, 'js/app.js'), 'utf8');
@@ -174,8 +200,8 @@ if (videoEditorJs.includes("import('./video-export.mjs')")) {
   );
 }
 for (const fragment of requiredHtmlFragments) {
-  if (!html.includes(fragment)) {
-    fail(`index.html is missing ${fragment}`);
+  if (!htmlBundle.includes(fragment)) {
+    fail(`HTML templates are missing ${fragment}`);
   }
 }
 

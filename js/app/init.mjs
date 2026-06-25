@@ -81,7 +81,7 @@ export function applyInitMixin(proto) {
     this.updateCaptureButtons();
 
     // Auto-start camera on load (if browser allows it) without blocking UI init.
-    void this.toggleCamera(true);
+    void this.cameraController.start();
     void this.refreshCameraDevices(this.preferredDeviceId);
   };
 }

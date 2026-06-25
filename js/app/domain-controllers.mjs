@@ -17,8 +17,18 @@ function attachAccessors(target, source, keys) {
   });
 }
 
+function attachOwner(controller, owner) {
+  Object.defineProperty(controller, 'owner', {
+    configurable: true,
+    enumerable: false,
+    writable: true,
+    value: owner,
+  });
+}
+
 export class CameraController {
-  constructor() {
+  constructor(owner = null) {
+    attachOwner(this, owner);
     this.cameraManager = new CameraManager();
     this.isRunning = false;
     this.preferredDeviceId = null;
@@ -36,6 +46,26 @@ export class CameraController {
       'autoPerformanceDowngraded',
       'lowFpsSampleCount',
     ]);
+  }
+
+  start() {
+    return this.owner?.toggleCamera(true);
+  }
+
+  stop() {
+    if (!this.owner) {
+      this.cameraManager.stop();
+      this.isRunning = false;
+      return undefined;
+    }
+    if (!this.owner.isRunning) return undefined;
+    return this.owner.toggleCamera(false);
+  }
+
+  switch(deviceId = null) {
+    if (!this.owner) return this.cameraManager.switchCamera(deviceId);
+    if (this.owner.cameraSelect) this.owner.cameraSelect.value = deviceId || '';
+    return this.owner.onCameraChange();
   }
 }
 
@@ -121,7 +151,8 @@ export class CaptureController {
 }
 
 export class VideoEditorController {
-  constructor() {
+  constructor(owner = null) {
+    attachOwner(this, owner);
     this.sourceMode = 'camera';
     this.videoObjectUrl = '';
     this.videoSourceFile = null;
@@ -149,10 +180,15 @@ export class VideoEditorController {
   attachLegacyAccessors(target) {
     attachAccessors(target, this, Object.keys(this));
   }
+
+  loadFile(file) {
+    return this.owner?.loadVideoFile(file);
+  }
 }
 
 export class ExportController {
-  constructor() {
+  constructor(owner = null) {
+    attachOwner(this, owner);
     this.videoExportSession = new VideoExportSession();
     this.videoExportDiagnosis = null;
     this.videoExportPreflight = null;
@@ -169,6 +205,14 @@ export class ExportController {
       'videoExportPlayback',
     ]);
     this.videoExportSession.attachLegacyAccessors(target);
+  }
+
+  start() {
+    return this.owner?.startVideoExport();
+  }
+
+  cancel(showMessage = true) {
+    return this.owner?.cancelVideoExport(showMessage);
   }
 }
 

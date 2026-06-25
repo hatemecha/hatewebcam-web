@@ -166,7 +166,7 @@ export function applyCameraMixin(proto) {
       this.cameraManager.stop();
       this.isRunning = false;
       this.cancelRenderLoop();
-      await this.toggleCamera(true);
+      await this.cameraController.start();
     }
   };
 

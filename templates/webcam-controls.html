@@ -1,0 +1,589 @@
+<aside class="control-panel" id="controlPanel">
+  <div class="panel-section webcam-only">
+    <div class="section-title accent">
+      <i class="fa-solid fa-video"></i> Cámara
+    </div>
+    <div class="help-text">La cámara se inicia sola al abrir la página.</div>
+    <button type="button" class="btn primary" id="btnToggleCamera">
+      <i class="fa-solid fa-play"></i> Encender Cámara
+    </button>
+    <div class="spacer-8"></div>
+    <div class="slider-label"><span>Elegir cámara</span></div>
+    <div class="help-text">Si tenés más de una cámara, elegí cuál usar.</div>
+    <div class="select-wrapper">
+      <select id="cameraSelect">
+        <option value="">Cargando...</option>
+      </select>
+    </div>
+    <div class="spacer-8"></div>
+    <div class="slider-label"><span>Rendimiento</span></div>
+    <div class="select-wrapper">
+      <select id="performanceModeSelect">
+        <option value="auto">Automático</option>
+        <option value="performance">Rendimiento</option>
+        <option value="normal" selected>Normal</option>
+        <option value="quality">Calidad</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Capture -->
+  <div class="panel-section webcam-only">
+    <div class="section-title accent">
+      <i class="fa-solid fa-camera-retro"></i> Captura
+    </div>
+    <div class="help-text">
+      Controles directos para sacar fotos y grabar sin tocar configuraciones
+      extra.
+    </div>
+    <div class="btn-row">
+      <button type="button" class="btn" id="btnTakePhoto">
+        <i class="fa-solid fa-camera"></i> Sacar foto
+      </button>
+      <button type="button" class="btn" id="btnRecord">
+        <i class="fa-solid fa-circle-dot"></i> Grabar
+      </button>
+    </div>
+    <div class="spacer-8"></div>
+    <div class="slider-label"><span>Temporizador de foto</span></div>
+    <div class="select-wrapper">
+      <select id="captureTimerSelect" aria-label="Temporizador de foto">
+        <option value="0">Sin temporizador</option>
+        <option value="5">5 segundos</option>
+        <option value="10">10 segundos</option>
+      </select>
+    </div>
+    <div
+      class="status-msg hidden"
+      id="captureStatus"
+      role="status"
+      aria-live="polite"
+    ></div>
+    <div class="help-text section-note">
+      Después de cada captura se abre una vista previa para decidir si querés
+      descargar o descartar.
+    </div>
+  </div>
+
+  <div id="effectsControlsSlot">
+    <div
+      class="panel-section adjust-context-nav video-only hidden"
+      id="adjustContextNav"
+      aria-label="Ajustes por pista"
+    >
+      <div
+        class="adjust-context-tabs"
+        role="tablist"
+        aria-label="Tipo de ajustes"
+      >
+        <button
+          type="button"
+          class="adjust-context-tab"
+          role="tab"
+          data-adjust-context="look"
+        >
+          Video / Look
+        </button>
+        <button
+          type="button"
+          class="adjust-context-tab"
+          role="tab"
+          data-adjust-context="blob"
+        >
+          Color
+        </button>
+        <button
+          type="button"
+          class="adjust-context-tab"
+          role="tab"
+          data-adjust-context="face"
+        >
+          Caras
+        </button>
+        <button
+          type="button"
+          class="adjust-context-tab"
+          role="tab"
+          data-adjust-context="blink"
+        >
+          Ojos
+        </button>
+      </div>
+      <div class="help-text" id="adjustContextHelp"></div>
+      <div
+        class="adjust-clip-status mono video-only hidden"
+        id="adjustClipStatus"
+      ></div>
+    </div>
+
+    <!-- Quick Filter -->
+    <div class="panel-section adjust-context-group" data-adjust-context="look">
+      <div class="section-title accent">
+        <i class="fa-solid fa-wand-magic-sparkles"></i> Filtro rápido
+      </div>
+      <div class="help-text adjust-webcam-help">
+        Elegí un look rápido. Si querés ajustar cada detalle, abrí las opciones
+        avanzadas.
+      </div>
+      <div class="help-text adjust-video-help video-only hidden">
+        Presets y filtros del clip LOOK seleccionado. Previsualizá moviendo el
+        cursor dentro de su tramo.
+      </div>
+      <div class="preset-grid">
+        <button type="button" class="btn preset-btn" data-preset="natural">
+          Natural
+        </button>
+        <button type="button" class="btn preset-btn" data-preset="vivid">
+          Vivo
+        </button>
+        <button type="button" class="btn preset-btn" data-preset="cinema">
+          Cine
+        </button>
+        <button type="button" class="btn preset-btn" data-preset="bw">
+          B/N
+        </button>
+      </div>
+      <label class="checkbox-group">
+        <input type="checkbox" id="chkBlackWhite" />
+        <span>Filtro blanco y negro</span>
+      </label>
+    </div>
+
+    <!-- Blob / color -->
+    <div class="panel-section adjust-context-group" data-adjust-context="blob">
+      <div class="section-title accent">
+        <i class="fa-solid fa-palette"></i> Tracking de color
+      </div>
+      <div class="help-text adjust-webcam-help">
+        Activá el detector y elegí qué color seguir en la preview.
+      </div>
+      <div class="help-text adjust-video-help video-only hidden">
+        Configurá el tracking de color del clip. El detector se enciende solo
+        dentro de su tramo en la timeline.
+      </div>
+      <div class="quick-detector">
+        <div class="quick-detector-row adjust-detector-toggle">
+          <label class="checkbox-group">
+            <input type="checkbox" id="chkBlobTracking" />
+            <span>Detectar objetos por color</span>
+          </label>
+        </div>
+        <div class="quick-detector-extra hidden" id="colorPickSection">
+          <div class="quick-action-copy">
+            <strong>Elegí qué color seguir</strong
+            ><span
+              >Presioná el botón y después tocá ese color en el video.</span
+            >
+          </div>
+          <button type="button" class="btn primary" id="btnColorPick">
+            <i class="fa-solid fa-eyedropper"></i> Elegir color en el video
+          </button>
+          <label
+            class="quick-color-chip"
+            title="Solo cambia el aspecto del recuadro"
+          >
+            <span class="quick-chip-label">Color del recuadro</span>
+            <span class="color-swatch" id="blobQuickColorSwatch"></span>
+            <input
+              type="color"
+              id="inpBlobQuickColor"
+              value="#ff2222"
+              aria-label="Color visual del recuadro"
+            />
+          </label>
+          <div
+            class="status-msg hidden"
+            id="colorPickStatus"
+            role="status"
+            aria-live="polite"
+          ></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Face -->
+    <div class="panel-section adjust-context-group" data-adjust-context="face">
+      <div class="section-title accent">
+        <i class="fa-solid fa-face-smile"></i> Detección de caras
+      </div>
+      <div class="help-text adjust-webcam-help">
+        Activá el detector y personalizá cómo se muestran las caras.
+      </div>
+      <div class="help-text adjust-video-help video-only hidden">
+        Personalizá recuadro, blur y etiqueta del clip CARAS. La detección se
+        activa sola cuando el cursor entra en su tramo.
+      </div>
+      <div class="quick-detector">
+        <div class="quick-detector-row adjust-detector-toggle">
+          <label class="checkbox-group">
+            <input type="checkbox" id="chkFaceDetection" />
+            <span>Detectar caras</span>
+          </label>
+        </div>
+        <div class="quick-detector-extra hidden" id="faceQuickControls">
+          <div class="face-visual-toggles">
+            <label class="checkbox-group">
+              <input type="checkbox" id="chkFaceShowBox" checked />
+              <span>Recuadro</span>
+            </label>
+            <label class="checkbox-group">
+              <input type="checkbox" id="chkFaceShowBlur" />
+              <span>Desenfoque / pixelado</span>
+            </label>
+          </div>
+          <div class="quick-inline-fields">
+            <label
+              class="quick-color-chip"
+              id="faceQuickColorChip"
+              title="Color del recuadro de caras"
+            >
+              <span class="quick-chip-label">Recuadro</span>
+              <span class="color-swatch" id="faceQuickColorSwatch"></span>
+              <input
+                type="color"
+                id="inpFaceQuickColor"
+                value="#ff2222"
+                aria-label="Color del recuadro de caras"
+              />
+            </label>
+          </div>
+          <div id="faceQuickLabelWrap">
+            <input
+              type="text"
+              id="inpFaceQuickLabel"
+              class="text-input compact-text-input"
+              maxlength="28"
+              placeholder="Texto del recuadro"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Blink -->
+    <div class="panel-section adjust-context-group" data-adjust-context="blink">
+      <div class="section-title accent">
+        <i class="fa-solid fa-eye"></i> Detección de pestañeos
+      </div>
+      <div class="help-text adjust-webcam-help">
+        Activá el detector para marcar pestañeos en la preview.
+      </div>
+      <div class="help-text adjust-video-help video-only hidden">
+        Ajustá el detector del clip OJOS. Se activa solo dentro de su tramo en
+        la timeline.
+      </div>
+      <div class="quick-detector">
+        <div class="quick-detector-row adjust-detector-toggle">
+          <label class="checkbox-group">
+            <input type="checkbox" id="chkBlinkDetection" />
+            <span>Detectar pestañeos</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Advanced Toggle -->
+    <div class="panel-section adjust-advanced-toggle">
+      <button
+        class="btn toggle-btn"
+        id="btnToggleAdvancedOptions"
+        type="button"
+        aria-expanded="false"
+        aria-controls="advancedOptions"
+      >
+        <span class="toggle-btn-leading">
+          <i class="fa-solid fa-sliders"></i>
+          <span id="advancedToggleLabel">Mostrar opciones avanzadas</span>
+        </span>
+        <i class="fa-solid fa-chevron-down toggle-chevron"></i>
+      </button>
+      <div class="help-text section-note">
+        Acá quedan formatos, ajuste fino, configuración detallada y perfiles
+        guardados.
+      </div>
+    </div>
+
+    <div id="advancedOptions" class="advanced-options hidden">
+      <!-- Capture Settings -->
+      <div class="panel-section adjust-webcam-only">
+        <div class="section-title">
+          <i class="fa-solid fa-film"></i> Calidad de salida
+        </div>
+        <div class="help-text photo-only">
+          Las fotos se descargan en JPEG. La grabación de cámara intenta MP4 y,
+          si no está disponible, usa WebM.
+        </div>
+        <div class="help-text video-only hidden">
+          La exportación del editor se configura en Proyecto → Exportación.
+        </div>
+        <div class="slider-group photo-only">
+          <div class="slider-label">
+            <span>Calidad foto JPEG</span
+            ><span class="value" id="valJpegQuality">92%</span>
+          </div>
+          <input
+            type="range"
+            id="sldJpegQuality"
+            min="60"
+            max="100"
+            step="1"
+            value="92"
+          />
+        </div>
+        <div class="slider-label photo-only">
+          <span>Formato de grabación</span>
+        </div>
+        <div class="select-wrapper photo-only">
+          <select id="videoFormatSelect">
+            <option value="auto">Automático (MP4 preferido)</option>
+            <option value="mp4">MP4 (si el navegador lo soporta)</option>
+            <option value="webm">WebM</option>
+          </select>
+        </div>
+        <div class="spacer-8"></div>
+        <label class="checkbox-group">
+          <input type="checkbox" id="chkQualityEnhancer" />
+          <span>Mejorador de calidad opcional</span>
+        </label>
+        <div class="slider-group hidden" id="qualityEnhancerStrengthGroup">
+          <div class="slider-label">
+            <span>Intensidad del mejorador</span
+            ><span class="value" id="valQualityEnhancerStrength">35%</span>
+          </div>
+          <input
+            type="range"
+            id="sldQualityEnhancerStrength"
+            min="0"
+            max="100"
+            step="1"
+            value="35"
+          />
+        </div>
+        <div class="help-text section-note photo-only">
+          Aplica limpieza y nitidez extra al archivo final.
+        </div>
+        <div class="help-text section-note video-only hidden">
+          Aplica limpieza y nitidez extra al video exportado.
+        </div>
+      </div>
+
+      <!-- Transforms -->
+      <div
+        class="panel-section adjust-context-group"
+        data-adjust-context="look"
+      >
+        <div class="section-title">
+          <i class="fa-solid fa-image"></i> Imagen
+        </div>
+        <div class="help-text webcam-only">
+          Ajustá orientación y encuadre de la cámara.
+        </div>
+        <div class="help-text video-only hidden">
+          Ajustá orientación y encuadre del video.
+        </div>
+        <label class="checkbox-group">
+          <input type="checkbox" id="chkMirror" />
+          <span>Espejo (invertir horizontalmente)</span>
+        </label>
+        <label class="checkbox-group">
+          <input type="checkbox" id="chkFlipV" />
+          <span>Invertir verticalmente</span>
+        </label>
+        <div class="spacer-6"></div>
+        <div class="slider-label"><span>Rotación</span></div>
+        <div class="select-wrapper">
+          <select id="rotationSelect">
+            <option value="0">Sin rotación</option>
+            <option value="90">90° (girar derecha)</option>
+            <option value="180">180° (invertir)</option>
+            <option value="270">270° (girar izquierda)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Image Tuning -->
+      <div
+        class="panel-section adjust-context-group"
+        data-adjust-context="look"
+      >
+        <div class="section-title accent">
+          <i class="fa-solid fa-screwdriver-wrench"></i> Ajuste fino
+        </div>
+        <div class="help-text webcam-only">
+          Personalizá el look en tiempo real. También aplica a foto y grabación.
+        </div>
+        <div class="help-text video-only hidden">
+          Personalizá el look que se aplica a la preview y a la exportación.
+        </div>
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>Exposición</span><span class="value" id="valExposure">0</span>
+          </div>
+          <input
+            type="range"
+            id="sldExposure"
+            min="-100"
+            max="100"
+            step="1"
+            value="0"
+          />
+        </div>
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>Sombras</span><span class="value" id="valShadows">0</span>
+          </div>
+          <input
+            type="range"
+            id="sldShadows"
+            min="-100"
+            max="100"
+            step="1"
+            value="0"
+          />
+        </div>
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>Luces altas</span
+            ><span class="value" id="valHighlights">0</span>
+          </div>
+          <input
+            type="range"
+            id="sldHighlights"
+            min="-100"
+            max="100"
+            step="1"
+            value="0"
+          />
+        </div>
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>Contraste</span
+            ><span class="value" id="valContrast">100%</span>
+          </div>
+          <input
+            type="range"
+            id="sldContrast"
+            min="50"
+            max="180"
+            step="1"
+            value="100"
+          />
+        </div>
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>Saturación</span
+            ><span class="value" id="valSaturation">100%</span>
+          </div>
+          <input
+            type="range"
+            id="sldSaturation"
+            min="0"
+            max="200"
+            step="1"
+            value="100"
+          />
+        </div>
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>Temperatura</span
+            ><span class="value" id="valTemperature">0</span>
+          </div>
+          <input
+            type="range"
+            id="sldTemperature"
+            min="-100"
+            max="100"
+            step="1"
+            value="0"
+          />
+        </div>
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>Detalle</span><span class="value" id="valDetail">0</span>
+          </div>
+          <input
+            type="range"
+            id="sldDetail"
+            min="-100"
+            max="100"
+            step="1"
+            value="0"
+          />
+        </div>
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>Nitidez</span><span class="value" id="valSharpness">0</span>
+          </div>
+          <input
+            type="range"
+            id="sldSharpness"
+            min="0"
+            max="100"
+            step="1"
+            value="0"
+          />
+        </div>
+        <button type="button" class="btn" id="btnResetImageAdjustments">
+          <i class="fa-solid fa-rotate-left"></i> Restablecer ajustes de imagen
+        </button>
+      </div>
+
+      <!-- Effect config (dynamic) -->
+      <div
+        id="effectConfigBlob"
+        class="adjust-context-group"
+        data-adjust-context="blob"
+      ></div>
+      <div
+        id="effectConfigFace"
+        class="adjust-context-group"
+        data-adjust-context="face"
+      ></div>
+      <div
+        id="effectConfigBlink"
+        class="adjust-context-group"
+        data-adjust-context="blink"
+      ></div>
+
+      <!-- Profiles -->
+      <div class="panel-section adjust-webcam-only">
+        <div class="section-title">
+          <i class="fa-solid fa-bookmark"></i> Ajustes guardados
+        </div>
+        <div class="help-text">
+          Guardá detectores, transforms y ajustes de imagen para reutilizarlos
+          rápido.
+        </div>
+        <div class="profile-row">
+          <div class="select-wrapper flex-1">
+            <select id="profileSelect">
+              <option value="">—</option>
+            </select>
+          </div>
+          <button
+            type="button"
+            class="btn btn-icon"
+            id="btnSaveProfile"
+            title="Guardar configuración actual"
+          >
+            <i class="fa-solid fa-floppy-disk"></i>
+          </button>
+          <button
+            type="button"
+            class="btn btn-icon danger"
+            id="btnDeleteProfile"
+            title="Eliminar"
+          >
+            <i class="fa-solid fa-trash-can"></i>
+          </button>
+        </div>
+        <div
+          class="status-msg hidden"
+          id="profileStatus"
+          role="status"
+          aria-live="polite"
+        ></div>
+      </div>
+    </div>
+  </div>
+</aside>
