@@ -21,7 +21,9 @@ import {
   PREVIEW_MIN_WIDTH,
   PREVIEW_MIN_HEIGHT,
   COMMON_VIDEO_FPS,
+  PERFORMANCE_MODE_PRESETS,
   normalizePreviewQuality,
+  normalizePerformanceMode,
 } from './constants.mjs';
 import { setupDom } from './dom.mjs';
 import { applyStorageMixin } from './settings.mjs';
@@ -37,24 +39,43 @@ import { applyUIHelpersMixin } from './ui-helpers.mjs';
 import { applyProfilesMixin } from './profiles.mjs';
 import { applyCaptureMixin } from './capture.mjs';
 import { applyModalfocusmanagementMixin } from './modal-focus.mjs';
-import { RenderEngine } from './render-engine.mjs';
 import { SettingsStore } from './settings-store.mjs';
 import { TimelineView } from './timeline-view.mjs';
-import { VideoExportSession } from './video-export-session.mjs';
 import { EditAssistController } from './edit-assist-controller.mjs';
+import {
+  CameraController,
+  RenderController,
+  EffectsController,
+  CaptureController,
+  VideoEditorController,
+  ExportController,
+  UiController,
+} from './domain-controllers.mjs';
 
 export class AppController {
   constructor() {
-    this.renderEngine = new RenderEngine();
-    this.renderEngine.attachLegacyAccessors(this);
+    this.uiController = new UiController();
+    this.uiController.attachLegacyAccessors(this);
+    this.renderController = new RenderController();
+    this.renderController.attachLegacyAccessors(this);
+    this.cameraController = new CameraController();
+    this.cameraController.attachLegacyAccessors(this);
+    this.effectsController = new EffectsController(
+      DEFAULT_QUICK_DETECTOR_SETTINGS,
+    );
+    this.effectsController.attachLegacyAccessors(this);
+    this.captureController = new CaptureController();
+    this.captureController.attachLegacyAccessors(this);
+    this.videoEditorController = new VideoEditorController();
+    this.videoEditorController.attachLegacyAccessors(this);
+    this.exportController = new ExportController();
+    this.exportController.attachLegacyAccessors(this);
     this.settingsStore = new SettingsStore({
       onError: (err) => this.notifyStorageUnavailable(err),
     });
     this.timelineView = new TimelineView({
       formatTime: (seconds) => this.formatDurationDetailed(seconds),
     });
-    this.videoExportSession = new VideoExportSession();
-    this.videoExportSession.attachLegacyAccessors(this);
     this.editAssist = new EditAssistController({
       getSourceFile: () => this.videoSourceFile,
       getTimeline: () => this.videoTimeline,
@@ -82,7 +103,6 @@ export class AppController {
       showStatus: (el, message, type) => this.showStatus(el, message, type),
       updateTimelineHint: () => this.updateTimelineHint(),
     });
-    this.modalFocusState = new WeakMap();
     this.TIMELINE_EFFECT_META = TIMELINE_EFFECT_META;
     this.DEFAULT_TIMELINE_EFFECT_DURATION = DEFAULT_TIMELINE_EFFECT_DURATION;
     this.DEFAULT_IMAGE_SETTINGS = DEFAULT_IMAGE_SETTINGS;
@@ -102,79 +122,10 @@ export class AppController {
     this.PREVIEW_MIN_WIDTH = PREVIEW_MIN_WIDTH;
     this.PREVIEW_MIN_HEIGHT = PREVIEW_MIN_HEIGHT;
     this.COMMON_VIDEO_FPS = COMMON_VIDEO_FPS;
+    this.PERFORMANCE_MODE_PRESETS = PERFORMANCE_MODE_PRESETS;
     this.normalizePreviewQuality = normalizePreviewQuality;
-    this.cameraManager = new CameraManager();
-    this.effectManager = new EffectManager();
-    this.blobTrackingEffect = null;
-    this.faceDetectionEffect = null;
-    this.blinkDetectionEffect = null;
-    this.isRunning = false;
-    this.colorPickMode = false;
-    this.animFrameId = null;
-    this.frameCount = 0;
-    this.lastFpsTime = performance.now();
-    this.flipH = false;
-    this.flipV = false;
-    this.rotation = 0;
-    this.mobileActivePreset = null;
-    this.mediaRecorder = null;
-    this.recordingStream = null;
-    this.recordingChunks = [];
-    this.isRecording = false;
-    this.recordingStartTs = 0;
-    this.recordingTimer = null;
-    this.currentRecordingMimeType = '';
-    this.currentRecordingExt = 'webm';
-    this.currentRecordingBitrate = 6000000;
-    this.currentRecordingFps = 30;
-    this.pendingCapture = null;
-    this.lastRecordingDurationSec = 0;
-    this.previewScale = 1;
-    this.photoPreviewRenderToken = 0;
-    this.previewPhotoEnhancerDebounceId = null;
-    this.photoCountdownTimer = null;
-    this.photoCountdownRemaining = 0;
-    this.isPhotoCountdownActive = false;
-    this.preferredDeviceId = null;
-    this.faceMeshScriptLoadPromise = null;
-    this.mediaPipeConsoleFilterInstalled = false;
-    this.faceLoadRequestId = 0;
-    this.blinkLoadRequestId = 0;
-    this.isPageVisible = document.visibilityState !== 'hidden';
-    this.sourceMode = 'camera';
-    this.videoObjectUrl = '';
-    this.videoSourceFile = null;
-    this.videoPlaceholderLoading = false;
-    this.videoSourceFps = 30;
-    this.videoSourceAverageBitrate = 0;
-    this.videoTimeline = new VideoTimeline();
-    this.editorHistory =
-      typeof EditorHistory !== 'undefined' ? new EditorHistory() : null;
-    this.editorTool = 'select';
-    this.adjustmentsContext = 'look';
-    this.timelineZoom = 1;
-    this.timelineHistorySuspended = false;
-    this.selectedVideoEffectId = '';
-    this.selectedVideoEffectIds = new Set();
-    this.timelineClipboard = null;
-    this.paletteDragState = null;
-    this.timelineDragGhost = null;
-    this.appliedTimelineItemIds = {};
-    this.timelineDetectorSyncPromise = null;
-    this.timelineDetectorSyncForce = false;
-    this.videoBaseImageSettings = null;
-    this.pendingEditorProject = null;
-    this.isVideoExporting = false;
-    this.videoExportFileName = '';
-    this.videoExportWakeLock = null;
-    this.webcamSessionState = null;
+    this.normalizePerformanceMode = normalizePerformanceMode;
     this.imageSettings = { ...DEFAULT_IMAGE_SETTINGS };
-    this.quickDetectorSettings = { ...DEFAULT_QUICK_DETECTOR_SETTINGS };
-    this.saveImageSettingsTimer = null;
-    this.saveQuickDetectorSettingsTimer = null;
-    this.saveEffectSettingsTimer = null;
-    this.syncSelectedClipConfigTimer = null;
-    this.storageWarningShown = false;
   }
 
   start() {

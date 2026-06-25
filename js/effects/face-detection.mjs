@@ -2,7 +2,7 @@
  * FaceDetection — MediaPipe Face Mesh-based face detection
  * Draws bounding boxes around detected faces, accounting for canvas transforms
  */
-class FaceDetection {
+export class FaceDetection {
   constructor() {
     this.faceMesh = null;
     this.ready = false;

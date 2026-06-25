@@ -5,10 +5,73 @@ export const COMMON_VIDEO_FPS = [
 
 const EXPORT_FORMATS = new Set(['auto', 'mp4', 'webm']);
 const EXPORT_MODES = new Set(['full', 'effects-chroma']);
+const EXPORT_PRESETS = new Set([
+  'fast',
+  'balanced',
+  'high',
+  'chroma',
+  'experimental-mp4',
+]);
 const CHROMA_COLORS = {
   green: '#00ff00',
   blue: '#0047ff',
 };
+const MIB = 1024 * 1024;
+const GIB = 1024 * MIB;
+const EXPORT_RISK_LIMITS = Object.freeze({
+  highBytes: 700 * MIB,
+  blockBytes: 1.5 * GIB,
+  highFrames: 18_000,
+  blockFrames: 36_000,
+  highPixelRate: 125_000_000,
+});
+const EXPORT_PRESET_PROFILES = Object.freeze({
+  fast: Object.freeze({
+    mode: 'full',
+    format: 'webm',
+    copyAudio: false,
+    qualityEnhancer: false,
+    maxWidth: 1280,
+    maxHeight: 720,
+    maxFps: 30,
+  }),
+  balanced: Object.freeze({
+    mode: 'full',
+    format: 'webm',
+    copyAudio: false,
+    qualityEnhancer: false,
+    maxWidth: 1920,
+    maxHeight: 1080,
+    maxFps: 30,
+  }),
+  high: Object.freeze({
+    mode: 'full',
+    format: 'webm',
+    copyAudio: false,
+    qualityEnhancer: true,
+    maxWidth: Number.POSITIVE_INFINITY,
+    maxHeight: Number.POSITIVE_INFINITY,
+    maxFps: 60,
+  }),
+  chroma: Object.freeze({
+    mode: 'effects-chroma',
+    format: 'webm',
+    copyAudio: false,
+    qualityEnhancer: false,
+    maxWidth: Number.POSITIVE_INFINITY,
+    maxHeight: Number.POSITIVE_INFINITY,
+    maxFps: 30,
+  }),
+  'experimental-mp4': Object.freeze({
+    mode: 'full',
+    format: 'mp4',
+    copyAudio: true,
+    qualityEnhancer: false,
+    maxWidth: 1920,
+    maxHeight: 1080,
+    maxFps: 30,
+  }),
+});
 const MP4_CODEC_CANDIDATES = [
   { codec: 'avc1.640033', mediaCodec: 'avc' },
   { codec: 'avc1.64002a', mediaCodec: 'avc' },
@@ -69,6 +132,16 @@ export function normalizeEditorExportFormat(value) {
 export function normalizeEditorExportMode(value) {
   const mode = String(value || 'full').toLowerCase();
   return EXPORT_MODES.has(mode) ? mode : 'full';
+}
+
+export function normalizeEditorExportPreset(value) {
+  const preset = String(value || 'balanced').toLowerCase();
+  return EXPORT_PRESETS.has(preset) ? preset : 'balanced';
+}
+
+export function getEditorExportPresetProfile(value) {
+  const preset = normalizeEditorExportPreset(value);
+  return { preset, ...EXPORT_PRESET_PROFILES[preset] };
 }
 
 export function getEditorChromaColor(value) {
@@ -375,6 +448,140 @@ export function calculateExportBitrate(
     Number.isFinite(sourceBitrate) ? sourceBitrate : 0,
     qualityBitrate,
   );
+}
+
+export function calculateExportDimensions({
+  width = 1,
+  height = 1,
+  preset = 'balanced',
+} = {}) {
+  const profile = getEditorExportPresetProfile(preset);
+  const safeWidth = Math.max(1, Math.round(Number(width) || 1));
+  const safeHeight = Math.max(1, Math.round(Number(height) || 1));
+  const maxWidth = Number(profile.maxWidth) || Number.POSITIVE_INFINITY;
+  const maxHeight = Number(profile.maxHeight) || Number.POSITIVE_INFINITY;
+  const scale = Math.min(1, maxWidth / safeWidth, maxHeight / safeHeight);
+  return {
+    width: Math.max(1, Math.round(safeWidth * scale)),
+    height: Math.max(1, Math.round(safeHeight * scale)),
+    scale,
+  };
+}
+
+export function classifyExportMemoryRisk({
+  estimatedBytes = 0,
+  totalFrames = 0,
+  width = 1,
+  height = 1,
+  fps = 30,
+} = {}) {
+  const safeBytes = Math.max(0, Number(estimatedBytes) || 0);
+  const safeFrames = Math.max(0, Number(totalFrames) || 0);
+  const pixelRate =
+    Math.max(1, Number(width) || 1) *
+    Math.max(1, Number(height) || 1) *
+    Math.max(1, Number(fps) || 1);
+  const blocked =
+    safeBytes > EXPORT_RISK_LIMITS.blockBytes ||
+    safeFrames > EXPORT_RISK_LIMITS.blockFrames;
+  if (blocked) {
+    return {
+      level: 'blocked',
+      label: 'Bloqueado',
+      blocked: true,
+      recommendation:
+        'Reducí duración o usá Rápido/Balanceado antes de exportar.',
+    };
+  }
+  const high =
+    safeBytes > EXPORT_RISK_LIMITS.highBytes ||
+    safeFrames > EXPORT_RISK_LIMITS.highFrames ||
+    pixelRate >= EXPORT_RISK_LIMITS.highPixelRate;
+  if (high) {
+    return {
+      level: 'high',
+      label: 'Alto',
+      blocked: false,
+      recommendation: 'Recomendación: usar Balanceado o 720p/30.',
+    };
+  }
+  const medium = safeBytes > 300 * MIB || safeFrames > 9_000;
+  return {
+    level: medium ? 'medium' : 'low',
+    label: medium ? 'Medio' : 'Bajo',
+    blocked: false,
+    recommendation: medium
+      ? 'Si la pestaña se vuelve lenta, usá Rápido.'
+      : 'Listo para exportar.',
+  };
+}
+
+export function buildEditorExportPreflight({
+  preset = 'balanced',
+  width = 1,
+  height = 1,
+  sourceFps = 30,
+  duration = 0,
+  sourceBitrate = 0,
+  mode,
+  requestedFormat,
+  copyAudio,
+  qualityEnhancer,
+} = {}) {
+  const profile = getEditorExportPresetProfile(preset);
+  const exportMode = normalizeEditorExportMode(mode || profile.mode);
+  const exportFormat =
+    exportMode === 'effects-chroma'
+      ? 'webm'
+      : normalizeEditorExportFormat(requestedFormat || profile.format);
+  const shouldCopyAudio =
+    exportMode === 'full' &&
+    (copyAudio == null ? profile.copyAudio : copyAudio);
+  const shouldEnhance =
+    qualityEnhancer == null ? profile.qualityEnhancer : !!qualityEnhancer;
+  const dimensions = calculateExportDimensions({
+    width,
+    height,
+    preset: profile.preset,
+  });
+  const fps = Math.min(
+    normalizeFrameRate(sourceFps) || 30,
+    Math.max(1, Number(profile.maxFps) || 30),
+  );
+  const safeDuration = Math.max(0, Number(duration) || 0);
+  const totalFrames = calculateExportFrameCount(safeDuration, fps);
+  const bitrate = calculateExportBitrate(
+    sourceBitrate,
+    dimensions.width,
+    dimensions.height,
+    fps,
+    shouldEnhance && exportMode === 'full',
+  );
+  const estimatedBytes = Math.ceil((bitrate * safeDuration) / 8);
+  const risk = classifyExportMemoryRisk({
+    estimatedBytes,
+    totalFrames,
+    width: dimensions.width,
+    height: dimensions.height,
+    fps,
+  });
+  return {
+    ...profile,
+    mode: exportMode,
+    format: exportFormat,
+    copyAudio: shouldCopyAudio,
+    qualityEnhancer: shouldEnhance,
+    width: dimensions.width,
+    height: dimensions.height,
+    scale: dimensions.scale,
+    fps,
+    duration: safeDuration,
+    totalFrames,
+    bitrate,
+    estimatedBytes,
+    risk,
+    blocked: risk.blocked,
+  };
 }
 
 export function calculateExportFrameCount(duration, fps) {

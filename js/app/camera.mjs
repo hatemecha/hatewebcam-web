@@ -91,6 +91,107 @@ export function applyCameraMixin(proto) {
       : 'No se pudo activar la cámara. Revisá permisos y reintentá.';
   };
 
+  proto.getEffectivePerformanceMode = function () {
+    const mode = this.normalizePerformanceMode(
+      this.imageSettings.performanceMode,
+    );
+    if (mode === 'auto')
+      return this.autoPerformanceDowngraded ? 'performance' : 'normal';
+    return mode;
+  };
+
+  proto.getPerformanceModePreset = function (mode) {
+    const effective = mode || this.getEffectivePerformanceMode?.() || 'normal';
+    return (
+      this.PERFORMANCE_MODE_PRESETS[effective] ||
+      this.PERFORMANCE_MODE_PRESETS.normal
+    );
+  };
+
+  proto.getCameraStartOptions = function () {
+    return { ...this.getPerformanceModePreset().camera };
+  };
+
+  proto.applyDetectorPerformanceProfile = function (profile) {
+    if (this.blobTrackingEffect) {
+      this.blobTrackingEffect.processScale = profile.blobProcessScale;
+      this.blobTrackingEffect.processIntervalMs = profile.detectorIntervalMs;
+    }
+    if (this.faceDetectionEffect) {
+      this.faceDetectionEffect.processIntervalMs = profile.detectorIntervalMs;
+    }
+    if (this.blinkDetectionEffect) {
+      this.blinkDetectionEffect.processIntervalMs = profile.detectorIntervalMs;
+    }
+    this.renderEffectConfig?.();
+  };
+
+  proto.applyPerformanceProfileSettings = function (
+    profile,
+    { save = true } = {},
+  ) {
+    this.imageSettings.previewQuality = profile.previewQuality;
+    this.applyDetectorPerformanceProfile(profile);
+    this.updateImageControlsUI();
+    this.requestPreviewRefresh(true);
+    if (save) this.saveImageSettings();
+  };
+
+  proto.applyPerformanceMode = async function (
+    mode,
+    { restartCamera = false, notify = false, save = true } = {},
+  ) {
+    const normalized = this.normalizePerformanceMode(mode);
+    const changed = this.imageSettings.performanceMode !== normalized;
+    this.imageSettings.performanceMode = normalized;
+    this.autoPerformanceDowngraded = false;
+    this.lowFpsSampleCount = 0;
+    this.applyPerformanceProfileSettings(this.getPerformanceModePreset(), {
+      save,
+    });
+    if (notify) {
+      this.showStatus(
+        this.captureStatus,
+        `Modo ${this.PERFORMANCE_MODE_PRESETS[normalized].label} aplicado.`,
+        'info',
+      );
+      setTimeout(() => this.hideStatus(this.captureStatus), 1600);
+    }
+    if (
+      restartCamera &&
+      changed &&
+      this.isRunning &&
+      this.sourceMode === 'camera'
+    ) {
+      this.cameraManager.stop();
+      this.isRunning = false;
+      this.cancelRenderLoop();
+      await this.toggleCamera(true);
+    }
+  };
+
+  proto.handlePreviewFpsSample = function (fps) {
+    if (
+      this.imageSettings.performanceMode !== 'auto' ||
+      this.autoPerformanceDowngraded
+    ) {
+      return;
+    }
+    if (fps < 24) this.lowFpsSampleCount += 1;
+    else this.lowFpsSampleCount = 0;
+    if (this.lowFpsSampleCount < 3) return;
+    this.autoPerformanceDowngraded = true;
+    this.applyPerformanceProfileSettings(
+      this.PERFORMANCE_MODE_PRESETS.performance,
+      { save: false },
+    );
+    this.showStatus(
+      this.captureStatus,
+      'FPS bajo detectado. Se bajó la preview y el tracking.',
+      'warning',
+    );
+  };
+
   proto.toggleCamera = async function (forceStart = false) {
     if (this.sourceMode !== 'camera') return;
     if (this.isRunning && !forceStart) {
@@ -117,6 +218,7 @@ export function applyCameraMixin(proto) {
       const ok = await this.cameraManager.start(
         this.videoEl,
         requestedDeviceId,
+        this.getCameraStartOptions(),
       );
       if (ok) {
         this.isRunning = true;
@@ -174,7 +276,10 @@ export function applyCameraMixin(proto) {
 
     this.cameraSelect.disabled = true;
     try {
-      await this.cameraManager.switchCamera(this.cameraSelect.value);
+      await this.cameraManager.switchCamera(
+        this.cameraSelect.value,
+        this.getCameraStartOptions(),
+      );
       const settings = this.cameraManager.getStreamSettings();
       this.preferredDeviceId = settings.deviceId || this.preferredDeviceId;
       void this.refreshCameraDevices(this.preferredDeviceId);

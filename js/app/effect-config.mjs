@@ -224,7 +224,7 @@ export function applyEffectConfigUIMixin(proto) {
       <div class="config-block">
         <div class="config-block-title">Respuesta</div>
         <div class="help-text">Menos suavizado y menos retención responden más rápido. Si vibra demasiado, subilos un poco.</div>
-        ${this.slider('sldFaceInterval', 'valFaceInterval', 'Intervalo de análisis (ms)', fd.processIntervalMs, 16, 80)}
+        ${this.slider('sldFaceInterval', 'valFaceInterval', 'Intervalo de análisis (ms)', fd.processIntervalMs, 16, 120)}
         ${this.slider('sldFaceSmoothing', 'valFaceSmoothing', 'Suavizado del recuadro (%)', Math.round((fd.boxSmoothing || 0) * 100), 0, 95)}
         ${this.slider('sldFaceHold', 'valFaceHold', 'Retención al perder cara (ms)', fd.detectionHoldMs, 80, 300, 10)}
       </div>
@@ -305,7 +305,7 @@ export function applyEffectConfigUIMixin(proto) {
         (v) => (fd.boxThickness = v),
       );
       this.bindSlider(el, 'sldFaceInterval', 'valFaceInterval', (v) => {
-        fd.processIntervalMs = this.clamp(Math.round(v), 16, 80);
+        fd.processIntervalMs = this.clamp(Math.round(v), 16, 120);
       });
       this.bindSlider(el, 'sldFaceSmoothing', 'valFaceSmoothing', (v) => {
         fd.boxSmoothing = this.clamp(v / 100, 0, 0.95);
@@ -375,7 +375,7 @@ export function applyEffectConfigUIMixin(proto) {
         <div class="config-block-title">Configuración</div>
         <div class="help-text">Cuando cerrás un ojo, se dibujan líneas entre los objetos detectados. Necesitás tener el detector de objetos activado para ver las conexiones.</div>
         ${this.slider('sldEar', 'valEar', 'Sensibilidad (cuanto más alto, más fácil detectar)', bd.eyeArThreshold, 0.1, 0.4, 0.01)}
-        ${this.slider('sldBlinkInterval', 'valBlinkInterval', 'Intervalo de análisis (ms)', bd.processIntervalMs, 16, 80)}
+        ${this.slider('sldBlinkInterval', 'valBlinkInterval', 'Intervalo de análisis (ms)', bd.processIntervalMs, 16, 120)}
         ${this.slider('sldBlinkClosedFrames', 'valBlinkClosedFrames', 'Frames cerrados mínimos', bd.minClosedFrames, 1, 4)}
         ${this.slider('sldBlinkSmoothing', 'valBlinkSmoothing', 'Suavizado del párpado (%)', Math.round((bd._earSmoothing || 0) * 100), 0, 90)}
       </div>
@@ -391,7 +391,7 @@ export function applyEffectConfigUIMixin(proto) {
         this.scheduleSaveActiveEffectSettings();
       });
       this.bindSlider(el, 'sldBlinkInterval', 'valBlinkInterval', (v) => {
-        bd.processIntervalMs = this.clamp(Math.round(v), 16, 80);
+        bd.processIntervalMs = this.clamp(Math.round(v), 16, 120);
       });
       this.bindSlider(
         el,

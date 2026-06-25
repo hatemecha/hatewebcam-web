@@ -1,3 +1,5 @@
+import { WebGLFilterRenderer } from './webgl-filter-renderer.mjs';
+
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyRenderLoopMixin(proto) {
   proto.getSourceFrameDimensions = function () {
@@ -232,6 +234,7 @@ export function applyRenderLoopMixin(proto) {
         const now = performance.now();
         if (now - this.lastFpsTime >= 1000) {
           this.fpsInfo.textContent = `${this.frameCount} FPS`;
+          this.handlePreviewFpsSample?.(this.frameCount);
           this.frameCount = 0;
           this.lastFpsTime = now;
         }
@@ -260,8 +263,7 @@ export function applyRenderLoopMixin(proto) {
     );
   };
 
-  proto.buildCanvasFilter = function () {
-    if (this.isNeutralLookProcessing()) return 'none';
+  proto.getBaseFilterValues = function () {
     const exposureBoost = this.clamp(
       100 + this.imageSettings.exposure * 0.8,
       35,
@@ -272,8 +274,23 @@ export function applyRenderLoopMixin(proto) {
       ? 0
       : this.clamp(this.imageSettings.saturation, 0, 200);
     const grayscale = this.imageSettings.blackAndWhite ? 100 : 0;
+    return {
+      brightness: exposureBoost / 100,
+      contrast: contrast / 100,
+      saturation: saturation / 100,
+      grayscale: grayscale / 100,
+      exposureBoost,
+      contrastPercent: contrast,
+      saturationPercent: saturation,
+      grayscalePercent: grayscale,
+    };
+  };
 
-    return `brightness(${exposureBoost}%) contrast(${contrast}%) saturate(${saturation}%) grayscale(${grayscale}%)`;
+  proto.buildCanvasFilter = function () {
+    if (this.isNeutralLookProcessing()) return 'none';
+    const values = this.getBaseFilterValues();
+
+    return `brightness(${values.exposureBoost}%) contrast(${values.contrastPercent}%) saturate(${values.saturationPercent}%) grayscale(${values.grayscalePercent}%)`;
   };
 
   proto.needsAdvancedPixelAdjustments = function () {
@@ -293,6 +310,59 @@ export function applyRenderLoopMixin(proto) {
     return this.renderEngine.ensurePostFxBuffer(mode, w, h, scale);
   };
 
+  proto.ensureWebGLFilterRenderer = function () {
+    if (this.webglFilterFailed) return null;
+    if (!this.webglFilterRenderer) {
+      try {
+        this.webglFilterRenderer = new WebGLFilterRenderer();
+      } catch {
+        this.webglFilterFailed = true;
+        return null;
+      }
+    }
+    return this.webglFilterRenderer;
+  };
+
+  proto.tryDrawBaseFrameWithWebGL = function (
+    targetCtx,
+    targetCanvas,
+    mode,
+    drawMetrics,
+  ) {
+    if (mode !== 'preview' || this.isNeutralLookProcessing()) return false;
+    const renderer = this.ensureWebGLFilterRenderer();
+    if (!renderer) return false;
+    try {
+      const filteredCanvas = renderer.render(
+        this.videoEl,
+        drawMetrics.sourceWidth,
+        drawMetrics.sourceHeight,
+        this.getBaseFilterValues(),
+      );
+      targetCtx.save();
+      targetCtx.filter = 'none';
+      targetCtx.translate(targetCanvas.width / 2, targetCanvas.height / 2);
+      if (drawMetrics.effectiveRotation !== 0) {
+        targetCtx.rotate((drawMetrics.effectiveRotation * Math.PI) / 180);
+      }
+      if (drawMetrics.sx !== 1 || drawMetrics.sy !== 1) {
+        targetCtx.scale(drawMetrics.sx, drawMetrics.sy);
+      }
+      targetCtx.drawImage(
+        filteredCanvas,
+        -drawMetrics.drawWidth / 2,
+        -drawMetrics.drawHeight / 2,
+        drawMetrics.drawWidth,
+        drawMetrics.drawHeight,
+      );
+      targetCtx.restore();
+      return true;
+    } catch {
+      this.webglFilterFailed = true;
+      return false;
+    }
+  };
+
   proto.drawBaseFrame = function (targetCtx, targetCanvas, mode = 'preview') {
     const { sourceWidth, sourceHeight } = this.getSourceFrameDimensions();
     const effectiveRotation = this.getEffectiveRotationDegrees(
@@ -310,6 +380,24 @@ export function applyRenderLoopMixin(proto) {
       : Math.min(scaleX, scaleY);
     const drawWidth = Math.max(1, Math.round(sourceWidth * frameScale));
     const drawHeight = Math.max(1, Math.round(sourceHeight * frameScale));
+    let sx = 1;
+    let sy = 1;
+    if (this.getEffectiveFlipH()) sx = -1;
+    if (this.flipV) sy = -1;
+
+    if (
+      this.tryDrawBaseFrameWithWebGL(targetCtx, targetCanvas, mode, {
+        sourceWidth,
+        sourceHeight,
+        effectiveRotation,
+        drawWidth,
+        drawHeight,
+        sx,
+        sy,
+      })
+    ) {
+      return effectiveRotation;
+    }
 
     targetCtx.save();
     targetCtx.filter = this.buildCanvasFilter();
@@ -317,10 +405,6 @@ export function applyRenderLoopMixin(proto) {
     if (effectiveRotation !== 0) {
       targetCtx.rotate((effectiveRotation * Math.PI) / 180);
     }
-    let sx = 1;
-    let sy = 1;
-    if (this.getEffectiveFlipH()) sx = -1;
-    if (this.flipV) sy = -1;
     if (sx !== 1 || sy !== 1) {
       targetCtx.scale(sx, sy);
     }

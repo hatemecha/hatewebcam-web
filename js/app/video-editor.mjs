@@ -1,8 +1,10 @@
 import {
+  buildEditorExportPreflight,
   diagnoseVideoExportSupport,
   formatObservedExportProgress,
   getEditorChromaColor,
 } from '../video-export.mjs';
+import { VideoTimeline } from '../editor/video-timeline.mjs';
 import { applyVideoEditorClipboardMixin } from './video-editor-clipboard.mjs';
 import { applyVideoEditorTimelineMixin } from './video-editor-timeline.mjs';
 
@@ -301,6 +303,7 @@ export function applyLocalvideoeditorMixin(proto) {
         },
         preview: {
           previewQuality: this.imageSettings.previewQuality,
+          performanceMode: this.imageSettings.performanceMode,
         },
       },
       editAssist: this.editAssist?.toJSON?.() || null,
@@ -2033,6 +2036,40 @@ export function applyLocalvideoeditorMixin(proto) {
       });
   };
 
+  proto.buildVideoExportPreflight = function () {
+    if (!this.videoSourceFile) return null;
+    const { sourceWidth, sourceHeight } = this.getSourceFrameDimensions();
+    const { width, height } = this.getEffectiveFrameDimensions(
+      sourceWidth,
+      sourceHeight,
+    );
+    return buildEditorExportPreflight({
+      preset: this.imageSettings.editorExportPreset,
+      width,
+      height,
+      sourceFps: this.videoSourceFps,
+      duration: Math.max(
+        0,
+        (Number(this.videoTimeline?.trimEnd) || 0) -
+          (Number(this.videoTimeline?.trimStart) || 0),
+      ),
+      sourceBitrate: this.videoSourceAverageBitrate,
+      mode: this.imageSettings.editorExportMode,
+      requestedFormat: this.imageSettings.editorExportFormat,
+      copyAudio: this.imageSettings.editorCopyAudio,
+      qualityEnhancer: this.imageSettings.qualityEnhancer,
+    });
+  };
+
+  proto.getEffectiveVideoExportFps = function () {
+    return this.buildVideoExportPreflight()?.fps || null;
+  };
+
+  proto.formatVideoExportPreflight = function (preflight) {
+    if (!preflight) return 'Importá un video para habilitar la exportación.';
+    return `Preflight: ${preflight.width}×${preflight.height} · ${this.formatVideoFps(preflight.fps)} FPS · ${this.formatDurationDetailed(preflight.duration)} · ${preflight.totalFrames} frames · ${this.formatVideoBitrate(preflight.bitrate)} · memoria ${preflight.risk.label}`;
+  };
+
   proto.updateVideoEditorUI = function () {
     const loaded = !!this.videoSourceFile;
     const canExport =
@@ -2101,29 +2138,29 @@ export function applyLocalvideoeditorMixin(proto) {
     }
     this.updatePreviewPlaceholder();
     if (this.videoExportDetails) {
-      const bitrate = this.getRecommendedVideoBitrate(
-        this.videoEl.videoWidth,
-        this.videoEl.videoHeight,
-        this.videoSourceFps,
-      );
+      const preflight = this.buildVideoExportPreflight();
       const modeLabel =
-        this.imageSettings.editorExportMode === 'effects-chroma'
+        preflight?.mode === 'effects-chroma'
           ? 'solo efectos chroma'
           : 'video + efectos';
       const formatLabel =
-        this.imageSettings.editorExportMode === 'effects-chroma'
+        preflight?.mode === 'effects-chroma'
           ? 'WebM'
-          : (this.imageSettings.editorExportFormat || 'auto').toUpperCase();
+          : (
+              preflight?.format ||
+              this.imageSettings.editorExportFormat ||
+              'auto'
+            ).toUpperCase();
       const audioLabel =
-        this.imageSettings.editorExportMode === 'effects-chroma'
+        preflight?.mode === 'effects-chroma'
           ? 'sin audio'
-          : this.imageSettings.editorCopyAudio
+          : preflight?.copyAudio
             ? 'audio si compatible'
             : 'sin audio';
       const exportLabel = canExport
         ? `${formatLabel} · ${modeLabel} · ${audioLabel}`
         : 'WebCodecs no disponible';
-      this.videoExportDetails.textContent = `${this.videoEl.videoWidth}×${this.videoEl.videoHeight} · ${this.formatVideoFps(this.videoSourceFps)} FPS · ${this.formatVideoBitrate(bitrate)} · ${exportLabel}`;
+      this.videoExportDetails.textContent = `${this.formatVideoExportPreflight(preflight)} · ${exportLabel}`;
     }
     void this.refreshVideoExportDiagnostics();
     this.updateTimelineHint();
@@ -2263,30 +2300,30 @@ export function applyLocalvideoeditorMixin(proto) {
         ? 'sin audio'
         : diagnosis.audioCopySupported
           ? `audio copiado (${diagnosis.audioCodec})`
-          : `sin audio${diagnosis.audioReason ? ` (${diagnosis.audioReason})` : ''}`;
-    return `Diagnóstico: ${format} · ${diagnosis.codec} · ${this.videoEl.videoWidth}×${this.videoEl.videoHeight} · ${this.formatVideoFps(this.videoSourceFps)} FPS · ${this.formatVideoBitrate(bitrate)} · ${mode} · ${audio}`;
+          : diagnosis.audioCopyRequested &&
+              diagnosis.audioReason === 'audio_codec_unknown'
+            ? 'audio se intentará si es compatible'
+            : `sin audio${diagnosis.audioReason ? ` (${diagnosis.audioReason})` : ''}`;
+    return `Diagnóstico: ${format} · ${diagnosis.codec} · ${this.formatVideoBitrate(bitrate)} · ${mode} · ${audio}`;
   };
 
   proto.refreshVideoExportDiagnostics = async function () {
     if (!this.videoExportDiagnostics || !this.videoSourceFile) return null;
-    const bitrate = this.getRecommendedVideoBitrate(
-      this.videoEl.videoWidth,
-      this.videoEl.videoHeight,
-      this.videoSourceFps,
-    );
+    const preflight = this.buildVideoExportPreflight();
+    if (!preflight) return null;
     const diagnosis = await diagnoseVideoExportSupport({
-      width: this.videoEl.videoWidth,
-      height: this.videoEl.videoHeight,
-      fps: this.getVideoExportFps(),
-      bitrate,
-      requestedFormat: this.imageSettings.editorExportFormat,
-      mode: this.imageSettings.editorExportMode,
-      copyAudio: this.imageSettings.editorCopyAudio,
+      width: preflight.width,
+      height: preflight.height,
+      fps: preflight.fps,
+      bitrate: preflight.bitrate,
+      requestedFormat: preflight.format,
+      mode: preflight.mode,
+      copyAudio: preflight.copyAudio,
     });
-    this.videoExportDiagnostics.textContent = this.formatVideoExportDiagnosis(
+    this.videoExportDiagnostics.textContent = `${this.formatVideoExportDiagnosis(
       diagnosis,
-      bitrate,
-    );
+      preflight.bitrate,
+    )} · ${preflight.risk.recommendation}`;
     return diagnosis;
   };
 
@@ -2486,37 +2523,31 @@ export function applyLocalvideoeditorMixin(proto) {
   };
 
   proto.runVideoExportViaWebCodecs = async function () {
-    const {
-      calculateExportBitrate,
-      calculateExportFrameCount,
-      encodeCanvasSequence,
-      formatExportDebugInfo,
-    } = await import('../video-export.mjs');
-    const fps = this.getVideoExportFps();
+    const { encodeCanvasSequence, formatExportDebugInfo } =
+      await import('../video-export.mjs');
+    const preflight =
+      this.videoExportPreflight || this.buildVideoExportPreflight();
+    if (!preflight) throw new Error('video_export_preflight_missing');
+    this.videoExportPreflight = preflight;
+    const fps = preflight.fps;
     const start = this.videoTimeline.trimStart;
     const end = this.videoTimeline.trimEnd;
-    const mode = this.imageSettings.editorExportMode || 'full';
-    const totalFrames = calculateExportFrameCount(end - start, fps);
+    const mode = preflight.mode;
+    const totalFrames = preflight.totalFrames;
     this.ensureRecordingCanvas();
     this.formatExportDebugInfo = formatExportDebugInfo;
     this.videoExportTotalFrames = totalFrames;
-    const bitrate = calculateExportBitrate(
-      this.videoSourceAverageBitrate,
-      this.recordingCanvas.width,
-      this.recordingCanvas.height,
-      fps,
-      this.imageSettings.qualityEnhancer && mode === 'full',
-    );
+    const bitrate = preflight.bitrate;
     const diagnosis =
       this.videoExportDiagnosis ||
       (await diagnoseVideoExportSupport({
-        width: this.recordingCanvas.width,
-        height: this.recordingCanvas.height,
+        width: preflight.width,
+        height: preflight.height,
         fps,
         bitrate,
-        requestedFormat: this.imageSettings.editorExportFormat,
+        requestedFormat: preflight.format,
         mode,
-        copyAudio: this.imageSettings.editorCopyAudio,
+        copyAudio: preflight.copyAudio,
       }));
 
     const baseName =
@@ -2534,13 +2565,13 @@ export function applyLocalvideoeditorMixin(proto) {
       totalFrames,
       duration: end - start,
       bitrate,
-      requestedFormat: this.imageSettings.editorExportFormat,
+      requestedFormat: preflight.format,
       mode,
       chromaColor: this.imageSettings.effectsExportChroma,
       audioSourceFile: this.videoSourceFile,
       trimStart: start,
       trimEnd: end,
-      copyAudio: !!this.imageSettings.editorCopyAudio,
+      copyAudio: !!preflight.copyAudio,
       diagnosis,
       renderFrame: (frameIndex, meta) =>
         this.renderVideoExportFrame(frameIndex, fps, meta),
@@ -2604,32 +2635,50 @@ export function applyLocalvideoeditorMixin(proto) {
     }
 
     try {
+      const preflight = this.buildVideoExportPreflight();
+      if (!preflight) throw new Error('video_export_preflight_missing');
+      this.videoExportPreflight = preflight;
+      if (this.videoExportDetails) {
+        this.videoExportDetails.textContent =
+          this.formatVideoExportPreflight(preflight);
+      }
+      if (preflight.blocked) {
+        if (this.videoExportDiagnostics) {
+          this.videoExportDiagnostics.textContent =
+            preflight.risk.recommendation;
+        }
+        this.showStatus(
+          this.videoEditorStatus,
+          'Exportación bloqueada por riesgo de memoria. Reducí duración o usá Rápido/Balanceado.',
+          'error',
+        );
+        this.videoExportPreflight = null;
+        return;
+      }
       this.ensureRecordingCanvas();
-      const bitrate = this.getRecommendedVideoBitrate(
-        this.recordingCanvas.width,
-        this.recordingCanvas.height,
-        this.getVideoExportFps(),
-      );
       const diagnosis = await diagnoseVideoExportSupport({
-        width: this.recordingCanvas.width,
-        height: this.recordingCanvas.height,
-        fps: this.getVideoExportFps(),
-        bitrate,
-        requestedFormat: this.imageSettings.editorExportFormat,
-        mode: this.imageSettings.editorExportMode,
-        copyAudio: this.imageSettings.editorCopyAudio,
+        width: preflight.width,
+        height: preflight.height,
+        fps: preflight.fps,
+        bitrate: preflight.bitrate,
+        requestedFormat: preflight.format,
+        mode: preflight.mode,
+        copyAudio: preflight.copyAudio,
       });
       this.videoExportDiagnosis = diagnosis;
       if (this.videoExportDiagnostics) {
-        this.videoExportDiagnostics.textContent =
-          this.formatVideoExportDiagnosis(diagnosis, bitrate);
+        this.videoExportDiagnostics.textContent = `${this.formatVideoExportDiagnosis(
+          diagnosis,
+          preflight.bitrate,
+        )} · ${preflight.risk.recommendation}`;
       }
       if (!diagnosis.supported) {
         this.showStatus(
           this.videoEditorStatus,
-          this.formatVideoExportDiagnosis(diagnosis, bitrate),
+          this.formatVideoExportDiagnosis(diagnosis, preflight.bitrate),
           'error',
         );
+        this.videoExportPreflight = null;
         return;
       }
       this.flushPendingClipConfigSync();
@@ -2937,6 +2986,12 @@ export function applyLocalvideoeditorMixin(proto) {
     const messages = {
       webcodecs_codec_unsupported:
         'No hay un codec compatible para el formato elegido.',
+      webcodecs_unavailable:
+        'WebCodecs no está disponible. Usá Chrome o Edge actualizado.',
+      videoframe_unavailable:
+        'VideoFrame no está disponible. Usá Chrome o Edge actualizado.',
+      video_export_preflight_missing:
+        'No se pudo calcular la exportación antes de iniciar.',
       video_seek_timeout: 'No se pudo leer un frame del video a tiempo.',
       video_playback_timeout:
         'No se pudo avanzar el video a tiempo durante la exportación.',
@@ -2973,6 +3028,7 @@ export function applyLocalvideoeditorMixin(proto) {
     this.videoExportSession.stop();
     this.videoExportFileName = '';
     this.videoExportDiagnosis = null;
+    this.videoExportPreflight = null;
     this.videoExportRecoveredSource = false;
     if (this.videoExportPlayback) {
       this.videoEl.pause();

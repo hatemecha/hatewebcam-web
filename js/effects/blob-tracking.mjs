@@ -2,7 +2,7 @@
  * BlobTracking — Canvas-based HSV color detection
  * Optimized for lower CPU usage and more stable detections.
  */
-class BlobTracking {
+export class BlobTracking {
   constructor() {
     // HSV ranges
     this.hsvMin = [0, 50, 50];
@@ -59,6 +59,9 @@ class BlobTracking {
     this._morphBufferB = null;
     this._visited = null;
     this._queue = null;
+    this._worker = this._createWorker();
+    this._workerBusy = false;
+    this._workerSeq = 0;
   }
 
   getName() {
@@ -186,6 +189,147 @@ class BlobTracking {
     return this._trackedBlobs;
   }
 
+  _createWorker() {
+    if (typeof Worker === 'undefined') return null;
+    try {
+      const worker = new Worker(
+        new URL('../workers/blob-tracking-worker.mjs', import.meta.url),
+        { type: 'module' },
+      );
+      worker.onmessage = (event) => {
+        this._workerBusy = false;
+        if (event.data?.seq !== this._workerSeq) return;
+        this._stabilizeBlobs(event.data.blobs || []);
+      };
+      worker.onerror = () => {
+        this._workerBusy = false;
+        this._worker = null;
+      };
+      return worker;
+    } catch {
+      return null;
+    }
+  }
+
+  _postWorkerAnalysis(imageData, sw, sh, scale) {
+    if (!this._worker || this._workerBusy) return false;
+    this._workerBusy = true;
+    this._workerSeq += 1;
+    const areaScale = scale * scale;
+    try {
+      this._worker.postMessage(
+        {
+          seq: this._workerSeq,
+          width: sw,
+          height: sh,
+          buffer: imageData.data.buffer,
+          hsvMin: this.hsvMin,
+          hsvMax: this.hsvMax,
+          detectionMode: this.detectionMode,
+          erodeIterations: this.erodeIterations,
+          dilateIterations: this.dilateIterations,
+          minAreaScaled: this.minArea * areaScale,
+          maxAreaScaled: this.maxArea * areaScale,
+          maxObjects: this.maxObjects,
+        },
+        [imageData.data.buffer],
+      );
+      return true;
+    } catch {
+      this._workerBusy = false;
+      this._worker = null;
+      return false;
+    }
+  }
+
+  _analyzeImageData(imageData, sw, sh, scale, now) {
+    const data = imageData.data;
+    const mask = this._mask;
+
+    const hMin = this.hsvMin[0];
+    const hMax = this.hsvMax[0];
+    const sMin = this.hsvMin[1];
+    const sMax = this.hsvMax[1];
+    const vMin = this.hsvMin[2];
+    const vMax = this.hsvMax[2];
+
+    for (let p = 0, i = 0; p < mask.length; p++, i += 4) {
+      const r = data[i] / 255;
+      const g = data[i + 1] / 255;
+      const b = data[i + 2] / 255;
+
+      const max = r > g ? (r > b ? r : b) : g > b ? g : b;
+      const min = r < g ? (r < b ? r : b) : g < b ? g : b;
+      const d = max - min;
+
+      let hue = 0;
+      let sat = 0;
+      const val = Math.round(max * 255);
+
+      if (d !== 0) {
+        sat = Math.round((d / max) * 255);
+        if (max === r) hue = ((g - b) / d) % 6;
+        else if (max === g) hue = (b - r) / d + 2;
+        else hue = (r - g) / d + 4;
+        hue = Math.round(hue * 30);
+        if (hue < 0) hue += 180;
+      }
+
+      let match;
+      if (this.detectionMode === 'lights') {
+        match = val >= 200 && sat <= 50;
+      } else if (this.detectionMode === 'shadows') {
+        match = val <= 60;
+      } else {
+        const hueOk =
+          hMin <= hMax
+            ? hue >= hMin && hue <= hMax
+            : hue >= hMin || hue <= hMax;
+        match =
+          hueOk && sat >= sMin && sat <= sMax && val >= vMin && val <= vMax;
+      }
+
+      mask[p] = match ? 255 : 0;
+    }
+
+    let processedMask = mask;
+    let outputMask = this._morphBufferA;
+    if (this.erodeIterations > 0) {
+      for (let i = 0; i < this.erodeIterations; i++) {
+        this._erode(processedMask, outputMask, sw, sh);
+        processedMask = outputMask;
+        outputMask =
+          outputMask === this._morphBufferA
+            ? this._morphBufferB
+            : this._morphBufferA;
+      }
+    }
+    if (this.dilateIterations > 0) {
+      for (let i = 0; i < this.dilateIterations; i++) {
+        this._dilate(processedMask, outputMask, sw, sh);
+        processedMask = outputMask;
+        outputMask =
+          outputMask === this._morphBufferA
+            ? this._morphBufferB
+            : this._morphBufferA;
+      }
+    }
+
+    const areaScale = scale * scale;
+    const minAreaScaled = this.minArea * areaScale;
+    const maxAreaScaled = this.maxArea * areaScale;
+    const blobs = this._findBlobs(processedMask, sw, sh);
+    this._stabilizeBlobs(
+      blobs
+        .filter(
+          (bObj) => bObj.area >= minAreaScaled && bObj.area <= maxAreaScaled,
+        )
+        .sort((a, bObj) => bObj.area - a.area)
+        .slice(0, this.maxObjects),
+      now,
+    );
+  }
+
   /**
    * Process frame — detect blobs and draw overlays
    */
@@ -222,91 +366,10 @@ class BlobTracking {
       // Downscaled frame read to reduce per-pixel workload
       this._tempCtx.drawImage(canvas, 0, 0, sw, sh);
       const imageData = this._tempCtx.getImageData(0, 0, sw, sh);
-      const data = imageData.data;
-      const mask = this._mask;
-
-      const hMin = this.hsvMin[0];
-      const hMax = this.hsvMax[0];
-      const sMin = this.hsvMin[1];
-      const sMax = this.hsvMax[1];
-      const vMin = this.hsvMin[2];
-      const vMax = this.hsvMax[2];
-
-      for (let p = 0, i = 0; p < mask.length; p++, i += 4) {
-        const r = data[i] / 255;
-        const g = data[i + 1] / 255;
-        const b = data[i + 2] / 255;
-
-        const max = r > g ? (r > b ? r : b) : g > b ? g : b;
-        const min = r < g ? (r < b ? r : b) : g < b ? g : b;
-        const d = max - min;
-
-        let hue = 0;
-        let sat = 0;
-        const val = Math.round(max * 255);
-
-        if (d !== 0) {
-          sat = Math.round((d / max) * 255);
-          if (max === r) hue = ((g - b) / d) % 6;
-          else if (max === g) hue = (b - r) / d + 2;
-          else hue = (r - g) / d + 4;
-          hue = Math.round(hue * 30);
-          if (hue < 0) hue += 180;
-        }
-
-        let match;
-        if (this.detectionMode === 'lights') {
-          match = val >= 200 && sat <= 50;
-        } else if (this.detectionMode === 'shadows') {
-          match = val <= 60;
-        } else {
-          const hueOk =
-            hMin <= hMax
-              ? hue >= hMin && hue <= hMax
-              : hue >= hMin || hue <= hMax;
-          match =
-            hueOk && sat >= sMin && sat <= sMax && val >= vMin && val <= vMax;
-        }
-
-        mask[p] = match ? 255 : 0;
+      const useWorker = renderProfile?.quality !== 'best';
+      if (!useWorker || !this._postWorkerAnalysis(imageData, sw, sh, scale)) {
+        this._analyzeImageData(imageData, sw, sh, scale, now);
       }
-
-      let processedMask = mask;
-      let outputMask = this._morphBufferA;
-      if (this.erodeIterations > 0) {
-        for (let i = 0; i < this.erodeIterations; i++) {
-          this._erode(processedMask, outputMask, sw, sh);
-          processedMask = outputMask;
-          outputMask =
-            outputMask === this._morphBufferA
-              ? this._morphBufferB
-              : this._morphBufferA;
-        }
-      }
-      if (this.dilateIterations > 0) {
-        for (let i = 0; i < this.dilateIterations; i++) {
-          this._dilate(processedMask, outputMask, sw, sh);
-          processedMask = outputMask;
-          outputMask =
-            outputMask === this._morphBufferA
-              ? this._morphBufferB
-              : this._morphBufferA;
-        }
-      }
-
-      const areaScale = scale * scale;
-      const minAreaScaled = this.minArea * areaScale;
-      const maxAreaScaled = this.maxArea * areaScale;
-      const blobs = this._findBlobs(processedMask, sw, sh);
-      this._stabilizeBlobs(
-        blobs
-          .filter(
-            (bObj) => bObj.area >= minAreaScaled && bObj.area <= maxAreaScaled,
-          )
-          .sort((a, bObj) => bObj.area - a.area)
-          .slice(0, this.maxObjects),
-        now,
-      );
     }
 
     const filtered = this._trackedBlobs;

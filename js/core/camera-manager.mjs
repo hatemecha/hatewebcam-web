@@ -1,7 +1,7 @@
 /**
  * CameraManager - WebRTC camera capture
  */
-class CameraManager {
+export class CameraManager {
   constructor() {
     this.stream = null;
     this.videoElement = null;
@@ -119,7 +119,7 @@ class CameraManager {
       isMobile ||
       (deviceMemory > 0 && deviceMemory <= 4) ||
       (hardwareConcurrency > 0 && hardwareConcurrency <= 4);
-    const preferredFps = 60;
+    const preferredFps = 30;
 
     const defaultWidth = lowPower ? 960 : 1280;
     const defaultHeight = lowPower ? 540 : 720;
@@ -190,9 +190,9 @@ class CameraManager {
   /**
    * Switch to a different camera
    */
-  async switchCamera(deviceId) {
+  async switchCamera(deviceId, opts = {}) {
     if (this.running && this.videoElement) {
-      return this.start(this.videoElement, deviceId);
+      return this.start(this.videoElement, deviceId, opts);
     }
     return false;
   }

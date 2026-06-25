@@ -1,45 +1,24 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-const javascriptFiles = [
-  'js/app.js',
-  'js/app/controller.mjs',
-  'js/app/constants.mjs',
-  'js/app/settings-store.mjs',
-  'js/app/render-engine.mjs',
-  'js/app/timeline-view.mjs',
-  'js/app/video-export-session.mjs',
-  'js/app/edit-assist-controller.mjs',
-  'js/app/video-editor-timeline.mjs',
-  'js/app/video-editor-clipboard.mjs',
-  'js/app/dom.mjs',
-  'js/app/settings.mjs',
-  'js/app/video-editor.mjs',
-  'js/app/init.mjs',
-  'js/app/events.mjs',
-  'js/app/camera.mjs',
-  'js/app/effects.mjs',
-  'js/app/render.mjs',
-  'js/app/color-pick.mjs',
-  'js/app/effect-config.mjs',
-  'js/app/ui-helpers.mjs',
-  'js/app/profiles.mjs',
-  'js/app/capture.mjs',
-  'js/app/modal-focus.mjs',
-  'js/video-export.mjs',
-  'js/audio-tempo-analyzer.mjs',
-  'js/video-timeline.js',
-  'js/editor-history.js',
-  'js/camera.js',
-  'js/effects/effect-manager.js',
-  'js/effects/blob-tracking.js',
-  'js/effects/face-detection.js',
-  'js/effects/blink-detection.js',
-];
+function listJavascriptFiles(dir = 'js') {
+  return readdirSync(resolve(rootDir, dir))
+    .flatMap((entry) => {
+      const relativePath = `${dir}/${entry}`;
+      const absolutePath = resolve(rootDir, relativePath);
+      return statSync(absolutePath).isDirectory()
+        ? listJavascriptFiles(relativePath)
+        : relativePath;
+    })
+    .filter((file) => /\.(mjs|js)$/.test(file))
+    .sort();
+}
+
+const javascriptFiles = listJavascriptFiles();
 
 const controllerConstantPattern =
   /(?<![.\w$])(?:TIMELINE_EFFECT_META|DEFAULT_TIMELINE_EFFECT_DURATION|DEFAULT_IMAGE_SETTINGS|DEFAULT_CAMERA_FPS|DEFAULT_PREVIEW_QUALITY|MEDIAPIPE_FACE_MESH_VERSION|MEDIAPIPE_FACE_MESH_SRC|MEDIAPIPE_CONSOLE_NOISE_PATTERNS|DETECTOR_DEFAULT_BOX_COLOR|DEFAULT_QUICK_DETECTOR_SETTINGS|ADJUST_CONTEXT_HELP|STORAGE_KEY|PROFILES_KEY|COMMON_VIDEO_FPS)\b/;
@@ -61,6 +40,7 @@ const requiredHtmlFragments = [
   'id="btnTakePhoto"',
   'id="btnRecord"',
   'id="captureTimerSelect"',
+  'id="performanceModeSelect"',
   'id="captureCountdown"',
   'id="btnVideoMode"',
   'id="videoFileInput"',
@@ -93,13 +73,11 @@ const requiredHtmlFragments = [
   'id="btnToolSelect"',
   'id="timelinePlayheadHandle"',
   'id="timelineMarkers"',
-  'js/editor-history.js',
   'id="videoExportModal"',
   'id="chkMirror"',
   'id="chkFaceDetection"',
   'id="chkBlinkDetection"',
   'js/app.js',
-  'js/video-timeline.js',
 ];
 
 function fail(message) {

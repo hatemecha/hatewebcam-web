@@ -31,6 +31,7 @@ export default [
   {
     ignores: [
       'node_modules/**',
+      'dist/**',
       'vendor/**',
       'coverage/**',
       'playwright-report/**',

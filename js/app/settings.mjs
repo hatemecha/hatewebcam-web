@@ -629,6 +629,9 @@ export function applyStorageMixin(proto) {
       ...this.DEFAULT_IMAGE_SETTINGS,
       ...saved,
     };
+    this.imageSettings.performanceMode = this.normalizePerformanceMode(
+      this.imageSettings.performanceMode,
+    );
     this.imageSettings.exposure = this.clamp(
       parseInt(this.imageSettings.exposure, 10) || 0,
       -100,
@@ -808,6 +811,10 @@ export function applyStorageMixin(proto) {
       this.previewQualitySelect.value = normalizePreviewQuality(
         this.imageSettings.previewQuality,
       );
+    if (this.performanceModeSelect)
+      this.performanceModeSelect.value = this.normalizePerformanceMode(
+        this.imageSettings.performanceMode,
+      );
     if (this.captureTimerSelect)
       this.captureTimerSelect.value = String(
         this.imageSettings.captureTimerSeconds,
@@ -978,6 +985,15 @@ export function applyStorageMixin(proto) {
       });
     }
 
+    if (this.performanceModeSelect) {
+      this.performanceModeSelect.addEventListener('change', (e) => {
+        void this.applyPerformanceMode(e.target.value, {
+          restartCamera: true,
+          notify: true,
+        });
+      });
+    }
+
     const bindCaptureTimerSelect = (selectEl) => {
       if (!selectEl) return;
       selectEl.addEventListener('change', (e) => {
@@ -1012,6 +1028,7 @@ export function applyStorageMixin(proto) {
             this.imageSettings.experimentalExportFeatures,
           effectsExportChroma: this.imageSettings.effectsExportChroma,
           previewQuality: this.imageSettings.previewQuality,
+          performanceMode: this.imageSettings.performanceMode,
           qualityEnhancer: this.imageSettings.qualityEnhancer,
           qualityEnhancerStrength: this.imageSettings.qualityEnhancerStrength,
         };

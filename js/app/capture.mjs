@@ -377,8 +377,16 @@ export function applyCaptureMixin(proto) {
 
   proto.ensureRecordingCanvas = function () {
     const { sourceWidth, sourceHeight } = this.getSourceFrameDimensions();
-    const { width: recordingWidth, height: recordingHeight } =
+    let { width: recordingWidth, height: recordingHeight } =
       this.getEffectiveFrameDimensions(sourceWidth, sourceHeight);
+    if (
+      this.sourceMode === 'video' &&
+      this.videoExportPreflight?.width &&
+      this.videoExportPreflight?.height
+    ) {
+      recordingWidth = this.videoExportPreflight.width;
+      recordingHeight = this.videoExportPreflight.height;
+    }
     this.renderEngine.ensureRecordingCanvas(recordingWidth, recordingHeight);
     return this.recordingCanvas;
   };
@@ -428,7 +436,10 @@ export function applyCaptureMixin(proto) {
 
   proto.getVideoExportFps = function () {
     return (
-      this.normalizeVideoFps(this.videoSourceFps) || this.DEFAULT_CAMERA_FPS
+      this.videoExportPreflight?.fps ||
+      this.getEffectiveVideoExportFps?.() ||
+      this.normalizeVideoFps(this.videoSourceFps) ||
+      this.DEFAULT_CAMERA_FPS
     );
   };
 

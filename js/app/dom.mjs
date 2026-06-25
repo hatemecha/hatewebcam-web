@@ -134,6 +134,7 @@ export function setupDom(app) {
 
   app.btnToggleCamera = $('#btnToggleCamera');
   app.cameraSelect = $('#cameraSelect');
+  app.performanceModeSelect = $('#performanceModeSelect');
   app.btnTakePhoto = $('#btnTakePhoto');
   app.btnRecord = $('#btnRecord');
   app.captureStatus = $('#captureStatus');

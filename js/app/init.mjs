@@ -53,6 +53,11 @@ export function applyInitMixin(proto) {
     this.loadQuickDetectorSettings(cfg);
     this.updateQuickDetectorControlsUI();
     this.loadImageSettings(cfg);
+    await this.applyPerformanceMode(this.imageSettings.performanceMode, {
+      restartCamera: false,
+      notify: false,
+      save: false,
+    });
     this.updateImageControlsUI();
     this.mobileActivePreset = null;
     this.updateMobilePresetButtons(this.mobileActivePreset);

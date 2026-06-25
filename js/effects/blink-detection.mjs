@@ -2,7 +2,7 @@
  * BlinkDetection — MediaPipe Face Mesh blink detection
  * Port of the Python BlinkDetection effect
  */
-class BlinkDetection {
+export class BlinkDetection {
   constructor(options = {}) {
     // MediaPipe Face Mesh
     this.faceMesh = null;

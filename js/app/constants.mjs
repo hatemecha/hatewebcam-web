@@ -43,9 +43,45 @@ export const DEFAULT_IMAGE_SETTINGS = {
   captureTimerSeconds: 0,
   qualityEnhancer: false,
   qualityEnhancerStrength: 35,
+  performanceMode: 'normal',
 };
 export const DEFAULT_CAMERA_FPS = 30;
 export const DEFAULT_PREVIEW_QUALITY = 'balanced';
+export const PERFORMANCE_MODE_PRESETS = Object.freeze({
+  auto: Object.freeze({
+    label: 'Automático',
+    camera: Object.freeze({ width: 1280, height: 720, fps: 30 }),
+    previewQuality: 'balanced',
+    blobProcessScale: 0.45,
+    detectorIntervalMs: 33,
+  }),
+  performance: Object.freeze({
+    label: 'Rendimiento',
+    camera: Object.freeze({ width: 1280, height: 720, fps: 30 }),
+    previewQuality: 'draft',
+    blobProcessScale: 0.35,
+    detectorIntervalMs: 120,
+  }),
+  normal: Object.freeze({
+    label: 'Normal',
+    camera: Object.freeze({ width: 1280, height: 720, fps: 30 }),
+    previewQuality: 'balanced',
+    blobProcessScale: 0.45,
+    detectorIntervalMs: 33,
+  }),
+  quality: Object.freeze({
+    label: 'Calidad',
+    camera: Object.freeze({ width: 1920, height: 1080, fps: 60 }),
+    previewQuality: 'high',
+    blobProcessScale: 0.45,
+    detectorIntervalMs: 33,
+  }),
+});
+export function normalizePerformanceMode(value) {
+  return Object.prototype.hasOwnProperty.call(PERFORMANCE_MODE_PRESETS, value)
+    ? value
+    : 'normal';
+}
 export const MEDIAPIPE_FACE_MESH_VERSION = '0.4.1633559619';
 export const MEDIAPIPE_FACE_MESH_BASE_URL = 'vendor/mediapipe/face_mesh';
 export const MEDIAPIPE_FACE_MESH_SRC = `${MEDIAPIPE_FACE_MESH_BASE_URL}/face_mesh.js`;

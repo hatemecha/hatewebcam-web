@@ -1,7 +1,7 @@
 /**
  * EffectManager — Manages active effects pipeline
  */
-class EffectManager {
+export class EffectManager {
   constructor() {
     this.effects = [];
   }

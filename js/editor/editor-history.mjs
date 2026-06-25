@@ -1,5 +1,5 @@
 /** Lightweight undo/redo stack for the local video editor timeline. */
-class EditorHistory {
+export class EditorHistory {
   constructor(limit = 50) {
     this.limit = limit;
     this.undoStack = [];

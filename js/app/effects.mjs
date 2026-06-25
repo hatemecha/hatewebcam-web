@@ -1,3 +1,7 @@
+import { BlobTracking } from '../effects/blob-tracking.mjs';
+import { FaceDetection } from '../effects/face-detection.mjs';
+import { BlinkDetection } from '../effects/blink-detection.mjs';
+
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyEffectsMixin(proto) {
   proto.syncBlinkLandmarkSource = function () {
@@ -22,6 +26,9 @@ export function applyEffectsMixin(proto) {
             this.blobTrackingEffect.setConfig(savedBlobConfig);
           this.blobTrackingEffect.boxColor =
             this.quickDetectorSettings.blobBoxColor;
+          this.applyDetectorPerformanceProfile?.(
+            this.getPerformanceModePreset?.(),
+          );
           this.effectManager.addEffect(this.blobTrackingEffect);
         }
         if (this.blinkDetectionEffect) {
@@ -87,6 +94,9 @@ export function applyEffectsMixin(proto) {
           if (savedFaceConfig)
             this.faceDetectionEffect.setConfig(savedFaceConfig);
           this.applyQuickDetectorSettingsToEffects();
+          this.applyDetectorPerformanceProfile?.(
+            this.getPerformanceModePreset?.(),
+          );
           this.effectManager.addEffect(this.faceDetectionEffect);
         } else {
           this.applyQuickDetectorSettingsToEffects();
@@ -140,6 +150,9 @@ export function applyEffectsMixin(proto) {
           const savedBlinkConfig = this.getSavedEffectConfig('blink');
           if (savedBlinkConfig)
             this.blinkDetectionEffect.setConfig(savedBlinkConfig);
+          this.applyDetectorPerformanceProfile?.(
+            this.getPerformanceModePreset?.(),
+          );
           this.effectManager.addEffect(this.blinkDetectionEffect);
         }
         this.syncBlinkLandmarkSource();

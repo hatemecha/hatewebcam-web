@@ -1,8 +1,4 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import vm from 'node:vm';
 import {
   getProcessingFrameDimensions,
   getPreviewFrameDimensions,
@@ -21,14 +17,26 @@ import {
   formatObservedExportProgress,
   getWebmMuxerCodec,
   normalizeFrameRate,
+  buildEditorExportPreflight,
   snapFrameRate,
   shouldAppendFinalFrame,
 } from '../js/video-export.mjs';
+import { CameraManager } from '../js/core/camera-manager.mjs';
+import { VideoTimeline } from '../js/editor/video-timeline.mjs';
+import { EditorHistory } from '../js/editor/editor-history.mjs';
+import { BlobTracking } from '../js/effects/blob-tracking.mjs';
+import { BlinkDetection } from '../js/effects/blink-detection.mjs';
+import { FaceDetection } from '../js/effects/face-detection.mjs';
 import { RENDER_PROFILES } from '../js/app/render-engine.mjs';
 import { calculateTimelineTickInterval } from '../js/app/timeline-view.mjs';
-import { DEFAULT_IMAGE_SETTINGS } from '../js/app/constants.mjs';
+import {
+  DEFAULT_IMAGE_SETTINGS,
+  PERFORMANCE_MODE_PRESETS,
+  normalizePerformanceMode,
+} from '../js/app/constants.mjs';
 import { EditAssistController } from '../js/app/edit-assist-controller.mjs';
 import { applyEffectsMixin } from '../js/app/effects.mjs';
+import { applyCameraMixin } from '../js/app/camera.mjs';
 import { applyRenderLoopMixin } from '../js/app/render.mjs';
 import { applyLocalvideoeditorMixin } from '../js/app/video-editor.mjs';
 import {
@@ -36,19 +44,17 @@ import {
   extractMediaAudioSamples,
 } from '../js/audio-tempo-analyzer.mjs';
 
-const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-
-function loadClass(file, className, context = {}) {
-  const source = readFileSync(resolve(rootDir, file), 'utf8');
-  const sandbox = vm.createContext({ ...context });
-  vm.runInContext(
-    `${source}\n;globalThis.ExportedClass = ${className};`,
-    sandbox,
-    {
-      filename: file,
-    },
-  );
-  return sandbox.ExportedClass;
+function mockGlobal(name, value) {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, name);
+  Object.defineProperty(globalThis, name, {
+    value,
+    configurable: true,
+    writable: true,
+  });
+  return () => {
+    if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+    else delete globalThis[name];
+  };
 }
 
 async function checkCameraStreamCleanup() {
@@ -68,43 +74,52 @@ async function checkCameraStreamCleanup() {
       getUserMedia: async () => stream,
     },
   };
-  const CameraManager = loadClass('js/camera.js', 'CameraManager', {
-    console: { warn() {} },
-    navigator,
-  });
-  const camera = new CameraManager();
-  const video = {
-    srcObject: null,
-    play: async () => {
-      throw new Error('play_failed');
-    },
-  };
+  const restoreNavigator = mockGlobal('navigator', navigator);
+  try {
+    const camera = new CameraManager();
+    const video = {
+      srcObject: null,
+      play: async () => {
+        const error = new Error('play_failed');
+        error.name = 'NotAllowedError';
+        throw error;
+      },
+    };
 
-  const started = await camera.start(video);
-  assert.equal(started, false);
-  assert.equal(
-    trackStopped,
-    true,
-    'failed playback must stop the acquired track',
-  );
-  assert.equal(camera.stream, null);
-  assert.equal(video.srcObject, null);
-  assert.equal(camera.isRunning(), false);
+    const started = await camera.start(video);
+    assert.equal(started, false);
+    assert.equal(
+      trackStopped,
+      true,
+      'failed playback must stop the acquired track',
+    );
+    assert.equal(camera.stream, null);
+    assert.equal(video.srcObject, null);
+    assert.equal(camera.isRunning(), false);
+  } finally {
+    restoreNavigator();
+  }
 }
 
 function checkCameraPreservesSupportedFps() {
-  const CameraManager = loadClass('js/camera.js', 'CameraManager', {
-    console,
-    navigator: { userAgent: '', mediaDevices: {} },
+  const restoreNavigator = mockGlobal('navigator', {
+    userAgent: '',
+    mediaDevices: {},
   });
-  const camera = new CameraManager();
-  const preferred = camera._buildVideoConstraints();
-  const requested = camera._buildVideoConstraints(null, { fps: 30 });
+  let preferred;
+  let requested;
+  try {
+    const camera = new CameraManager();
+    preferred = camera._buildVideoConstraints();
+    requested = camera._buildVideoConstraints(null, { fps: 30 });
+  } finally {
+    restoreNavigator();
+  }
 
   assert.equal(
     preferred.video.frameRate.ideal,
-    60,
-    'camera should prefer 60 FPS when supported',
+    30,
+    'camera should default to 30 FPS',
   );
   assert.equal(
     'max' in preferred.video.frameRate,
@@ -135,17 +150,8 @@ function checkReusableMorphologyBuffers() {
       getContext: () => fakeContext,
     }),
   };
-  const BlobTracking = loadClass(
-    'js/effects/blob-tracking.js',
-    'BlobTracking',
-    {
-      document,
-      Uint8Array,
-      Int32Array,
-      Math,
-      performance: { now: () => now },
-    },
-  );
+  const restoreDocument = mockGlobal('document', document);
+  const restorePerformance = mockGlobal('performance', { now: () => now });
   const effect = new BlobTracking();
   effect._ensureBuffers(3, 3);
 
@@ -257,6 +263,8 @@ function checkReusableMorphologyBuffers() {
     previewAnalysisCount + 1,
     'export profile must force per-frame analysis',
   );
+  restorePerformance();
+  restoreDocument();
 }
 
 function checkBlinkDetectionUsesRefinedEyeLandmarks() {
@@ -270,16 +278,9 @@ function checkBlinkDetectionUsesRefinedEyeLandmarks() {
       return Promise.resolve();
     }
   }
-  const BlinkDetection = loadClass(
-    'js/effects/blink-detection.js',
-    'BlinkDetection',
-    {
-      console,
-      FaceMesh,
-    },
-  );
-
+  const restoreFaceMesh = mockGlobal('FaceMesh', FaceMesh);
   const effect = new BlinkDetection();
+  restoreFaceMesh();
   assert.equal(
     options.refineLandmarks,
     true,
@@ -340,17 +341,13 @@ function checkFaceDetectionUsesRefinedEyeLandmarks() {
       return Promise.resolve();
     }
   }
-  const FaceDetection = loadClass(
-    'js/effects/face-detection.js',
-    'FaceDetection',
-    {
-      console,
-      document: { createElement: () => ({ getContext: () => ({}) }) },
-      FaceMesh,
-    },
-  );
-
+  const restoreDocument = mockGlobal('document', {
+    createElement: () => ({ getContext: () => ({}) }),
+  });
+  const restoreFaceMesh = mockGlobal('FaceMesh', FaceMesh);
   const effect = new FaceDetection();
+  restoreFaceMesh();
+  restoreDocument();
   assert.equal(
     options.refineLandmarks,
     true,
@@ -402,7 +399,6 @@ function checkFaceDetectionUsesRefinedEyeLandmarks() {
 }
 
 function checkVideoTimelineIntervals() {
-  const VideoTimeline = loadClass('js/video-timeline.js', 'VideoTimeline');
   const timeline = new VideoTimeline(20);
   timeline.setTrim(2, 18);
   const look = timeline.add('look', 2, 8, { contrast: 120 });
@@ -569,7 +565,6 @@ function checkAudioTempoAnalyzer() {
 }
 
 function checkEditAssistManualControls() {
-  const VideoTimeline = loadClass('js/video-timeline.js', 'VideoTimeline');
   const timeline = new VideoTimeline(10);
   timeline.addMarker({ time: 3, source: 'user' });
   const controller = new EditAssistController({
@@ -753,7 +748,6 @@ function checkTimelineClipSnappingHelper() {
 }
 
 function checkTimelineMarkerIntervalsForInsertion() {
-  const VideoTimeline = loadClass('js/video-timeline.js', 'VideoTimeline');
   const timeline = new VideoTimeline(10);
   timeline.addMarkers([
     { time: 1, kind: 'beat', source: 'edit-assist' },
@@ -781,7 +775,6 @@ function checkTimelineMarkerIntervalsForInsertion() {
 }
 
 function checkTimelineClipboardBasics() {
-  const VideoTimeline = loadClass('js/video-timeline.js', 'VideoTimeline');
   const timeline = new VideoTimeline(10);
   const look = timeline.add('look', 1, 2, { contrast: 120 });
   const app = {
@@ -809,7 +802,6 @@ function checkTimelineClipboardBasics() {
 }
 
 function checkProjectJsonRoundTrip() {
-  const VideoTimeline = loadClass('js/video-timeline.js', 'VideoTimeline');
   const timeline = new VideoTimeline(12);
   timeline.setTrim(1, 10);
   timeline.add('look', 2, 4, { contrast: 120 });
@@ -855,7 +847,6 @@ function checkProjectJsonRoundTrip() {
 }
 
 function checkBeatReactiveAutomation() {
-  const VideoTimeline = loadClass('js/video-timeline.js', 'VideoTimeline');
   const timeline = new VideoTimeline(8);
   timeline.addMarkers([
     { time: 1, kind: 'beat', source: 'edit-assist' },
@@ -900,7 +891,6 @@ function checkBeatReactiveAutomation() {
 }
 
 function checkSplitAllEffectsAtMarkers() {
-  const VideoTimeline = loadClass('js/video-timeline.js', 'VideoTimeline');
   const timeline = new VideoTimeline(10);
   timeline.add('look', 0, 10, { contrast: 120 });
   timeline.add('face', 2, 8, { showBox: true });
@@ -1381,8 +1371,6 @@ async function checkExportTimelineDetectorToggleIsQuiet() {
 }
 
 function checkEditorHistoryUndoRedo() {
-  const EditorHistory = loadClass('js/editor-history.js', 'EditorHistory');
-  const VideoTimeline = loadClass('js/video-timeline.js', 'VideoTimeline');
   const history = new EditorHistory();
   const timeline = new VideoTimeline(12);
   timeline.setTrim(1, 11);
@@ -1501,6 +1489,46 @@ function checkVideoExportTimingAndQuality() {
     true,
     'non-grid durations may append a final duration marker',
   );
+  const fast = buildEditorExportPreflight({
+    preset: 'fast',
+    width: 3840,
+    height: 2160,
+    sourceFps: 60,
+    duration: 10,
+  });
+  assert.deepEqual([fast.width, fast.height, fast.fps], [1280, 720, 30]);
+  assert.equal(fast.format, 'webm');
+  assert.equal(fast.copyAudio, false);
+
+  const high = buildEditorExportPreflight({
+    preset: 'high',
+    width: 3840,
+    height: 2160,
+    sourceFps: 120,
+    duration: 10,
+  });
+  assert.deepEqual([high.width, high.height, high.fps], [3840, 2160, 60]);
+  assert.equal(high.risk.level, 'high');
+
+  const mp4 = buildEditorExportPreflight({
+    preset: 'experimental-mp4',
+    width: 2560,
+    height: 1440,
+    sourceFps: 60,
+    duration: 10,
+  });
+  assert.deepEqual([mp4.width, mp4.height, mp4.fps], [1920, 1080, 30]);
+  assert.equal(mp4.format, 'mp4');
+  assert.equal(mp4.copyAudio, true);
+
+  const blocked = buildEditorExportPreflight({
+    preset: 'balanced',
+    width: 1920,
+    height: 1080,
+    sourceFps: 30,
+    duration: 1300,
+  });
+  assert.equal(blocked.blocked, true);
   assert.equal(
     formatExportDebugInfo({
       stage: 'encode',
@@ -1527,6 +1555,34 @@ function checkVideoExportTimingAndQuality() {
     }),
     'stage:seek-fallback · frame:579/590 · fps:30 · t:19.300s · 576x576 · queue:0 · frames_reutilizados:1',
   );
+}
+
+function checkAutoPerformanceDowngrade() {
+  const app = {
+    imageSettings: { performanceMode: 'auto', previewQuality: 'balanced' },
+    PERFORMANCE_MODE_PRESETS,
+    normalizePerformanceMode,
+    autoPerformanceDowngraded: false,
+    lowFpsSampleCount: 0,
+    blobTrackingEffect: { processScale: 0.45, processIntervalMs: 33 },
+    faceDetectionEffect: { processIntervalMs: 30 },
+    blinkDetectionEffect: { processIntervalMs: 30 },
+    updateImageControlsUI() {},
+    requestPreviewRefresh() {},
+    renderEffectConfig() {},
+    showStatus() {},
+  };
+  applyCameraMixin(app);
+  app.handlePreviewFpsSample(23);
+  app.handlePreviewFpsSample(23);
+  assert.equal(app.autoPerformanceDowngraded, false);
+  app.handlePreviewFpsSample(23);
+  assert.equal(app.autoPerformanceDowngraded, true);
+  assert.equal(app.imageSettings.previewQuality, 'draft');
+  assert.equal(app.blobTrackingEffect.processScale, 0.35);
+  assert.equal(app.blobTrackingEffect.processIntervalMs, 120);
+  assert.equal(app.faceDetectionEffect.processIntervalMs, 120);
+  assert.equal(app.blinkDetectionEffect.processIntervalMs, 120);
 }
 
 async function checkVideoExportDiagnostics() {
@@ -1900,6 +1956,7 @@ await checkExportTimelineDetectorToggleIsQuiet();
 checkEditorHistoryUndoRedo();
 checkPreviewProcessingResolutionContract();
 checkVideoExportTimingAndQuality();
+checkAutoPerformanceDowngrade();
 await checkVideoExportDiagnostics();
 checkEditorExportFormatHelpers();
 checkPaletteDropUsesEffectTypeRow();
