@@ -6,15 +6,17 @@ const APP_TEMPLATES = [
 ];
 
 export async function loadAppTemplates() {
-  for (const [selector, path] of APP_TEMPLATES) {
-    const slot = document.querySelector(selector);
-    if (!slot) continue;
+  await Promise.all(
+    APP_TEMPLATES.map(async ([selector, path]) => {
+      const slot = document.querySelector(selector);
+      if (!slot) return;
 
-    const response = await fetch(path);
-    if (!response.ok) {
-      throw new Error(`No se pudo cargar ${path}`);
-    }
+      const response = await fetch(path, { cache: 'no-cache' });
+      if (!response.ok) {
+        throw new Error(`No se pudo cargar ${path}`);
+      }
 
-    slot.outerHTML = await response.text();
-  }
+      slot.outerHTML = await response.text();
+    }),
+  );
 }

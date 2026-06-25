@@ -1,4 +1,4 @@
-const MEDIABUNNY_URL = '../vendor/mediabunny/mediabunny.min.mjs';
+const MEDIABUNNY_URL = '../vendor/mediabunny/mediabunny.min.mjs?v=1.49.0-local';
 const DEFAULT_MIN_BPM = 60;
 const DEFAULT_MAX_BPM = 180;
 

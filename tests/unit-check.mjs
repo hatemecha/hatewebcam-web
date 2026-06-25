@@ -1578,6 +1578,11 @@ function checkAutoPerformanceDowngrade() {
   assert.equal(app.autoPerformanceDowngraded, false);
   app.handlePreviewFpsSample(23);
   assert.equal(app.autoPerformanceDowngraded, true);
+  assert.deepEqual(PERFORMANCE_MODE_PRESETS.performance.camera, {
+    width: 960,
+    height: 540,
+    fps: 30,
+  });
   assert.equal(app.imageSettings.previewQuality, 'draft');
   assert.equal(app.blobTrackingEffect.processScale, 0.35);
   assert.equal(app.blobTrackingEffect.processIntervalMs, 120);

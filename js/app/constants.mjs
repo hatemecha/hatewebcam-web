@@ -57,7 +57,7 @@ export const PERFORMANCE_MODE_PRESETS = Object.freeze({
   }),
   performance: Object.freeze({
     label: 'Rendimiento',
-    camera: Object.freeze({ width: 1280, height: 720, fps: 30 }),
+    camera: Object.freeze({ width: 960, height: 540, fps: 30 }),
     previewQuality: 'draft',
     blobProcessScale: 0.35,
     detectorIntervalMs: 120,

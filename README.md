@@ -32,18 +32,34 @@ La forma correcta de usar el proyecto es esta URL:
 https://hatemecha.github.io/hatewebcam-web/
 ```
 
-### Opción local (desarrollo)
+### Opción local (desarrollo recomendado)
 
 Desde la carpeta del proyecto:
 
 ```bash
-python -m http.server 8080
+npm install
+npm run dev
 ```
 
 Luego abre:
 
 ```text
-http://localhost:8080
+http://localhost:5173
+```
+
+Checks útiles:
+
+```bash
+npm test
+npm run lint
+npm run build
+npm run preview
+```
+
+Alternativa estática simple:
+
+```bash
+python -m http.server 8080
 ```
 
 ## Uso básico
@@ -72,7 +88,7 @@ http://localhost:8080
 
 - Modo `Video + efectos`: Auto/MP4/WebM. Auto prefiere WebM VP9/VP8 por velocidad; MP4 H.264 queda disponible como opción explícita.
 - Modo `Solo efectos chroma`: WebM con fondo verde o azul, sin audio y sin video base, pensado para componer en otro editor.
-- La resolución se mantiene en tamaño original efectivo, con FPS detectado y bitrate recomendado desde el archivo de entrada.
+- La resolución, FPS y bitrate se calculan según el preset: `fast` puede bajar a 720p/30, `balanced` a 1080p/30, `high` mantiene tamaño original hasta 60 FPS y `chroma` exporta overlays en WebM.
 - `Copiar audio original` intenta copia packet-level solo si el codec es compatible con el contenedor elegido; si no lo es, exporta sin audio e informa el motivo.
 - No se integra `ffmpeg.wasm`.
 
@@ -82,6 +98,9 @@ Para ejecutar checks básicos de sintaxis y estructura:
 
 ```bash
 npm test
+npm run lint
+npm run build
+npm run test:browser
 ```
 
 ## Persistencia de configuración
@@ -106,6 +125,11 @@ Están vendorizadas para que la app sea local/offline en runtime:
 - El procesamiento principal se realiza en el navegador.
 - Las capturas se descargan localmente por el usuario.
 - No hay backend propio en este repositorio.
+
+## Seguridad / CSP
+
+- La app no sube archivos a servidores ni carga scripts desde CDN en runtime.
+- La CSP mantiene `unsafe-eval`, `wasm-unsafe-eval` y `blob:` por compatibilidad con MediaPipe Face Mesh, WebAssembly, Workers locales y exportación.
 
 ---
 

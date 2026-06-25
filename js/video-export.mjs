@@ -1,4 +1,4 @@
-const MEDIABUNNY_URL = '../vendor/mediabunny/mediabunny.min.mjs';
+const MEDIABUNNY_URL = '../vendor/mediabunny/mediabunny.min.mjs?v=1.49.0-local';
 export const COMMON_VIDEO_FPS = [
   23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60, 120,
 ];

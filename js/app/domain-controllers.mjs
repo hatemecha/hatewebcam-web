@@ -5,6 +5,7 @@ import { EffectManager } from '../effects/effect-manager.mjs';
 import { RenderEngine } from './render-engine.mjs';
 import { VideoExportSession } from './video-export-session.mjs';
 
+// ponytail: transitional bridge; new behavior should enter controllers, not more AppController mixins.
 function attachAccessors(target, source, keys) {
   keys.forEach((key) => {
     Object.defineProperty(target, key, {

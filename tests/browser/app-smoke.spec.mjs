@@ -20,3 +20,23 @@ test('video editor shell loads without fatal errors', async ({ page }) => {
   );
   expect(fatalMessages).toEqual([]);
 });
+
+test('template boot failure shows a visible error', async ({ page }) => {
+  await page.route('**/templates/video-editor.html', (route) => route.abort());
+
+  await page.goto('/');
+
+  await expect(page.getByRole('heading')).toContainText(
+    'No se pudo iniciar HateWebcam',
+  );
+});
+
+test('runtime vendor assets are served from dist', async ({ request }) => {
+  for (const path of [
+    '/vendor/mediabunny/mediabunny.min.mjs',
+    '/vendor/mediapipe/face_mesh/face_mesh.js',
+  ]) {
+    const response = await request.get(path);
+    expect(response.ok()).toBeTruthy();
+  }
+});
