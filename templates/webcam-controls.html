@@ -20,11 +20,22 @@
     <div class="select-wrapper">
       <select id="performanceModeSelect">
         <option value="auto">Automático</option>
-        <option value="performance">Rendimiento</option>
-        <option value="normal" selected>Normal</option>
-        <option value="quality">Calidad</option>
+        <option value="performance">Más fluido</option>
+        <option value="normal" selected>Balanceado</option>
+        <option value="quality">Más detalle</option>
       </select>
     </div>
+    <div class="spacer-8"></div>
+    <button
+      type="button"
+      class="btn mirror-quick-btn"
+      id="btnMirrorQuick"
+      aria-pressed="false"
+      title="Espejo en vista y captura"
+    >
+      <i class="fa-solid fa-arrows-left-right" aria-hidden="true"></i>
+      <span>Espejo en vista y captura</span>
+    </button>
   </div>
 
   <!-- Capture -->
@@ -192,6 +203,11 @@
             />
           </label>
           <div
+            class="color-palette"
+            data-color-target="inpBlobQuickColor"
+            aria-label="Paleta para el recuadro de color"
+          ></div>
+          <div
             class="status-msg hidden"
             id="colorPickStatus"
             role="status"
@@ -226,6 +242,11 @@
               <input type="checkbox" id="chkFaceShowBox" checked />
               <span>Recuadro</span>
             </label>
+            <div
+              class="color-palette"
+              data-color-target="inpFaceQuickColor"
+              aria-label="Paleta para el recuadro de caras"
+            ></div>
             <label class="checkbox-group">
               <input type="checkbox" id="chkFaceShowBlur" />
               <span>Desenfoque / pixelado</span>
@@ -344,6 +365,10 @@
         <label class="checkbox-group">
           <input type="checkbox" id="chkQualityEnhancer" />
           <span>Mejorador de calidad opcional</span>
+        </label>
+        <label class="checkbox-group photo-only">
+          <input type="checkbox" id="chkShutterSound" checked />
+          <span>Sonido de obturador</span>
         </label>
         <div class="slider-group hidden" id="qualityEnhancerStrengthGroup">
           <div class="slider-label">
@@ -583,6 +608,32 @@
           role="status"
           aria-live="polite"
         ></div>
+        <button
+          type="button"
+          class="btn danger-outline"
+          id="btnDeleteAllProfiles"
+        >
+          <i class="fa-solid fa-trash-can" aria-hidden="true"></i> Eliminar
+          todos los perfiles guardados
+        </button>
+      </div>
+
+      <div class="panel-section adjust-webcam-only webcam-diagnostics">
+        <div class="section-title">
+          <i class="fa-solid fa-gauge-high"></i> Diagnóstico
+        </div>
+        <div class="diagnostic-row">
+          <span>Calidad efectiva de preview</span
+          ><strong id="previewQualityDiagnostic">Balanceada</strong>
+        </div>
+        <button
+          type="button"
+          class="btn danger-outline"
+          id="btnResetWebcamConfig"
+        >
+          <i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Restablecer
+          configuración de webcam
+        </button>
       </div>
     </div>
   </div>

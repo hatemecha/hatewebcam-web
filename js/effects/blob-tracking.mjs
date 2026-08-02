@@ -68,6 +68,11 @@ export class BlobTracking {
     return 'Detector de Objetos';
   }
 
+  getDetectionSummary() {
+    const count = this._trackedBlobs.length;
+    return { status: count > 0 ? 'detected' : 'searching', count };
+  }
+
   triggerConnection(eye) {
     if (eye === 'left') {
       this.leftActive = true;

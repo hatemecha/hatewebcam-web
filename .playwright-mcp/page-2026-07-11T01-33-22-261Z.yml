@@ -1,0 +1,38 @@
+- main [ref=e3]:
+  - generic [ref=e4]:
+    - region [ref=e70]:
+      - generic:
+        - link [ref=e25] [cursor=pointer]:
+          - /url: https://github.com/hatemecha
+        - link [ref=e26] [cursor=pointer]:
+          - /url: https://www.instagram.com/hatemecha/
+      - generic [ref=e14]:
+        - heading [level=1] [ref=e71]:
+          - generic [ref=e16]: HATE
+          - generic [ref=e17]: MECHA
+        - generic [ref=e72]:
+          - button [ref=e73] [cursor=pointer]
+          - button [ref=e74] [cursor=pointer]
+      - button [ref=e75] [cursor=pointer]
+    - dialog [ref=e58]:
+      - generic [ref=e28]:
+        - navigation "Secciones del portfolio" [ref=e29]:
+          - button "acerca de" [ref=e59] [cursor=pointer]
+          - button "home" [ref=e60] [cursor=pointer]
+          - button "proyectos" [ref=e61] [cursor=pointer]
+          - button "cv & skills" [ref=e62] [cursor=pointer]
+          - button "galeria" [ref=e63] [cursor=pointer]
+          - button "musica" [ref=e64] [cursor=pointer]
+          - button "acerca de" [ref=e65] [cursor=pointer]
+          - button "home" [ref=e66] [cursor=pointer]
+          - button "proyectos" [ref=e67] [cursor=pointer]
+        - paragraph [ref=e39]: ↑↓ ←→ · WASD · rueda
+      - generic [ref=e40]:
+        - button "Cerrar menú" [ref=e41] [cursor=pointer]: x
+        - article [ref=e42]:
+          - generic: "function createCodeLine(line: string) { const lineElement = document.createElement(\"span\"); lineElement.className = \"menuCodeLine\"; lineElement.textContent = line.length > 0 ? line :"
+          - paragraph [ref=e43]: ギャラリー
+          - heading "galeria" [level=2] [ref=e68]
+          - paragraph [ref=e76]: dibujo / fotografia
+          - button "Entrar en galeria" [active] [ref=e69] [cursor=pointer]: enter
+          - generic: "function getConnectionY(rect: Rect) { return Math.round(rect.y + rect.h / 2); }"

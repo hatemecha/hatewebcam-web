@@ -238,6 +238,7 @@ export function applyRenderLoopMixin(proto) {
           this.frameCount = 0;
           this.lastFpsTime = now;
         }
+        this.updateEffectsInfo?.();
         this.updateVideoTransport();
       }
     } catch (err) {

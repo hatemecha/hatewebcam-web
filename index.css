@@ -278,6 +278,81 @@ body {
   letter-spacing: 0;
 }
 
+.capture-countdown-ring {
+  width: 164px;
+  height: 164px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(8, 8, 8, 0.88) 61%, transparent 63%),
+    conic-gradient(
+      var(--red) var(--countdown-progress, 0deg),
+      rgba(255, 255, 255, 0.2) 0
+    );
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  transition:
+    background 180ms linear,
+    transform 180ms ease;
+}
+
+.capture-countdown.is-final .capture-countdown-ring {
+  transform: scale(1.08);
+  box-shadow:
+    0 0 0 5px rgba(211, 47, 47, 0.28),
+    0 12px 40px rgba(0, 0, 0, 0.55);
+}
+
+.capture-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 24;
+  pointer-events: none;
+  background: #fff;
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+}
+
+.capture-flash.is-visible {
+  opacity: 0.92;
+  transition-duration: 35ms;
+}
+
+.recording-hud {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 25;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 8px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--r-sm);
+  background: rgba(10, 10, 10, 0.82);
+  color: #fff;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.35px;
+  backdrop-filter: blur(8px);
+}
+
+.recording-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ff3939;
+  box-shadow: 0 0 0 4px rgba(255, 57, 57, 0.16);
+  animation: recording-pulse 1.3s ease-in-out infinite;
+}
+
+@keyframes recording-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
 .capture-countdown-label {
   font-family: var(--mono);
   font-size: 12px;
@@ -358,6 +433,130 @@ body {
   font-size: 9px;
   color: var(--gray-dim);
   letter-spacing: 0.3px;
+}
+
+.preview-diagnostics,
+.detector-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.preview-diagnostics span + span::before {
+  content: '·';
+  margin-right: 6px;
+}
+
+.detector-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 23px;
+  padding: 3px 7px;
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--gray);
+  white-space: nowrap;
+}
+
+.detector-chip[data-state='searching'],
+.detector-chip[data-state='active'] {
+  border-color: rgba(255, 179, 0, 0.42);
+  color: #e6bd62;
+}
+
+.detector-chip[data-state='detected'] {
+  border-color: rgba(0, 200, 83, 0.44);
+  color: #62d98d;
+}
+
+.detector-chip[data-state='error'] {
+  border-color: rgba(255, 57, 57, 0.5);
+  color: #ff7777;
+}
+
+.camera-state-title {
+  margin: 3px 0 0;
+  font-size: 18px;
+  color: #fff;
+}
+
+.camera-state-message,
+.camera-state-hint {
+  max-width: 420px;
+  margin: 0;
+  text-align: center;
+  line-height: 1.45;
+}
+
+.camera-state-hint {
+  color: #d8ad66;
+}
+.camera-state-action {
+  margin-top: 5px;
+}
+
+.mirror-quick-btn.is-active,
+.mobile-mirror-btn.is-active {
+  border-color: rgba(211, 47, 47, 0.72);
+  background: rgba(211, 47, 47, 0.14);
+  color: #fff;
+}
+
+.color-palette {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 7px;
+}
+
+.color-palette-swatch {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: var(--swatch-color);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+}
+
+.color-palette-swatch.is-selected {
+  border-color: #fff;
+  outline: 2px solid var(--red);
+  outline-offset: 1px;
+}
+
+.color-palette-custom {
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--r-sm);
+  background: var(--bg-input);
+  color: var(--gray);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.color-palette-custom.is-selected {
+  border-color: var(--red);
+  color: #fff;
+}
+.danger-outline {
+  border-color: rgba(211, 47, 47, 0.4);
+  color: #ef8d8d;
+}
+.webcam-diagnostics .diagnostic-row {
+  margin-bottom: 10px;
+}
+.diagnostic-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--gray);
+  font-size: 11px;
 }
 
 /* ─── Control Panel ─── */
@@ -2916,6 +3115,47 @@ body.video-mode[data-editor-tool='trim'] .timeline-track-video {
     background: rgba(229, 57, 53, 0.24);
   }
 
+  .mobile-capture-btn.record {
+    width: 54px;
+    height: 54px;
+    border-radius: 15px;
+    border-color: rgba(229, 57, 53, 0.8);
+    background: rgba(96, 12, 12, 0.62);
+  }
+
+  .mobile-capture-btn.record::after {
+    content: 'REC';
+    position: absolute;
+    margin-top: 72px;
+    font-family: var(--mono);
+    font-size: 8px;
+    letter-spacing: 0.7px;
+    color: #fff;
+  }
+
+  .mobile-capture-btn.record.is-recording::after {
+    content: 'STOP';
+  }
+
+  .mobile-mirror-btn {
+    min-width: 48px;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    border-radius: 50%;
+  }
+
+  .mobile-mirror-btn span {
+    display: none;
+  }
+  .mobile-color-row {
+    flex-wrap: wrap;
+  }
+  .mobile-color-palette {
+    flex: 1 1 100%;
+    margin: 0 0 6px;
+  }
+
   .mobile-capture-btn.is-countdown {
     border-color: rgba(229, 57, 53, 0.9);
     background: rgba(229, 57, 53, 0.18);
@@ -2970,6 +3210,28 @@ body.video-mode[data-editor-tool='trim'] .timeline-track-video {
 
   .capture-preview-value {
     text-align: left;
+  }
+
+  .capture-countdown-ring {
+    width: 150px;
+    height: 150px;
+  }
+  .recording-hud {
+    top: max(10px, env(safe-area-inset-top));
+    left: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recording-dot {
+    animation: none;
+  }
+  .capture-countdown-ring,
+  .capture-flash {
+    transition: none;
+  }
+  .capture-countdown.is-final .capture-countdown-ring {
+    transform: none;
   }
 }
 

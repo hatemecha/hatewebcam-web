@@ -335,12 +335,21 @@ export function applyEventsMixin(proto) {
       if (this.isRunning) void this.cameraController.stop();
       else void this.cameraController.start();
     });
+    this.btnCameraStateAction?.addEventListener('click', () => {
+      void this.cameraController.start();
+    });
     this.cameraSelect.addEventListener('change', () => {
       void this.cameraController.switch(this.cameraSelect.value);
     });
     this.chkMirror.addEventListener(
       'change',
       this.onTransformChange.bind(this),
+    );
+    this.btnMirrorQuick?.addEventListener('click', () =>
+      this.toggleMirrorQuick(),
+    );
+    this.btnMobileMirror?.addEventListener('click', () =>
+      this.toggleMirrorQuick(),
     );
     this.chkFlipV.addEventListener('change', this.onTransformChange.bind(this));
     this.rotationSelect.addEventListener(
@@ -517,6 +526,13 @@ export function applyEventsMixin(proto) {
       'click',
       this.deleteProfile.bind(this),
     );
+    this.btnDeleteAllProfiles?.addEventListener(
+      'click',
+      this.deleteAllProfiles.bind(this),
+    );
+    this.btnResetWebcamConfig?.addEventListener('click', () => {
+      void this.resetWebcamConfiguration();
+    });
     this.profileSelect.addEventListener('change', this.loadProfile.bind(this));
     window.addEventListener('keydown', this.onGlobalKeyDown.bind(this));
     document.addEventListener(

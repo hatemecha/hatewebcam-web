@@ -180,6 +180,14 @@ export function applyCaptureMixin(proto) {
         Math.max(1, this.photoCountdownRemaining),
       );
     }
+    const total = Math.max(1, this.photoCountdownTotal || 1);
+    const progress = this.isPhotoCountdownActive
+      ? ((total - this.photoCountdownRemaining) / total) * 360
+      : 0;
+    this.captureCountdown.style.setProperty(
+      '--countdown-progress',
+      `${progress}deg`,
+    );
   };
 
   proto.cancelPhotoCountdown = function (showMessage = true) {
@@ -190,6 +198,7 @@ export function applyCaptureMixin(proto) {
     const wasActive = this.isPhotoCountdownActive;
     this.isPhotoCountdownActive = false;
     this.photoCountdownRemaining = 0;
+    this.photoCountdownTotal = 0;
     this.updateCaptureCountdownUI();
     this.updateCaptureButtons();
 
@@ -232,6 +241,7 @@ export function applyCaptureMixin(proto) {
     this.cancelPhotoCountdown(false);
     this.isPhotoCountdownActive = true;
     this.photoCountdownRemaining = seconds;
+    this.photoCountdownTotal = seconds;
     this.updateCaptureCountdownUI();
     this.updateCaptureButtons();
     this.showStatus(this.captureStatus, `Foto en ${seconds} segundos`, 'info');
@@ -257,6 +267,7 @@ export function applyCaptureMixin(proto) {
   };
 
   proto.requestPhotoCapture = function () {
+    this.armShutterSound();
     if (this.isPhotoCountdownActive) {
       this.cancelPhotoCountdown(true);
       return;
@@ -287,6 +298,12 @@ export function applyCaptureMixin(proto) {
       this.btnTakePhoto.innerHTML = this.isPhotoCountdownActive
         ? '<i class="fa-solid fa-xmark"></i> Cancelar timer'
         : '<i class="fa-solid fa-camera"></i> Sacar foto';
+      this.btnTakePhoto.setAttribute(
+        'aria-label',
+        this.isPhotoCountdownActive
+          ? 'Cancelar temporizador de foto'
+          : 'Sacar foto',
+      );
     }
     if (this.btnRecord)
       this.btnRecord.disabled =
@@ -327,6 +344,12 @@ export function applyCaptureMixin(proto) {
       this.btnMobileTakePhoto.innerHTML = this.isPhotoCountdownActive
         ? '<i class="fa-solid fa-xmark"></i>'
         : '<i class="fa-solid fa-camera"></i>';
+      this.btnMobileTakePhoto.setAttribute(
+        'aria-label',
+        this.isPhotoCountdownActive
+          ? 'Cancelar temporizador de foto'
+          : 'Sacar foto',
+      );
     }
     if (this.selMobileCaptureTimer)
       this.selMobileCaptureTimer.disabled = lockCaptureSettings;
@@ -342,6 +365,10 @@ export function applyCaptureMixin(proto) {
       this.btnMobileRecord.innerHTML = this.isRecording
         ? '<i class="fa-solid fa-stop"></i>'
         : '<i class="fa-solid fa-circle-dot"></i>';
+      this.btnMobileRecord.setAttribute(
+        'aria-label',
+        this.isRecording ? 'Detener grabación' : 'Grabar video',
+      );
     }
     if (this.btnMobileBlobToggle)
       this.btnMobileBlobToggle.disabled = lockDetectorControls;
@@ -727,6 +754,8 @@ export function applyCaptureMixin(proto) {
     if (!this.validatePhotoCaptureReady()) return;
 
     try {
+      this.showCaptureFlash();
+      this.playShutterSound();
       const initialEnhancerEnabled = !!this.imageSettings.qualityEnhancer;
       const initialEnhancerStrength =
         this.imageSettings.qualityEnhancerStrength;
@@ -764,6 +793,73 @@ export function applyCaptureMixin(proto) {
     } else {
       this.startRecording();
     }
+  };
+
+  proto.showCaptureFlash = function () {
+    if (!this.captureFlash) return;
+    this.captureFlash.classList.remove('is-visible');
+    void this.captureFlash.offsetWidth;
+    this.captureFlash.classList.add('is-visible');
+    setTimeout(() => this.captureFlash?.classList.remove('is-visible'), 180);
+  };
+
+  proto.armShutterSound = function () {
+    if (!this.imageSettings.shutterSound) return;
+    try {
+      const AudioContextClass =
+        globalThis.AudioContext || globalThis.webkitAudioContext;
+      if (!AudioContextClass) return;
+      if (!this.shutterAudioContext)
+        this.shutterAudioContext = new AudioContextClass();
+      void this.shutterAudioContext.resume?.().catch(() => {});
+      this.shutterSoundArmed = true;
+    } catch {
+      this.shutterSoundArmed = false;
+    }
+  };
+
+  proto.playShutterSound = function () {
+    if (
+      !this.imageSettings.shutterSound ||
+      !this.shutterSoundArmed ||
+      !this.shutterAudioContext
+    )
+      return;
+    try {
+      const audio = this.shutterAudioContext;
+      const oscillator = audio.createOscillator();
+      const gain = audio.createGain();
+      oscillator.type = 'square';
+      oscillator.frequency.setValueAtTime(180, audio.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(
+        70,
+        audio.currentTime + 0.055,
+      );
+      gain.gain.setValueAtTime(0.035, audio.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + 0.07);
+      oscillator.connect(gain).connect(audio.destination);
+      oscillator.start();
+      oscillator.stop(audio.currentTime + 0.075);
+    } catch {
+      // El sonido es opcional: la captura nunca depende de Web Audio.
+    }
+  };
+
+  proto.updateRecordingHud = function () {
+    if (!this.recordingHud) return;
+    this.recordingHud.classList.toggle('hidden', !this.isRecording);
+    if (!this.isRecording) return;
+    const seconds = Math.max(
+      0,
+      Math.floor((Date.now() - this.recordingStartTs) / 1000),
+    );
+    if (this.recordingHudTime)
+      this.recordingHudTime.textContent = this.formatDuration(seconds);
+    if (this.recordingHudFormat)
+      this.recordingHudFormat.textContent =
+        (this.currentRecordingExt || 'webm').toUpperCase() === 'WEBM'
+          ? 'WebM'
+          : 'MP4';
   };
 
   proto.startRecording = function () {
@@ -913,16 +1009,21 @@ export function applyCaptureMixin(proto) {
       this.mediaRecorder.start(250);
       this.isRecording = true;
       this.recordingStartTs = Date.now();
+      this.updateRecordingHud();
+      const effectiveFormat =
+        this.currentRecordingExt.toUpperCase() === 'WEBM' ? 'WebM' : 'MP4';
+      this.showStatus(
+        this.captureStatus,
+        recordingProfile.fallbackMessage
+          ? `${recordingProfile.fallbackMessage} Grabación iniciada en ${effectiveFormat}.`
+          : `Grabación iniciada en ${effectiveFormat}.`,
+        recordingProfile.fallbackMessage ? 'warning' : 'info',
+      );
       if (this.recordingTimer) clearInterval(this.recordingTimer);
       this.recordingTimer = setInterval(() => {
         if (!this.isRecording) return;
-        const sec = Math.floor((Date.now() - this.recordingStartTs) / 1000);
-        this.showStatus(
-          this.captureStatus,
-          `Grabando ${this.formatDuration(sec)}`,
-          'warning',
-        );
-      }, 300);
+        this.updateRecordingHud();
+      }, 1000);
 
       this.updateCaptureButtons();
     } catch (err) {
@@ -943,6 +1044,7 @@ export function applyCaptureMixin(proto) {
       this.currentRecordingBitrate = 6000000;
       this.currentRecordingFps = 30;
       this.lastRecordingDurationSec = 0;
+      this.updateRecordingHud();
       this.updateCaptureButtons();
     }
   };
@@ -960,6 +1062,7 @@ export function applyCaptureMixin(proto) {
       this.lastRecordingDurationSec = 0;
     }
     this.recordingStartTs = 0;
+    this.updateRecordingHud();
 
     if (this.recordingTimer) {
       clearInterval(this.recordingTimer);
@@ -967,6 +1070,13 @@ export function applyCaptureMixin(proto) {
     }
 
     this.updateCaptureButtons();
+    this.showStatus(
+      this.captureStatus,
+      saveFile
+        ? 'Grabación detenida. Preparando vista previa.'
+        : 'Grabación cancelada.',
+      'info',
+    );
 
     if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
       this.mediaRecorder.stop();

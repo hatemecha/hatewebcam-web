@@ -15,12 +15,23 @@ export function setupDom(app) {
   app.placeholderVideo = $('#previewPlaceholderVideo');
   app.placeholderLoading = $('#previewPlaceholderLoading');
   app.placeholderCameraMessage = $('#previewPlaceholderCameraMessage');
+  app.cameraStateTitle = $('#cameraStateTitle');
+  app.cameraStateHint = $('#cameraStateHint');
+  app.cameraStateIcon = $('#cameraStateIcon');
+  app.btnCameraStateAction = $('#btnCameraStateAction');
   app.placeholderLoadingMessage = $('#previewPlaceholderLoadingMessage');
   app.btnPreviewImportVideo = $('#btnPreviewImportVideo');
   app.resolutionInfo = $('#resolutionInfo');
   app.fpsInfo = $('#fpsInfo');
   app.effectsInfo = $('#effectsInfo');
-  app.previewQualitySelect = $('#previewQualitySelect');
+  app.previewQualityDiagnostic = $('#previewQualityDiagnostic');
+  app.recordingHud = $('#recordingHud');
+  app.recordingHudTime = $('#recordingHudTime');
+  app.recordingHudFormat = $('#recordingHudFormat');
+  app.captureFlash = $('#captureFlash');
+  app.detectorChipBlob = $('#detectorChipBlob');
+  app.detectorChipFace = $('#detectorChipFace');
+  app.detectorChipBlink = $('#detectorChipBlink');
   app.btnWebcamMode = $('#btnWebcamMode');
   app.btnVideoMode = $('#btnVideoMode');
   app.videoFileInput = $('#videoFileInput');
@@ -143,6 +154,7 @@ export function setupDom(app) {
   app.valJpegQuality = $('#valJpegQuality');
   app.videoFormatSelect = $('#videoFormatSelect');
   app.chkQualityEnhancer = $('#chkQualityEnhancer');
+  app.chkShutterSound = $('#chkShutterSound');
   app.sldQualityEnhancerStrength = $('#sldQualityEnhancerStrength');
   app.valQualityEnhancerStrength = $('#valQualityEnhancerStrength');
   app.qualityEnhancerStrengthGroup = $('#qualityEnhancerStrengthGroup');
@@ -166,6 +178,8 @@ export function setupDom(app) {
   app.controlPanel = $('#controlPanel');
 
   app.chkMirror = $('#chkMirror');
+  app.btnMirrorQuick = $('#btnMirrorQuick');
+  app.btnMobileMirror = $('#btnMobileMirror');
   app.chkFlipV = $('#chkFlipV');
   app.rotationSelect = $('#rotationSelect');
   app.chkBlackWhite = $('#chkBlackWhite');
@@ -217,6 +231,8 @@ export function setupDom(app) {
   app.profileSelect = $('#profileSelect');
   app.btnSaveProfile = $('#btnSaveProfile');
   app.btnDeleteProfile = $('#btnDeleteProfile');
+  app.btnDeleteAllProfiles = $('#btnDeleteAllProfiles');
+  app.btnResetWebcamConfig = $('#btnResetWebcamConfig');
   app.profileStatus = $('#profileStatus');
   app.btnMobileEffectsDock = $('#btnMobileEffectsDock');
   app.mobileFxBackdrop = $('#mobileFxBackdrop');

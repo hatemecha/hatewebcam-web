@@ -88,11 +88,33 @@
             <div
               class="preview-placeholder-view preview-placeholder-camera"
               id="previewPlaceholderCamera"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
             >
-              <i class="fa-solid fa-video fa-2x"></i>
-              <div id="previewPlaceholderCameraMessage">
-                Iniciando cámara automáticamente...
-              </div>
+              <i
+                class="fa-solid fa-video fa-2x"
+                id="cameraStateIcon"
+                aria-hidden="true"
+              ></i>
+              <h2 class="camera-state-title" id="cameraStateTitle">
+                Cámara apagada
+              </h2>
+              <p
+                class="camera-state-message"
+                id="previewPlaceholderCameraMessage"
+              >
+                Encendé la cámara para ver la imagen.
+              </p>
+              <p class="camera-state-hint hidden" id="cameraStateHint"></p>
+              <button
+                type="button"
+                class="btn primary camera-state-action"
+                id="btnCameraStateAction"
+              >
+                <i class="fa-solid fa-play" aria-hidden="true"></i>
+                <span>Encender cámara</span>
+              </button>
             </div>
             <div
               class="preview-placeholder-view preview-placeholder-video hidden"
@@ -134,33 +156,26 @@
             class="capture-countdown hidden"
             id="captureCountdown"
             role="status"
-            aria-live="assertive"
+            aria-live="off"
           >
-            <div class="capture-countdown-value" id="captureCountdownValue">
-              5
+            <div class="capture-countdown-ring" aria-hidden="true">
+              <div class="capture-countdown-value" id="captureCountdownValue">
+                5
+              </div>
             </div>
             <div class="capture-countdown-label">Foto en</div>
           </div>
+          <div class="capture-flash" id="captureFlash" aria-hidden="true"></div>
           <div
-            class="preview-overlay-toolbar"
-            aria-label="Controles de vista previa"
+            class="recording-hud hidden"
+            id="recordingHud"
+            aria-hidden="true"
           >
-            <label class="preview-overlay-control" for="previewQualitySelect">
-              <span class="preview-overlay-kicker"
-                ><i class="fa-solid fa-film"></i> Vista previa</span
-              >
-              <div class="select-wrapper preview-overlay-select">
-                <select
-                  id="previewQualitySelect"
-                  aria-label="Calidad de vista previa"
-                >
-                  <option value="draft">Borrador</option>
-                  <option value="balanced" selected>Balanceada</option>
-                  <option value="high">Alta</option>
-                  <option value="full">Exacta</option>
-                </select>
-              </div>
-            </label>
+            <span class="recording-dot"></span>
+            <strong>REC</strong>
+            <span id="recordingHudTime">00:00</span>
+            <span aria-hidden="true">·</span>
+            <span id="recordingHudFormat">WebM</span>
           </div>
           <div
             class="mobile-hud"
@@ -277,6 +292,11 @@
                     aria-label="Color tracking objetos"
                   />
                 </label>
+                <div
+                  class="color-palette mobile-color-palette"
+                  data-color-target="inpMobileBlobColor"
+                  aria-label="Paleta de objetos"
+                ></div>
                 <label class="mobile-color-chip" id="mobileFaceColorChip">
                   <span>Cara</span>
                   <input
@@ -286,6 +306,11 @@
                     aria-label="Color tracking caras"
                   />
                 </label>
+                <div
+                  class="color-palette mobile-color-palette"
+                  data-color-target="inpMobileFaceColor"
+                  aria-label="Paleta de caras"
+                ></div>
               </div>
               <div class="mobile-face-label-wrap" id="mobileFaceLabelWrap">
                 <input
@@ -310,6 +335,16 @@
               </button>
               <button
                 type="button"
+                class="mobile-dock-btn mobile-mirror-btn"
+                id="btnMobileMirror"
+                aria-pressed="false"
+                title="Espejo en vista y captura"
+              >
+                <i class="fa-solid fa-arrows-left-right" aria-hidden="true"></i>
+                <span>Espejo</span>
+              </button>
+              <button
+                type="button"
                 class="mobile-capture-btn"
                 id="btnMobileTakePhoto"
                 aria-label="Sacar foto"
@@ -328,9 +363,24 @@
           </div>
         </div>
         <div class="preview-status-bar">
-          <span id="resolutionInfo">—</span>
-          <span id="fpsInfo">—</span>
-          <span id="effectsInfo">Sin detectores</span>
+          <div class="preview-diagnostics">
+            <span id="resolutionInfo">—</span><span id="fpsInfo">—</span>
+          </div>
+          <div
+            class="detector-chips"
+            id="effectsInfo"
+            aria-label="Estado de detectores"
+          >
+            <span class="detector-chip" id="detectorChipBlob" data-state="off"
+              >Color: desactivado</span
+            >
+            <span class="detector-chip" id="detectorChipFace" data-state="off"
+              >Caras: desactivadas</span
+            >
+            <span class="detector-chip" id="detectorChipBlink" data-state="off"
+              >Pestañeos: desactivados</span
+            >
+          </div>
         </div>
         <div id="videoEditorTemplateSlot"></div>
       </main>

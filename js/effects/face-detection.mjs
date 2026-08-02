@@ -6,6 +6,7 @@ export class FaceDetection {
   constructor() {
     this.faceMesh = null;
     this.ready = false;
+    this.initError = null;
     this._processing = false;
     this._lastProcessTs = 0;
 
@@ -47,6 +48,15 @@ export class FaceDetection {
     return 'Detector de Caras';
   }
 
+  getDetectionSummary() {
+    if (this.initError) return { status: 'error', count: 0 };
+    const now = performance.now();
+    const count = this._faces.filter(
+      (face) => now - (face.lastSeenTs || 0) <= this.detectionHoldMs,
+    ).length;
+    return { status: count > 0 ? 'detected' : 'searching', count };
+  }
+
   getPrimaryFaceLandmarks(maxAgeMs = this.detectionHoldMs) {
     const now = performance.now();
     const face = this._faces.find((candidate) => {
@@ -83,9 +93,14 @@ export class FaceDetection {
         .initialize()
         .then(() => {
           this.ready = true;
+          this.initError = null;
         })
-        .catch((e) => console.error('FaceDetection init error:', e));
+        .catch((e) => {
+          this.initError = e;
+          console.error('FaceDetection init error:', e);
+        });
     } catch (e) {
+      this.initError = e;
       console.error('FaceDetection: cannot init', e);
     }
   }

@@ -54,7 +54,7 @@ export class CameraManager {
         this.stop();
       }
 
-      await this._startWithConstraints(constraints, deviceId);
+      await this._startWithConstraints(constraints, deviceId, opts);
       this.lastError = null;
       return true;
     } catch (e) {
@@ -65,6 +65,7 @@ export class CameraManager {
           await this._startWithConstraints(
             this._buildVideoConstraints(null, opts),
             null,
+            opts,
           );
           this.lastError = null;
           return true;
@@ -149,8 +150,11 @@ export class CameraManager {
     return constraints;
   }
 
-  async _startWithConstraints(constraints, deviceId = null) {
+  async _startWithConstraints(constraints, deviceId = null, opts = {}) {
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    if (typeof opts.onPermissionGranted === 'function') {
+      opts.onPermissionGranted();
+    }
     this.stream = stream;
     this.videoElement.srcObject = stream;
 

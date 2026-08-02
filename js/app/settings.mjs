@@ -457,6 +457,7 @@ export function applyStorageMixin(proto) {
       );
     }
     this.syncAdvancedQuickInputs();
+    this.updateColorPaletteSelections?.();
     this.updateCaptureButtons();
     this.updateVideoEffectInspector();
     this.updateVideoEditorUI();
@@ -625,6 +626,15 @@ export function applyStorageMixin(proto) {
 
   proto.loadImageSettings = function (cfg) {
     const saved = cfg.imageSettings || {};
+    if (saved.performanceMode == null && saved.previewQuality != null) {
+      const legacyQuality = normalizePreviewQuality(saved.previewQuality);
+      saved.performanceMode =
+        legacyQuality === 'draft'
+          ? 'performance'
+          : ['high', 'full'].includes(legacyQuality)
+            ? 'quality'
+            : 'normal';
+    }
     this.imageSettings = {
       ...this.DEFAULT_IMAGE_SETTINGS,
       ...saved,
@@ -720,6 +730,7 @@ export function applyStorageMixin(proto) {
     this.imageSettings.captureTimerSeconds = this.normalizeCaptureTimerSeconds(
       this.imageSettings.captureTimerSeconds,
     );
+    this.imageSettings.shutterSound = this.imageSettings.shutterSound !== false;
     this.imageSettings.qualityEnhancer = !!this.imageSettings.qualityEnhancer;
     const enhancerStrength = parseInt(
       this.imageSettings.qualityEnhancerStrength,
@@ -807,10 +818,10 @@ export function applyStorageMixin(proto) {
     if (this.effectsExportChromaSelect)
       this.effectsExportChromaSelect.value =
         this.imageSettings.effectsExportChroma;
-    if (this.previewQualitySelect)
-      this.previewQualitySelect.value = normalizePreviewQuality(
-        this.imageSettings.previewQuality,
-      );
+    if (this.previewQualityDiagnostic) {
+      this.previewQualityDiagnostic.textContent =
+        this.getCurrentPreviewQualityPreset().label;
+    }
     if (this.performanceModeSelect)
       this.performanceModeSelect.value = this.normalizePerformanceMode(
         this.imageSettings.performanceMode,
@@ -825,6 +836,8 @@ export function applyStorageMixin(proto) {
       );
     if (this.chkQualityEnhancer)
       this.chkQualityEnhancer.checked = !!this.imageSettings.qualityEnhancer;
+    if (this.chkShutterSound)
+      this.chkShutterSound.checked = this.imageSettings.shutterSound !== false;
     if (this.sldQualityEnhancerStrength)
       this.sldQualityEnhancerStrength.value = String(
         this.imageSettings.qualityEnhancerStrength,
@@ -974,17 +987,6 @@ export function applyStorageMixin(proto) {
       });
     }
 
-    if (this.previewQualitySelect) {
-      this.previewQualitySelect.addEventListener('change', (e) => {
-        this.imageSettings.previewQuality = normalizePreviewQuality(
-          e.target.value,
-        );
-        e.target.value = this.imageSettings.previewQuality;
-        this.requestPreviewRefresh(true);
-        this.saveImageSettings();
-      });
-    }
-
     if (this.performanceModeSelect) {
       this.performanceModeSelect.addEventListener('change', (e) => {
         void this.applyPerformanceMode(e.target.value, {
@@ -1010,6 +1012,13 @@ export function applyStorageMixin(proto) {
       this.chkQualityEnhancer.addEventListener('change', (e) => {
         this.imageSettings.qualityEnhancer = e.target.checked;
         this.updateQualityEnhancerControls();
+        this.saveImageSettings();
+      });
+    }
+
+    if (this.chkShutterSound) {
+      this.chkShutterSound.addEventListener('change', (e) => {
+        this.imageSettings.shutterSound = !!e.target.checked;
         this.saveImageSettings();
       });
     }
@@ -1103,6 +1112,145 @@ export function applyStorageMixin(proto) {
         this.syncAdvancedQuickInputs();
       });
     }
+  };
+
+  proto.syncMirrorControls = function () {
+    if (this.chkMirror) this.chkMirror.checked = !!this.flipH;
+    for (const button of [this.btnMirrorQuick, this.btnMobileMirror]) {
+      if (!button) continue;
+      button.setAttribute('aria-pressed', String(!!this.flipH));
+      button.classList.toggle('is-active', !!this.flipH);
+    }
+  };
+
+  proto.toggleMirrorQuick = function () {
+    this.flipH = !this.flipH;
+    if (this.chkMirror) this.chkMirror.checked = this.flipH;
+    this.onTransformChange();
+  };
+
+  proto.initializeColorPalettes = function () {
+    const colors = ['#ff2222', '#ffb300', '#00c853', '#00b8d4', '#ffffff'];
+    document
+      .querySelectorAll('.color-palette[data-color-target]')
+      .forEach((palette) => {
+        if (palette.childElementCount) return;
+        const input = document.getElementById(palette.dataset.colorTarget);
+        if (!input) return;
+        for (const color of colors) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'color-palette-swatch';
+          button.dataset.color = color;
+          button.style.setProperty('--swatch-color', color);
+          button.setAttribute('aria-label', `Usar color ${color}`);
+          button.addEventListener('click', () => {
+            input.value = color;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            this.updateColorPaletteSelections();
+          });
+          palette.appendChild(button);
+        }
+        const custom = document.createElement('button');
+        custom.type = 'button';
+        custom.className = 'color-palette-custom';
+        custom.textContent = 'Personalizado';
+        custom.addEventListener('click', () => input.click());
+        palette.appendChild(custom);
+      });
+    this.updateColorPaletteSelections();
+  };
+
+  proto.updateColorPaletteSelections = function () {
+    document
+      .querySelectorAll('.color-palette[data-color-target]')
+      .forEach((palette) => {
+        const input = document.getElementById(palette.dataset.colorTarget);
+        const value = input?.value?.toLowerCase() || '';
+        let matched = false;
+        palette.querySelectorAll('.color-palette-swatch').forEach((button) => {
+          const selected = button.dataset.color.toLowerCase() === value;
+          matched ||= selected;
+          button.classList.toggle('is-selected', selected);
+          button.setAttribute('aria-pressed', String(selected));
+        });
+        palette
+          .querySelector('.color-palette-custom')
+          ?.classList.toggle('is-selected', !matched);
+      });
+  };
+
+  proto.resetWebcamConfiguration = async function () {
+    if (
+      !confirm(
+        '¿Restablecer toda la configuración de webcam? Los perfiles guardados no se eliminarán.',
+      )
+    )
+      return;
+    this.cancelPhotoCountdown(false);
+    const editorKeys = [
+      'editorExportPreset',
+      'editorExportFormat',
+      'editorExportMode',
+      'editorCopyAudio',
+      'experimentalExportFeatures',
+      'effectsExportChroma',
+    ];
+    const preservedEditorSettings = Object.fromEntries(
+      editorKeys.map((key) => [key, this.imageSettings[key]]),
+    );
+    this.imageSettings = {
+      ...this.DEFAULT_IMAGE_SETTINGS,
+      ...preservedEditorSettings,
+    };
+    this.flipH = false;
+    this.flipV = false;
+    this.rotation = 0;
+    this.quickDetectorSettings = { ...this.DEFAULT_QUICK_DETECTOR_SETTINGS };
+    if (this.chkFlipV) this.chkFlipV.checked = false;
+    if (this.rotationSelect) this.rotationSelect.value = '0';
+    this.syncMirrorControls();
+
+    for (const [input, type] of [
+      [this.chkBlobTracking, 'blob'],
+      [this.chkFaceDetection, 'face'],
+      [this.chkBlinkDetection, 'blink'],
+    ]) {
+      if (input) input.checked = false;
+      await this.toggleEffect(type);
+    }
+
+    await this.applyPerformanceMode(
+      this.DEFAULT_IMAGE_SETTINGS.performanceMode,
+      {
+        restartCamera: false,
+        notify: false,
+        save: false,
+      },
+    );
+    this.mobileActivePreset = 'natural';
+    this.updateMobilePresetButtons(this.mobileActivePreset);
+    this.updateImageControlsUI();
+    this.updateQuickDetectorControlsUI();
+    this.updateColorPaletteSelections();
+
+    const cfg = this.loadConfig();
+    cfg.flipH = false;
+    cfg.flipV = false;
+    cfg.rotation = 0;
+    cfg.imageSettings = { ...this.imageSettings };
+    cfg.quickDetectorSettings = { ...this.quickDetectorSettings };
+    cfg.activeDetectors = { blob: false, face: false, blink: false };
+    cfg.effectSettings = { ...(cfg.effectSettings || {}) };
+    delete cfg.effectSettings.blob;
+    delete cfg.effectSettings.face;
+    delete cfg.effectSettings.blink;
+    this.saveConfig(cfg);
+    this.showStatus(
+      this.captureStatus,
+      'Configuración de webcam restablecida',
+      'success',
+    );
   };
 
   proto.applyImagePreset = function (name) {

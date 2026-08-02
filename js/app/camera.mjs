@@ -1,5 +1,106 @@
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyCameraMixin(proto) {
+  proto.getCameraStatePresentation = function (state, error = null) {
+    const states = {
+      off: {
+        title: 'Cámara apagada',
+        message: 'Encendé la cámara para ver la imagen.',
+        action: 'Encender cámara',
+        icon: 'fa-video-slash',
+      },
+      requesting: {
+        title: 'Permiso de cámara',
+        message: 'Aceptá el permiso del sitio para continuar.',
+        icon: 'fa-shield-halved',
+      },
+      starting: {
+        title: 'Iniciando cámara',
+        message: 'Estamos preparando la imagen.',
+        icon: 'fa-spinner fa-spin',
+      },
+      running: {
+        title: 'Cámara funcionando',
+        message: 'La cámara está lista.',
+        icon: 'fa-video',
+      },
+      denied: {
+        title: 'Permiso de cámara denegado',
+        message: 'Habilitá la cámara para este sitio y volvé a intentarlo.',
+        hint: 'Revisá el ícono de permisos junto a la dirección del sitio.',
+        action: 'Reintentar',
+        icon: 'fa-shield-halved',
+      },
+      missing: {
+        title: 'No se encontró una cámara',
+        message: 'Conectá una cámara o revisá que esté habilitada.',
+        action: 'Reintentar',
+        icon: 'fa-video-slash',
+      },
+      busy: {
+        title: 'La cámara está ocupada',
+        message: 'Cerrá la aplicación que la está usando y reintentá.',
+        action: 'Reintentar',
+        icon: 'fa-triangle-exclamation',
+      },
+      unsupported: {
+        title: 'Configuración no soportada',
+        message: 'Probá otra cámara o el modo Balanceado.',
+        action: 'Reintentar',
+        icon: 'fa-triangle-exclamation',
+      },
+      unknown: {
+        title: 'No se pudo iniciar la cámara',
+        message: 'Revisá los permisos y volvé a intentarlo.',
+        action: 'Reintentar',
+        icon: 'fa-circle-exclamation',
+      },
+    };
+    return { ...(states[state] || states.unknown), state, error };
+  };
+
+  proto.classifyCameraError = function (error) {
+    const name = error?.name || '';
+    if (name === 'NotAllowedError' || name === 'SecurityError') return 'denied';
+    if (name === 'NotFoundError' || name === 'DevicesNotFoundError')
+      return 'missing';
+    if (name === 'NotReadableError' || name === 'TrackStartError')
+      return 'busy';
+    if (
+      name === 'OverconstrainedError' ||
+      name === 'ConstraintNotSatisfiedError' ||
+      !navigator.mediaDevices?.getUserMedia
+    )
+      return 'unsupported';
+    return 'unknown';
+  };
+
+  proto.setCameraState = function (
+    state,
+    error = null,
+    { focus = false } = {},
+  ) {
+    const view = this.getCameraStatePresentation(state, error);
+    const stateKey = `${state}:${error?.name || ''}`;
+    const changed = this.cameraUiStateKey !== stateKey;
+    this.cameraUiStateKey = stateKey;
+    this.cameraUiState = state;
+    if (this.cameraStateTitle) this.cameraStateTitle.textContent = view.title;
+    this.setCameraPlaceholderMessage(view.message);
+    if (this.cameraStateHint) {
+      this.cameraStateHint.textContent = view.hint || '';
+      this.cameraStateHint.classList.toggle('hidden', !view.hint);
+    }
+    if (this.cameraStateIcon) {
+      this.cameraStateIcon.className = `fa-solid ${view.icon} fa-2x`;
+    }
+    if (this.btnCameraStateAction) {
+      this.btnCameraStateAction.classList.toggle('hidden', !view.action);
+      const label = this.btnCameraStateAction.querySelector('span');
+      if (label) label.textContent = view.action || '';
+      if (focus && changed && view.action) this.btnCameraStateAction.focus();
+    }
+  };
+
   proto.setCameraPlaceholderMessage = function (message) {
     if (this.placeholderCameraMessage) {
       this.placeholderCameraMessage.textContent = message;
@@ -70,25 +171,13 @@ export function applyCameraMixin(proto) {
   };
 
   proto.getCameraStartErrorMessage = function (error, wasAutoStart = false) {
-    const errorName = error && error.name ? error.name : '';
-    if (errorName === 'NotAllowedError' || errorName === 'SecurityError') {
-      return 'Permiso de cámara bloqueado. Habilitá el permiso del navegador y tocá Encender Cámara.';
-    }
-    if (errorName === 'NotFoundError' || errorName === 'DevicesNotFoundError') {
-      return 'No se encontró una cámara disponible. Conectá una cámara y tocá Encender Cámara.';
-    }
-    if (errorName === 'NotReadableError' || errorName === 'TrackStartError') {
-      return 'Otra app parece estar usando la cámara. Cerrala y tocá Encender Cámara.';
-    }
-    if (
-      errorName === 'OverconstrainedError' ||
-      errorName === 'ConstraintNotSatisfiedError'
-    ) {
-      return 'La cámara no soporta la configuración solicitada. Probá otra cámara o reintentá.';
-    }
-    return wasAutoStart
-      ? 'La cámara no se inició automáticamente. Tocá Encender Cámara para reintentar.'
-      : 'No se pudo activar la cámara. Revisá permisos y reintentá.';
+    const view = this.getCameraStatePresentation(
+      this.classifyCameraError(error),
+      error,
+    );
+    return wasAutoStart && view.state === 'unknown'
+      ? 'La cámara no se inició automáticamente. Volvé a intentarlo.'
+      : `${view.title}. ${view.message}`;
   };
 
   proto.getEffectivePerformanceMode = function () {
@@ -204,6 +293,7 @@ export function applyCameraMixin(proto) {
       this.btnToggleCamera.innerHTML =
         '<i class="fa-solid fa-play"></i> Encender Cámara';
       this.btnToggleCamera.classList.remove('active');
+      this.setCameraState('off');
       this.updatePreviewPlaceholder();
       this.resolutionInfo.textContent = '—';
       this.fpsInfo.textContent = '—';
@@ -214,14 +304,18 @@ export function applyCameraMixin(proto) {
     if (!this.isRunning) {
       const requestedDeviceId =
         this.cameraSelect.value || this.preferredDeviceId || null;
-      this.setCameraPlaceholderMessage('Solicitando permiso de cámara...');
+      this.setCameraState('requesting');
       const ok = await this.cameraManager.start(
         this.videoEl,
         requestedDeviceId,
-        this.getCameraStartOptions(),
+        {
+          ...this.getCameraStartOptions(),
+          onPermissionGranted: () => this.setCameraState('starting'),
+        },
       );
       if (ok) {
         this.isRunning = true;
+        this.setCameraState('running');
         this.updatePreviewPlaceholder();
         this.btnToggleCamera.innerHTML =
           '<i class="fa-solid fa-stop"></i> Apagar Cámara';
@@ -255,6 +349,12 @@ export function applyCameraMixin(proto) {
           this.cameraSelect.value = this.preferredDeviceId;
         void this.refreshCameraDevices(this.preferredDeviceId);
       } else {
+        const errorState = this.classifyCameraError(
+          this.cameraManager.lastError,
+        );
+        this.setCameraState(errorState, this.cameraManager.lastError, {
+          focus: true,
+        });
         const message = this.getCameraStartErrorMessage(
           this.cameraManager.lastError,
           forceStart,
@@ -276,15 +376,23 @@ export function applyCameraMixin(proto) {
 
     this.cameraSelect.disabled = true;
     try {
-      await this.cameraManager.switchCamera(
+      this.setCameraState('starting');
+      const ok = await this.cameraManager.switchCamera(
         this.cameraSelect.value,
-        this.getCameraStartOptions(),
+        {
+          ...this.getCameraStartOptions(),
+          onPermissionGranted: () => this.setCameraState('starting'),
+        },
       );
+      if (!ok)
+        throw this.cameraManager.lastError || new Error('camera_switch_failed');
+      this.setCameraState('running');
       const settings = this.cameraManager.getStreamSettings();
       this.preferredDeviceId = settings.deviceId || this.preferredDeviceId;
       void this.refreshCameraDevices(this.preferredDeviceId);
     } catch (err) {
       console.error('Error switching camera:', err);
+      this.setCameraState(this.classifyCameraError(err), err, { focus: true });
       this.showStatus(
         this.captureStatus,
         'No se pudo cambiar de cámara',
@@ -305,5 +413,6 @@ export function applyCameraMixin(proto) {
     cfg.flipV = this.flipV;
     cfg.rotation = this.rotation;
     this.saveConfig(cfg);
+    this.syncMirrorControls?.();
   };
 }

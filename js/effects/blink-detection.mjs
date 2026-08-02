@@ -7,6 +7,7 @@ export class BlinkDetection {
     // MediaPipe Face Mesh
     this.faceMesh = null;
     this.ready = false;
+    this.initError = null;
     this.initPromise = null;
     this.landmarkSource = options.landmarkSource || null;
 
@@ -35,6 +36,7 @@ export class BlinkDetection {
     this._rightEarSmooth = 1;
     this._leftClosedFrames = 0;
     this._rightClosedFrames = 0;
+    this._lastBlinkTs = 0;
 
     if (this.landmarkSource) {
       this.ready = true;
@@ -45,6 +47,12 @@ export class BlinkDetection {
 
   getName() {
     return 'Detección de Pestañeos';
+  }
+
+  getDetectionSummary() {
+    if (this.initError) return { status: 'error', detected: false };
+    const detected = performance.now() - this._lastBlinkTs < 900;
+    return { status: detected ? 'detected' : 'active', detected };
   }
 
   _initMediaPipe() {
@@ -81,11 +89,14 @@ export class BlinkDetection {
         .initialize()
         .then(() => {
           this.ready = true;
+          this.initError = null;
         })
         .catch((e) => {
+          this.initError = e;
           console.error('FaceMesh init error:', e);
         });
     } catch (e) {
+      this.initError = e;
       console.error('Cannot initialize FaceMesh:', e);
     }
   }
@@ -118,6 +129,9 @@ export class BlinkDetection {
 
       this.leftBlinkDetected = this._leftClosedFrames >= this.minClosedFrames;
       this.rightBlinkDetected = this._rightClosedFrames >= this.minClosedFrames;
+      if (this.leftBlinkDetected || this.rightBlinkDetected) {
+        this._lastBlinkTs = performance.now();
+      }
 
       // Fire callback
       if (this.blinkCallback) {
@@ -305,5 +319,6 @@ export class BlinkDetection {
     this._rightClosedFrames = 0;
     this._leftEarSmooth = 1;
     this._rightEarSmooth = 1;
+    this._lastBlinkTs = 0;
   }
 }

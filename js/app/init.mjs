@@ -41,6 +41,7 @@ export function applyInitMixin(proto) {
     if (typeof cfg.flipH === 'boolean') this.flipH = cfg.flipH;
     else this.flipH = false;
     if (this.chkMirror) this.chkMirror.checked = this.flipH;
+    this.syncMirrorControls();
 
     if (typeof cfg.flipV === 'boolean') this.flipV = cfg.flipV;
     if (this.chkFlipV) this.chkFlipV.checked = this.flipV;
@@ -75,10 +76,13 @@ export function applyInitMixin(proto) {
     this.bindEditorSplitters();
     this.bindQuickDetectorEvents();
     this.bindImageControlEvents();
+    this.initializeColorPalettes();
     this.editAssist?.bind();
     this.syncMobileViewportState();
     this.setMobileFxPanelVisible(false);
     this.updateCaptureButtons();
+    this.setCameraState('off');
+    void this.restoreActiveDetectors(cfg);
 
     // Auto-start camera on load (if browser allows it) without blocking UI init.
     void this.cameraController.start();

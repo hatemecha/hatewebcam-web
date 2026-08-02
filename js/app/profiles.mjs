@@ -21,6 +21,11 @@ export function applyProfilesMixin(proto) {
       flipV: this.flipV,
       rotation: this.rotation,
       imageSettings: { ...this.imageSettings },
+      activeDetectors: {
+        blob: !!this.chkBlobTracking?.checked,
+        face: !!this.chkFaceDetection?.checked,
+        blink: !!this.chkBlinkDetection?.checked,
+      },
     };
     if (this.blobTrackingEffect)
       config.blob = this.blobTrackingEffect.getConfig();
@@ -36,7 +41,7 @@ export function applyProfilesMixin(proto) {
     setTimeout(() => this.hideStatus(this.profileStatus), 2500);
   };
 
-  proto.loadProfile = function () {
+  proto.loadProfile = async function () {
     const name = this.profileSelect.value;
     if (!name) return;
     const profiles = this.loadProfiles();
@@ -46,6 +51,7 @@ export function applyProfilesMixin(proto) {
       if (typeof config.display.flipH === 'boolean') {
         this.flipH = config.display.flipH;
         this.chkMirror.checked = this.flipH;
+        this.syncMirrorControls();
       }
       if (typeof config.display.flipV === 'boolean') {
         this.flipV = config.display.flipV;
@@ -60,6 +66,11 @@ export function applyProfilesMixin(proto) {
           ...this.imageSettings,
           ...config.display.imageSettings,
         };
+        await this.applyPerformanceMode(this.imageSettings.performanceMode, {
+          restartCamera: false,
+          notify: false,
+          save: false,
+        });
         this.updateImageControlsUI();
         this.saveImageSettings();
       }
@@ -109,6 +120,25 @@ export function applyProfilesMixin(proto) {
     }
     if (config.blink && this.blinkDetectionEffect)
       this.blinkDetectionEffect.setConfig(config.blink);
+    if (config.display?.activeDetectors) {
+      for (const [input, type] of [
+        [this.chkBlobTracking, 'blob'],
+        [this.chkFaceDetection, 'face'],
+        [this.chkBlinkDetection, 'blink'],
+      ]) {
+        if (!input) continue;
+        const shouldEnable = !!config.display.activeDetectors[type];
+        if (input.checked === shouldEnable) continue;
+        input.checked = shouldEnable;
+        await this.toggleEffect(type);
+      }
+    }
+    if (config.blob && this.blobTrackingEffect)
+      this.blobTrackingEffect.setConfig(config.blob);
+    if (config.face && this.faceDetectionEffect)
+      this.faceDetectionEffect.setConfig(config.face);
+    if (config.blink && this.blinkDetectionEffect)
+      this.blinkDetectionEffect.setConfig(config.blink);
     this.applyQuickDetectorSettingsToEffects();
     this.updateQuickDetectorControlsUI();
     this.saveQuickDetectorSettings();
@@ -127,5 +157,26 @@ export function applyProfilesMixin(proto) {
     this.updateProfilesList();
     this.showStatus(this.profileStatus, `"${name}" eliminado`, 'warning');
     setTimeout(() => this.hideStatus(this.profileStatus), 2500);
+  };
+
+  proto.deleteAllProfiles = function () {
+    const profiles = this.loadProfiles();
+    if (Object.keys(profiles).length === 0) {
+      this.showStatus(this.profileStatus, 'No hay perfiles guardados', 'info');
+      return;
+    }
+    if (
+      !confirm(
+        '¿Eliminar todos los perfiles guardados? Esta acción no restablece la webcam.',
+      )
+    )
+      return;
+    this.saveProfiles({});
+    this.updateProfilesList();
+    this.showStatus(
+      this.profileStatus,
+      'Perfiles guardados eliminados',
+      'warning',
+    );
   };
 }

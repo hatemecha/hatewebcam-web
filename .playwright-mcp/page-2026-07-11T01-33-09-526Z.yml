@@ -1,0 +1,44 @@
+- main [ref=e3]:
+  - generic [ref=e4]:
+    - region:
+      - generic:
+        - link [ref=e25] [cursor=pointer]:
+          - /url: https://github.com/hatemecha
+        - link [ref=e26] [cursor=pointer]:
+          - /url: https://www.instagram.com/hatemecha/
+      - generic:
+        - heading [level=1]:
+          - generic: HATE
+          - generic: MECHA
+        - generic:
+          - button
+          - button
+      - button
+    - dialog [ref=e27]:
+      - generic [ref=e28]:
+        - navigation "Secciones del portfolio" [ref=e29]:
+          - button "cv & skills" [ref=e30] [cursor=pointer]
+          - button "galeria" [ref=e31] [cursor=pointer]
+          - button "musica" [ref=e32] [cursor=pointer]
+          - button "acerca de" [ref=e33] [cursor=pointer]
+          - button "home" [ref=e34] [cursor=pointer]
+          - button "proyectos" [ref=e35] [cursor=pointer]
+          - button "cv & skills" [ref=e36] [cursor=pointer]
+          - button "galeria" [ref=e37] [cursor=pointer]
+          - button "musica" [ref=e38] [cursor=pointer]
+        - paragraph [ref=e39]
+      - generic [ref=e40]:
+        - button "Cerrar menú" [ref=e41] [cursor=pointer]: x
+        - article [ref=e42]:
+          - paragraph [ref=e43]
+          - heading "home" [level=2] [ref=e44]
+          - paragraph
+          - button "Entrar en home" [ref=e45] [cursor=pointer]: enter
+        - generic:
+          - generic:
+            - figure [ref=e46]:
+              - generic [ref=e47]: img:01
+            - figure [ref=e50]:
+              - generic [ref=e53]: img:02
+            - figure [ref=e54]:
+              - generic [ref=e55]: img:03

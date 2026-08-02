@@ -52,6 +52,7 @@ export function applyEffectsMixin(proto) {
         this.saveActiveEffectSettings();
         this.renderEffectConfig();
         this.updateEffectsInfo();
+        this.saveDetectorActivationState();
       }
       return;
     }
@@ -178,21 +179,85 @@ export function applyEffectsMixin(proto) {
       this.saveActiveEffectSettings();
       this.renderEffectConfig();
       this.updateEffectsInfo();
+      this.saveDetectorActivationState();
     }
   };
 
-  proto.updateEffectsInfo = function () {
-    const names = [];
-    if (this.blobTrackingEffect) names.push('Color');
-    if (this.faceDetectionEffect) {
-      if (this.faceDetectionEffect.showBox && this.faceDetectionEffect.showBlur)
-        names.push('Caras mixtas');
-      else if (this.faceDetectionEffect.showBlur)
-        names.push('Caras blur/pixeladas');
-      else names.push('Caras');
+  proto.saveDetectorActivationState = function () {
+    if (this.sourceMode === 'video' || typeof this.loadConfig !== 'function')
+      return;
+    const cfg = this.loadConfig();
+    cfg.activeDetectors = {
+      blob: !!this.chkBlobTracking?.checked,
+      face: !!this.chkFaceDetection?.checked,
+      blink: !!this.chkBlinkDetection?.checked,
+    };
+    this.saveConfig(cfg);
+  };
+
+  proto.restoreActiveDetectors = async function (cfg = this.loadConfig()) {
+    const active = cfg.activeDetectors || {};
+    for (const [input, type] of [
+      [this.chkBlobTracking, 'blob'],
+      [this.chkFaceDetection, 'face'],
+      [this.chkBlinkDetection, 'blink'],
+    ]) {
+      if (!input || !active[type]) continue;
+      input.checked = true;
+      await this.toggleEffect(type);
     }
-    if (this.blinkDetectionEffect) names.push('Pestañeos');
-    this.effectsInfo.textContent =
-      names.length > 0 ? names.join(' · ') : 'Sin detectores';
+    this.updateQuickDetectorControlsUI();
+  };
+
+  proto.updateDetectorChip = function (element, text, state) {
+    if (!element) return;
+    const key = `${state}:${text}`;
+    if (element.dataset.summaryKey === key) return;
+    element.dataset.summaryKey = key;
+    element.dataset.state = state;
+    element.textContent = text;
+  };
+
+  proto.updateEffectsInfo = function (force = false) {
+    const now = performance.now();
+    if (!force && now - (this.lastDetectorUiUpdateTs || 0) < 200) return;
+    this.lastDetectorUiUpdateTs = now;
+
+    const blob = this.blobTrackingEffect?.getDetectionSummary?.();
+    const face = this.faceDetectionEffect?.getDetectionSummary?.();
+    const blink = this.blinkDetectionEffect?.getDetectionSummary?.();
+    this.updateDetectorChip(
+      this.detectorChipBlob,
+      !blob
+        ? 'Color: desactivado'
+        : blob.status === 'error'
+          ? 'Color: error'
+          : blob.count > 0
+            ? `Color encontrado (${blob.count})`
+            : 'Color: buscando',
+      !blob ? 'off' : blob.status,
+    );
+    this.updateDetectorChip(
+      this.detectorChipFace,
+      !face
+        ? 'Caras: desactivadas'
+        : face.status === 'error'
+          ? 'Caras: error'
+          : face.count > 0
+            ? `${face.count} ${face.count === 1 ? 'cara detectada' : 'caras detectadas'}`
+            : 'Caras: buscando',
+      !face ? 'off' : face.status,
+    );
+    this.updateDetectorChip(
+      this.detectorChipBlink,
+      !blink
+        ? 'Pestañeos: desactivados'
+        : blink.status === 'error'
+          ? 'Pestañeos: error'
+          : blink.detected
+            ? 'Pestañeo detectado'
+            : 'Pestañeos: activos',
+      !blink ? 'off' : blink.status,
+    );
   };
 }
