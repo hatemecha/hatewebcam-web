@@ -2,6 +2,19 @@
   "name": "hatewebcam-web",
   "version": "0.1.0",
   "private": true,
+  "description": "Webcam y editor de video local con filtros, detectores y exportación en el navegador.",
+  "license": "MIT",
+  "homepage": "https://hatemecha.github.io/hatewebcam-web/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hatemecha/hatewebcam-web.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hatemecha/hatewebcam-web/issues"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

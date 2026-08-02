@@ -2,7 +2,9 @@
 
 Aplicación web para usar la cámara con filtros en tiempo real, detectores visuales (color, caras y pestañeos), captura de foto/video y vista previa antes de descargar.
 
-> **BETA**
+> **Estado:** beta pública. Es un proyecto personal en desarrollo; puede haber cambios de interfaz y compatibilidad entre navegadores.
+
+![Vista de hatewebcam con una cámara de prueba](docs/images/webcam-desktop.png)
 
 ## Qué ofrece
 
@@ -17,6 +19,7 @@ Aplicación web para usar la cámara con filtros en tiempo real, detectores visu
 
 ## Requisitos
 
+- Node.js `^20.19.0` o `>=22.12.0` para desarrollo y build.
 - Navegador moderno (recomendado: Chrome/Edge actual).
 - Cámara disponible y permisos habilitados.
 - Servir la app desde `localhost` o `https` (no usar `file://`).
@@ -37,7 +40,7 @@ https://hatemecha.github.io/hatewebcam-web/
 Desde la carpeta del proyecto:
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
@@ -83,6 +86,8 @@ python -m http.server 8080
 6. En la vista previa decide: `Descargar` o `Descartar`.
 
 ## Editor de video
+
+![Editor de video de hatewebcam](docs/images/video-editor-desktop.png)
 
 1. Abre la pestaña `Video` y elige un archivo local.
 2. Arrastra los extremos de la timeline para recortar y marca sobre ella los intervalos de efectos.
@@ -135,13 +140,38 @@ Están vendorizadas para que la app sea local/offline en runtime:
 
 - El procesamiento principal se realiza en el navegador.
 - Las capturas se descargan localmente por el usuario.
-- No hay backend propio en este repositorio.
+- Los ajustes y perfiles se guardan únicamente en `localStorage`.
+- La aplicación no incluye telemetría, analytics ni backend propio.
+- En runtime no solicita recursos a CDN; las únicas navegaciones externas son enlaces iniciados por el usuario.
+
+## Limitaciones conocidas
+
+- La cámara requiere `https` o `localhost` y permiso explícito del navegador.
+- Los formatos y codecs disponibles dependen de `MediaRecorder`, WebCodecs y del navegador/sistema operativo.
+- Face Mesh usa WebAssembly y puede consumir recursos apreciables en equipos o móviles modestos.
+- La exportación puede omitir audio cuando el codec original no es compatible con el contenedor elegido.
+
+## Estructura del proyecto
+
+- `js/app/`: controladores y UI de webcam/editor.
+- `js/core/`, `js/editor/`, `js/effects/`: lógica reutilizable de cámara, timeline y detectores.
+- `templates/`: fragmentos HTML cargados por la aplicación.
+- `vendor/`: dependencias de runtime vendorizadas con sus licencias.
+- `tests/`: checks unitarios, de estructura y de navegador.
+
+La aplicación es estática: no necesita backend ni cuentas privadas para ejecutarse o mantener un fork funcional.
 
 ## Seguridad / CSP
 
 - La app no sube archivos a servidores ni carga scripts desde CDN en runtime.
 - La CSP mantiene `unsafe-eval`, `wasm-unsafe-eval` y `blob:` por compatibilidad con MediaPipe Face Mesh, WebAssembly, Workers locales y exportación.
 
----
+## Contribuir
 
-hatemecha @ alex romero
+Los bugs y propuestas se gestionan en [GitHub Issues](https://github.com/hatemecha/hatewebcam-web/issues). Antes de enviar cambios, consultá [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Licencia
+
+El código propio se distribuye bajo [MIT](LICENSE). Los componentes vendorizados conservan sus licencias; consultá [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+Mantenido por Alex Romero (`hatemecha`).
