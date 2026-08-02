@@ -40,3 +40,65 @@ test('runtime vendor assets are served from dist', async ({ request }) => {
     expect(response.ok()).toBeTruthy();
   }
 });
+
+test('language follows the browser and a discreet persisted override', async ({
+  browser,
+}) => {
+  const englishContext = await browser.newContext({ locale: 'en-US' });
+  const page = await englishContext.newPage();
+
+  await page.goto('/');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await expect(page.locator('#languageSelect')).toHaveValue('en');
+  await expect(page.locator('#languageSelect')).toHaveAttribute(
+    'aria-label',
+    'Language',
+  );
+  await expect(page.locator('#performanceModeSelect option')).toHaveText([
+    'Automatic',
+    'Smoother',
+    'Balanced',
+    'More detail',
+  ]);
+  const englishUi = await page.locator('body').textContent();
+  expect(englishUi).not.toMatch(/[áéíóúñ¿¡]/i);
+  expect(englishUi).not.toMatch(
+    /\b(Ajustes|Cámara|Caras|Pestañeos|Temporizador|Guardar|Eliminar|Restablecer|Exportación|Importar|Seleccionar|Recuadro|Desenfoque)\b/i,
+  );
+
+  await page.locator('#chkBlobTracking').check();
+  await expect(page.locator('#effectConfigBlob')).not.toBeEmpty();
+  expect(await page.locator('#effectConfigBlob').textContent()).not.toMatch(
+    /[áéíóúñ¿¡]/i,
+  );
+
+  await page.locator('#btnToggleAdvancedOptions').click();
+  let profilePromptMessage = '';
+  page.once('dialog', async (dialog) => {
+    profilePromptMessage = dialog.message();
+    await dialog.dismiss();
+  });
+  await page.locator('#btnSaveProfile').click();
+  expect(profilePromptMessage).toBe('Name for this preset:');
+
+  await page.locator('#languageSelect').selectOption('es');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'es');
+  await expect(page.locator('#performanceModeSelect option')).toHaveText([
+    'Automático',
+    'Más fluido',
+    'Balanceado',
+    'Más detalle',
+  ]);
+  await page.reload();
+  await expect(page.locator('#languageSelect')).toHaveValue('es');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'es');
+
+  await englishContext.close();
+
+  const spanishContext = await browser.newContext({ locale: 'es-AR' });
+  const spanishPage = await spanishContext.newPage();
+  await spanishPage.goto('/');
+  await expect(spanishPage.locator('#languageSelect')).toHaveValue('es');
+  await expect(spanishPage.locator('html')).toHaveAttribute('lang', 'es');
+  await spanishContext.close();
+});

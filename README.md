@@ -4,7 +4,7 @@ Aplicación web para usar la cámara con filtros en tiempo real, detectores visu
 
 > **Estado:** beta pública. Es un proyecto personal en desarrollo; puede haber cambios de interfaz y compatibilidad entre navegadores.
 
-![Vista de hatewebcam con una cámara de prueba](docs/images/webcam-desktop.png)
+![Vista de hatewebcam con detección de color y caras](docs/images/webcam-desktop.png)
 
 ## Qué ofrece
 
@@ -15,6 +15,7 @@ Aplicación web para usar la cámara con filtros en tiempo real, detectores visu
 - Detectores: objetos por color, caras (Face Mesh) y pestañeos.
 - Perfiles guardados en el navegador para recuperar configuraciones.
 - Interfaz responsive con HUD dedicado en móviles.
+- Interfaz en español e inglés, con detección automática y selector persistente.
 - Editor local de video con recorte y efectos por intervalos sobre una timeline interactiva.
 
 ## Requisitos
@@ -87,7 +88,7 @@ python -m http.server 8080
 
 ## Editor de video
 
-![Editor de video de hatewebcam](docs/images/video-editor-desktop.png)
+![Editor de video de hatewebcam en inglés](docs/images/video-editor-desktop.png)
 
 1. Abre la pestaña `Video` y elige un archivo local.
 2. Arrastra los extremos de la timeline para recortar y marca sobre ella los intervalos de efectos.
@@ -125,6 +126,7 @@ La app guarda ajustes en `localStorage` del navegador:
 
 - `hatewebcam_config`: configuración general.
 - `hatewebcam_profiles`: perfiles guardados.
+- `hatewebcam_locale`: idioma elegido manualmente (`es` o `en`).
 
 Si necesitás resetear todo, limpia esos valores desde DevTools o borra datos del sitio.
 

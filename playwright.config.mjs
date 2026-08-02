@@ -6,6 +6,7 @@ export default defineConfig({
   use: {
     ...devices['Desktop Chrome'],
     baseURL: 'http://127.0.0.1:4173',
+    locale: 'es-AR',
     launchOptions: {
       args: [
         '--use-fake-device-for-media-stream',

@@ -150,6 +150,47 @@ body {
   font-size: 11px;
 }
 
+.language-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.language-control i {
+  font-size: 10px;
+}
+
+.language-control select {
+  width: 32px;
+  padding: 2px 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.language-control select:hover {
+  color: var(--text-primary);
+  border-bottom-color: var(--border-light);
+}
+
+.language-control select:focus-visible {
+  color: var(--text-primary);
+  border-bottom-color: var(--focus);
+}
+
+.language-control option {
+  background: var(--surface-1);
+  color: var(--text-primary);
+}
+
 /* ─── Preview ─── */
 .preview-area {
   flex: 1;
@@ -1088,13 +1129,15 @@ input[type='range']:disabled {
 
 .checkbox-group input[type='checkbox'] {
   appearance: none;
+  display: grid;
+  place-content: center;
+  box-sizing: border-box;
   width: 13px;
   height: 13px;
   border: 1px solid #333;
   border-radius: 2px;
   background: var(--bg-input);
   cursor: pointer;
-  position: relative;
   transition: all var(--transition);
   flex-shrink: 0;
 }
@@ -1106,14 +1149,11 @@ input[type='range']:disabled {
 
 .checkbox-group input[type='checkbox']:checked::after {
   content: '';
-  position: absolute;
-  top: 1px;
-  left: 3.5px;
   width: 4px;
   height: 7px;
   border: solid #fff;
   border-width: 0 1.5px 1.5px 0;
-  transform: rotate(45deg);
+  transform: translateY(-0.5px) rotate(45deg);
 }
 
 /* ─── Radio Buttons ─── */
@@ -1625,11 +1665,6 @@ input[type='range']:disabled {
   .checkbox-group input[type='checkbox'] {
     width: 15px;
     height: 15px;
-  }
-
-  .checkbox-group input[type='checkbox']:checked::after {
-    top: 2px;
-    left: 4.5px;
   }
 
   .quick-color-chip {
@@ -3734,10 +3769,10 @@ body:not(.video-mode) .preview-wrapper {
 
 .photo-shutter,
 .record-trigger {
-  display: inline-flex;
+  display: inline-grid;
+  grid-template-rows: 46px auto;
   align-items: center;
-  justify-content: center;
-  flex-direction: column;
+  justify-items: center;
   gap: 4px;
   min-width: 58px;
   min-height: 64px;
@@ -3748,6 +3783,15 @@ body:not(.video-mode) .preview-wrapper {
   color: var(--text-secondary);
   font-family: var(--sans);
   cursor: pointer;
+  transition:
+    color var(--transition),
+    transform var(--transition);
+}
+
+.photo-shutter:hover:not(:disabled),
+.record-trigger:hover:not(:disabled) {
+  color: var(--text-primary);
+  transform: translateY(-1px);
 }
 
 .photo-shutter-core {
@@ -3781,15 +3825,28 @@ body:not(.video-mode) .preview-wrapper {
 }
 
 .record-trigger-core {
-  width: 28px;
-  height: 28px;
-  border-radius: 2px;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 46px;
+  height: 46px;
+  border: 2px solid var(--text-secondary);
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+}
+
+.record-trigger-core::after {
+  content: '';
+  width: 24px;
+  height: 24px;
+  border-radius: 3px;
   background: var(--recording);
 }
 
-.record-trigger.recording .record-trigger-core {
-  width: 22px;
-  height: 22px;
+.record-trigger.recording .record-trigger-core::after {
+  width: 18px;
+  height: 18px;
   box-shadow: 0 0 0 6px rgba(255, 59, 48, 0.14);
 }
 

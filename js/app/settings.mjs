@@ -1,4 +1,5 @@
 import { normalizePreviewQuality } from './constants.mjs';
+import { translate } from '../i18n.mjs';
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyStorageMixin(proto) {
   proto.loadJsonStorage = function (key, fallbackValue) {
@@ -1216,7 +1217,9 @@ export function applyStorageMixin(proto) {
   proto.resetWebcamConfiguration = async function () {
     if (
       !confirm(
-        '¿Restablecer toda la configuración de webcam? Los perfiles guardados no se eliminarán.',
+        translate(
+          '¿Restablecer toda la configuración de webcam? Los perfiles guardados no se eliminarán.',
+        ),
       )
     )
       return;

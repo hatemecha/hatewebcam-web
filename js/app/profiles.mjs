@@ -1,3 +1,5 @@
+import { translate } from '../i18n.mjs';
+
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyProfilesMixin(proto) {
   proto.updateProfilesList = function () {
@@ -12,7 +14,7 @@ export function applyProfilesMixin(proto) {
   };
 
   proto.saveCurrentProfile = function () {
-    const name = prompt('Nombre para este ajuste:');
+    const name = prompt(translate('Nombre para este ajuste:'));
     if (!name) return;
     const profiles = this.loadProfiles();
     const config = {};
@@ -150,7 +152,7 @@ export function applyProfilesMixin(proto) {
   proto.deleteProfile = function () {
     const name = this.profileSelect.value;
     if (!name) return;
-    if (!confirm(`¿Eliminar "${name}"?`)) return;
+    if (!confirm(translate(`¿Eliminar "${name}"?`))) return;
     const profiles = this.loadProfiles();
     delete profiles[name];
     this.saveProfiles(profiles);
@@ -167,7 +169,9 @@ export function applyProfilesMixin(proto) {
     }
     if (
       !confirm(
-        '¿Eliminar todos los perfiles guardados? Esta acción no restablece la webcam.',
+        translate(
+          '¿Eliminar todos los perfiles guardados? Esta acción no restablece la webcam.',
+        ),
       )
     )
       return;
