@@ -291,7 +291,7 @@ export function applyCameraMixin(proto) {
       this.isRunning = false;
       this.cancelRenderLoop();
       this.btnToggleCamera.innerHTML =
-        '<i class="fa-solid fa-play"></i> Encender Cámara';
+        '<i class="fa-solid fa-play"></i> Encender cámara';
       this.btnToggleCamera.classList.remove('active');
       this.setCameraState('off');
       this.updatePreviewPlaceholder();
@@ -318,7 +318,7 @@ export function applyCameraMixin(proto) {
         this.setCameraState('running');
         this.updatePreviewPlaceholder();
         this.btnToggleCamera.innerHTML =
-          '<i class="fa-solid fa-stop"></i> Apagar Cámara';
+          '<span class="camera-live-label"><span class="camera-live-dot" aria-hidden="true"></span>Cámara activa</span><span class="camera-off-action">Apagar</span>';
         this.btnToggleCamera.classList.add('active');
 
         this.videoEl.addEventListener(

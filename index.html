@@ -11,13 +11,16 @@
     <title>HateWebcam Web</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css" />
-    <link rel="stylesheet" href="index.css?v=20260621-editor12" />
+    <link rel="stylesheet" href="index.css" />
   </head>
 
   <body>
     <!-- Header -->
     <header class="header-bar">
-      <div class="logo">HATEWEBCAM <span class="beta-tag">BETA</span></div>
+      <div class="logo">
+        HATEWEBCAM
+        <span class="beta-tag">BETA</span>
+      </div>
       <div class="mode-switch" role="tablist" aria-label="Modo de trabajo">
         <button
           type="button"
@@ -58,15 +61,6 @@
           >
             <i class="fa-brands fa-github"></i>
             <span>Repo</span>
-          </a>
-          <a
-            href="https://instagram.com/hatemecha"
-            target="_blank"
-            rel="noopener noreferrer"
-            title="Instagram @hatemecha"
-          >
-            <i class="fa-brands fa-instagram"></i>
-            <span>@hatemecha</span>
           </a>
         </nav>
       </div>
@@ -127,15 +121,14 @@
                 ></i>
                 <p class="preview-import-title">Importá un video para editar</p>
                 <p class="preview-import-hint">
-                  Podés importar MP4, WebM u otros formatos que tu navegador
-                  pueda leer. La exportación estable es WebM sin audio.
+                  MP4 o WebM. La exportación estable usa WebM sin audio.
                 </p>
                 <button
                   type="button"
                   class="btn primary preview-import-btn"
                   id="btnPreviewImportVideo"
                 >
-                  <i class="fa-solid fa-folder-open"></i> Importar video
+                  Importar video
                 </button>
               </div>
             </div>
@@ -185,7 +178,7 @@
             <div class="mobile-fx-backdrop hidden" id="mobileFxBackdrop"></div>
             <div class="mobile-fx-panel hidden" id="mobileFxPanel">
               <div class="mobile-fx-header">
-                <span>Efectos</span>
+                <span>Ajustes</span>
                 <button
                   type="button"
                   class="mobile-fx-close"
@@ -226,7 +219,7 @@
                 </button>
               </div>
               <label class="mobile-inline-field">
-                <span>Temporizador foto</span>
+                <span>Temporizador</span>
                 <div class="select-wrapper mobile-select-wrapper">
                   <select
                     id="selMobileCaptureTimer"
@@ -244,7 +237,7 @@
                   class="mobile-chip-btn"
                   id="btnMobileBlobToggle"
                 >
-                  Tracking color
+                  Color
                 </button>
                 <button
                   type="button"
@@ -270,7 +263,7 @@
                 </button>
               </div>
               <label class="mobile-inline-field face-visual-toggles">
-                <span>Efectos visuales</span>
+                <span>Caras</span>
                 <div class="face-visual-toggle-row">
                   <label class="checkbox-group">
                     <input type="checkbox" id="chkMobileFaceShowBox" checked />
@@ -284,7 +277,7 @@
               </label>
               <div class="mobile-color-row">
                 <label class="mobile-color-chip">
-                  <span>Obj</span>
+                  <span>Color</span>
                   <input
                     type="color"
                     id="inpMobileBlobColor"
@@ -330,8 +323,8 @@
                 aria-controls="mobileFxPanel"
                 aria-expanded="false"
               >
-                <i class="fa-solid fa-wand-magic-sparkles"></i>
-                <span>Efectos</span>
+                <i class="fa-solid fa-sliders"></i>
+                <span>Ajustes</span>
               </button>
               <button
                 type="button"
@@ -362,24 +355,70 @@
             </div>
           </div>
         </div>
-        <div class="preview-status-bar">
-          <div class="preview-diagnostics">
-            <span id="resolutionInfo">—</span><span id="fpsInfo">—</span>
+        <div class="preview-console-footer webcam-only">
+          <div class="desktop-capture-bar" aria-label="Controles de captura">
+            <label class="capture-timer-field" for="captureTimerSelect">
+              <span class="capture-timer-label">Temporizador</span>
+              <span class="select-wrapper capture-timer-select">
+                <select
+                  id="captureTimerSelect"
+                  aria-label="Temporizador de foto"
+                >
+                  <option value="0">0 s</option>
+                  <option value="5">5 s</option>
+                  <option value="10">10 s</option>
+                </select>
+              </span>
+            </label>
+            <div
+              class="capture-bar-status"
+              id="captureStatus"
+              role="status"
+              aria-live="polite"
+            ></div>
+            <div class="capture-actions">
+              <button
+                type="button"
+                class="photo-shutter"
+                id="btnTakePhoto"
+                aria-label="Sacar foto"
+              >
+                <span class="photo-shutter-core" aria-hidden="true"></span>
+                <span class="capture-action-label">Foto</span>
+              </button>
+              <button
+                type="button"
+                class="record-trigger"
+                id="btnRecord"
+                aria-label="Grabar video"
+              >
+                <span class="record-trigger-core" aria-hidden="true"></span>
+                <span class="capture-action-label">Grabar</span>
+              </button>
+            </div>
           </div>
-          <div
-            class="detector-chips"
-            id="effectsInfo"
-            aria-label="Estado de detectores"
-          >
-            <span class="detector-chip" id="detectorChipBlob" data-state="off"
-              >Color: desactivado</span
+          <div class="preview-status-bar">
+            <div class="preview-diagnostics">
+              <span id="resolutionInfo">—</span><span id="fpsInfo">—</span>
+            </div>
+            <div
+              class="detector-chips"
+              id="effectsInfo"
+              aria-label="Estado de detectores"
             >
-            <span class="detector-chip" id="detectorChipFace" data-state="off"
-              >Caras: desactivadas</span
-            >
-            <span class="detector-chip" id="detectorChipBlink" data-state="off"
-              >Pestañeos: desactivados</span
-            >
+              <span class="detector-chip" id="detectorChipBlob" data-state="off"
+                >Color</span
+              >
+              <span class="detector-chip" id="detectorChipFace" data-state="off"
+                >Caras</span
+              >
+              <span
+                class="detector-chip"
+                id="detectorChipBlink"
+                data-state="off"
+                >Pestañeos</span
+              >
+            </div>
           </div>
         </div>
         <div id="videoEditorTemplateSlot"></div>
@@ -393,6 +432,6 @@
 
     <div id="captureModalTemplateSlot"></div>
     <!-- App -->
-    <script type="module" src="js/app.js?v=20260621-split1"></script>
+    <script type="module" src="js/app.js"></script>
   </body>
 </html>

@@ -60,7 +60,7 @@ export function applyInitMixin(proto) {
       save: false,
     });
     this.updateImageControlsUI();
-    this.mobileActivePreset = null;
+    this.mobileActivePreset = this.getMatchingImagePreset();
     this.updateMobilePresetButtons(this.mobileActivePreset);
     this.preferredDeviceId =
       typeof cfg.deviceId === 'string' && cfg.deviceId ? cfg.deviceId : null;

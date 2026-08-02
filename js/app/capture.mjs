@@ -296,8 +296,8 @@ export function applyCaptureMixin(proto) {
         (!this.isRunning || this.isRecording || previewOpen) &&
         !this.isPhotoCountdownActive;
       this.btnTakePhoto.innerHTML = this.isPhotoCountdownActive
-        ? '<i class="fa-solid fa-xmark"></i> Cancelar timer'
-        : '<i class="fa-solid fa-camera"></i> Sacar foto';
+        ? '<span class="photo-shutter-core is-cancel" aria-hidden="true"><i class="fa-solid fa-xmark"></i></span><span class="capture-action-label">Cancelar</span>'
+        : '<span class="photo-shutter-core" aria-hidden="true"></span><span class="capture-action-label">Foto</span>';
       this.btnTakePhoto.setAttribute(
         'aria-label',
         this.isPhotoCountdownActive
@@ -325,11 +325,12 @@ export function applyCaptureMixin(proto) {
     if (this.btnRecord) {
       if (this.isRecording) {
         this.btnRecord.classList.add('recording');
-        this.btnRecord.innerHTML = '<i class="fa-solid fa-stop"></i> Detener';
+        this.btnRecord.innerHTML =
+          '<span class="record-trigger-core" aria-hidden="true"></span><span class="capture-action-label">Detener</span>';
       } else {
         this.btnRecord.classList.remove('recording');
         this.btnRecord.innerHTML =
-          '<i class="fa-solid fa-circle-dot"></i> Grabar';
+          '<span class="record-trigger-core" aria-hidden="true"></span><span class="capture-action-label">Grabar</span>';
       }
     }
 
@@ -1132,19 +1133,15 @@ export function applyCaptureMixin(proto) {
     this.photoPreviewRenderToken++;
 
     if (this.capturePreviewTitle) {
-      this.capturePreviewTitle.innerHTML =
-        capture.kind === 'video'
-          ? '<i class="fa-solid fa-film"></i> Vista previa de video'
-          : '<i class="fa-solid fa-image"></i> Vista previa de foto';
+      this.capturePreviewTitle.textContent =
+        capture.kind === 'video' ? 'Video listo' : 'Foto lista';
     }
     if (this.capturePreviewFilename) {
       this.capturePreviewFilename.textContent = capture.filename;
     }
     if (this.btnDownloadCapture) {
-      this.btnDownloadCapture.innerHTML =
-        capture.kind === 'video'
-          ? '<i class="fa-solid fa-download"></i> Descargar video'
-          : '<i class="fa-solid fa-download"></i> Descargar foto';
+      this.btnDownloadCapture.textContent =
+        capture.kind === 'video' ? 'Descargar video' : 'Descargar foto';
     }
 
     if (this.capturePreviewImage) {
@@ -1188,13 +1185,13 @@ export function applyCaptureMixin(proto) {
 
     const rows = [
       ['Tipo', kind === 'video' ? 'Video' : 'Foto'],
-      ['Resolucion', `${meta.width || 0}x${meta.height || 0}`],
+      ['Resolución', `${meta.width || 0} × ${meta.height || 0}`],
       ['Formato', meta.format || (kind === 'video' ? 'WEBM/MP4' : 'JPEG')],
-      ['Tamano', this.formatBytes(meta.size || 0)],
+      ['Tamaño', this.formatBytes(meta.size || 0)],
     ];
 
     if (meta.durationSec != null)
-      rows.push(['Duracion', this.formatDurationDetailed(meta.durationSec)]);
+      rows.push(['Duración', this.formatDurationDetailed(meta.durationSec)]);
     if (meta.jpegQuality != null)
       rows.push(['Calidad JPEG', `${meta.jpegQuality}%`]);
     if (meta.fps != null) rows.push(['FPS', `${meta.fps}`]);
@@ -1256,12 +1253,10 @@ export function applyCaptureMixin(proto) {
       this.capturePreviewInfo.innerHTML = '';
     }
     if (this.btnDownloadCapture) {
-      this.btnDownloadCapture.innerHTML =
-        '<i class="fa-solid fa-download"></i> Descargar';
+      this.btnDownloadCapture.textContent = 'Descargar';
     }
     if (this.capturePreviewTitle) {
-      this.capturePreviewTitle.innerHTML =
-        '<i class="fa-solid fa-image"></i> Vista previa de captura';
+      this.capturePreviewTitle.textContent = 'Captura lista';
     }
     this.syncPreviewPhotoTools();
   };

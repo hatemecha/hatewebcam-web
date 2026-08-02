@@ -167,10 +167,41 @@ export function applyStorageMixin(proto) {
   };
 
   proto.updateMobilePresetButtons = function (activePreset = null) {
+    this.presetButtons.forEach((btn) => {
+      const match = activePreset && btn.dataset.preset === activePreset;
+      btn.classList.toggle('is-active', !!match);
+      btn.setAttribute('aria-pressed', String(!!match));
+    });
     this.mobilePresetButtons.forEach((btn) => {
       const match = activePreset && btn.dataset.mobilePreset === activePreset;
       btn.classList.toggle('is-active', !!match);
+      btn.setAttribute('aria-pressed', String(!!match));
     });
+  };
+
+  proto.getMatchingImagePreset = function () {
+    const keys = [
+      'blackAndWhite',
+      'exposure',
+      'shadows',
+      'highlights',
+      'contrast',
+      'saturation',
+      'temperature',
+      'detail',
+      'sharpness',
+    ];
+    const presets = {
+      natural: [false, 0, 0, 0, 100, 100, 0, 0, 0],
+      vivid: [false, 8, 12, -10, 116, 135, 8, 24, 12],
+      cinema: [false, -8, 18, -22, 112, 88, -6, 12, 8],
+      bw: [true, 0, 12, -10, 118, 0, 0, 20, 10],
+    };
+    return (
+      Object.entries(presets).find(([, values]) =>
+        keys.every((key, index) => this.imageSettings[key] === values[index]),
+      )?.[0] || null
+    );
   };
 
   proto.isMobileViewport = function () {
@@ -847,6 +878,8 @@ export function applyStorageMixin(proto) {
     this.updateQualityEnhancerControls();
     this.updateEditorExportControls?.();
     this.updateBWDependentControls();
+    this.mobileActivePreset = this.getMatchingImagePreset();
+    this.updateMobilePresetButtons(this.mobileActivePreset);
   };
 
   proto.updateBWDependentControls = function () {
@@ -1325,8 +1358,8 @@ export function applyStorageMixin(proto) {
 
     if (this.advancedToggleLabel) {
       this.advancedToggleLabel.textContent = visible
-        ? 'Ocultar opciones avanzadas'
-        : 'Mostrar opciones avanzadas';
+        ? 'Ocultar ajustes avanzados'
+        : 'Ajustes avanzados';
     }
   };
 

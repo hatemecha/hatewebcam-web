@@ -144,7 +144,7 @@
     id="timelineEffectPalette"
     aria-label="Efectos para arrastrar a la timeline"
   >
-    <span class="timeline-palette-label">Arrastrá al tiempo</span>
+    <span class="timeline-palette-label">Efectos</span>
     <div class="timeline-palette-items" role="list">
       <button
         type="button"
@@ -152,7 +152,7 @@
         data-effect-type="look"
         draggable="true"
       >
-        <i class="fa-solid fa-wand-magic-sparkles"></i> Look
+        <i class="fa-solid fa-circle-half-stroke"></i> Look
       </button>
       <button
         type="button"
@@ -180,8 +180,7 @@
       </button>
     </div>
     <span class="timeline-palette-hint"
-      >Soltá sobre la timeline · doble click en pista vacía = clip en el
-      cursor</span
+      >Arrastrá a una pista o hacé doble click.</span
     >
   </div>
   <div class="timeline-viewport" id="timelineViewport">
@@ -406,9 +405,7 @@
       aria-labelledby="tabInspectorProject"
     >
       <div class="panel-section">
-        <div class="section-title accent">
-          <i class="fa-solid fa-route"></i> Cómo editar
-        </div>
+        <div class="section-title">Cómo editar</div>
         <ol class="inspector-workflow-steps" id="inspectorWorkflowSteps">
           <li data-step="import" class="is-current">Importá un video</li>
           <li data-step="effects">Arrastrá efectos a la timeline</li>
@@ -416,12 +413,10 @@
         </ol>
       </div>
       <div class="panel-section">
-        <div class="section-title accent">
-          <i class="fa-solid fa-file-video"></i> Video
-        </div>
+        <div class="section-title">Video</div>
         <div class="help-text" id="videoProjectHelp">
-          Podés importar MP4, WebM u otros formatos que tu navegador pueda leer.
-          La exportación estable del editor es WebM sin audio.
+          MP4, WebM y otros formatos compatibles. La exportación estable usa
+          WebM sin audio.
         </div>
         <input
           type="file"
@@ -456,9 +451,7 @@
           aria-live="polite"
         ></div>
         <div class="spacer-8"></div>
-        <div class="section-title">
-          <i class="fa-solid fa-wave-square"></i> Asistencia de edición
-        </div>
+        <div class="section-title">Asistencia de edición</div>
         <div class="help-text">
           Detecta pulsos aproximados para ayudarte a sincronizar efectos. Podés
           mover o borrar marcadores manualmente.
@@ -563,9 +556,7 @@
           aria-live="polite"
         ></div>
         <div class="spacer-8"></div>
-        <div class="section-title">
-          <i class="fa-solid fa-file-export"></i> Exportación
-        </div>
+        <div class="section-title">Exportación</div>
         <div class="help-text">
           Se procesa localmente en resolución original. La preview no cambia la
           calidad final.

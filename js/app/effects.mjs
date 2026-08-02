@@ -229,34 +229,34 @@ export function applyEffectsMixin(proto) {
     this.updateDetectorChip(
       this.detectorChipBlob,
       !blob
-        ? 'Color: desactivado'
+        ? 'Color'
         : blob.status === 'error'
-          ? 'Color: error'
+          ? 'Color · error'
           : blob.count > 0
-            ? `Color encontrado (${blob.count})`
-            : 'Color: buscando',
+            ? 'Color encontrado'
+            : 'Color · buscando',
       !blob ? 'off' : blob.status,
     );
     this.updateDetectorChip(
       this.detectorChipFace,
       !face
-        ? 'Caras: desactivadas'
+        ? 'Caras'
         : face.status === 'error'
-          ? 'Caras: error'
+          ? 'Caras · error'
           : face.count > 0
-            ? `${face.count} ${face.count === 1 ? 'cara detectada' : 'caras detectadas'}`
-            : 'Caras: buscando',
+            ? `${face.count} ${face.count === 1 ? 'cara' : 'caras'}`
+            : 'Caras · buscando',
       !face ? 'off' : face.status,
     );
     this.updateDetectorChip(
       this.detectorChipBlink,
       !blink
-        ? 'Pestañeos: desactivados'
+        ? 'Pestañeos'
         : blink.status === 'error'
-          ? 'Pestañeos: error'
+          ? 'Pestañeos · error'
           : blink.detected
-            ? 'Pestañeo detectado'
-            : 'Pestañeos: activos',
+            ? 'Pestañeo'
+            : 'Pestañeos · activos',
       !blink ? 'off' : blink.status,
     );
   };

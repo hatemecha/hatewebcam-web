@@ -7,9 +7,7 @@
 >
   <div class="capture-preview-card">
     <div class="capture-preview-header">
-      <div class="section-title accent" id="capturePreviewTitle">
-        <i class="fa-solid fa-image"></i> Vista previa de captura
-      </div>
+      <div class="section-title" id="capturePreviewTitle">Captura lista</div>
       <button
         class="btn btn-icon"
         id="btnCloseCapturePreview"
@@ -42,16 +40,10 @@
         class="capture-preview-photo-tools hidden"
         id="capturePreviewPhotoTools"
       >
-        <div class="capture-preview-tools-title">
-          <i class="fa-solid fa-wand-magic-sparkles"></i> Mejorador de foto (en
-          esta vista previa)
-        </div>
-        <div class="help-text section-note">
-          Activalo acá para comparar el resultado antes de descargar.
-        </div>
+        <div class="capture-preview-tools-title">Mejora de foto</div>
         <label class="checkbox-group">
           <input type="checkbox" id="chkPreviewPhotoEnhancer" />
-          <span>Mejorar foto antes de descargar</span>
+          <span>Mejorar antes de descargar</span>
         </label>
         <div class="slider-group hidden" id="previewPhotoEnhancerStrengthGroup">
           <div class="slider-label">
@@ -70,10 +62,10 @@
       </div>
       <div class="btn-row">
         <button class="btn primary" id="btnDownloadCapture" type="button">
-          <i class="fa-solid fa-download"></i> Descargar
+          Descargar
         </button>
-        <button class="btn danger" id="btnDiscardCapture" type="button">
-          <i class="fa-solid fa-trash-can"></i> Descartar
+        <button class="btn" id="btnDiscardCapture" type="button">
+          Descartar
         </button>
       </div>
     </div>

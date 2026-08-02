@@ -18,6 +18,8 @@ Thumbs.db
 # Build / temp artifacts
 dist/
 build/
+__pycache__/
+*.pyc
 *.tmp
 test-results/
 playwright-report/

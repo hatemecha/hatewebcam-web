@@ -56,6 +56,17 @@ npm run build
 npm run preview
 ```
 
+### Publicación y caché
+
+GitHub Pages se publica desde el artefacto `dist` generado por Vite mediante
+`.github/workflows/pages.yml`. En **Settings → Pages**, la fuente debe ser
+**GitHub Actions**. Vite genera nombres con hash de contenido para CSS,
+JavaScript, fuentes y workers; por eso un despliegue nuevo cambia las URLs de
+los assets modificados sin mantener versiones manuales en `index.html`.
+
+La opción `base: './'` de `vite.config.mjs` permite que esos assets funcionen
+tanto en preview local como bajo la ruta `/hatewebcam-web/` de GitHub Pages.
+
 Alternativa estática simple:
 
 ```bash

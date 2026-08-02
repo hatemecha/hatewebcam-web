@@ -997,17 +997,12 @@ export function applyLocalvideoeditorMixin(proto) {
       });
     const cfg = this.loadConfig();
     this.setAdvancedOptionsVisible(!!cfg.showAdvancedOptions);
-    const captureSection = this.controlPanel.querySelector(
-      '.panel-section.webcam-only:nth-of-type(2)',
-    );
+    const sourceSection = this.controlPanel.querySelector('#sourcePanel');
     if (
-      captureSection &&
+      sourceSection &&
       this.effectsControlsSlot.parentElement !== this.controlPanel
     ) {
-      captureSection.insertAdjacentElement(
-        'afterend',
-        this.effectsControlsSlot,
-      );
+      sourceSection.insertAdjacentElement('afterend', this.effectsControlsSlot);
     }
   };
 
@@ -2108,8 +2103,8 @@ export function applyLocalvideoeditorMixin(proto) {
     }
     if (this.videoProjectHelp) {
       this.videoProjectHelp.textContent = loaded
-        ? 'Podés reemplazar el video o exportar cuando termines de editar.'
-        : 'Elegí el archivo con el que querés trabajar. Podés cambiarlo en cualquier momento.';
+        ? 'Reemplazá el video o exportá cuando termines.'
+        : 'Importá un archivo para empezar.';
     }
     this.timelineEffectPalette
       ?.querySelectorAll('.timeline-palette-chip')
