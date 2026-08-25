@@ -4,6 +4,7 @@
   "private": true,
   "description": "Webcam y editor de video local con filtros, detectores y exportación en el navegador.",
   "license": "MIT",
+  "author": "Alex Romero (hatemecha)",
   "homepage": "https://hatemecha.github.io/hatewebcam-web/",
   "repository": {
     "type": "git",

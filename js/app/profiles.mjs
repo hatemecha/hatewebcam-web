@@ -4,7 +4,7 @@ import { translate } from '../i18n.mjs';
 export function applyProfilesMixin(proto) {
   proto.updateProfilesList = function () {
     const profiles = this.loadProfiles();
-    this.profileSelect.innerHTML = '<option value="">—</option>';
+    this.profileSelect.innerHTML = '<option value="">-</option>';
     for (const name of Object.keys(profiles)) {
       const opt = document.createElement('option');
       opt.value = name;

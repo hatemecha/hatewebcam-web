@@ -99,6 +99,14 @@ export function applyCameraMixin(proto) {
       if (label) label.textContent = view.action || '';
       if (focus && changed && view.action) this.btnCameraStateAction.focus();
     }
+    if (
+      this.sourceMode !== 'video' &&
+      state !== 'running' &&
+      state !== 'starting' &&
+      this.captureStatus
+    ) {
+      this.hideStatus(this.captureStatus);
+    }
   };
 
   proto.setCameraPlaceholderMessage = function (message) {
@@ -255,7 +263,7 @@ export function applyCameraMixin(proto) {
       this.cameraManager.stop();
       this.isRunning = false;
       this.cancelRenderLoop();
-      await this.cameraController.start();
+      await this.toggleCamera(true);
     }
   };
 
@@ -295,8 +303,8 @@ export function applyCameraMixin(proto) {
       this.btnToggleCamera.classList.remove('active');
       this.setCameraState('off');
       this.updatePreviewPlaceholder();
-      this.resolutionInfo.textContent = '—';
-      this.fpsInfo.textContent = '—';
+      this.resolutionInfo.textContent = '-';
+      this.fpsInfo.textContent = '-';
       this.updateCaptureButtons();
       return;
     }
@@ -361,7 +369,6 @@ export function applyCameraMixin(proto) {
         );
         this.setCameraPlaceholderMessage(message);
         this.updatePreviewPlaceholder();
-        this.showStatus(this.captureStatus, message, 'warning');
       }
       this.updateCaptureButtons();
     }

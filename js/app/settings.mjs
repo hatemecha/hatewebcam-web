@@ -1287,6 +1287,7 @@ export function applyStorageMixin(proto) {
       'Configuración de webcam restablecida',
       'success',
     );
+    setTimeout(() => this.hideStatus(this.captureStatus), 2200);
   };
 
   proto.applyImagePreset = function (name) {

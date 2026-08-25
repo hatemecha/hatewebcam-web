@@ -35,6 +35,7 @@ export default [
       'vendor/**',
       'coverage/**',
       'playwright-report/**',
+      '.impeccable/**',
     ],
   },
   js.configs.recommended,
@@ -46,17 +47,6 @@ export default [
       globals: browserGlobals,
     },
     rules: baseRules,
-  },
-  {
-    files: [
-      'js/camera.js',
-      'js/editor-history.js',
-      'js/video-timeline.js',
-      'js/effects/*.js',
-    ],
-    rules: {
-      'no-unused-vars': 'off',
-    },
   },
   {
     files: ['tests/**/*.mjs', 'scripts/**/*.mjs', 'playwright.config.mjs'],

@@ -4,7 +4,7 @@ Aplicación web para usar la cámara con filtros en tiempo real, detectores visu
 
 > **Estado:** beta pública. Es un proyecto personal en desarrollo; puede haber cambios de interfaz y compatibilidad entre navegadores.
 
-![Vista de hatewebcam con detección de color y caras](docs/images/webcam-desktop.png)
+![Vista de hatewebcam con detección de color y caras](docs/images/webcam-desktop.jpg)
 
 ## Qué ofrece
 
@@ -71,7 +71,7 @@ los assets modificados sin mantener versiones manuales en `index.html`.
 La opción `base: './'` de `vite.config.mjs` permite que esos assets funcionen
 tanto en preview local como bajo la ruta `/hatewebcam-web/` de GitHub Pages.
 
-Alternativa estática simple:
+Alternativa para servir el código fuente sin Vite (sin HMR ni build de producción):
 
 ```bash
 python -m http.server 8080
@@ -88,7 +88,7 @@ python -m http.server 8080
 
 ## Editor de video
 
-![Editor de video de hatewebcam en inglés](docs/images/video-editor-desktop.png)
+![Editor de video de hatewebcam en inglés](docs/images/video-editor-desktop.jpg)
 
 1. Abre la pestaña `Video` y elige un archivo local.
 2. Arrastra los extremos de la timeline para recortar y marca sobre ella los intervalos de efectos.
@@ -160,6 +160,8 @@ Están vendorizadas para que la app sea local/offline en runtime:
 - `templates/`: fragmentos HTML cargados por la aplicación.
 - `vendor/`: dependencias de runtime vendorizadas con sus licencias.
 - `tests/`: checks unitarios, de estructura y de navegador.
+- `DESIGN.md`: sistema visual (superficies, tipografía, estados).
+- `PRODUCT.md`: propósito, usuarios y límites del producto.
 
 La aplicación es estática: no necesita backend ni cuentas privadas para ejecutarse o mantener un fork funcional.
 
@@ -167,6 +169,8 @@ La aplicación es estática: no necesita backend ni cuentas privadas para ejecut
 
 - La app no sube archivos a servidores ni carga scripts desde CDN en runtime.
 - La CSP mantiene `unsafe-eval`, `wasm-unsafe-eval` y `blob:` por compatibilidad con MediaPipe Face Mesh, WebAssembly, Workers locales y exportación.
+- Los websockets a `localhost` en la CSP existen para el servidor de desarrollo de Vite; no se usan en GitHub Pages.
+- Para reportar un problema de seguridad, consultá [SECURITY.md](SECURITY.md).
 
 ## Contribuir
 
@@ -176,4 +180,4 @@ Los bugs y propuestas se gestionan en [GitHub Issues](https://github.com/hatemec
 
 El código propio se distribuye bajo [MIT](LICENSE). Los componentes vendorizados conservan sus licencias; consultá [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-Mantenido por Alex Romero (`hatemecha`).
+Mantenido por Alex Romero (`hatemecha`). El historial reciente está en [CHANGELOG.md](CHANGELOG.md). El número `0.1.0` en `package.json` marca la beta; no hay promesa de semver mientras el estado sea beta.

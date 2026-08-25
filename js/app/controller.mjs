@@ -1,5 +1,9 @@
 /**
- * HateWebcam Web — Main Application Controller
+ * HateWebcam Web — application controller.
+ *
+ * Mixins attach behavior onto this instance. Domain objects with real
+ * methods (camera, render buffers, export session) live here as fields;
+ * there is no property-proxy layer between them and the mixins.
  */
 import {
   TIMELINE_EFFECT_META,
@@ -25,6 +29,10 @@ import {
   normalizePreviewQuality,
   normalizePerformanceMode,
 } from './constants.mjs';
+import { CameraManager } from '../core/camera-manager.mjs';
+import { VideoTimeline } from '../editor/video-timeline.mjs';
+import { EditorHistory } from '../editor/editor-history.mjs';
+import { EffectManager } from '../effects/effect-manager.mjs';
 import { setupDom } from './dom.mjs';
 import { applyStorageMixin } from './settings.mjs';
 import { applyLocalvideoeditorMixin } from './video-editor.mjs';
@@ -42,34 +50,11 @@ import { applyModalfocusmanagementMixin } from './modal-focus.mjs';
 import { SettingsStore } from './settings-store.mjs';
 import { TimelineView } from './timeline-view.mjs';
 import { EditAssistController } from './edit-assist-controller.mjs';
-import {
-  CameraController,
-  RenderController,
-  EffectsController,
-  CaptureController,
-  VideoEditorController,
-  ExportController,
-  UiController,
-} from './domain-controllers.mjs';
+import { RenderEngine } from './render-engine.mjs';
+import { VideoExportSession } from './video-export-session.mjs';
 
 export class AppController {
   constructor() {
-    this.uiController = new UiController();
-    this.uiController.attachLegacyAccessors(this);
-    this.renderController = new RenderController();
-    this.renderController.attachLegacyAccessors(this);
-    this.cameraController = new CameraController(this);
-    this.cameraController.attachLegacyAccessors(this);
-    this.effectsController = new EffectsController(
-      DEFAULT_QUICK_DETECTOR_SETTINGS,
-    );
-    this.effectsController.attachLegacyAccessors(this);
-    this.captureController = new CaptureController();
-    this.captureController.attachLegacyAccessors(this);
-    this.videoEditorController = new VideoEditorController(this);
-    this.videoEditorController.attachLegacyAccessors(this);
-    this.exportController = new ExportController(this);
-    this.exportController.attachLegacyAccessors(this);
     this.settingsStore = new SettingsStore({
       onError: (err) => this.notifyStorageUnavailable(err),
     });
@@ -103,6 +88,93 @@ export class AppController {
       showStatus: (el, message, type) => this.showStatus(el, message, type),
       updateTimelineHint: () => this.updateTimelineHint(),
     });
+
+    this.cameraManager = new CameraManager();
+    this.isRunning = false;
+    this.preferredDeviceId = null;
+    this.webcamSessionState = null;
+    this.autoPerformanceDowngraded = false;
+    this.lowFpsSampleCount = 0;
+
+    this.renderEngine = new RenderEngine();
+    this.animFrameId = null;
+    this.animFrameType = '';
+    this.frameCount = 0;
+    this.lastFpsTime = performance.now();
+    this.previewScale = 1;
+    this.renderEngine.attachLegacyAccessors(this);
+
+    this.effectManager = new EffectManager();
+    this.blobTrackingEffect = null;
+    this.faceDetectionEffect = null;
+    this.blinkDetectionEffect = null;
+    this.faceMeshScriptLoadPromise = null;
+    this.mediaPipeConsoleFilterInstalled = false;
+    this.faceLoadRequestId = 0;
+    this.blinkLoadRequestId = 0;
+    this.quickDetectorSettings = { ...DEFAULT_QUICK_DETECTOR_SETTINGS };
+    this.saveQuickDetectorSettingsTimer = null;
+    this.saveEffectSettingsTimer = null;
+
+    this.mediaRecorder = null;
+    this.recordingStream = null;
+    this.recordingChunks = [];
+    this.isRecording = false;
+    this.recordingStartTs = 0;
+    this.recordingTimer = null;
+    this.currentRecordingMimeType = '';
+    this.currentRecordingExt = 'webm';
+    this.currentRecordingBitrate = 6_000_000;
+    this.currentRecordingFps = 30;
+    this.pendingCapture = null;
+    this.lastRecordingDurationSec = 0;
+    this.photoPreviewRenderToken = 0;
+    this.previewPhotoEnhancerDebounceId = null;
+    this.photoCountdownTimer = null;
+    this.photoCountdownRemaining = 0;
+    this.isPhotoCountdownActive = false;
+
+    this.sourceMode = 'camera';
+    this.videoObjectUrl = '';
+    this.videoSourceFile = null;
+    this.videoPlaceholderLoading = false;
+    this.videoSourceFps = 30;
+    this.videoSourceAverageBitrate = 0;
+    this.videoTimeline = new VideoTimeline();
+    this.editorHistory = new EditorHistory();
+    this.editorTool = 'select';
+    this.adjustmentsContext = 'look';
+    this.timelineZoom = 1;
+    this.timelineHistorySuspended = false;
+    this.selectedVideoEffectId = '';
+    this.selectedVideoEffectIds = new Set();
+    this.timelineClipboard = null;
+    this.paletteDragState = null;
+    this.timelineDragGhost = null;
+    this.appliedTimelineItemIds = {};
+    this.timelineDetectorSyncPromise = null;
+    this.timelineDetectorSyncForce = false;
+    this.videoBaseImageSettings = null;
+    this.pendingEditorProject = null;
+
+    this.videoExportSession = new VideoExportSession();
+    this.videoExportDiagnosis = null;
+    this.videoExportPreflight = null;
+    this.videoExportRecoveredSource = false;
+    this.videoExportPlayback = null;
+    this.videoExportSession.attachLegacyAccessors(this);
+
+    this.modalFocusState = new WeakMap();
+    this.colorPickMode = false;
+    this.flipH = false;
+    this.flipV = false;
+    this.rotation = 0;
+    this.mobileActivePreset = null;
+    this.isPageVisible = document.visibilityState !== 'hidden';
+    this.saveImageSettingsTimer = null;
+    this.syncSelectedClipConfigTimer = null;
+    this.storageWarningShown = false;
+
     this.TIMELINE_EFFECT_META = TIMELINE_EFFECT_META;
     this.DEFAULT_TIMELINE_EFFECT_DURATION = DEFAULT_TIMELINE_EFFECT_DURATION;
     this.DEFAULT_IMAGE_SETTINGS = DEFAULT_IMAGE_SETTINGS;

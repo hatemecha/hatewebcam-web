@@ -84,7 +84,7 @@ export function applyLocalvideoeditorMixin(proto) {
     this.setCameraPlaceholderMessage('Iniciando cámara automáticamente...');
     this.updatePreviewPlaceholder();
     void this.restoreWebcamSessionState();
-    void this.cameraController.start();
+    void this.toggleCamera(true);
   };
 
   proto.restoreWebcamSessionState = async function () {
@@ -119,7 +119,7 @@ export function applyLocalvideoeditorMixin(proto) {
   };
 
   proto.disposeVideoSource = function () {
-    if (this.isVideoExporting) this.exportController.cancel();
+    if (this.isVideoExporting) this.cancelVideoExport();
     this.videoEl.pause();
     this.cancelRenderLoop();
     this.isRunning = false;
@@ -504,8 +504,8 @@ export function applyLocalvideoeditorMixin(proto) {
     }
     const active = this.isPlayheadInSelectedClip();
     this.adjustClipStatus.textContent = active
-      ? `Tramo ${this.formatDurationDetailed(item.startTime)} — ${this.formatDurationDetailed(item.endTime)} · Vista previa activa`
-      : `Tramo ${this.formatDurationDetailed(item.startTime)} — ${this.formatDurationDetailed(item.endTime)} · Mové el cursor al clip para previsualizar`;
+      ? `Tramo ${this.formatDurationDetailed(item.startTime)} - ${this.formatDurationDetailed(item.endTime)} · Vista previa activa`
+      : `Tramo ${this.formatDurationDetailed(item.startTime)} - ${this.formatDurationDetailed(item.endTime)} · Mové el cursor al clip para previsualizar`;
     this.adjustClipStatus.classList.toggle('is-live', active);
     this.adjustClipStatus.classList.remove('hidden');
   };
@@ -1502,7 +1502,7 @@ export function applyLocalvideoeditorMixin(proto) {
         this.TIMELINE_EFFECT_META[item.type]?.row || 1,
       );
       if (this.videoEffectRangeLabel) {
-        this.videoEffectRangeLabel.textContent = `${this.formatDurationDetailed(startTime)} — ${this.formatDurationDetailed(endTime)}`;
+        this.videoEffectRangeLabel.textContent = `${this.formatDurationDetailed(startTime)} - ${this.formatDurationDetailed(endTime)}`;
       }
       if (this.videoEffectDurationLabel) {
         this.videoEffectDurationLabel.textContent = `Duración: ${Math.max(0, endTime - startTime).toFixed(2)} s`;
@@ -2067,6 +2067,8 @@ export function applyLocalvideoeditorMixin(proto) {
 
   proto.updateVideoEditorUI = function () {
     const loaded = !!this.videoSourceFile;
+    document.body.classList.toggle('video-has-source', loaded);
+    if (!loaded && this.inspectorTabs) this.setInspectorTab('project');
     const canExport =
       loaded &&
       typeof VideoEncoder !== 'undefined' &&
@@ -2996,7 +2998,7 @@ export function applyLocalvideoeditorMixin(proto) {
       messages[err?.message] ||
       'La exportación falló. Revisá espacio libre y permisos.';
     this.showStatus(this.videoEditorStatus, message, 'error');
-    void this.exportController.cancel(false).then(() => {
+    void this.cancelVideoExport(false).then(() => {
       this.videoExportTitle.innerHTML =
         '<i class="fa-solid fa-triangle-exclamation"></i> Error de exportación';
       const detail = err?.message || err?.name || 'error_desconocido';

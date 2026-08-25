@@ -5,6 +5,8 @@ const TRANSLATABLE_ATTRIBUTES = ['aria-label', 'title', 'placeholder'];
 // Spanish is the source language. Longer phrases run first so dynamic messages
 // can be translated without coupling the UI layer to every controller method.
 const ENGLISH_REPLACEMENTS = Object.entries({
+  Dispositivo: 'Device',
+  'Saltar al visor': 'Skip to viewer',
   'Reducí duración o usá Rápido/Balanceado antes de exportar.':
     'Reduce the duration or use Fast/Balanced before exporting.',
   'Recomendación: usar Balanceado o 720p/30.':

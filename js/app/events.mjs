@@ -118,7 +118,7 @@ export function applyEventsMixin(proto) {
     }
     this.videoFileInput.addEventListener('change', () => {
       const [file] = this.videoFileInput.files || [];
-      if (file) void this.videoEditorController.loadFile(file);
+      if (file) void this.loadVideoFile(file);
       this.videoFileInput.value = '';
     });
     this.projectFileInput?.addEventListener('change', () => {
@@ -186,14 +186,14 @@ export function applyEventsMixin(proto) {
       this.deleteSelectedVideoEffect.bind(this),
     );
     this.btnExportVideo.addEventListener('click', () => {
-      void this.exportController.start();
+      void this.startVideoExport();
     });
     if (this.btnHeaderExportVideo)
       this.btnHeaderExportVideo.addEventListener('click', () => {
-        void this.exportController.start();
+        void this.startVideoExport();
       });
     this.btnCancelVideoExport.addEventListener('click', () => {
-      void this.exportController.cancel();
+      void this.cancelVideoExport();
     });
     this.btnCloseVideoExportModal.addEventListener(
       'click',
@@ -332,14 +332,13 @@ export function applyEventsMixin(proto) {
       this.refreshPausedVideoPreview();
     });
     this.btnToggleCamera.addEventListener('click', () => {
-      if (this.isRunning) void this.cameraController.stop();
-      else void this.cameraController.start();
+      void this.toggleCamera();
     });
     this.btnCameraStateAction?.addEventListener('click', () => {
-      void this.cameraController.start();
+      void this.toggleCamera(true);
     });
     this.cameraSelect.addEventListener('change', () => {
-      void this.cameraController.switch(this.cameraSelect.value);
+      void this.onCameraChange();
     });
     this.chkMirror.addEventListener(
       'change',

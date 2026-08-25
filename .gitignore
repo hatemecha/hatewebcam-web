@@ -1,5 +1,3 @@
-revision.md
-
 # Dependencies
 node_modules/
 
@@ -12,25 +10,27 @@ npm-debug.log*
 .env.*
 !.env.example
 
-# OS files
+# OS
 .DS_Store
 Thumbs.db
 
-# Editor
+# Editor and local agent state
 .vscode/
 .idea/
+.cursor/
+.codex/
+.claude/
+.agents/
+.impeccable/
+.omx/
 
-# Build / temp artifacts
+# Build / test artifacts
 dist/
 build/
-__pycache__/
-*.pyc
-*.tmp
+coverage/
 test-results/
 playwright-report/
 .playwright-mcp/
-coverage/
-
-.omx
-
-todo.md
+__pycache__/
+*.pyc
+*.tmp

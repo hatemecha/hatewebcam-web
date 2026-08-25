@@ -452,7 +452,7 @@ export function applyCaptureMixin(proto) {
 
   proto.formatVideoFps = function (value) {
     const fps = this.normalizeVideoFps(value);
-    if (!fps) return '—';
+    if (!fps) return '-';
     return Number.isInteger(fps)
       ? String(fps)
       : fps.toFixed(3).replace(/\.?0+$/, '');
@@ -1406,12 +1406,14 @@ export function applyCaptureMixin(proto) {
   proto.showStatus = function (el, msg, type) {
     if (!el) return;
     el.textContent = msg;
-    el.className = `status-msg ${type}`;
-    el.classList.remove('hidden');
+    el.classList.remove('hidden', 'success', 'warning', 'info', 'error');
+    el.classList.add('status-msg', type);
   };
 
   proto.hideStatus = function (el) {
     if (!el) return;
+    el.textContent = '';
     el.classList.add('hidden');
+    el.classList.remove('success', 'warning', 'info', 'error');
   };
 }

@@ -286,7 +286,7 @@ export function applyVideoEditorTimelineMixin(proto) {
     }
     if (this.videoEffectRangeLabel) {
       if (this.selectedVideoEffectId) {
-        this.videoEffectRangeLabel.textContent = `${this.formatDurationDetailed(selectionStart)} — ${this.formatDurationDetailed(selectionEnd)}`;
+        this.videoEffectRangeLabel.textContent = `${this.formatDurationDetailed(selectionStart)} - ${this.formatDurationDetailed(selectionEnd)}`;
       } else {
         this.videoEffectRangeLabel.textContent = `Cursor: ${this.formatDurationDetailed(this.videoEl.currentTime || 0)}`;
       }

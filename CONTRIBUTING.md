@@ -29,6 +29,8 @@ npm run test:browser
 
 El pull request debe explicar el problema, el cambio realizado y cómo se verificó. Mantené los cambios pequeños y no agregues dependencias o servicios externos sin justificar su necesidad.
 
+No incluyas estado local de editores o agentes (`.cursor/`, `.codex/`, `.impeccable/`, capturas de review). El sistema visual está en [DESIGN.md](DESIGN.md). Los avisos de seguridad se reportan según [SECURITY.md](SECURITY.md).
+
 ## Conducta
 
 Participá con respeto y criticá ideas, no personas. El mantenedor puede moderar interacciones que dificulten una colaboración segura y constructiva.

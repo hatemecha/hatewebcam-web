@@ -303,7 +303,7 @@
   </div>
   <div class="timeline-hint">
     <span id="timelineHintText"></span>
-    <span class="mono" id="videoEffectRangeLabel">0.00s — 0.00s</span>
+    <span class="mono" id="videoEffectRangeLabel">0.00s - 0.00s</span>
   </div>
   <div class="visually-hidden" aria-hidden="true">
     <input
@@ -405,14 +405,6 @@
       aria-labelledby="tabInspectorProject"
     >
       <div class="panel-section">
-        <div class="section-title">Cómo editar</div>
-        <ol class="inspector-workflow-steps" id="inspectorWorkflowSteps">
-          <li data-step="import" class="is-current">Importá un video</li>
-          <li data-step="effects">Arrastrá efectos a la timeline</li>
-          <li data-step="export">Exportá el resultado</li>
-        </ol>
-      </div>
-      <div class="panel-section">
         <div class="section-title">Video</div>
         <div class="help-text" id="videoProjectHelp">
           MP4, WebM y otros formatos compatibles. La exportación estable usa
@@ -450,183 +442,190 @@
           role="status"
           aria-live="polite"
         ></div>
-        <div class="spacer-8"></div>
-        <div class="section-title">Asistencia de edición</div>
-        <div class="help-text">
-          Detecta pulsos aproximados para ayudarte a sincronizar efectos. Podés
-          mover o borrar marcadores manualmente.
-        </div>
-        <button type="button" class="btn" id="btnEditAssistAnalyze">
-          <i class="fa-solid fa-wave-square"></i> Analizar audio
-        </button>
-        <div class="edit-assist-result mono" id="editAssistResult">
-          Importá un video para analizar su audio.
-        </div>
-        <div class="edit-assist-grid">
-          <label>
-            <span>BPM</span>
-            <input
-              type="number"
-              id="editAssistBpmInput"
-              class="text-input"
-              min="20"
-              max="320"
-              step="0.1"
-              disabled
-            />
-          </label>
-          <label>
-            <span>Offset ms</span>
-            <input
-              type="number"
-              id="editAssistOffsetInput"
-              class="text-input"
-              min="-5000"
-              max="5000"
-              step="10"
-              value="0"
-              disabled
-            />
-          </label>
-        </div>
-        <div class="btn-row edit-assist-actions">
-          <button type="button" class="btn" id="btnEditAssistHalf" disabled>
-            Usar mitad
-          </button>
-          <button type="button" class="btn" id="btnEditAssistDouble" disabled>
-            Usar doble
-          </button>
-          <button
-            type="button"
-            class="btn btn-icon"
-            id="btnEditAssistOffsetDown"
-            aria-label="Mover grilla 10 milisegundos antes"
-            disabled
-          >
-            <i class="fa-solid fa-minus"></i>
-          </button>
-          <button
-            type="button"
-            class="btn btn-icon"
-            id="btnEditAssistOffsetUp"
-            aria-label="Mover grilla 10 milisegundos después"
-            disabled
-          >
-            <i class="fa-solid fa-plus"></i>
-          </button>
-        </div>
-        <div class="slider-label"><span>Marcadores</span></div>
-        <div class="select-wrapper">
-          <select id="editAssistDensitySelect" disabled>
-            <option value="1">Cada beat</option>
-            <option value="2">Cada 2 beats</option>
-            <option value="4" selected>Cada 4 beats</option>
-            <option value="8">Cada 8 beats</option>
-          </select>
-        </div>
-        <div class="btn-row edit-assist-actions">
-          <button type="button" class="btn" id="btnEditAssistBeat" disabled>
-            Cada beat
-          </button>
-          <button type="button" class="btn" id="btnEditAssistEvery2" disabled>
-            Cada 2
-          </button>
-          <button type="button" class="btn" id="btnEditAssistEvery4" disabled>
-            Cada 4
-          </button>
-          <button type="button" class="btn" id="btnEditAssistEvery8" disabled>
-            Cada 8
-          </button>
-          <button
-            type="button"
-            class="btn"
-            id="btnEditAssistRegenerate"
-            disabled
-          >
-            Regenerar
-          </button>
-        </div>
-        <button type="button" class="btn" id="btnEditAssistClear" disabled>
-          <i class="fa-solid fa-eraser"></i> Limpiar Edit Assist
-        </button>
-        <div
-          class="status-msg hidden"
-          id="editAssistStatus"
-          role="status"
-          aria-live="polite"
-        ></div>
-        <div class="spacer-8"></div>
-        <div class="section-title">Exportación</div>
-        <div class="help-text">
-          Se procesa localmente en resolución original. La preview no cambia la
-          calidad final.
-        </div>
-        <div class="video-export-summary mono" id="editorStableExportDetails">
-          Estable: WebM · sin audio
-        </div>
-        <div class="slider-label">
-          <span>Preset de exportación</span>
-        </div>
-        <div class="select-wrapper">
-          <select id="editorExportPresetSelect">
-            <option value="fast">Rápido</option>
-            <option value="balanced" selected>Balanceado</option>
-            <option value="high">Alta calidad</option>
-            <option value="chroma">Chroma para composición</option>
-            <option value="experimental-mp4">Experimental MP4</option>
-          </select>
-        </div>
-        <div class="spacer-8"></div>
-        <div class="slider-label"><span>Salida del editor</span></div>
-        <div class="select-wrapper">
-          <select id="videoExportModeSelect">
-            <option value="full">Video + efectos</option>
-            <option value="effects-chroma">Solo efectos chroma</option>
-          </select>
-        </div>
-        <div class="spacer-8"></div>
-        <label class="checkbox-group">
-          <input type="checkbox" id="chkExperimentalExportFeatures" />
-          <span>Mostrar opciones experimentales</span>
-        </label>
-        <div id="editorExperimentalExportGroup" class="hidden">
+        <div class="video-project-advanced">
           <div class="spacer-8"></div>
+          <div class="section-title">Asistencia de edición</div>
+          <div class="help-text">
+            Detecta pulsos aproximados para ayudarte a sincronizar efectos.
+            Podés mover o borrar marcadores manualmente.
+          </div>
+          <button type="button" class="btn" id="btnEditAssistAnalyze">
+            <i class="fa-solid fa-wave-square"></i> Analizar audio
+          </button>
+          <div class="edit-assist-result mono" id="editAssistResult">
+            Importá un video para analizar su audio.
+          </div>
+          <div class="edit-assist-grid">
+            <label>
+              <span>BPM</span>
+              <input
+                type="number"
+                id="editAssistBpmInput"
+                class="text-input"
+                min="20"
+                max="320"
+                step="0.1"
+                disabled
+              />
+            </label>
+            <label>
+              <span>Offset ms</span>
+              <input
+                type="number"
+                id="editAssistOffsetInput"
+                class="text-input"
+                min="-5000"
+                max="5000"
+                step="10"
+                value="0"
+                disabled
+              />
+            </label>
+          </div>
+          <div class="btn-row edit-assist-actions">
+            <button type="button" class="btn" id="btnEditAssistHalf" disabled>
+              Usar mitad
+            </button>
+            <button type="button" class="btn" id="btnEditAssistDouble" disabled>
+              Usar doble
+            </button>
+            <button
+              type="button"
+              class="btn btn-icon"
+              id="btnEditAssistOffsetDown"
+              aria-label="Mover grilla 10 milisegundos antes"
+              disabled
+            >
+              <i class="fa-solid fa-minus"></i>
+            </button>
+            <button
+              type="button"
+              class="btn btn-icon"
+              id="btnEditAssistOffsetUp"
+              aria-label="Mover grilla 10 milisegundos después"
+              disabled
+            >
+              <i class="fa-solid fa-plus"></i>
+            </button>
+          </div>
+          <div class="slider-label"><span>Marcadores</span></div>
+          <div class="select-wrapper">
+            <select id="editAssistDensitySelect" disabled>
+              <option value="1">Cada beat</option>
+              <option value="2">Cada 2 beats</option>
+              <option value="4" selected>Cada 4 beats</option>
+              <option value="8">Cada 8 beats</option>
+            </select>
+          </div>
+          <div class="btn-row edit-assist-actions">
+            <button type="button" class="btn" id="btnEditAssistBeat" disabled>
+              Cada beat
+            </button>
+            <button type="button" class="btn" id="btnEditAssistEvery2" disabled>
+              Cada 2
+            </button>
+            <button type="button" class="btn" id="btnEditAssistEvery4" disabled>
+              Cada 4
+            </button>
+            <button type="button" class="btn" id="btnEditAssistEvery8" disabled>
+              Cada 8
+            </button>
+            <button
+              type="button"
+              class="btn"
+              id="btnEditAssistRegenerate"
+              disabled
+            >
+              Regenerar
+            </button>
+          </div>
+          <button type="button" class="btn" id="btnEditAssistClear" disabled>
+            <i class="fa-solid fa-eraser"></i> Limpiar Edit Assist
+          </button>
+          <div
+            class="status-msg hidden"
+            id="editAssistStatus"
+            role="status"
+            aria-live="polite"
+          ></div>
+          <div class="spacer-8"></div>
+          <div class="section-title">Exportación</div>
+          <div class="help-text">
+            Se procesa localmente en resolución original. La preview no cambia
+            la calidad final.
+          </div>
+          <div class="video-export-summary mono" id="editorStableExportDetails">
+            Estable: WebM · sin audio
+          </div>
           <div class="slider-label">
-            <span>Formato de exportación</span>
+            <span>Preset de exportación</span>
           </div>
           <div class="select-wrapper">
-            <select id="editorExportFormatSelect">
-              <option value="webm">WebM</option>
-              <option value="auto">Automático</option>
-              <option value="mp4">MP4 (Premiere, puede ser lento)</option>
+            <select id="editorExportPresetSelect">
+              <option value="fast">Rápido</option>
+              <option value="balanced" selected>Balanceado</option>
+              <option value="high">Alta calidad</option>
+              <option value="chroma">Chroma para composición</option>
+              <option value="experimental-mp4">Experimental MP4</option>
+            </select>
+          </div>
+          <div class="spacer-8"></div>
+          <div class="slider-label"><span>Salida del editor</span></div>
+          <div class="select-wrapper">
+            <select id="videoExportModeSelect">
+              <option value="full">Video + efectos</option>
+              <option value="effects-chroma">Solo efectos chroma</option>
             </select>
           </div>
           <div class="spacer-8"></div>
           <label class="checkbox-group">
-            <input type="checkbox" id="chkEditorCopyAudio" />
-            <span>Copiar audio original si es compatible</span>
+            <input type="checkbox" id="chkExperimentalExportFeatures" />
+            <span>Mostrar opciones experimentales</span>
           </label>
-        </div>
-        <div class="spacer-8"></div>
-        <div id="effectsExportChromaGroup" class="hidden">
-          <div class="slider-label"><span>Chroma</span></div>
-          <div class="select-wrapper">
-            <select id="effectsExportChromaSelect">
-              <option value="green">Verde</option>
-              <option value="blue">Azul</option>
-            </select>
+          <div id="editorExperimentalExportGroup" class="hidden">
+            <div class="spacer-8"></div>
+            <div class="slider-label">
+              <span>Formato de exportación</span>
+            </div>
+            <div class="select-wrapper">
+              <select id="editorExportFormatSelect">
+                <option value="webm">WebM</option>
+                <option value="auto">Automático</option>
+                <option value="mp4">MP4 (Premiere, puede ser lento)</option>
+              </select>
+            </div>
+            <div class="spacer-8"></div>
+            <label class="checkbox-group">
+              <input type="checkbox" id="chkEditorCopyAudio" />
+              <span>Copiar audio original si es compatible</span>
+            </label>
           </div>
+          <div class="spacer-8"></div>
+          <div id="effectsExportChromaGroup" class="hidden">
+            <div class="slider-label"><span>Chroma</span></div>
+            <div class="select-wrapper">
+              <select id="effectsExportChromaSelect">
+                <option value="green">Verde</option>
+                <option value="blue">Azul</option>
+              </select>
+            </div>
+          </div>
+          <div class="video-export-summary mono" id="videoExportDetails">
+            Importá un video para habilitar la exportación.
+          </div>
+          <div
+            class="video-export-diagnostics mono"
+            id="videoExportDiagnostics"
+          ></div>
+          <button
+            type="button"
+            class="btn primary"
+            id="btnExportVideo"
+            disabled
+          >
+            <i class="fa-solid fa-download"></i> Exportar video
+          </button>
         </div>
-        <div class="video-export-summary mono" id="videoExportDetails">
-          Importá un video para habilitar la exportación.
-        </div>
-        <div
-          class="video-export-diagnostics mono"
-          id="videoExportDiagnostics"
-        ></div>
-        <button type="button" class="btn primary" id="btnExportVideo" disabled>
-          <i class="fa-solid fa-download"></i> Exportar video
-        </button>
       </div>
     </div>
     <div
@@ -649,7 +648,7 @@
           termina. Los ajustes visuales están en la pestaña Ajustes.
         </div>
         <div class="timeline-clip-meta hidden" id="videoEffectClipMeta">
-          <div class="timeline-clip-type" id="videoEffectTypeLabel">—</div>
+          <div class="timeline-clip-type" id="videoEffectTypeLabel">-</div>
           <div class="help-text inspector-clip-note">
             Mové o estirá el clip en la timeline, o editá los tiempos acá abajo.
           </div>
