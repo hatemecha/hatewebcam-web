@@ -157,6 +157,14 @@
       <button
         type="button"
         class="timeline-palette-chip"
+        data-effect-type="subject"
+        draggable="true"
+      >
+        <i class="fa-solid fa-person-running"></i> Subject FX
+      </button>
+      <button
+        type="button"
+        class="timeline-palette-chip"
         data-effect-type="blob"
         draggable="true"
       >
@@ -219,6 +227,15 @@
           <button
             type="button"
             class="timeline-track-label"
+            data-adjust-context="subject"
+            data-effect-type="subject"
+            title="Ajustes de FX de sujeto"
+          >
+            SUBJECT
+          </button>
+          <button
+            type="button"
+            class="timeline-track-label"
             data-adjust-context="blob"
             data-effect-type="blob"
             title="Ajustes de color"
@@ -272,6 +289,10 @@
           <div
             class="timeline-track timeline-track-effects"
             data-track="look"
+          ></div>
+          <div
+            class="timeline-track timeline-track-effects"
+            data-track="subject"
           ></div>
           <div
             class="timeline-track timeline-track-effects"
@@ -644,8 +665,8 @@
           <i class="fa-solid fa-layer-group"></i> Clip seleccionado
         </div>
         <div class="help-text" id="videoEffectEmptyNoVideo">
-          Importá un video primero. Después arrastrá Look, Color, Caras u Ojos a
-          la timeline.
+          Importá un video primero. Después arrastrá Look, Subject FX, Color,
+          Caras u Ojos a la timeline.
         </div>
         <div class="help-text hidden" id="videoEffectEmptyHint">
           Hacé click en un clip de la timeline para ver cuándo empieza y
@@ -745,7 +766,7 @@
           Seleccioná un clip en la timeline para editar sus opciones acá.
         </div>
         <ol class="inspector-adjust-steps">
-          <li>Arrastrá Look, Color, Caras u Ojos desde la barra de arriba.</li>
+          <li>Arrastrá Look, Subject FX, Color, Caras u Ojos desde la barra de arriba.</li>
           <li>Hacé click en el clip para abrir sus ajustes.</li>
           <li>Usá la pestaña Clip si querés cambiar solo la duración.</li>
         </ol>
@@ -753,7 +774,10 @@
           Los cambios se aplican al instante; no hace falta guardar nada.
         </div>
       </div>
-      <div id="inspectorAdjustmentsHost" class="hidden"></div>
+      <div id="inspectorAdjustmentsHost" class="hidden">
+        <div id="subjectFxInspectorHost" class="subject-fx-inspector hidden"></div>
+        <div class="status-msg subject-fx-status" id="subjectFxStatus" role="status"></div>
+      </div>
     </div>
   </div>
 </aside>

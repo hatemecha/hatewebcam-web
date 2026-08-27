@@ -1,0 +1,314 @@
+/* Subject FX inspector + timeline accents (Graphite Bench) */
+
+#inspectorAdjustmentsHost.is-subject-fx #effectsControlsSlot,
+#inspectorAdjustmentsHost.is-subject-fx #adjustClipStatus {
+  display: none !important;
+}
+
+.subject-fx-inspector:not(.hidden) + .subject-fx-status {
+  display: none;
+}
+
+.subject-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 4px;
+}
+
+.subject-inspector-head {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.subject-inspector-title {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: var(--gray-dim);
+}
+
+.subject-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 26px;
+}
+
+.subject-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--gray-light);
+}
+
+.subject-status-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subject-status-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--gray-dim);
+}
+
+.subject-status-pill--ready .subject-status-dot {
+  background: var(--success, #69af81);
+}
+
+.subject-status-pill--pending .subject-status-dot {
+  background: var(--warning, #c59b59);
+}
+
+.subject-status-pill--warning .subject-status-dot {
+  background: var(--warning, #c59b59);
+}
+
+.subject-status-pill--error .subject-status-dot {
+  background: var(--danger, #cf635e);
+}
+
+.subject-retry-btn {
+  flex-shrink: 0;
+}
+
+.subject-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.subject-preset-btn {
+  min-height: 28px;
+  padding: 5px 8px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--r-sm);
+  background: var(--bg-card);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.subject-preset-btn:hover {
+  border-color: color-mix(in srgb, var(--brand) 40%, var(--border-light));
+  background: color-mix(in srgb, var(--brand) 8%, var(--bg-card));
+}
+
+.subject-preset-btn.is-active {
+  border-color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 16%, var(--bg-card));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand) 35%, transparent);
+}
+
+.subject-preset-span-2 {
+  grid-column: 1 / -1;
+}
+
+.subject-preset-hint {
+  margin: -4px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--gray-light);
+}
+
+.subject-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.subject-controls .control-field {
+  margin-bottom: 0;
+}
+
+.subject-field {
+  margin-top: 6px;
+}
+
+.subject-field--compact {
+  margin-top: 4px;
+}
+
+.subject-field-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--gray-dim);
+  margin-bottom: 4px;
+}
+
+.subject-segmented {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.subject-segment {
+  min-height: 26px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--r-sm);
+  background: var(--bg-card);
+  color: var(--gray-light);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+}
+
+.subject-segment.is-active {
+  border-color: var(--brand);
+  color: var(--text);
+  background: color-mix(in srgb, var(--brand) 14%, var(--bg-card));
+}
+
+.subject-variation-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.subject-variation-value {
+  min-width: 2.5ch;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.subject-footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 2px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.subject-power-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--gray-light);
+  cursor: pointer;
+}
+
+.subject-power-toggle input {
+  accent-color: var(--brand);
+}
+
+.subject-advanced-toggle {
+  border: 0;
+  background: transparent;
+  color: var(--gray-light);
+  font-family: var(--mono);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.subject-advanced-panel {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.subject-advanced-note,
+.subject-playhead-note {
+  font-size: 11px;
+  color: var(--gray-light);
+}
+
+.subject-playhead-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--warning, #c59b59) 10%, var(--bg-card));
+}
+
+.btn-compact {
+  min-height: 26px;
+  padding: 4px 8px;
+  font-size: 10px;
+}
+
+.timeline-item[data-type='subject'] {
+  background: color-mix(in srgb, var(--brand) 34%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--brand) 55%, transparent);
+}
+
+.timeline-item[data-type='subject'].is-selected {
+  outline-color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 52%, var(--bg-card));
+}
+
+.subject-fx-lab {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  z-index: 6;
+  max-width: 220px;
+  background: color-mix(in srgb, var(--bg-card) 92%, transparent);
+  color: var(--text);
+  padding: 8px;
+  font: 10px/1.35 var(--mono);
+  border: 1px solid var(--border-light);
+  border-radius: var(--r-sm);
+  pointer-events: auto;
+  backdrop-filter: blur(6px);
+}
+
+.subject-fx-lab-title {
+  font-size: 9px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--gray-dim);
+  margin-bottom: 4px;
+}
+
+.subject-fx-lab pre {
+  margin: 0 0 6px;
+  white-space: pre-wrap;
+}
+
+.subject-fx-lab-overlay {
+  position: absolute;
+  pointer-events: none;
+  z-index: 4;
+  opacity: 0.72;
+}
+
+.subject-fx-lab-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.subject-fx-lab-actions .btn.is-active {
+  border-color: var(--brand);
+}
+
+@media (max-width: 720px) {
+  .subject-segmented {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

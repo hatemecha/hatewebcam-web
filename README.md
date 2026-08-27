@@ -92,9 +92,22 @@ python -m http.server 8080
 
 1. Abre la pestaña `Video` y elige un archivo local.
 2. Arrastra los extremos de la timeline para recortar y marca sobre ella los intervalos de efectos.
-3. Configura un look o detector y agrégalo al tramo marcado.
-4. Pulsa `M` para agregar o quitar marcadores en el playhead. Con el imán activo, trims, clips y cursor ajustan también a esos marcadores.
-5. Exporta; un modal bloquea la edición hasta iniciar la descarga final.
+3. Arrastrá **Subject FX** a la pista SUBJECT, elegí un preset (Anatomy, Fragment, Smear, etc.) y ajustá intensidad/reactividad.
+4. Configura un look o detector y agrégalo al tramo marcado.
+5. Pulsa `M` para agregar o quitar marcadores en el playhead. Con el imán activo, trims, clips y cursor ajustan también a esos marcadores.
+6. Exporta; un modal bloquea la edición hasta iniciar la descarga final.
+
+### Subject FX (videoclip)
+
+FX generativos reactivos al cuerpo, al movimiento y al beat sobre planos ya filmados:
+
+1. Importá el video.
+2. Arrastrá **Subject FX** a la timeline.
+3. Elegí preset (**Anatomy**, **Fragment**, **Smear**, etc.).
+4. Reproducí y ajustá **Intensidad del efecto** / **Reactividad** (Movimiento, Beat, Movimiento + beat).
+5. Exportá con **Video + efectos**.
+
+El análisis corporal (MediaPipe Pose) corre localmente; no se sube nada al servidor.
 
 ### Grabación de cámara
 

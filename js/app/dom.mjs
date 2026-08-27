@@ -133,6 +133,8 @@ export function setupDom(app) {
   app.inspectorSplitter = $('#inspectorSplitter');
   app.timelineSplitter = $('#timelineSplitter');
   app.inspectorAdjustmentsHost = $('#inspectorAdjustmentsHost');
+  app.subjectFxInspectorHost = $('#subjectFxInspectorHost');
+  app.subjectFxStatus = $('#subjectFxStatus');
   app.inspectorAdjustNoVideo = $('#inspectorAdjustNoVideo');
   app.inspectorAdjustNoClip = $('#inspectorAdjustNoClip');
   app.inspectorWorkflowSteps = $('#inspectorWorkflowSteps');

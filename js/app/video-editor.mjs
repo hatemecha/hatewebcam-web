@@ -7,6 +7,7 @@ import {
 import { VideoTimeline } from '../editor/video-timeline.mjs';
 import { applyVideoEditorClipboardMixin } from './video-editor-clipboard.mjs';
 import { applyVideoEditorTimelineMixin } from './video-editor-timeline.mjs';
+import { createDefaultSubjectConfig } from '../subject/subject-config.mjs';
 
 const VIDEO_END_EPSILON = 0.001;
 const VIDEO_EXPORT_PLAYBACK_RATE = 4;
@@ -51,6 +52,7 @@ export function applyLocalvideoeditorMixin(proto) {
         .querySelectorAll('.video-only')
         .forEach((el) => el.classList.remove('hidden'));
       this.mountVideoEffectsControls();
+      this.ensureSubjectFxLab?.();
       this.setEditorTool('select');
       this.setInspectorTab('project');
       this.applyTimelineZoom();
@@ -139,6 +141,8 @@ export function applyLocalvideoeditorMixin(proto) {
     this.timelineClipboard = null;
     this.updateTimelineClipboardStatus();
     this.appliedTimelineItemIds = {};
+    this.appliedTimelineSubjectId = '';
+    this.resetSubjectFxTemporalState?.();
     this.timelineDetectorSyncPromise = null;
     this.timelineDetectorSyncForce = false;
     this.videoBaseImageSettings = null;
@@ -272,7 +276,7 @@ export function applyLocalvideoeditorMixin(proto) {
     if (!this.videoSourceFile) return null;
     const timeline = this.videoTimeline.toJSON();
     return {
-      version: 1,
+      version: 2,
       source: {
         name: this.videoSourceFile.name,
         size: this.videoSourceFile.size,
@@ -361,14 +365,17 @@ export function applyLocalvideoeditorMixin(proto) {
   };
 
   proto.normalizeEditorProject = function (project) {
-    if (
-      !project ||
-      project.version !== 1 ||
-      !project.source ||
-      !project.timeline
-    )
+    if (!project || !project.source || !project.timeline) {
       throw new Error('invalid_project');
-    return project;
+    }
+    if (project.version === 1) {
+      return this.normalizeEditorProjectV2?.({
+        ...project,
+        version: 1,
+      });
+    }
+    if (project.version !== 2) throw new Error('invalid_project');
+    return this.normalizeEditorProjectV2?.(project) || project;
   };
 
   proto.editorProjectMatchesSource = function (project, file) {
@@ -514,6 +521,7 @@ export function applyLocalvideoeditorMixin(proto) {
     const hasVideo = !!this.videoSourceFile;
     const item = this.getSelectedVideoEffectItem();
     const hasSelection = !!item;
+    const isSubject = item?.type === 'subject';
     if (this.inspectorAdjustNoVideo)
       this.inspectorAdjustNoVideo.classList.toggle('hidden', hasVideo);
     if (this.inspectorAdjustNoClip)
@@ -521,11 +529,20 @@ export function applyLocalvideoeditorMixin(proto) {
         'hidden',
         !hasVideo || hasSelection,
       );
-    if (this.inspectorAdjustmentsHost)
+    if (this.inspectorAdjustmentsHost) {
       this.inspectorAdjustmentsHost.classList.toggle('hidden', !hasSelection);
+      this.inspectorAdjustmentsHost.classList.toggle('is-subject-fx', isSubject);
+    }
     if (this.adjustContextNav)
-      this.adjustContextNav.classList.toggle('hidden', !hasSelection);
+      this.adjustContextNav.classList.toggle('hidden', !hasSelection || isSubject);
+    if (this.effectsControlsSlot)
+      this.effectsControlsSlot.classList.toggle('hidden', isSubject);
+    if (this.adjustContextHelp)
+      this.adjustContextHelp.classList.toggle('hidden', isSubject);
+    if (this.adjustClipStatus)
+      this.adjustClipStatus.classList.toggle('hidden', isSubject);
     if (hasSelection) this.updateAdjustmentsContext();
+    if (isSubject) this.renderSubjectFxInspector?.();
   };
 
   proto.normalizeLookClipConfig = function (config = {}) {
@@ -615,6 +632,9 @@ export function applyLocalvideoeditorMixin(proto) {
           };
       return { ...config, automation: this.getSelectedAutomationMode() };
     }
+    if (type === 'subject') {
+      return createDefaultSubjectConfig('anatomy');
+    }
     return {
       ...(this.blinkDetectionEffect
         ? this.blinkDetectionEffect.getConfig()
@@ -656,6 +676,9 @@ export function applyLocalvideoeditorMixin(proto) {
       else this.applyClipConfigToQuickSettings(item);
     } else if (item.type === 'blink' && this.blinkDetectionEffect) {
       this.blinkDetectionEffect.setConfig(item.config);
+    } else if (item.type === 'subject') {
+      this.subjectFxEffect?.setConfig(item.config || {});
+      this.renderSubjectFxInspector?.();
     }
     this.syncQuickDetectorSettingsFromEffects();
     this.updateQuickDetectorControlsUI();
@@ -701,7 +724,7 @@ export function applyLocalvideoeditorMixin(proto) {
     const bounds = this.timelineTrackArea.getBoundingClientRect();
     if (clientY < bounds.top || clientY > bounds.bottom) return null;
     const ratio = this.clamp((clientY - bounds.top) / bounds.height, 0, 0.999);
-    const row = Math.floor(ratio * 5);
+    const row = Math.floor(ratio * 6);
     if (row <= 0) return null;
     return (
       Object.keys(this.TIMELINE_EFFECT_META).find(
@@ -965,6 +988,7 @@ export function applyLocalvideoeditorMixin(proto) {
     if (this.btnDeleteVideoEffect)
       this.btnDeleteVideoEffect.disabled = !editing;
     if (this.btnOpenEffectAdjust) this.btnOpenEffectAdjust.disabled = !editing;
+    this.renderSubjectFxInspector?.();
   };
 
   proto.commitSelectedEffectAutomation = function () {
@@ -2024,6 +2048,7 @@ export function applyLocalvideoeditorMixin(proto) {
   proto.syncVideoTimelineEffects = async function (force = false) {
     if (this.sourceMode !== 'video' || !this.videoSourceFile) return;
     this.syncVideoTimelineLookNow({ force });
+    await this.syncVideoTimelineSubject?.(force);
     await this.syncVideoTimelineDetectors(force);
   };
 
@@ -2400,7 +2425,16 @@ export function applyLocalvideoeditorMixin(proto) {
 
   proto.seekVideo = function (time) {
     if (!this.videoSourceFile || this.isVideoExporting) return;
-    this.videoEl.currentTime = this.clampVideoSeekTime(time);
+    const previous = this.videoEl.currentTime || 0;
+    const next = this.clampVideoSeekTime(time);
+    if (
+      this.subjectFxEffect?.active &&
+      Math.abs(next - previous) > 0.04 &&
+      (next < previous - 0.02 || Math.abs(next - previous) > 0.35)
+    ) {
+      this.subjectFxEffect.onSeek?.();
+    }
+    this.videoEl.currentTime = next;
     this.updateVideoTransport();
     if (!this.animFrameId) this.scheduleRenderLoop();
   };
@@ -2474,6 +2508,7 @@ export function applyLocalvideoeditorMixin(proto) {
       { stage: 'detectors', time },
     );
     await this.syncVideoTimelineDetectorsAt(time, false);
+    await this.syncVideoTimelineSubjectAt?.(time, false);
     this.updateVideoExportProgress(
       frameIndex,
       this.videoExportTotalFrames || 0,
@@ -2705,6 +2740,8 @@ export function applyLocalvideoeditorMixin(proto) {
         face: '',
         blink: '',
       };
+      this.appliedTimelineSubjectId = '';
+      this.resetSubjectFxTemporalState?.();
       this.videoExportRecoveredSource = false;
       this.videoExportSession.start(0);
       this.videoExportProgress.value = 0;

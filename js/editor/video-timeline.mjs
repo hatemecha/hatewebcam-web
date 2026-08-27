@@ -1,6 +1,6 @@
 /** Small, dependency-free timeline model used by the local video editor. */
 export class VideoTimeline {
-  static TYPES = ['look', 'blob', 'face', 'blink'];
+  static TYPES = ['look', 'subject', 'blob', 'face', 'blink'];
   static MARKER_KINDS = ['manual', 'beat', 'bar', 'section'];
   static MARKER_SOURCES = ['user', 'edit-assist'];
 

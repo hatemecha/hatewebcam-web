@@ -41,6 +41,33 @@ import { applyCameraMixin } from '../js/app/camera.mjs';
 import { applyRenderLoopMixin } from '../js/app/render.mjs';
 import { applyLocalvideoeditorMixin } from '../js/app/video-editor.mjs';
 import {
+  createDefaultSubjectConfig,
+  migrateProjectToV2,
+  normalizeSubjectConfig,
+} from '../js/subject/subject-config.mjs';
+import { SubjectMotionAnalyzer } from '../js/subject/subject-motion.mjs';
+import {
+  createSeededRandom,
+  seededInt,
+} from '../js/subject/subject-prng.mjs';
+import { applySubjectFxIntegrationMixin } from '../js/app/subject-fx-integration.mjs';
+import {
+  SubjectMask,
+  normalizeMaskBuffer,
+  smoothMaskTemporal,
+} from '../js/subject/subject-mask.mjs';
+import {
+  buildLocalMotionRegions,
+  getMotionAt,
+  getStrongestMotionRegion,
+} from '../js/subject/subject-local-motion.mjs';
+import {
+  mapNormToCanvas,
+  mapNormToSubjectSpace,
+  getVideoDrawMetrics,
+} from '../js/subject/subject-frame-map.mjs';
+import { SubjectAnalysisCache } from '../js/subject/subject-cache.mjs';
+import {
   estimateTempoFromSamples,
   extractMediaAudioSamples,
 } from '../js/audio-tempo-analyzer.mjs';
@@ -862,7 +889,7 @@ function checkProjectJsonRoundTrip() {
   };
   applyLocalvideoeditorMixin(app);
   const project = JSON.parse(JSON.stringify(app.buildEditorProjectData()));
-  assert.equal(project.version, 1);
+  assert.equal(project.version, 2);
   assert.equal(project.source.name, 'clip.mp4');
   assert.equal(project.trim.start, 1);
   assert.equal(project.timeline.items.length, 1);
@@ -1969,6 +1996,238 @@ function checkObservedExportProgressAndTimelineTicks() {
   );
 }
 
+function checkSubjectTimelineType() {
+  const timeline = new VideoTimeline(10);
+  timeline.setTrim(0, 10);
+  const subject = timeline.add('subject', 1, 4, createDefaultSubjectConfig('anatomy'));
+  assert.equal(subject.type, 'subject');
+  assert.throws(() => timeline.add('subject', 2, 5), /superponer/);
+  assert.deepEqual(
+    Array.from(timeline.activeAt(2), (item) => item.type),
+    ['subject'],
+  );
+}
+
+function checkSubjectConfigNormalization() {
+  const config = normalizeSubjectConfig({
+    preset: 'fragment',
+    amount: 2,
+    reactivity: 'motion-beat',
+    seed: 42,
+  });
+  assert.equal(config.preset, 'fragment');
+  assert.equal(config.amount, 1);
+  assert.equal(config.reactivity, 'motion-beat');
+  assert.equal(config.modules.fragments.enabled, true);
+}
+
+function checkSubjectProjectMigration() {
+  const v1 = {
+    version: 1,
+    source: { name: 'a.mp4', duration: 10 },
+    timeline: {
+      items: [
+        {
+          id: 's1',
+          type: 'subject',
+          startTime: 1,
+          endTime: 3,
+          config: { preset: 'anatomy', amount: 0.5 },
+        },
+      ],
+      markers: [],
+    },
+    trim: { start: 0, end: 10 },
+  };
+  const v2 = migrateProjectToV2(v1);
+  assert.equal(v2.version, 2);
+  assert.equal(v2.timeline.items[0].config.preset, 'anatomy');
+}
+
+function checkSubjectDeterministicPrng() {
+  const a = seededInt(99, 0, 100, 'clip', 1);
+  const b = seededInt(99, 0, 100, 'clip', 1);
+  const c = seededInt(100, 0, 100, 'clip', 1);
+  assert.equal(a, b);
+  assert.notEqual(a, c);
+  const rng = createSeededRandom(1234);
+  const seq = [rng(), rng(), rng()];
+  const rng2 = createSeededRandom(1234);
+  assert.deepEqual(seq, [rng2(), rng2(), rng2()]);
+}
+
+function checkSubjectMotionEnergy() {
+  const analyzer = new SubjectMotionAnalyzer({ smoothing: 1 });
+  const landmarks = Array.from({ length: 33 }, (_, index) => ({
+    x: 0.5 + (index % 5) * 0.01,
+    y: 0.5,
+    visibility: 1,
+  }));
+  const first = analyzer.analyze(landmarks, 0, 1);
+  landmarks[15].x += 0.08;
+  landmarks[16].x -= 0.08;
+  const second = analyzer.analyze(landmarks, 100, 1);
+  assert.ok(first);
+  assert.ok(second);
+  assert.ok(second.motionEnergy >= first.motionEnergy);
+}
+
+function checkSubjectBeatIntegration() {
+  const timeline = new VideoTimeline(8);
+  timeline.addMarkers([
+    { time: 1, kind: 'beat', source: 'edit-assist', strength: 1 },
+  ]);
+  const app = {
+    videoTimeline: timeline,
+    clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
+  };
+  applySubjectFxIntegrationMixin(app);
+  assert.ok(app.getSubjectBeatStrength(1) > 0.8);
+  assert.ok(app.getSubjectBeatStrength(2) < 0.05);
+}
+
+async function checkSubjectMaskPipeline() {
+  const raw = new Uint8Array(16);
+  raw.fill(0);
+  raw[5] = 255;
+  raw[6] = 255;
+  raw[9] = 255;
+  raw[10] = 255;
+  const mask = normalizeMaskBuffer(raw, 4, 4, {
+    threshold: 0.3,
+    feather: 0,
+    dilate: 0,
+    erode: 0,
+  });
+  assert.ok(mask instanceof SubjectMask);
+  assert.ok(mask.getMaskCoverage() > 0);
+  assert.ok(mask.getSubjectBounds());
+  assert.ok(mask.sampleMask(0.5, 0.5) >= 0);
+
+  const prev = new SubjectMask(
+    4,
+    4,
+    new Uint8Array([0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 0, 0, 0, 0, 0, 0]),
+  );
+  const next = new SubjectMask(
+    4,
+    4,
+    new Uint8Array([255, 255, 0, 0, 255, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+  );
+  const blended = smoothMaskTemporal(next, prev, 0.5);
+  assert.equal(blended.data[0], 128);
+}
+
+async function checkSubjectLocalMotion() {
+  const landmarks = Array.from({ length: 33 }, () => ({
+    x: 0.5,
+    y: 0.5,
+    z: 0,
+    visibility: 1,
+  }));
+  landmarks[15] = { x: 0.68, y: 0.42, z: 0, visibility: 1 };
+  landmarks[16] = { x: 0.72, y: 0.38, z: 0, visibility: 1 };
+  landmarks[18] = { x: 0.74, y: 0.4, z: 0, visibility: 1 };
+  const frame = {
+    landmarks,
+    jointVelocities: Array.from({ length: 33 }, () => ({ x: 0, y: 0 })),
+  };
+  frame.jointVelocities[15] = { x: 0.04, y: -0.01 };
+  frame.jointVelocities[16] = { x: 0.05, y: -0.02 };
+  frame.jointVelocities[18] = { x: 0.03, y: -0.015 };
+  const regions = buildLocalMotionRegions(frame);
+  assert.ok(regions.rightHand);
+  assert.ok(regions.rightHand.speed > 0);
+  const strongest = getStrongestMotionRegion(regions);
+  assert.ok(strongest?.speed > 0);
+  const motion = getMotionAt(
+    regions,
+    regions.rightHand.position.x,
+    regions.rightHand.position.y,
+  );
+  assert.ok(motion.speed > 0);
+}
+
+function checkSubjectAnalysisCache() {
+  const cache = new SubjectAnalysisCache({ sourceKey: 'clip-a', duration: 2000 });
+  cache.addSample({ timestamp: 0, motionEnergy: 0.1, landmarks: [] });
+  cache.addSample({ timestamp: 1000, motionEnergy: 0.9, landmarks: [] });
+  const mid = cache.getAt(0.5);
+  assert.ok(mid);
+  assert.ok(mid.motionEnergy > 0.4 && mid.motionEnergy < 0.7);
+  assert.equal(cache.getProgressLabel(), '');
+  cache.running = true;
+  cache.progress = 0.42;
+  assert.match(cache.getProgressLabel(), /42%/);
+  cache.markReady();
+  assert.equal(cache.getProgressLabel(), 'Análisis listo');
+  cache.invalidate('clip-b');
+  assert.equal(cache.samples.length, 0);
+}
+
+function checkSubjectFrameMap() {
+  const metrics = getVideoDrawMetrics({
+    canvasWidth: 640,
+    canvasHeight: 360,
+    sourceWidth: 1280,
+    sourceHeight: 720,
+    effectiveRotation: 0,
+    flipH: false,
+    flipV: false,
+    useCover: false,
+  });
+  assert.equal(metrics.drawWidth, 640);
+  assert.equal(metrics.drawHeight, 360);
+  const center = mapNormToCanvas(0.5, 0.5, metrics);
+  assert.ok(Math.abs(center.x - 320) < 2);
+  assert.ok(Math.abs(center.y - 180) < 2);
+  const subjectCenter = mapNormToSubjectSpace(0.5, 0.5, metrics);
+  assert.ok(Math.abs(subjectCenter.x) < 1);
+  assert.ok(Math.abs(subjectCenter.y) < 1);
+}
+
+function checkSubjectBypassToggle() {
+  const app = {
+    subjectFxBypass: false,
+    btnSubjectBypass: { checked: true, setAttribute() {} },
+    subjectFxEffect: { setBypass() {}, resetTemporalState() {} },
+    syncVideoTimelineSubject() {},
+    renderSubjectFxInspector() {},
+  };
+  applySubjectFxIntegrationMixin(app);
+  app.toggleSubjectFxBypass();
+  assert.equal(app.subjectFxBypass, true);
+  app.updateSubjectFxBypassUI();
+  assert.equal(app.btnSubjectBypass.checked, false);
+}
+
+function checkSubjectVariationStep() {
+  const timeline = new VideoTimeline(8);
+  const item = timeline.upsert({
+    id: 'subject-1',
+    type: 'subject',
+    startTime: 0,
+    endTime: 8,
+    config: createDefaultSubjectConfig('fragment'),
+  });
+  const app = {
+    videoTimeline: timeline,
+    getSelectedVideoEffectItem: () => item,
+    pushTimelineHistory() {},
+    subjectFxEffect: { setConfig() {} },
+    renderSubjectFxInspector() {},
+    syncVideoTimelineSubject() {},
+  };
+  applySubjectFxIntegrationMixin(app);
+  const before = item.config.seed;
+  app.stepSubjectVariation(1);
+  const updated = timeline.items.find((entry) => entry.id === 'subject-1');
+  assert.notEqual(updated.config.seed, before);
+  app.stepSubjectVariation(1);
+  const again = timeline.items.find((entry) => entry.id === 'subject-1');
+  assert.notEqual(again.config.seed, updated.config.seed);
+}
+
 await checkCameraStreamCleanup();
 checkSettingsStoreRejectsNonObjectState();
 checkCameraPreservesSupportedFps();
@@ -1977,6 +2236,18 @@ checkBlinkDetectionUsesRefinedEyeLandmarks();
 await checkBlinkCallbackClearsWhenBlobDisabled();
 checkFaceDetectionUsesRefinedEyeLandmarks();
 checkVideoTimelineIntervals();
+checkSubjectTimelineType();
+checkSubjectConfigNormalization();
+checkSubjectProjectMigration();
+checkSubjectDeterministicPrng();
+checkSubjectMotionEnergy();
+checkSubjectBeatIntegration();
+await checkSubjectMaskPipeline();
+await checkSubjectLocalMotion();
+checkSubjectAnalysisCache();
+checkSubjectFrameMap();
+checkSubjectBypassToggle();
+checkSubjectVariationStep();
 checkAudioTempoAnalyzer();
 checkEditAssistManualControls();
 await checkMediaAudioExtraction();

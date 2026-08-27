@@ -16,9 +16,10 @@ export {
 
 export const TIMELINE_EFFECT_META = Object.freeze({
   look: { label: 'Look', trackLabel: 'LOOK', row: 1 },
-  blob: { label: 'Color', trackLabel: 'COLOR', row: 2 },
-  face: { label: 'Caras', trackLabel: 'CARAS', row: 3 },
-  blink: { label: 'Ojos', trackLabel: 'OJOS', row: 4 },
+  subject: { label: 'FX de sujeto', trackLabel: 'SUBJECT', row: 2 },
+  blob: { label: 'Color', trackLabel: 'COLOR', row: 3 },
+  face: { label: 'Caras', trackLabel: 'CARAS', row: 4 },
+  blink: { label: 'Ojos', trackLabel: 'OJOS', row: 5 },
 });
 export const DEFAULT_TIMELINE_EFFECT_DURATION = 3;
 export const DEFAULT_IMAGE_SETTINGS = {
@@ -105,16 +106,25 @@ export const DEFAULT_QUICK_DETECTOR_SETTINGS = {
 };
 export const ADJUST_CONTEXT_HELP = {
   look: 'Orientación, encuadre, presets y ajuste fino para la pista VIDEO y tramos LOOK.',
+  subject:
+    'FX generativos reactivos al cuerpo, movimiento y beat para tramos SUBJECT.',
   blob: 'Seguimiento por color para tramos en la pista COLOR.',
   face: 'Detección y estilo de caras en la pista CARAS.',
   blink: 'Detección de pestañeos en la pista OJOS.',
 };
 export const ADJUST_CONTEXT_VIDEO_HELP = {
   look: 'Ajustá orientación, filtros y look del clip seleccionado. Solo se ve cuando el cursor está dentro de su tramo.',
+  subject:
+    'Preset, intensidad y reactividad del clip SUBJECT seleccionado.',
   blob: 'Elegí color, sensibilidad y aspecto del tracking. El detector se enciende solo dentro del clip COLOR.',
   face: 'Elegí recuadro, blur, pixelado y etiqueta. La detección se enciende sola cuando el cursor entra en el clip CARAS.',
   blink:
     'Ajustá sensibilidad del detector. Se activa solo dentro del clip OJOS en la timeline.',
 };
+export const MEDIAPIPE_TASKS_VISION_VERSION = '0.10.18';
+export const MEDIAPIPE_POSE_LANDMARKER_MODEL =
+  'vendor/mediapipe/pose_landmarker/pose_landmarker_lite.task';
+export const MEDIAPIPE_TASKS_VISION_WASM_BASE =
+  'vendor/mediapipe/tasks-vision/wasm';
 export const STORAGE_KEY = 'hatewebcam_config';
 export const PROFILES_KEY = 'hatewebcam_profiles';

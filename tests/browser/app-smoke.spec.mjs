@@ -22,6 +22,9 @@ test('video editor shell loads without fatal errors', async ({ page }) => {
   await expect(page.locator('#videoExportDetails')).toContainText(
     'Importá un video',
   );
+  await expect(
+    page.locator('[data-effect-type="subject"]'),
+  ).toHaveCount(2);
   expect(fatalMessages).toEqual([]);
 });
 

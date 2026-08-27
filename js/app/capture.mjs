@@ -15,6 +15,16 @@ export function applyCaptureMixin(proto) {
     if (e.key === 'Escape' && this.isMobileFxPanelVisible()) {
       this.setMobileFxPanelVisible(false);
     }
+    if (
+      this.sourceMode === 'video' &&
+      !e.metaKey &&
+      !e.ctrlKey &&
+      !e.altKey &&
+      e.key.toLowerCase() === 'b' &&
+      !['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target?.tagName)
+    ) {
+      this.toggleSubjectFxBypass?.();
+    }
   };
 
   proto.isPendingPhotoCapture = function () {

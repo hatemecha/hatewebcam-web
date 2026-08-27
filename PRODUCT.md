@@ -49,6 +49,7 @@ Neighboring webcam filters rarely offer the same detector stack and timeline-bas
 - Responsive UI with dedicated mobile HUD.
 - Spanish and English UI with auto-detection and persistent locale selector.
 - Local video editor: trim, interval effects, markers, magnetic snapping, export modal.
+- Subject FX: body tracking (MediaPipe Pose), motion/beat-reactive generative overlays for music-video styling.
 - Chroma-only export mode (green/blue WebM overlays for external compositing).
 
 **Technical constraints:**

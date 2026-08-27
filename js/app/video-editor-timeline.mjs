@@ -1,3 +1,5 @@
+import { SUBJECT_PRESET_LABELS } from '../effects/subject-fx/subject-presets.mjs';
+
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyVideoEditorTimelineMixin(proto) {
   proto.resolveTimelineClipTimes = function ({
@@ -169,6 +171,13 @@ export function applyVideoEditorTimelineMixin(proto) {
           console.warn('Detector preload failed:', err);
         }
       }
+      if (type === 'subject') {
+        try {
+          await this.ensureSubjectFxEffect?.().analyzer.ensureReady();
+        } catch (err) {
+          console.warn('Subject FX preload failed:', err);
+        }
+      }
       this.selectVideoEffect(saved.id);
       void this.syncVideoTimelineEffects(true);
       this.showStatus(
@@ -197,6 +206,14 @@ export function applyVideoEditorTimelineMixin(proto) {
       this.videoEffectStart.value = item.startTime.toFixed(2);
       this.videoEffectEnd.value = item.endTime.toFixed(2);
       this.applyVideoEffectItemConfig(item);
+      if (item.type === 'subject') {
+        const t = this.videoEl?.currentTime || 0;
+        if (t < item.startTime || t >= item.endTime) {
+          void this.seekVideo(
+            Math.min(item.endTime - 0.05, item.startTime + 0.05),
+          );
+        }
+      }
     }
     this.renderVideoTimeline();
     this.updateVideoEffectInspector();
@@ -324,9 +341,13 @@ export function applyVideoEditorTimelineMixin(proto) {
       el.className = `timeline-item${item.id === this.selectedVideoEffectId || selectedIds.has(item.id) ? ' is-selected' : ''}`;
       el.dataset.id = item.id;
       el.dataset.type = item.type;
+      const label =
+        item.type === 'subject'
+          ? SUBJECT_PRESET_LABELS[item.config?.preset] || 'SUBJECT'
+          : meta.trackLabel;
       el.innerHTML = `
         <span class="timeline-item-handle start" aria-hidden="true"></span>
-        <span class="timeline-item-label">${meta.trackLabel}</span>
+        <span class="timeline-item-label">${label}</span>
         <span class="timeline-item-handle end" aria-hidden="true"></span>
       `;
       this.positionTimelineRowElement(

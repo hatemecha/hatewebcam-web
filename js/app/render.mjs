@@ -240,6 +240,18 @@ export function applyRenderLoopMixin(proto) {
         }
         this.updateEffectsInfo?.();
         this.updateVideoTransport();
+        this.updateSubjectFxLab?.();
+        if (
+          this.sourceMode === 'video' &&
+          this.subjectFxEffect?.active &&
+          !this.subjectFxInspectorHost?.classList.contains('hidden')
+        ) {
+          const nextStatus = this.subjectFxEffect.analyzer?.status || '';
+          if (nextStatus !== this._subjectFxInspectorStatus) {
+            this._subjectFxInspectorStatus = nextStatus;
+            this.renderSubjectFxInspector?.();
+          }
+        }
       }
     } catch (err) {
       console.error('Render loop error:', err);
@@ -364,35 +376,56 @@ export function applyRenderLoopMixin(proto) {
     }
   };
 
-  proto.drawBaseFrame = function (targetCtx, targetCanvas, mode = 'preview') {
+  proto.getVideoDrawMetrics = function (targetCanvas, mode = 'preview') {
     const { sourceWidth, sourceHeight } = this.getSourceFrameDimensions();
     const effectiveRotation = this.getEffectiveRotationDegrees(
       sourceWidth,
       sourceHeight,
     );
-    const rotated = effectiveRotation === 90 || effectiveRotation === 270;
-    const orientedWidth = rotated ? sourceHeight : sourceWidth;
-    const orientedHeight = rotated ? sourceWidth : sourceHeight;
-    const scaleX = targetCanvas.width / Math.max(1, orientedWidth);
-    const scaleY = targetCanvas.height / Math.max(1, orientedHeight);
     const useCover = mode === 'preview' && this.isMobileViewport();
+    const scaleX =
+      targetCanvas.width /
+      Math.max(1, effectiveRotation === 90 || effectiveRotation === 270
+        ? sourceHeight
+        : sourceWidth);
+    const scaleY =
+      targetCanvas.height /
+      Math.max(1, effectiveRotation === 90 || effectiveRotation === 270
+        ? sourceWidth
+        : sourceHeight);
     const frameScale = useCover
       ? Math.max(scaleX, scaleY)
       : Math.min(scaleX, scaleY);
-    const drawWidth = Math.max(1, Math.round(sourceWidth * frameScale));
-    const drawHeight = Math.max(1, Math.round(sourceHeight * frameScale));
+    return {
+      canvasWidth: targetCanvas.width,
+      canvasHeight: targetCanvas.height,
+      sourceWidth,
+      sourceHeight,
+      effectiveRotation,
+      flipH: this.getEffectiveFlipH?.() ?? false,
+      flipV: !!this.flipV,
+      drawWidth: Math.max(1, Math.round(sourceWidth * frameScale)),
+      drawHeight: Math.max(1, Math.round(sourceHeight * frameScale)),
+      useCover,
+    };
+  };
+
+  proto.drawBaseFrame = function (targetCtx, targetCanvas, mode = 'preview') {
+    const { sourceWidth, sourceHeight } = this.getSourceFrameDimensions();
+    const metrics = this.getVideoDrawMetrics(targetCanvas, mode);
+    const effectiveRotation = metrics.effectiveRotation;
     let sx = 1;
     let sy = 1;
-    if (this.getEffectiveFlipH()) sx = -1;
-    if (this.flipV) sy = -1;
+    if (metrics.flipH) sx = -1;
+    if (metrics.flipV) sy = -1;
 
     if (
       this.tryDrawBaseFrameWithWebGL(targetCtx, targetCanvas, mode, {
         sourceWidth,
         sourceHeight,
         effectiveRotation,
-        drawWidth,
-        drawHeight,
+        drawWidth: metrics.drawWidth,
+        drawHeight: metrics.drawHeight,
         sx,
         sy,
       })
@@ -411,10 +444,10 @@ export function applyRenderLoopMixin(proto) {
     }
     targetCtx.drawImage(
       this.videoEl,
-      -drawWidth / 2,
-      -drawHeight / 2,
-      drawWidth,
-      drawHeight,
+      -metrics.drawWidth / 2,
+      -metrics.drawHeight / 2,
+      metrics.drawWidth,
+      metrics.drawHeight,
     );
     targetCtx.restore();
     return effectiveRotation;
@@ -573,6 +606,24 @@ export function applyRenderLoopMixin(proto) {
       this.applyAdvancedPixelAdjustments(targetCanvas, targetCtx, mode);
     }
 
+    const profileName =
+      mode === 'preview' && this.isMobileViewport() ? 'mobile' : mode;
+    const renderProfile = this.renderEngine.getProfile(profileName);
+
+    if (this.subjectFxEffect?.active && !this.subjectFxBypass) {
+      const beatStrength = this.getSubjectBeatStrength?.(
+        this.videoEl.currentTime || 0,
+      );
+      const drawMetrics = this.getVideoDrawMetrics(targetCanvas, mode);
+      this.subjectFxEffect.processFullFrame(
+        targetCtx,
+        targetCanvas,
+        this.videoEl,
+        renderProfile,
+        { mediaTime: this.videoEl.currentTime, beatStrength, drawMetrics },
+      );
+    }
+
     if (this.faceDetectionEffect) {
       this.faceDetectionEffect.flipH = this.getEffectiveFlipH();
       this.faceDetectionEffect.flipV = this.flipV;
@@ -587,14 +638,24 @@ export function applyRenderLoopMixin(proto) {
         this.blobTrackingEffect.boxColor;
     }
 
-    const profileName =
-      mode === 'preview' && this.isMobileViewport() ? 'mobile' : mode;
     this.effectManager.processFrame(
       targetCtx,
       targetCanvas,
       this.videoEl,
-      this.renderEngine.getProfile(profileName),
+      renderProfile,
     );
+
+    if (this.subjectFxEffect?.active && !this.subjectFxBypass) {
+      const beatStrength = this.getSubjectBeatStrength?.(
+        this.videoEl.currentTime || 0,
+      );
+      const drawMetrics = this.getVideoDrawMetrics(targetCanvas, mode);
+      this.subjectFxEffect.processOverlay(targetCtx, targetCanvas, {
+        ...renderProfile,
+        beatStrength,
+        drawMetrics,
+      });
+    }
   };
 
   proto.applySharpenFilter = function (imageData, amount) {
