@@ -22,15 +22,18 @@ const JOINT_SPAWN = Object.freeze({
   rightArm: [12, 14, 16],
 });
 
+/** Simulation is authored against a 30fps media clock. */
+const MEDIA_FRAME_MS = 1000 / 30;
+
 function seededRandom(seed, ...parts) {
   return seededRange(seed, 0, 1, ...parts);
 }
 
-function pickSize(seed, clipId, index, scale = 1) {
-  const roll = seededRandom(seed, clipId, index, 'tier');
+function pickSize(seed, clipId, serial, scale = 1) {
+  const roll = seededRandom(seed, clipId, serial, 'tier');
   const tier = roll < 0.55 ? 'micro' : roll < 0.88 ? 'small' : 'medium';
   const [min, max] = SIZE_TIERS[tier];
-  return seededRange(seed, min, max, clipId, index, 'size') * scale;
+  return seededRange(seed, min, max, clipId, serial, 'size') * scale;
 }
 
 export class FragmentEngine {
@@ -39,14 +42,20 @@ export class FragmentEngine {
     this.lastSeed = 0;
     this.lastClipId = '';
     this.spawnCooldown = 0;
+    this.spawnSerial = 0;
+    this.lastMediaMs = null;
+    this.simAccumulatorMs = 0;
   }
 
   reset(options = {}) {
     this.fragments = [];
     this.spawnCooldown = 0;
+    this.lastMediaMs = null;
+    this.simAccumulatorMs = 0;
     if (options.hard) {
       this.lastSeed = 0;
       this.lastClipId = '';
+      this.spawnSerial = 0;
     }
   }
 
@@ -61,24 +70,84 @@ export class FragmentEngine {
     beatStrength = 0,
     scale = 1,
     persistence = 0.5,
+    mediaTimeMs = null,
   }) {
     if (!config?.enabled || !frame || !sourceCanvas || !drawMetrics) return;
 
     if (clipId !== this.lastClipId || seed !== this.lastSeed) {
       this.fragments = [];
+      this.spawnCooldown = 0;
+      this.simAccumulatorMs = 0;
+      this.lastMediaMs = null;
       this.lastClipId = clipId;
       this.lastSeed = seed;
     }
+
+    const mediaMs =
+      mediaTimeMs != null && Number.isFinite(mediaTimeMs)
+        ? mediaTimeMs
+        : (frame.timestamp ?? 0);
+
+    if (this.lastMediaMs != null && mediaMs + 40 < this.lastMediaMs) {
+      this.fragments = [];
+      this.spawnCooldown = 0;
+      this.simAccumulatorMs = 0;
+    }
+
+    if (this.lastMediaMs == null) {
+      this.lastMediaMs = mediaMs;
+      return;
+    }
+    const deltaMs = Math.max(0, mediaMs - this.lastMediaMs);
+    this.lastMediaMs = mediaMs;
+    if (deltaMs === 0) return;
+    this.simAccumulatorMs += deltaMs;
 
     const maxCount = Math.max(3, Math.round(config.density * intensity * 22));
     const regions = frame.regions || {};
     const strongest = getStrongestMotionRegion(regions);
     const spawnRate =
       0.35 + intensity * config.density * 0.8 + beatStrength * 0.35;
+
+    while (this.simAccumulatorMs >= MEDIA_FRAME_MS - 0.001) {
+      this.simAccumulatorMs -= MEDIA_FRAME_MS;
+      this.#stepFrame({
+        frame,
+        config,
+        intensity,
+        seed,
+        clipId,
+        drawMetrics,
+        scale,
+        beatStrength,
+        strongest,
+        persistence,
+        maxCount,
+        regions,
+        spawnRate,
+      });
+    }
+  }
+
+  #stepFrame({
+    frame,
+    config,
+    seed,
+    clipId,
+    drawMetrics,
+    scale,
+    beatStrength,
+    strongest,
+    persistence,
+    maxCount,
+    regions,
+    spawnRate,
+  }) {
     this.spawnCooldown -= spawnRate;
 
     while (this.spawnCooldown <= 0 && this.fragments.length < maxCount) {
       this.spawnCooldown += 1;
+      this.spawnSerial += 1;
       const fragment = this.#spawnFragment({
         frame,
         config,
@@ -89,9 +158,10 @@ export class FragmentEngine {
         beatStrength,
         strongest,
         persistence,
-        index: this.fragments.length,
+        serial: this.spawnSerial,
       });
       if (fragment) this.fragments.push(fragment);
+      else break;
     }
 
     this.fragments = this.fragments
@@ -141,9 +211,9 @@ export class FragmentEngine {
     beatStrength,
     strongest,
     persistence,
-    index,
+    serial,
   }) {
-    const modeRoll = seededRandom(seed, clipId, index, 'mode');
+    const modeRoll = seededRandom(seed, clipId, serial, 'mode');
     let anchor = null;
     let kind = 'surface';
 
@@ -159,7 +229,7 @@ export class FragmentEngine {
         frame.mask,
         seed,
         clipId,
-        index,
+        serial,
         (s, ...parts) => seededRandom(s, ...parts),
       );
     } else if (modeRoll < 0.72 && frame.mask?.contour?.length) {
@@ -171,7 +241,7 @@ export class FragmentEngine {
             0,
             frame.mask.contour.length - 1,
             clipId,
-            index,
+            serial,
             'edge',
           )
         ];
@@ -183,11 +253,11 @@ export class FragmentEngine {
       const regionNames = Object.keys(JOINT_SPAWN);
       const regionName =
         regionNames[
-          seededInt(seed, 0, regionNames.length - 1, clipId, index, 'joint')
+          seededInt(seed, 0, regionNames.length - 1, clipId, serial, 'joint')
         ];
       const joints = JOINT_SPAWN[regionName];
       const jointIndex =
-        joints[seededInt(seed, 0, joints.length - 1, clipId, index, 'ji')];
+        joints[seededInt(seed, 0, joints.length - 1, clipId, serial, 'ji')];
       const landmark = frame.landmarks?.[jointIndex];
       if (landmark) anchor = { x: landmark.x, y: landmark.y };
     }
@@ -195,13 +265,14 @@ export class FragmentEngine {
     if (!anchor) return null;
 
     const mapped = mapNormToCanvas(anchor.x, anchor.y, drawMetrics);
-    const size = pickSize(seed, clipId, index, scale);
+    const size = pickSize(seed, clipId, serial, scale);
     const spread = config.spread * (0.25 + (strongest?.speed || 0) * 0.9);
     const sourceX = mapped.x - size / 2;
     const sourceY = mapped.y - size / 2;
 
     return {
       kind,
+      serial,
       anchorX: anchor.x,
       anchorY: anchor.y,
       x: sourceX,
@@ -210,12 +281,12 @@ export class FragmentEngine {
       sourceY,
       size,
       vx:
-        seededRange(seed, -1, 1, clipId, 'vx', index) * spread * 28 +
+        seededRange(seed, -1, 1, clipId, 'vx', serial) * spread * 28 +
         (frame.regions?.[strongest?.name]?.velocity?.x || 0) *
           drawMetrics.drawWidth *
           0.08,
       vy:
-        seededRange(seed, -1, 1, clipId, 'vy', index) * spread * 28 +
+        seededRange(seed, -1, 1, clipId, 'vy', serial) * spread * 28 +
         (frame.regions?.[strongest?.name]?.velocity?.y || 0) *
           drawMetrics.drawHeight *
           0.08,
@@ -224,7 +295,7 @@ export class FragmentEngine {
       maxAge: Math.round(
         12 + persistenceToFrames(persistence) + beatStrength * 8,
       ),
-      rotation: seededRange(seed, -8, 8, clipId, index, 'rot'),
+      rotation: seededRange(seed, -8, 8, clipId, serial, 'rot'),
     };
   }
 

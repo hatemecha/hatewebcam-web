@@ -15,6 +15,9 @@ function clamp01(value) {
   return Math.min(1, Math.max(0, Number(value) || 0));
 }
 
+const BEAT_ATTACK_MS = 40;
+const BEAT_DECAY_MS = 220;
+
 export class SubjectFxEffect {
   constructor(options = {}) {
     this.analyzer = new SubjectAnalyzer(options.analyzer || {});
@@ -29,7 +32,9 @@ export class SubjectFxEffect {
     this.bypass = false;
     this.clipId = '';
     this.beatEnvelope = 0;
-    this.lastBeatTs = 0;
+    this.lastBeatMediaMs = null;
+    this.lastIntensityMediaMs = null;
+    this._frameIntensity = 0;
     this.flipH = false;
     this._sourceSnapshot = null;
     this.previewFps = 30;
@@ -68,6 +73,9 @@ export class SubjectFxEffect {
     this.trails.reset();
     this.smear.reset();
     this.beatEnvelope = 0;
+    this.lastBeatMediaMs = null;
+    this.lastIntensityMediaMs = null;
+    this._frameIntensity = 0;
     this._sourceSnapshot = null;
   }
 
@@ -86,42 +94,49 @@ export class SubjectFxEffect {
     this.smear.dispose();
   }
 
-  setBeatPulse(strength = 0) {
+  setBeatPulse(strength = 0, mediaTimeMs = null) {
     const target = clamp01(strength);
     this.beatEnvelope = Math.max(this.beatEnvelope, target);
-    this.lastBeatTs = performance.now();
+    if (mediaTimeMs != null && Number.isFinite(mediaTimeMs)) {
+      this.lastBeatMediaMs = mediaTimeMs;
+    }
   }
 
-  tickBeatEnvelope() {
-    const elapsed = performance.now() - this.lastBeatTs;
-    const attack = 40;
-    const decay = 220;
-    if (elapsed < attack) return;
-    const decayFactor = Math.exp(-(elapsed - attack) / decay);
+  /** Advance beat envelope using media time only (no wall clock). */
+  tickBeatEnvelope(mediaTimeMs) {
+    if (mediaTimeMs == null || !Number.isFinite(mediaTimeMs)) return;
+    if (this.lastBeatMediaMs == null) {
+      this.lastBeatMediaMs = mediaTimeMs;
+      return;
+    }
+    const elapsed = mediaTimeMs - this.lastBeatMediaMs;
+    if (elapsed < 0) {
+      this.beatEnvelope = 0;
+      this.lastBeatMediaMs = mediaTimeMs;
+      return;
+    }
+    if (elapsed < BEAT_ATTACK_MS) return;
+    const decayFactor = Math.exp(-(elapsed - BEAT_ATTACK_MS) / BEAT_DECAY_MS);
     this.beatEnvelope *= decayFactor;
     if (this.beatEnvelope < 0.01) this.beatEnvelope = 0;
   }
 
-  adaptPreviewQuality(fps) {
-    this.previewFps = fps;
-    const now = performance.now();
-    if (fps < 22 && now - this._qualityDowngradeTs > 1200) {
-      this.previewQuality = Math.max(0.45, this.previewQuality * 0.85);
-      this.analyzer.setRuntimeQuality(this.previewQuality);
-      this._qualityDowngradeTs = now;
-    } else if (
-      fps > 28 &&
-      this.previewQuality < 1 &&
-      now - this._qualityDowngradeTs > 3000
-    ) {
-      this.previewQuality = Math.min(1, this.previewQuality + 0.08);
-      this.analyzer.setRuntimeQuality(this.previewQuality);
-      this._qualityDowngradeTs = now;
+  /**
+   * Pure intensity from current envelope + inputs.
+   * Pass tick:true with mediaTimeMs to advance envelope once per media frame.
+   */
+  computeIntensity(frame, beatStrength = 0, options = {}) {
+    const mediaTimeMs = options.mediaTimeMs;
+    const shouldTick = options.tick !== false && mediaTimeMs != null;
+    if (shouldTick) {
+      if (
+        this.lastIntensityMediaMs == null ||
+        mediaTimeMs !== this.lastIntensityMediaMs
+      ) {
+        this.tickBeatEnvelope(mediaTimeMs);
+        this.lastIntensityMediaMs = mediaTimeMs;
+      }
     }
-  }
-
-  computeIntensity(frame, beatStrength = 0) {
-    this.tickBeatEnvelope();
     const base = this.config.amount;
     const motion = frame?.motionEnergy || 0;
     const beat = Math.max(this.beatEnvelope, beatStrength);
@@ -139,6 +154,24 @@ export class SubjectFxEffect {
         );
       default:
         return clamp01(base);
+    }
+  }
+
+  adaptPreviewQuality(fps) {
+    this.previewFps = fps;
+    const now = performance.now();
+    if (fps < 22 && now - this._qualityDowngradeTs > 1200) {
+      this.previewQuality = Math.max(0.45, this.previewQuality * 0.85);
+      this.analyzer.setRuntimeQuality(this.previewQuality);
+      this._qualityDowngradeTs = now;
+    } else if (
+      fps > 28 &&
+      this.previewQuality < 1 &&
+      now - this._qualityDowngradeTs > 3000
+    ) {
+      this.previewQuality = Math.min(1, this.previewQuality + 0.08);
+      this.analyzer.setRuntimeQuality(this.previewQuality);
+      this._qualityDowngradeTs = now;
     }
   }
 
@@ -160,7 +193,11 @@ export class SubjectFxEffect {
       .catch(() => {});
     const frame = this.analyzer.lastFrame;
     const beatStrength = options.beatStrength || 0;
-    const intensity = this.computeIntensity(frame, beatStrength);
+    this._frameIntensity = this.computeIntensity(frame, beatStrength, {
+      mediaTimeMs: timestampMs,
+      tick: true,
+    });
+    const intensity = this._frameIntensity;
     if (!frame || intensity <= 0.01) return;
 
     if (!this._sourceSnapshot) {
@@ -212,6 +249,7 @@ export class SubjectFxEffect {
       beatStrength,
       scale: this.config.scale,
       persistence: this.config.persistence,
+      mediaTimeMs: timestampMs,
     });
     if (modules.fragments?.enabled) {
       this.fragments.render(ctx, this._sourceSnapshot, frame);
@@ -224,13 +262,21 @@ export class SubjectFxEffect {
       width: canvas.width,
       height: canvas.height,
       sourceCanvas: this._sourceSnapshot,
+      mediaTimeMs: timestampMs,
     });
   }
 
-  processOverlay(ctx, canvas, renderProfile, options = {}) {
+  processOverlay(ctx, canvas, options = {}) {
     if (!this.active || this.bypass) return;
     const frame = this.analyzer.lastFrame;
-    const intensity = this.computeIntensity(frame, options.beatStrength || 0);
+    const mediaTimeMs =
+      options.mediaTime != null ? options.mediaTime * 1000 : null;
+    const intensity =
+      this._frameIntensity ||
+      this.computeIntensity(frame, options.beatStrength || 0, {
+        mediaTimeMs,
+        tick: false,
+      });
     if (!frame) return;
 
     const drawMetrics = options.drawMetrics;
@@ -292,9 +338,14 @@ export class SubjectFxEffect {
       this.processOverlay(ctx, canvas, renderProfile);
       return;
     }
+    const mediaTime = video?.currentTime;
     this.processFullFrame(ctx, canvas, video, renderProfile, {
-      mediaTime: video?.currentTime,
+      mediaTime,
     });
-    this.processOverlay(ctx, canvas, renderProfile);
+    this.processOverlay(ctx, canvas, {
+      mediaTime,
+      drawMetrics: renderProfile?.drawMetrics,
+      beatStrength: renderProfile?.beatStrength,
+    });
   }
 }

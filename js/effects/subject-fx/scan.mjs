@@ -1,6 +1,14 @@
-import { mapNormToCanvas } from '../../subject/subject-frame-map.mjs';
+import {
+  drawSubjectMask,
+  mapNormToCanvas,
+} from '../../subject/subject-frame-map.mjs';
 
 export class ScanEngine {
+  constructor() {
+    this._clipCanvas = null;
+    this._clipCtx = null;
+  }
+
   render(ctx, canvas, frame, config, intensity = 1, drawMetrics = null) {
     if (!config?.enabled || !frame || !drawMetrics) return;
     const alpha = Math.min(1, intensity * 0.72);
@@ -15,36 +23,52 @@ export class ScanEngine {
     const h = Math.abs(br.y - tl.y);
 
     ctx.save();
-    ctx.beginPath();
-    if (frame.mask?.contour?.length > 8) {
-      frame.mask.contour.forEach((point, index) => {
-        const mapped = mapNormToCanvas(point.x, point.y, drawMetrics);
-        if (index === 0) ctx.moveTo(mapped.x, mapped.y);
-        else ctx.lineTo(mapped.x, mapped.y);
-      });
-      ctx.closePath();
-    } else {
-      ctx.rect(x, y, w, h);
-    }
-    ctx.clip();
 
-    if (config.outline) {
-      ctx.strokeStyle = `rgba(240,240,236,${alpha * 0.5})`;
-      ctx.lineWidth = 1;
-      if (frame.mask?.contour?.length > 8) {
-        ctx.beginPath();
-        frame.mask.contour.forEach((point, index) => {
+    if (frame.mask && !frame.simplified) {
+      if (!this._clipCanvas) {
+        this._clipCanvas = document.createElement('canvas');
+        this._clipCtx = this._clipCanvas.getContext('2d');
+      }
+      if (
+        this._clipCanvas.width !== canvas.width ||
+        this._clipCanvas.height !== canvas.height
+      ) {
+        this._clipCanvas.width = canvas.width;
+        this._clipCanvas.height = canvas.height;
+      }
+      const cctx = this._clipCtx;
+      cctx.clearRect(0, 0, canvas.width, canvas.height);
+      this.#renderScanContent(cctx, x, y, w, h, config, alpha);
+      cctx.globalCompositeOperation = 'destination-in';
+      drawSubjectMask(cctx, frame.mask, drawMetrics);
+      cctx.globalCompositeOperation = 'source-over';
+      ctx.drawImage(this._clipCanvas, 0, 0);
+
+      if (config.outline && frame.mask.contour?.length) {
+        ctx.fillStyle = `rgba(240,240,236,${alpha * 0.35})`;
+        const step = Math.max(1, Math.floor(frame.mask.contour.length / 48));
+        for (let i = 0; i < frame.mask.contour.length; i += step) {
+          const point = frame.mask.contour[i];
           const mapped = mapNormToCanvas(point.x, point.y, drawMetrics);
-          if (index === 0) ctx.moveTo(mapped.x, mapped.y);
-          else ctx.lineTo(mapped.x, mapped.y);
-        });
-        ctx.closePath();
-        ctx.stroke();
-      } else {
+          ctx.fillRect(mapped.x - 0.5, mapped.y - 0.5, 1.5, 1.5);
+        }
+      }
+    } else {
+      ctx.beginPath();
+      ctx.rect(x, y, w, h);
+      ctx.clip();
+      this.#renderScanContent(ctx, x, y, w, h, config, alpha);
+      if (config.outline) {
+        ctx.strokeStyle = `rgba(240,240,236,${alpha * 0.5})`;
+        ctx.lineWidth = 1;
         ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
       }
     }
 
+    ctx.restore();
+  }
+
+  #renderScanContent(ctx, x, y, w, h, config, alpha) {
     const lineStep = Math.max(
       5,
       Math.round(16 / Math.max(0.15, config.lineDensity)),
@@ -67,7 +91,5 @@ export class ScanEngine {
         }
       }
     }
-
-    ctx.restore();
   }
 }

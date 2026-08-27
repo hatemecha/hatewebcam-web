@@ -81,6 +81,22 @@ export function withSubjectVideoTransform(ctx, metrics, drawFn) {
   ctx.restore();
 }
 
+let _maskScratch = null;
+let _maskScratchCtx = null;
+
+function ensureMaskScratch(width, height) {
+  if (typeof document === 'undefined') return null;
+  if (!_maskScratch) {
+    _maskScratch = document.createElement('canvas');
+    _maskScratchCtx = _maskScratch.getContext('2d');
+  }
+  if (_maskScratch.width !== width || _maskScratch.height !== height) {
+    _maskScratch.width = width;
+    _maskScratch.height = height;
+  }
+  return _maskScratch;
+}
+
 export function drawSubjectMask(
   ctx,
   mask,
@@ -88,10 +104,9 @@ export function drawSubjectMask(
   { offsetX = 0, offsetY = 0 } = {},
 ) {
   if (!mask?.data?.length || !metrics) return;
-  const temp = document.createElement('canvas');
-  temp.width = mask.width;
-  temp.height = mask.height;
-  const tempCtx = temp.getContext('2d');
+  const temp = ensureMaskScratch(mask.width, mask.height);
+  if (!temp || !_maskScratchCtx) return;
+  const tempCtx = _maskScratchCtx;
   const imageData = tempCtx.createImageData(mask.width, mask.height);
   for (let index = 0; index < mask.data.length; index++) {
     imageData.data[index * 4 + 3] = mask.data[index];

@@ -49,6 +49,9 @@ export class SubjectAnalyzer {
     this.assetUrls = options.assetUrls || null;
     this.segmentationSource = 'none';
     this.useSimplifiedMode = false;
+    this.baseAnalysisScale = options.analysisScale ?? 0.5;
+    this.baseInferenceIntervalMs = options.inferenceIntervalMs ?? 80;
+    this.adaptiveQuality = 1;
     this.runtimeQuality = 1;
     this._analyzeErrors = 0;
   }
@@ -236,26 +239,37 @@ export class SubjectAnalyzer {
 
   setProfile(profile = {}) {
     if (profile.detectorIntervalMs === 0) {
-      this.inferenceIntervalMs = 0;
+      this.baseInferenceIntervalMs = 0;
     } else if (profile.quality === 'low') {
-      this.inferenceIntervalMs = 120;
-      this.analysisScale = 0.35;
-      this.runtimeQuality = 0.55;
+      this.baseInferenceIntervalMs = 120;
+      this.baseAnalysisScale = 0.35;
     } else if (profile.quality === 'fast') {
-      this.inferenceIntervalMs = 80;
-      this.analysisScale = 0.45;
-      this.runtimeQuality = 0.72;
+      this.baseInferenceIntervalMs = 80;
+      this.baseAnalysisScale = 0.45;
     } else {
-      this.inferenceIntervalMs = 66;
-      this.analysisScale = 0.55;
-      this.runtimeQuality = 1;
+      this.baseInferenceIntervalMs = 66;
+      this.baseAnalysisScale = 0.55;
     }
+    this.#recomputeRuntimeQuality();
   }
 
   setRuntimeQuality(factor = 1) {
-    this.runtimeQuality = Math.min(1, Math.max(0.35, factor));
+    this.adaptiveQuality = Math.min(1, Math.max(0.35, factor));
+    this.#recomputeRuntimeQuality();
+  }
+
+  #recomputeRuntimeQuality() {
+    this.runtimeQuality = this.adaptiveQuality;
+    this.analysisScale = this.baseAnalysisScale * this.adaptiveQuality;
+    if (this.baseInferenceIntervalMs === 0) {
+      this.inferenceIntervalMs = 0;
+      return;
+    }
     this.inferenceIntervalMs = Math.round(
-      Math.max(40, this.inferenceIntervalMs / Math.max(0.5, factor)),
+      Math.max(
+        40,
+        this.baseInferenceIntervalMs / Math.max(0.5, this.adaptiveQuality),
+      ),
     );
   }
 
@@ -297,14 +311,13 @@ export class SubjectAnalyzer {
 
     const tsSec = (timestampMs || 0) / 1000;
     const cached = this.cache.getAt(tsSec);
-    if (cached && this.cache.ready) {
-      this.lastFrame = this.#finalizeFrame(
-        cached,
-        cached.mask || this.lastMask,
-      );
-      this.status = SUBJECT_ANALYSIS_STATUS.ready;
-      return this.lastFrame;
-    }
+    // Cache holds pose/motion only. Never pair cached landmarks with a stale
+    // lastMask from another timestamp; mask-dependent FX keep live segmentation.
+    const cachedFrame =
+      cached && this.cache.ready
+        ? this.#finalizeFrame(cached, cached.mask || null)
+        : null;
+
     const waitForResult = renderProfile?.detectorIntervalMs === 0;
     if (
       waitForResult &&
@@ -323,10 +336,18 @@ export class SubjectAnalyzer {
       if (this.status !== SUBJECT_ANALYSIS_STATUS.error) {
         void this.ensureReady().catch(() => {});
       }
+      if (cachedFrame) {
+        this.lastFrame = cachedFrame;
+        this.status = SUBJECT_ANALYSIS_STATUS.ready;
+      }
       return this.lastFrame;
     }
 
     if (!shouldInfer || this._busy) {
+      if (cachedFrame) {
+        this.lastFrame = cachedFrame;
+        this.status = SUBJECT_ANALYSIS_STATUS.ready;
+      }
       return this.lastFrame;
     }
 

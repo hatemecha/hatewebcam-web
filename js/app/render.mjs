@@ -625,6 +625,7 @@ export function applyRenderLoopMixin(proto) {
         ...renderProfile,
         beatStrength,
         drawMetrics,
+        mediaTime: this.videoEl.currentTime,
       });
     }
   };

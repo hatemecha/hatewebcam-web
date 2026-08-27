@@ -45,8 +45,9 @@ export class SubjectAnalysisCache {
   addSample(sample) {
     if (!sample || !Number.isFinite(sample.timestamp)) return;
     const last = this.samples[this.samples.length - 1];
-    const minGap = 1 / this.sampleHz;
-    if (last && sample.timestamp - last.timestamp < minGap * 0.5) {
+    // Samples store timestamps in milliseconds; sampleHz is frames per second.
+    const minGapMs = 1000 / this.sampleHz;
+    if (last && sample.timestamp - last.timestamp < minGapMs * 0.5) {
       this.samples[this.samples.length - 1] = sample;
     } else {
       this.samples.push(sample);
@@ -55,7 +56,8 @@ export class SubjectAnalysisCache {
       this.samples.shift();
     }
     if (this.duration > 0) {
-      this.progress = clampRange(sample.timestamp / this.duration, 0, 1);
+      const durationMs = this.duration * 1000;
+      this.progress = clampRange(sample.timestamp / durationMs, 0, 1);
     }
   }
 

@@ -144,7 +144,7 @@ export function applySubjectFxIntegrationMixin(proto) {
     if (!force && this.appliedTimelineSubjectId === nextId) {
       if (item && this.subjectFxEffect?.active && !this.subjectFxBypass) {
         const beat = this.getSubjectBeatStrength(mediaTime);
-        if (beat > 0) this.subjectFxEffect.setBeatPulse(beat);
+        if (beat > 0) this.subjectFxEffect.setBeatPulse(beat, mediaTime * 1000);
       }
       return;
     }
@@ -185,7 +185,7 @@ export function applySubjectFxIntegrationMixin(proto) {
     effect.flipH = this.getEffectiveFlipH?.() ?? false;
 
     const beat = this.getSubjectBeatStrength(mediaTime);
-    if (beat > 0) effect.setBeatPulse(beat);
+    if (beat > 0) effect.setBeatPulse(beat, mediaTime * 1000);
 
     this.updateSubjectFxStatus(
       this.getSubjectFxStatusMessage?.() || effect.getStatusLabel(),

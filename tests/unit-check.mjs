@@ -69,6 +69,10 @@ import {
   SubjectAnalyzer,
 } from '../js/subject/subject-analyzer.mjs';
 import { resolveSubjectAssetUrls } from '../js/subject/mediapipe-paths.mjs';
+import { SubjectFxEffect } from '../js/effects/subject-fx/subject-effect.mjs';
+import { FragmentEngine } from '../js/effects/subject-fx/fragments.mjs';
+import { TrailEngine } from '../js/effects/subject-fx/trails.mjs';
+import { SmearEngine } from '../js/rendering/subject-webgl-renderer.mjs';
 import {
   estimateTempoFromSamples,
   extractMediaAudioSamples,
@@ -2158,13 +2162,19 @@ async function checkSubjectLocalMotion() {
 function checkSubjectAnalysisCache() {
   const cache = new SubjectAnalysisCache({
     sourceKey: 'clip-a',
-    duration: 2000,
+    duration: 2,
+    sampleHz: 10,
   });
   cache.addSample({ timestamp: 0, motionEnergy: 0.1, landmarks: [] });
-  cache.addSample({ timestamp: 1000, motionEnergy: 0.9, landmarks: [] });
-  const mid = cache.getAt(0.5);
+  // 40ms < half of 100ms min gap → replace, not append
+  cache.addSample({ timestamp: 40, motionEnergy: 0.2, landmarks: [] });
+  assert.equal(cache.samples.length, 1);
+  assert.equal(cache.samples[0].motionEnergy, 0.2);
+  cache.addSample({ timestamp: 120, motionEnergy: 0.9, landmarks: [] });
+  assert.equal(cache.samples.length, 2);
+  const mid = cache.getAt(0.06);
   assert.ok(mid);
-  assert.ok(mid.motionEnergy > 0.4 && mid.motionEnergy < 0.7);
+  assert.ok(mid.motionEnergy > 0.2 && mid.motionEnergy < 0.9);
   assert.equal(cache.getProgressLabel(), '');
   cache.running = true;
   cache.progress = 0.42;
@@ -2173,6 +2183,374 @@ function checkSubjectAnalysisCache() {
   assert.equal(cache.getProgressLabel(), 'Análisis listo');
   cache.invalidate('clip-b');
   assert.equal(cache.samples.length, 0);
+}
+
+async function checkSubjectCachedMaskNotStale() {
+  const assetUrls = resolveSubjectAssetUrls('http://localhost:4173/');
+  const analyzer = new SubjectAnalyzer({ assetUrls });
+  analyzer.cache.duration = 2;
+  analyzer.cache.addSample({
+    timestamp: 0,
+    motionEnergy: 0.1,
+    landmarks: [],
+    center: { x: 0.4, y: 0.4 },
+  });
+  analyzer.cache.addSample({
+    timestamp: 1000,
+    motionEnergy: 0.9,
+    landmarks: [],
+    center: { x: 0.6, y: 0.6 },
+  });
+  analyzer.cache.markReady();
+  analyzer.lastMask = new SubjectMask(4, 4, new Uint8Array(16).fill(255));
+  analyzer.ready = false;
+  const frame = await analyzer.analyze(
+    { videoWidth: 64, videoHeight: 64 },
+    500,
+  );
+  assert.ok(frame);
+  assert.equal(
+    frame.mask,
+    null,
+    'cached timestamps must not reuse an unrelated lastMask',
+  );
+}
+
+function checkSubjectMediaTimeBeatEnvelope() {
+  const effect = new SubjectFxEffect({
+    analyzer: { assetUrls: resolveSubjectAssetUrls('http://localhost:4173/') },
+  });
+  effect.config.reactivity = 'beat';
+  effect.config.amount = 1;
+  effect.config.beatInfluence = 1;
+  effect.setBeatPulse(1, 1000);
+  assert.equal(effect.beatEnvelope, 1);
+  effect.computeIntensity(null, 0, { mediaTimeMs: 1000, tick: true });
+  assert.ok(effect.beatEnvelope >= 0.99);
+  effect.computeIntensity(null, 0, { mediaTimeMs: 1500, tick: true });
+  const decayed = effect.beatEnvelope;
+  assert.ok(decayed < 1 && decayed > 0);
+  effect.computeIntensity(null, 0, { mediaTimeMs: 1500, tick: true });
+  assert.equal(
+    effect.beatEnvelope,
+    decayed,
+    'same media timestamp must not advance envelope twice',
+  );
+  effect.computeIntensity(null, 0, { mediaTimeMs: 2500, tick: false });
+  assert.equal(
+    effect.beatEnvelope,
+    decayed,
+    'pure intensity read must not tick envelope',
+  );
+}
+
+function checkSubjectFragmentMediaDeterminism() {
+  const metrics = getVideoDrawMetrics({
+    canvasWidth: 320,
+    canvasHeight: 180,
+    sourceWidth: 320,
+    sourceHeight: 180,
+  });
+  const landmarks = Array.from({ length: 33 }, (_, i) => ({
+    x: 0.4 + (i % 5) * 0.02,
+    y: 0.4 + Math.floor(i / 5) * 0.02,
+    z: 0,
+    visibility: 1,
+  }));
+  const frameBase = {
+    landmarks,
+    center: { x: 0.5, y: 0.5 },
+    motionEnergy: 0.4,
+    regions: {
+      leftHand: {
+        name: 'leftHand',
+        position: { x: 0.45, y: 0.42 },
+        velocity: { x: 0.1, y: -0.05 },
+        speed: 0.12,
+        direction: 0.3,
+      },
+    },
+  };
+  const config = {
+    enabled: true,
+    density: 0.8,
+    spread: 0.5,
+    motionInfluence: 0.6,
+  };
+  const sourceCanvas = { width: 320, height: 180 };
+
+  const run = (times) => {
+    const engine = new FragmentEngine();
+    for (const t of times) {
+      engine.update({
+        frame: { ...frameBase, timestamp: t },
+        config,
+        intensity: 1,
+        seed: 42,
+        clipId: 'clip',
+        drawMetrics: metrics,
+        sourceCanvas,
+        beatStrength: 0.2,
+        scale: 1,
+        persistence: 0.5,
+        mediaTimeMs: t,
+      });
+    }
+    return engine.fragments.map((fragment) => ({
+      serial: fragment.serial,
+      x: Number(fragment.x.toFixed(3)),
+      y: Number(fragment.y.toFixed(3)),
+      age: fragment.age,
+      life: Number(fragment.life.toFixed(4)),
+    }));
+  };
+
+  const coarse = [];
+  for (let t = 0; t <= 333.333; t += 1000 / 30) coarse.push(t);
+  const fine = [];
+  for (let t = 0; t <= 333.333; t += 1000 / 60) fine.push(t);
+  assert.deepEqual(
+    run(coarse),
+    run(fine),
+    'fragment simulation must follow media time, not render call frequency',
+  );
+
+  const engine = new FragmentEngine();
+  engine.update({
+    frame: { ...frameBase, timestamp: 0 },
+    config,
+    intensity: 1,
+    seed: 7,
+    clipId: 'a',
+    drawMetrics: metrics,
+    sourceCanvas,
+    mediaTimeMs: 0,
+  });
+  for (let i = 1; i <= 8; i++) {
+    engine.update({
+      frame: { ...frameBase, timestamp: i * (1000 / 30) },
+      config,
+      intensity: 1,
+      seed: 7,
+      clipId: 'a',
+      drawMetrics: metrics,
+      sourceCanvas,
+      mediaTimeMs: i * (1000 / 30),
+    });
+  }
+  const serials = engine.fragments.map((fragment) => fragment.serial);
+  assert.ok(serials.length > 0);
+  assert.equal(new Set(serials).size, serials.length);
+  assert.ok(Math.max(...serials) >= serials.length);
+  engine.fragments = engine.fragments.slice(0, 1);
+  engine.update({
+    frame: { ...frameBase, timestamp: 9 * (1000 / 30) },
+    config,
+    intensity: 1,
+    seed: 7,
+    clipId: 'a',
+    drawMetrics: metrics,
+    sourceCanvas,
+    mediaTimeMs: 9 * (1000 / 30),
+  });
+  const nextSerials = engine.fragments.map((fragment) => fragment.serial);
+  assert.ok(
+    nextSerials.every((serial) => serial >= 1),
+    'spawnSerial must stay monotonic even after fragments are removed',
+  );
+  assert.ok(Math.max(...nextSerials) > Math.max(...serials));
+}
+
+function checkSubjectEchoOwnsSnapshots() {
+  const restore = mockGlobal('document', {
+    createElement(tag) {
+      assert.equal(tag, 'canvas');
+      const state = {
+        globalAlpha: 1,
+        globalCompositeOperation: 'source-over',
+        fillStyle: '',
+        strokeStyle: '',
+      };
+      return {
+        width: 0,
+        height: 0,
+        getContext() {
+          return {
+            clearRect() {},
+            drawImage() {},
+            save() {},
+            restore() {},
+            beginPath() {},
+            rect() {},
+            clip() {},
+            get globalAlpha() {
+              return state.globalAlpha;
+            },
+            set globalAlpha(value) {
+              state.globalAlpha = value;
+            },
+            get globalCompositeOperation() {
+              return state.globalCompositeOperation;
+            },
+            set globalCompositeOperation(value) {
+              state.globalCompositeOperation = value;
+            },
+            set fillStyle(value) {
+              state.fillStyle = value;
+            },
+            set strokeStyle(value) {
+              state.strokeStyle = value;
+            },
+            fillRect() {},
+            stroke() {},
+            arc() {},
+            fill() {},
+            moveTo() {},
+            lineTo() {},
+            closePath() {},
+            createImageData(w, h) {
+              return {
+                data: new Uint8ClampedArray(w * h * 4),
+                width: w,
+                height: h,
+              };
+            },
+            putImageData() {},
+          };
+        },
+      };
+    },
+  });
+  try {
+    const trails = new TrailEngine();
+    const sourceCanvas = { width: 1280, height: 720, __id: 'live' };
+    const mask = new SubjectMask(8, 8, new Uint8Array(64).fill(200));
+    trails.update({
+      frame: {
+        timestamp: 100,
+        center: { x: 0.5, y: 0.5 },
+        motionEnergy: 0.3,
+        mask,
+        landmarks: [{ x: 0.5, y: 0.5 }],
+        regions: {},
+      },
+      config: {
+        enabled: true,
+        copies: 4,
+        spacing: 0.4,
+        decay: 0.8,
+        opacity: 0.5,
+        motionInfluence: 0.5,
+      },
+      intensity: 1,
+      width: 1280,
+      height: 720,
+      sourceCanvas,
+      mediaTimeMs: 100,
+    });
+    trails.update({
+      frame: {
+        timestamp: 200,
+        center: { x: 0.51, y: 0.5 },
+        motionEnergy: 0.4,
+        mask,
+        landmarks: [{ x: 0.51, y: 0.5 }],
+        regions: {},
+      },
+      config: {
+        enabled: true,
+        copies: 4,
+        spacing: 0.4,
+        decay: 0.8,
+        opacity: 0.5,
+        motionInfluence: 0.5,
+      },
+      intensity: 1,
+      width: 1280,
+      height: 720,
+      sourceCanvas,
+      mediaTimeMs: 200,
+    });
+    assert.equal(trails.history.length, 2);
+    assert.notEqual(trails.history[0].canvas, sourceCanvas);
+    assert.notEqual(trails.history[1].canvas, sourceCanvas);
+    assert.ok(trails.history[0].ownsCanvas);
+    assert.ok(trails.history[0].canvas.width <= 400);
+    assert.ok(trails.history[0].mask?.data instanceof Uint8Array);
+  } finally {
+    restore();
+  }
+}
+
+function checkSubjectSmearQuietFeedbackAdvances() {
+  const smear = new SmearEngine();
+  const calls = [];
+  smear.renderer = {
+    reset() {},
+    applySmear(source, options) {
+      calls.push({ ...options });
+      return source;
+    },
+  };
+  const frame = {
+    motionEnergy: 0.01,
+    regions: {},
+    mask: null,
+  };
+  const config = {
+    enabled: true,
+    threshold: 0.2,
+    subjectOnly: true,
+    spread: 0.5,
+    decay: 0.85,
+  };
+  const drew = smear.apply(
+    { drawImage() {} },
+    { width: 64, height: 64 },
+    frame,
+    config,
+    1,
+    { width: 64, height: 64 },
+    null,
+  );
+  assert.equal(drew, false);
+  assert.equal(calls.length, 1, 'quiet motion must still update feedback');
+  assert.equal(calls[0].dx, 0);
+  assert.equal(calls[0].dy, 0);
+  assert.ok(calls[0].mix > 0);
+  assert.ok(calls[0].decay > 0);
+
+  smear.apply(
+    { drawImage() {} },
+    { width: 64, height: 64 },
+    frame,
+    config,
+    1,
+    { width: 64, height: 64 },
+    null,
+  );
+  assert.equal(
+    calls.length,
+    2,
+    'feedback must keep advancing across quiet frames',
+  );
+}
+
+function checkSubjectAdaptiveQualityPreserved() {
+  const analyzer = new SubjectAnalyzer({
+    assetUrls: resolveSubjectAssetUrls('http://localhost:4173/'),
+  });
+  analyzer.setRuntimeQuality(0.5);
+  assert.equal(analyzer.adaptiveQuality, 0.5);
+  analyzer.setProfile({ quality: 'best' });
+  assert.equal(
+    analyzer.adaptiveQuality,
+    0.5,
+    'setProfile must not overwrite adaptive quality',
+  );
+  assert.ok(
+    Math.abs(analyzer.analysisScale - analyzer.baseAnalysisScale * 0.5) < 1e-9,
+  );
 }
 
 function checkSubjectFrameMap() {
@@ -2399,6 +2777,12 @@ checkSubjectBeatIntegration();
 await checkSubjectMaskPipeline();
 await checkSubjectLocalMotion();
 checkSubjectAnalysisCache();
+await checkSubjectCachedMaskNotStale();
+checkSubjectMediaTimeBeatEnvelope();
+checkSubjectFragmentMediaDeterminism();
+checkSubjectEchoOwnsSnapshots();
+checkSubjectSmearQuietFeedbackAdvances();
+checkSubjectAdaptiveQualityPreserved();
 checkSubjectFrameMap();
 checkSubjectBypassToggle();
 checkSubjectVariationStep();

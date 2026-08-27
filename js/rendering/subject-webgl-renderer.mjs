@@ -214,6 +214,8 @@ export class SubjectWebGLRenderer {
 export class SmearEngine {
   constructor() {
     this.renderer = new SubjectWebGLRenderer();
+    this._compositeCanvas = null;
+    this._compositeCtx = null;
   }
 
   reset() {
@@ -229,28 +231,40 @@ export class SmearEngine {
 
     const strongest = getStrongestMotionRegion(frame.regions || {});
     const localSpeed = strongest?.speed || frame.motionEnergy || 0;
-    if (localSpeed < config.threshold && config.subjectOnly) return false;
+    const quiet = localSpeed < config.threshold;
 
     const dir = strongest?.direction ?? frame.movementDirection ?? 0;
-    const mag = config.spread * intensity * (0.15 + localSpeed * 0.85);
+    const mag = quiet
+      ? 0
+      : config.spread * intensity * (0.15 + localSpeed * 0.85);
     const dx = Math.cos(dir) * mag * 0.018;
     const dy = Math.sin(dir) * mag * 0.018;
 
+    // Always advance/decay feedback so quiet motion never freezes an old frame.
     const output = this.renderer.applySmear(sourceCanvas, {
       dx,
       dy,
-      decay: config.decay,
-      mix: Math.min(0.78, 0.18 + intensity * 0.48),
+      decay: quiet
+        ? Math.min(0.92, (config.decay || 0.82) * 0.94)
+        : config.decay,
+      mix: quiet
+        ? Math.min(0.2, 0.06 + intensity * 0.08)
+        : Math.min(0.78, 0.18 + intensity * 0.48),
     });
 
+    if (quiet && config.subjectOnly) {
+      // Feedback updated; skip visible composite when motion is below threshold.
+      return false;
+    }
+
     if (config.subjectOnly !== false && frame.mask && !frame.simplified) {
-      const masked = document.createElement('canvas');
-      masked.width = canvas.width;
-      masked.height = canvas.height;
-      const mctx = masked.getContext('2d');
+      const masked = this.#ensureComposite(canvas.width, canvas.height);
+      const mctx = this._compositeCtx;
+      mctx.clearRect(0, 0, canvas.width, canvas.height);
       mctx.drawImage(output, 0, 0, canvas.width, canvas.height);
       mctx.globalCompositeOperation = 'destination-in';
-      this.#drawMask(mctx, frame, drawMetrics);
+      drawSubjectMask(mctx, frame.mask, drawMetrics);
+      mctx.globalCompositeOperation = 'source-over';
       ctx.drawImage(masked, 0, 0);
       return true;
     }
@@ -259,7 +273,18 @@ export class SmearEngine {
     return true;
   }
 
-  #drawMask(ctx, frame, drawMetrics) {
-    drawSubjectMask(ctx, frame.mask, drawMetrics);
+  #ensureComposite(width, height) {
+    if (!this._compositeCanvas) {
+      this._compositeCanvas = document.createElement('canvas');
+      this._compositeCtx = this._compositeCanvas.getContext('2d');
+    }
+    if (
+      this._compositeCanvas.width !== width ||
+      this._compositeCanvas.height !== height
+    ) {
+      this._compositeCanvas.width = width;
+      this._compositeCanvas.height = height;
+    }
+    return this._compositeCanvas;
   }
 }
