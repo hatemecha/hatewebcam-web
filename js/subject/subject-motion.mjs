@@ -107,12 +107,12 @@ export class SubjectMotionAnalyzer {
       (point) =>
         (point.visibility ?? point.presence ?? 1) >= this.confidenceThreshold,
     ).length;
-    const hasSubject = visibleCount >= 6 && confidence >= this.confidenceThreshold;
+    const hasSubject =
+      visibleCount >= 6 && confidence >= this.confidenceThreshold;
 
     if (!hasSubject) {
       const held =
-        this.lastGood &&
-        now - this.lastGoodTimestamp <= this.holdMs
+        this.lastGood && now - this.lastGoodTimestamp <= this.holdMs
           ? {
               ...this.lastGood,
               confidence: this.lastGood.confidence * 0.88,
@@ -166,8 +166,7 @@ export class SubjectMotionAnalyzer {
       const prevA = this.previousLandmarks?.[a];
       const prevB = this.previousLandmarks?.[b];
       if (!pA || !pB || !prevA || !prevB) return;
-      motionSum +=
-        dist(pA, prevA) + dist(pB, prevB);
+      motionSum += dist(pA, prevA) + dist(pB, prevB);
     });
     const motionEnergy = clampRange(
       motionSum * 18 * this.motionSensitivity,
@@ -183,7 +182,10 @@ export class SubjectMotionAnalyzer {
     const bodyExpansion = bbox
       ? clampRange(
           (bbox.width * bbox.height) /
-            Math.max(0.001, this.lastGood?.bodyExpansionBase || bbox.width * bbox.height),
+            Math.max(
+              0.001,
+              this.lastGood?.bodyExpansionBase || bbox.width * bbox.height,
+            ),
           0.5,
           1.8,
         )
@@ -201,12 +203,20 @@ export class SubjectMotionAnalyzer {
       headVelocity,
       wristVelocities: {
         left: {
-          x: (wristL.x - (this.previousLandmarks?.[WRIST_L]?.x || wristL.x)) / dt,
-          y: (wristL.y - (this.previousLandmarks?.[WRIST_L]?.y || wristL.y)) / dt,
+          x:
+            (wristL.x - (this.previousLandmarks?.[WRIST_L]?.x || wristL.x)) /
+            dt,
+          y:
+            (wristL.y - (this.previousLandmarks?.[WRIST_L]?.y || wristL.y)) /
+            dt,
         },
         right: {
-          x: (wristR.x - (this.previousLandmarks?.[WRIST_R]?.x || wristR.x)) / dt,
-          y: (wristR.y - (this.previousLandmarks?.[WRIST_R]?.y || wristR.y)) / dt,
+          x:
+            (wristR.x - (this.previousLandmarks?.[WRIST_R]?.x || wristR.x)) /
+            dt,
+          y:
+            (wristR.y - (this.previousLandmarks?.[WRIST_R]?.y || wristR.y)) /
+            dt,
         },
       },
       timestamp: now,

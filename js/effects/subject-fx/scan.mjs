@@ -45,7 +45,10 @@ export class ScanEngine {
       }
     }
 
-    const lineStep = Math.max(5, Math.round(16 / Math.max(0.15, config.lineDensity)));
+    const lineStep = Math.max(
+      5,
+      Math.round(16 / Math.max(0.15, config.lineDensity)),
+    );
     ctx.strokeStyle = `rgba(240,240,236,${alpha * 0.14})`;
     ctx.lineWidth = 1;
     for (let row = y; row < y + h; row += lineStep) {

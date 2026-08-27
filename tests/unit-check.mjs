@@ -46,10 +46,7 @@ import {
   normalizeSubjectConfig,
 } from '../js/subject/subject-config.mjs';
 import { SubjectMotionAnalyzer } from '../js/subject/subject-motion.mjs';
-import {
-  createSeededRandom,
-  seededInt,
-} from '../js/subject/subject-prng.mjs';
+import { createSeededRandom, seededInt } from '../js/subject/subject-prng.mjs';
 import { applySubjectFxIntegrationMixin } from '../js/app/subject-fx-integration.mjs';
 import {
   SubjectMask,
@@ -67,6 +64,11 @@ import {
   getVideoDrawMetrics,
 } from '../js/subject/subject-frame-map.mjs';
 import { SubjectAnalysisCache } from '../js/subject/subject-cache.mjs';
+import {
+  SUBJECT_ANALYSIS_STATUS,
+  SubjectAnalyzer,
+} from '../js/subject/subject-analyzer.mjs';
+import { resolveSubjectAssetUrls } from '../js/subject/mediapipe-paths.mjs';
 import {
   estimateTempoFromSamples,
   extractMediaAudioSamples,
@@ -1999,7 +2001,12 @@ function checkObservedExportProgressAndTimelineTicks() {
 function checkSubjectTimelineType() {
   const timeline = new VideoTimeline(10);
   timeline.setTrim(0, 10);
-  const subject = timeline.add('subject', 1, 4, createDefaultSubjectConfig('anatomy'));
+  const subject = timeline.add(
+    'subject',
+    1,
+    4,
+    createDefaultSubjectConfig('anatomy'),
+  );
   assert.equal(subject.type, 'subject');
   assert.throws(() => timeline.add('subject', 2, 5), /superponer/);
   assert.deepEqual(
@@ -2149,7 +2156,10 @@ async function checkSubjectLocalMotion() {
 }
 
 function checkSubjectAnalysisCache() {
-  const cache = new SubjectAnalysisCache({ sourceKey: 'clip-a', duration: 2000 });
+  const cache = new SubjectAnalysisCache({
+    sourceKey: 'clip-a',
+    duration: 2000,
+  });
   cache.addSample({ timestamp: 0, motionEnergy: 0.1, landmarks: [] });
   cache.addSample({ timestamp: 1000, motionEnergy: 0.9, landmarks: [] });
   const mid = cache.getAt(0.5);
@@ -2184,6 +2194,20 @@ function checkSubjectFrameMap() {
   const subjectCenter = mapNormToSubjectSpace(0.5, 0.5, metrics);
   assert.ok(Math.abs(subjectCenter.x) < 1);
   assert.ok(Math.abs(subjectCenter.y) < 1);
+
+  const rotated = getVideoDrawMetrics({
+    canvasWidth: 360,
+    canvasHeight: 640,
+    sourceWidth: 1280,
+    sourceHeight: 720,
+    effectiveRotation: 90,
+  });
+  assert.deepEqual(mapNormToCanvas(0, 0, rotated), { x: 360, y: 0 });
+  assert.deepEqual(mapNormToCanvas(1, 1, rotated), { x: 0, y: 640 });
+  assert.deepEqual(mapNormToCanvas(0, 0, { ...rotated, flipH: true }), {
+    x: 360,
+    y: 640,
+  });
 }
 
 function checkSubjectBypassToggle() {
@@ -2228,6 +2252,136 @@ function checkSubjectVariationStep() {
   assert.notEqual(again.config.seed, updated.config.seed);
 }
 
+function checkSubjectAssetUrlResolution() {
+  assert.deepEqual(resolveSubjectAssetUrls('http://localhost:5173/'), {
+    wasmBaseUrl: 'http://localhost:5173/vendor/mediapipe/tasks-vision/wasm',
+    poseModelUrl:
+      'http://localhost:5173/vendor/mediapipe/pose_landmarker/pose_landmarker_lite.task',
+    segmenterModelUrl:
+      'http://localhost:5173/vendor/mediapipe/image_segmenter/selfie_segmenter.tflite',
+  });
+  assert.equal(
+    resolveSubjectAssetUrls('https://hatemecha.github.io/hatewebcam-web/')
+      .wasmBaseUrl,
+    'https://hatemecha.github.io/hatewebcam-web/vendor/mediapipe/tasks-vision/wasm',
+  );
+}
+
+async function checkSubjectAnalyzerInitRetryLifecycle() {
+  class FakeWorker {
+    static instances = [];
+    static outcomes = ['error', 'ready'];
+
+    constructor() {
+      this.listeners = new Map();
+      this.messages = [];
+      this.terminated = false;
+      this.outcome = FakeWorker.outcomes.shift() || 'ready';
+      FakeWorker.instances.push(this);
+    }
+
+    addEventListener(type, listener) {
+      const listeners = this.listeners.get(type) || new Set();
+      listeners.add(listener);
+      this.listeners.set(type, listeners);
+    }
+
+    removeEventListener(type, listener) {
+      this.listeners.get(type)?.delete(listener);
+    }
+
+    postMessage(message) {
+      this.messages.push(message);
+      if (message.type !== 'init') return;
+      queueMicrotask(() => {
+        const data =
+          this.outcome === 'ready'
+            ? { type: 'ready' }
+            : { type: 'error', message: 'first_init_failed' };
+        this.listeners
+          .get('message')
+          ?.forEach((listener) => listener({ data }));
+      });
+    }
+
+    terminate() {
+      this.terminated = true;
+    }
+  }
+
+  const restoreWorker = mockGlobal('Worker', FakeWorker);
+  try {
+    const assetUrls = resolveSubjectAssetUrls('http://localhost:4173/');
+    const analyzer = new SubjectAnalyzer({ assetUrls });
+    await assert.rejects(analyzer.ensureReady(), /first_init_failed/);
+    assert.equal(analyzer.ready, false);
+    assert.equal(analyzer.status, SUBJECT_ANALYSIS_STATUS.error);
+    assert.equal(FakeWorker.instances[0].terminated, true);
+
+    const retryA = analyzer.ensureReady();
+    const retryB = analyzer.ensureReady();
+    assert.deepEqual(await Promise.all([retryA, retryB]), [true, true]);
+    assert.equal(
+      FakeWorker.instances.length,
+      2,
+      'concurrent readiness callers must share one Worker initialization',
+    );
+    assert.deepEqual(FakeWorker.instances[1].messages[0].assets, assetUrls);
+
+    analyzer.dispose();
+    assert.equal(analyzer.ready, false);
+    assert.equal(FakeWorker.instances[1].terminated, true);
+    await assert.rejects(analyzer.ensureReady(), /subject_analyzer_disposed/);
+  } finally {
+    restoreWorker();
+  }
+}
+
+async function checkSubjectClipAwaitsEffectBeforeAnalyzer() {
+  let readyCalls = 0;
+  const saved = {
+    id: 'subject-async',
+    type: 'subject',
+    startTime: 0,
+    endTime: 2,
+    config: createDefaultSubjectConfig('anatomy'),
+  };
+  const app = {
+    videoSourceFile: {},
+    TIMELINE_EFFECT_META: { subject: { label: 'FX de sujeto' } },
+    DEFAULT_TIMELINE_EFFECT_DURATION: 3,
+    videoTimeline: { upsert: () => saved },
+    pushTimelineHistory() {},
+    snapshotVideoEffectConfig: () => saved.config,
+    ensureSubjectFxEffect: async () => {
+      await Promise.resolve();
+      return {
+        analyzer: {
+          ensureReady: async () => {
+            readyCalls += 1;
+            return true;
+          },
+        },
+      };
+    },
+    selectVideoEffect() {},
+    syncVideoTimelineEffects() {},
+    showStatus() {},
+    hideStatus() {},
+    setInspectorTab() {},
+  };
+  applyLocalvideoeditorMixin(app);
+  app.resolveTimelineInsertionTimes = () => ({ startTime: 0, endTime: 2 });
+  app.snapshotVideoEffectConfig = () => saved.config;
+  app.selectVideoEffect = () => {};
+  await app.addTimelineEffectClip('subject', 0);
+  assert.equal(
+    readyCalls,
+    1,
+    'Subject clip preload must await the effect before accessing its analyzer',
+  );
+}
+
 await checkCameraStreamCleanup();
 checkSettingsStoreRejectsNonObjectState();
 checkCameraPreservesSupportedFps();
@@ -2248,6 +2402,9 @@ checkSubjectAnalysisCache();
 checkSubjectFrameMap();
 checkSubjectBypassToggle();
 checkSubjectVariationStep();
+checkSubjectAssetUrlResolution();
+await checkSubjectAnalyzerInitRetryLifecycle();
+await checkSubjectClipAwaitsEffectBeforeAnalyzer();
 checkAudioTempoAnalyzer();
 checkEditAssistManualControls();
 await checkMediaAudioExtraction();

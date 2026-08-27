@@ -55,11 +55,7 @@ export class SubjectAnalysisCache {
       this.samples.shift();
     }
     if (this.duration > 0) {
-      this.progress = clampRange(
-        sample.timestamp / this.duration,
-        0,
-        1,
-      );
+      this.progress = clampRange(sample.timestamp / this.duration, 0, 1);
     }
   }
 

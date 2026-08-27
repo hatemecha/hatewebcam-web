@@ -1,4 +1,5 @@
 import { WebGLFilterRenderer } from './webgl-filter-renderer.mjs';
+import { metricsFromApp } from '../subject/subject-frame-map.mjs';
 
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyRenderLoopMixin(proto) {
@@ -377,37 +378,7 @@ export function applyRenderLoopMixin(proto) {
   };
 
   proto.getVideoDrawMetrics = function (targetCanvas, mode = 'preview') {
-    const { sourceWidth, sourceHeight } = this.getSourceFrameDimensions();
-    const effectiveRotation = this.getEffectiveRotationDegrees(
-      sourceWidth,
-      sourceHeight,
-    );
-    const useCover = mode === 'preview' && this.isMobileViewport();
-    const scaleX =
-      targetCanvas.width /
-      Math.max(1, effectiveRotation === 90 || effectiveRotation === 270
-        ? sourceHeight
-        : sourceWidth);
-    const scaleY =
-      targetCanvas.height /
-      Math.max(1, effectiveRotation === 90 || effectiveRotation === 270
-        ? sourceWidth
-        : sourceHeight);
-    const frameScale = useCover
-      ? Math.max(scaleX, scaleY)
-      : Math.min(scaleX, scaleY);
-    return {
-      canvasWidth: targetCanvas.width,
-      canvasHeight: targetCanvas.height,
-      sourceWidth,
-      sourceHeight,
-      effectiveRotation,
-      flipH: this.getEffectiveFlipH?.() ?? false,
-      flipV: !!this.flipV,
-      drawWidth: Math.max(1, Math.round(sourceWidth * frameScale)),
-      drawHeight: Math.max(1, Math.round(sourceHeight * frameScale)),
-      useCover,
-    };
+    return metricsFromApp(this, targetCanvas, mode);
   };
 
   proto.drawBaseFrame = function (targetCtx, targetCanvas, mode = 'preview') {

@@ -39,7 +39,10 @@ function pickSmartLabels(frame, config, maxLabels = 6) {
   }).filter(Boolean);
 
   candidates.sort((a, b) => b.score - a.score);
-  const densityCap = Math.max(2, Math.round(maxLabels * (config.density ?? 0.55)));
+  const densityCap = Math.max(
+    2,
+    Math.round(maxLabels * (config.density ?? 0.55)),
+  );
   return candidates.slice(0, densityCap);
 }
 
@@ -72,7 +75,14 @@ function layoutLabels(labels, mappedPoints) {
   });
 }
 
-export function renderBodyMap(ctx, canvas, frame, config, intensity = 1, drawMetrics = null) {
+export function renderBodyMap(
+  ctx,
+  canvas,
+  frame,
+  config,
+  intensity = 1,
+  drawMetrics = null,
+) {
   if (!frame?.landmarks?.length || !config || !drawMetrics) return;
   const color = config.color || '#f0f0ec';
   const alpha = Math.min(1, intensity * (config.connectionOpacity ?? 0.45));

@@ -1,7 +1,16 @@
 import { seededRange } from '../../subject/subject-prng.mjs';
 
 export class RgbBreakupEngine {
-  render(ctx, canvas, frame, config, intensity = 1, seed = 0, clipId = '', sourceCanvas = null) {
+  render(
+    ctx,
+    canvas,
+    frame,
+    config,
+    intensity = 1,
+    seed = 0,
+    clipId = '',
+    sourceCanvas = null,
+  ) {
     if (!config?.enabled || !sourceCanvas) return;
     const split = config.split * intensity;
     if (split < 0.25) return;
@@ -19,7 +28,17 @@ export class RgbBreakupEngine {
         6;
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = 0.45;
-      ctx.drawImage(sourceCanvas, jitter, y, canvas.width, h, jitter, y, canvas.width, h);
+      ctx.drawImage(
+        sourceCanvas,
+        jitter,
+        y,
+        canvas.width,
+        h,
+        jitter,
+        y,
+        canvas.width,
+        h,
+      );
       ctx.globalAlpha = 0.35;
       ctx.drawImage(
         sourceCanvas,

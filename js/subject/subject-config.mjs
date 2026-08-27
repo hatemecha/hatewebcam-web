@@ -1,4 +1,7 @@
-import { SUBJECT_PRESETS, SUBJECT_PRESET_IDS } from '../effects/subject-fx/subject-presets.mjs';
+import {
+  SUBJECT_PRESETS,
+  SUBJECT_PRESET_IDS,
+} from '../effects/subject-fx/subject-presets.mjs';
 
 export const SUBJECT_REACTIVITY_MODES = Object.freeze([
   'fixed',
@@ -96,18 +99,32 @@ function mergeModule(name, source = {}) {
   const defaults = MODULE_DEFAULTS[name] || {};
   const merged = { ...defaults, ...(source || {}) };
   if (name === 'bodyMap') {
-    merged.connectionOpacity = clamp01(merged.connectionOpacity, defaults.connectionOpacity);
+    merged.connectionOpacity = clamp01(
+      merged.connectionOpacity,
+      defaults.connectionOpacity,
+    );
     merged.density = clamp01(merged.density, defaults.density);
     merged.color = normalizeHex(merged.color, defaults.color);
-    merged.lineThickness = clampNumber(merged.lineThickness, 0.5, 6, defaults.lineThickness);
+    merged.lineThickness = clampNumber(
+      merged.lineThickness,
+      0.5,
+      6,
+      defaults.lineThickness,
+    );
     merged.labelSize = clampNumber(merged.labelSize, 7, 18, defaults.labelSize);
   }
   if (name === 'fragments') {
     merged.density = clamp01(merged.density, defaults.density);
     merged.spread = clamp01(merged.spread, defaults.spread);
     merged.persistence = clamp01(merged.persistence, defaults.persistence);
-    merged.motionInfluence = clamp01(merged.motionInfluence, defaults.motionInfluence);
-    merged.beatInfluence = clamp01(merged.beatInfluence, defaults.beatInfluence);
+    merged.motionInfluence = clamp01(
+      merged.motionInfluence,
+      defaults.motionInfluence,
+    );
+    merged.beatInfluence = clamp01(
+      merged.beatInfluence,
+      defaults.beatInfluence,
+    );
   }
   if (name === 'trails') {
     merged.copies = clampNumber(merged.copies, 1, 16, defaults.copies);
@@ -173,7 +190,12 @@ export function normalizeSubjectConfig(raw = {}) {
     persistence: clamp01(raw.persistence, presetDefaults.persistence ?? 0.5),
     scale: clampNumber(raw.scale, 0.25, 2.5, presetDefaults.scale ?? 1),
     color: normalizeHex(raw.color, presetDefaults.color ?? '#f0f0ec'),
-    seed: clampNumber(raw.seed, 0, 999999, raw.seed ?? presetDefaults.seed ?? 18412),
+    seed: clampNumber(
+      raw.seed,
+      0,
+      999999,
+      raw.seed ?? presetDefaults.seed ?? 18412,
+    ),
     motionInfluence: clamp01(
       raw.motionInfluence,
       presetDefaults.motionInfluence ?? 0.75,

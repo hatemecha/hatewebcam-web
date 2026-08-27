@@ -16,8 +16,8 @@ function clamp01(value) {
 }
 
 export class SubjectFxEffect {
-  constructor() {
-    this.analyzer = new SubjectAnalyzer();
+  constructor(options = {}) {
+    this.analyzer = new SubjectAnalyzer(options.analyzer || {});
     this.fragments = new FragmentEngine();
     this.trails = new TrailEngine();
     this.smear = new SmearEngine();
@@ -109,7 +109,11 @@ export class SubjectFxEffect {
       this.previewQuality = Math.max(0.45, this.previewQuality * 0.85);
       this.analyzer.setRuntimeQuality(this.previewQuality);
       this._qualityDowngradeTs = now;
-    } else if (fps > 28 && this.previewQuality < 1 && now - this._qualityDowngradeTs > 3000) {
+    } else if (
+      fps > 28 &&
+      this.previewQuality < 1 &&
+      now - this._qualityDowngradeTs > 3000
+    ) {
       this.previewQuality = Math.min(1, this.previewQuality + 0.08);
       this.analyzer.setRuntimeQuality(this.previewQuality);
       this._qualityDowngradeTs = now;
@@ -151,7 +155,9 @@ export class SubjectFxEffect {
   processFullFrame(ctx, canvas, video, renderProfile, options = {}) {
     if (!this.active || this.bypass || !video) return;
     const timestampMs = (options.mediaTime ?? video.currentTime ?? 0) * 1000;
-    void this.analyzer.analyze(video, timestampMs, renderProfile);
+    void this.analyzer
+      .analyze(video, timestampMs, renderProfile)
+      .catch(() => {});
     const frame = this.analyzer.lastFrame;
     const beatStrength = options.beatStrength || 0;
     const intensity = this.computeIntensity(frame, beatStrength);
@@ -178,6 +184,7 @@ export class SubjectFxEffect {
         modules.smear,
         intensity,
         this._sourceSnapshot,
+        options.drawMetrics,
       );
     }
 
@@ -241,7 +248,14 @@ export class SubjectFxEffect {
       );
     }
     if (modules.scan?.enabled) {
-      this.scan.render(ctx, canvas, frame, modules.scan, intensity, drawMetrics);
+      this.scan.render(
+        ctx,
+        canvas,
+        frame,
+        modules.scan,
+        intensity,
+        drawMetrics,
+      );
     }
     if (modules.pixelBody?.enabled) {
       this.pixelBody.render(
@@ -261,7 +275,14 @@ export class SubjectFxEffect {
       modules.bodyMap?.showJoints ||
       modules.bodyMap?.showLabels
     ) {
-      renderBodyMap(ctx, canvas, frame, modules.bodyMap, intensity, drawMetrics);
+      renderBodyMap(
+        ctx,
+        canvas,
+        frame,
+        modules.bodyMap,
+        intensity,
+        drawMetrics,
+      );
     }
   }
 

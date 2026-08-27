@@ -1,4 +1,5 @@
 import { getStrongestMotionRegion } from '../subject/subject-local-motion.mjs';
+import { drawSubjectMask } from '../subject/subject-frame-map.mjs';
 
 const VERT = `
 attribute vec2 a_position;
@@ -87,9 +88,7 @@ export class SubjectWebGLRenderer {
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
     gl.bufferData(
       gl.ARRAY_BUFFER,
-      new Float32Array([
-        -1, -1, 0, 1, 1, -1, 1, 1, -1, 1, 0, 0, 1, 1, 1, 0,
-      ]),
+      new Float32Array([-1, -1, 0, 1, 1, -1, 1, 1, -1, 1, 0, 0, 1, 1, 1, 0]),
       gl.STATIC_DRAW,
     );
     const pos = gl.getAttribLocation(program, 'a_position');
@@ -225,7 +224,7 @@ export class SmearEngine {
     this.renderer.dispose();
   }
 
-  apply(ctx, canvas, frame, config, intensity, sourceCanvas) {
+  apply(ctx, canvas, frame, config, intensity, sourceCanvas, drawMetrics) {
     if (!config?.enabled || !frame || !sourceCanvas) return false;
 
     const strongest = getStrongestMotionRegion(frame.regions || {});
@@ -251,7 +250,7 @@ export class SmearEngine {
       const mctx = masked.getContext('2d');
       mctx.drawImage(output, 0, 0, canvas.width, canvas.height);
       mctx.globalCompositeOperation = 'destination-in';
-      this.#drawMask(mctx, canvas, frame);
+      this.#drawMask(mctx, frame, drawMetrics);
       ctx.drawImage(masked, 0, 0);
       return true;
     }
@@ -260,18 +259,7 @@ export class SmearEngine {
     return true;
   }
 
-  #drawMask(ctx, canvas, frame) {
-    const mask = frame.mask;
-    if (!mask?.data) return;
-    const temp = document.createElement('canvas');
-    temp.width = mask.width;
-    temp.height = mask.height;
-    const tctx = temp.getContext('2d');
-    const imageData = tctx.createImageData(mask.width, mask.height);
-    for (let i = 0; i < mask.data.length; i++) {
-      imageData.data[i * 4 + 3] = mask.data[i];
-    }
-    tctx.putImageData(imageData, 0, 0);
-    ctx.drawImage(temp, 0, 0, canvas.width, canvas.height);
+  #drawMask(ctx, frame, drawMetrics) {
+    drawSubjectMask(ctx, frame.mask, drawMetrics);
   }
 }

@@ -114,8 +114,7 @@ export const ADJUST_CONTEXT_HELP = {
 };
 export const ADJUST_CONTEXT_VIDEO_HELP = {
   look: 'Ajustá orientación, filtros y look del clip seleccionado. Solo se ve cuando el cursor está dentro de su tramo.',
-  subject:
-    'Preset, intensidad y reactividad del clip SUBJECT seleccionado.',
+  subject: 'Preset, intensidad y reactividad del clip SUBJECT seleccionado.',
   blob: 'Elegí color, sensibilidad y aspecto del tracking. El detector se enciende solo dentro del clip COLOR.',
   face: 'Elegí recuadro, blur, pixelado y etiqueta. La detección se enciende sola cuando el cursor entra en el clip CARAS.',
   blink:

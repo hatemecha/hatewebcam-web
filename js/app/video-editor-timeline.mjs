@@ -173,7 +173,11 @@ export function applyVideoEditorTimelineMixin(proto) {
       }
       if (type === 'subject') {
         try {
-          await this.ensureSubjectFxEffect?.().analyzer.ensureReady();
+          const effect = await this.ensureSubjectFxEffect?.();
+          if (!effect?.analyzer) {
+            throw new Error('subject_fx_analyzer_unavailable');
+          }
+          await effect.analyzer.ensureReady();
         } catch (err) {
           console.warn('Subject FX preload failed:', err);
         }

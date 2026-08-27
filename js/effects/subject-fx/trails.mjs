@@ -1,5 +1,8 @@
 import { getStrongestMotionRegion } from '../../subject/subject-local-motion.mjs';
-import { mapNormToCanvas } from '../../subject/subject-frame-map.mjs';
+import {
+  drawSubjectMask,
+  mapNormToCanvas,
+} from '../../subject/subject-frame-map.mjs';
 
 export class TrailEngine {
   constructor() {
@@ -40,7 +43,15 @@ export class TrailEngine {
     }
   }
 
-  render(ctx, canvas, config, intensity = 1, _flipH = false, sourceCanvas = null, drawMetrics = null) {
+  render(
+    ctx,
+    canvas,
+    config,
+    intensity = 1,
+    _flipH = false,
+    sourceCanvas = null,
+    drawMetrics = null,
+  ) {
     if (!config?.enabled || this.history.length < 2 || !drawMetrics) return;
     const mode = config.mode || 'silhouette';
     ctx.save();
@@ -73,7 +84,10 @@ export class TrailEngine {
           }
         : { x: 0, y: 0 };
 
-      if ((mode === 'body' || mode === 'ghost' || mode === 'silhouette') && snapshot.mask) {
+      if (
+        (mode === 'body' || mode === 'ghost' || mode === 'silhouette') &&
+        snapshot.mask
+      ) {
         this.#renderMaskEcho(
           ctx,
           canvas,
@@ -102,38 +116,27 @@ export class TrailEngine {
     ctx.restore();
   }
 
-  #renderMaskEcho(ctx, canvas, snapshot, alpha, offset, sourceCanvas, mode, drawMetrics) {
+  #renderMaskEcho(
+    ctx,
+    canvas,
+    snapshot,
+    alpha,
+    offset,
+    sourceCanvas,
+    mode,
+    drawMetrics,
+  ) {
     if (!snapshot.mask?.data || !sourceCanvas) return;
     const maskCanvas = document.createElement('canvas');
     maskCanvas.width = canvas.width;
     maskCanvas.height = canvas.height;
     const maskCtx = maskCanvas.getContext('2d');
-    const { width: mw, height: mh, data } = snapshot.mask;
-    const contentX = (canvas.width - drawMetrics.drawWidth) / 2 + offset.x;
-    const contentY = (canvas.height - drawMetrics.drawHeight) / 2 + offset.y;
-
-    const imageData = maskCtx.createImageData(mw, mh);
-    for (let i = 0; i < data.length; i++) {
-      imageData.data[i * 4 + 3] = data[i];
-    }
-    const temp = document.createElement('canvas');
-    temp.width = mw;
-    temp.height = mh;
-    temp.getContext('2d').putImageData(imageData, 0, 0);
-
     maskCtx.save();
     maskCtx.globalAlpha = alpha;
-    maskCtx.drawImage(
-      temp,
-      0,
-      0,
-      mw,
-      mh,
-      contentX,
-      contentY,
-      drawMetrics.drawWidth,
-      drawMetrics.drawHeight,
-    );
+    drawSubjectMask(maskCtx, snapshot.mask, drawMetrics, {
+      offsetX: offset.x,
+      offsetY: offset.y,
+    });
     maskCtx.globalCompositeOperation = 'source-in';
     maskCtx.drawImage(sourceCanvas, 0, 0);
     maskCtx.restore();

@@ -19,8 +19,6 @@ export const SUBJECT_ANALYSIS_STATUS = Object.freeze({
   simplified: 'simplified',
 });
 
-const WORKER_URL = new URL('./subject-worker.mjs', import.meta.url);
-
 export class SubjectAnalyzer {
   constructor(options = {}) {
     this.motionAnalyzer = new SubjectMotionAnalyzer(options);
@@ -42,6 +40,13 @@ export class SubjectAnalyzer {
     this._pendingBitmap = null;
     this._pendingMeta = null;
     this._loadPromise = null;
+    this._initCleanup = null;
+    this._rejectInit = null;
+    this._workerListeners = null;
+    this._resultWaiters = new Map();
+    this._generation = 0;
+    this._disposed = false;
+    this.assetUrls = options.assetUrls || null;
     this.segmentationSource = 'none';
     this.useSimplifiedMode = false;
     this.runtimeQuality = 1;
@@ -74,48 +79,159 @@ export class SubjectAnalyzer {
   async ensureReady() {
     if (this.ready) return true;
     if (this._loadPromise) return this._loadPromise;
+    if (this._disposed) throw new Error('subject_analyzer_disposed');
+    if (!this.assetUrls) throw new Error('subject_asset_urls_missing');
     this.status = SUBJECT_ANALYSIS_STATUS.preparing;
-    this._loadPromise = this.#initWorker()
+    this.statusMessage = '';
+    const generation = this._generation;
+    const loadPromise = this.#initWorker(generation)
       .then(() => {
+        if (generation !== this._generation || this._disposed) {
+          throw new Error('subject_analyzer_disposed');
+        }
         this.ready = true;
         this.status = SUBJECT_ANALYSIS_STATUS.analyzing;
         return true;
       })
       .catch((error) => {
-        console.error('SubjectAnalyzer init failed:', error);
-        this.status = SUBJECT_ANALYSIS_STATUS.error;
-        this.statusMessage =
-          'No se pudo iniciar el análisis corporal. Probá nuevamente o desactivá FX de sujeto.';
-        return false;
+        if (generation === this._generation && !this._disposed) {
+          this.#destroyWorker();
+          this.status = SUBJECT_ANALYSIS_STATUS.error;
+          this.statusMessage =
+            'No se pudo iniciar el análisis corporal. Probá nuevamente o desactivá FX de sujeto.';
+        }
+        throw error;
       })
       .finally(() => {
-        this._loadPromise = null;
+        if (this._loadPromise === loadPromise) this._loadPromise = null;
       });
-    return this._loadPromise;
+    this._loadPromise = loadPromise;
+    return loadPromise;
   }
 
-  #initWorker() {
+  #initWorker(generation) {
     return new Promise((resolve, reject) => {
-      this.worker = new Worker(WORKER_URL, { type: 'module' });
+      let worker;
+      try {
+        // Keep new URL inline so Vite bundles the module Worker in production.
+        worker = new Worker(new URL('./subject-worker.mjs', import.meta.url), {
+          type: 'module',
+        });
+      } catch (error) {
+        reject(error);
+        return;
+      }
+      this.worker = worker;
+      let settled = false;
+      const cleanup = () => {
+        worker.removeEventListener('message', onMessage);
+        worker.removeEventListener('error', onError);
+        worker.removeEventListener('messageerror', onMessageError);
+        if (this._initCleanup === cleanup) this._initCleanup = null;
+        if (this._rejectInit === fail) this._rejectInit = null;
+      };
+      const succeed = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        if (
+          generation !== this._generation ||
+          this.worker !== worker ||
+          this._disposed
+        ) {
+          reject(new Error('subject_analyzer_disposed'));
+          return;
+        }
+        this.#attachWorkerListeners(worker, generation);
+        resolve(true);
+      };
+      const fail = (error) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(error instanceof Error ? error : new Error(String(error)));
+      };
       const onMessage = (event) => {
         const message = event.data || {};
         if (message.type === 'ready') {
-          this.worker.removeEventListener('message', onMessage);
-          resolve(true);
+          succeed();
         } else if (message.type === 'error') {
-          this.worker.removeEventListener('message', onMessage);
-          reject(new Error(message.message || 'worker_init_failed'));
+          fail(new Error(message.message || 'worker_init_failed'));
         }
       };
-      this.worker.addEventListener('message', onMessage);
-      this.worker.addEventListener('message', (event) =>
-        this.#handleWorkerMessage(event.data),
-      );
-      this.worker.postMessage({
-        type: 'init',
-        maskWidth: Math.round(this.maskWidth * this.runtimeQuality),
-      });
+      const onError = (event) => {
+        event.preventDefault?.();
+        fail(event.error || new Error(event.message || 'subject_worker_error'));
+      };
+      const onMessageError = () =>
+        fail(new Error('subject_worker_message_error'));
+      this._initCleanup = cleanup;
+      this._rejectInit = fail;
+      worker.addEventListener('message', onMessage);
+      worker.addEventListener('error', onError);
+      worker.addEventListener('messageerror', onMessageError);
+      try {
+        worker.postMessage({
+          type: 'init',
+          assets: this.assetUrls,
+          maskWidth: Math.round(this.maskWidth * this.runtimeQuality),
+        });
+      } catch (error) {
+        fail(error);
+      }
     });
+  }
+
+  #attachWorkerListeners(worker, generation) {
+    const onMessage = (event) => {
+      if (generation !== this._generation || this.worker !== worker) return;
+      this.#handleWorkerMessage(event.data);
+    };
+    const onError = (event) => {
+      if (generation !== this._generation || this.worker !== worker) return;
+      event.preventDefault?.();
+      this.#handleWorkerFailure(
+        event.error || new Error(event.message || 'subject_worker_error'),
+      );
+    };
+    const onMessageError = () => {
+      if (generation !== this._generation || this.worker !== worker) return;
+      this.#handleWorkerFailure(new Error('subject_worker_message_error'));
+    };
+    worker.addEventListener('message', onMessage);
+    worker.addEventListener('error', onError);
+    worker.addEventListener('messageerror', onMessageError);
+    this._workerListeners = { worker, onMessage, onError, onMessageError };
+  }
+
+  #handleWorkerFailure(error) {
+    console.error('Subject worker error:', error);
+    this.#destroyWorker();
+    this.ready = false;
+    this._busy = false;
+    this._pendingBitmap?.close?.();
+    this._pendingBitmap = null;
+    this._pendingMeta = null;
+    this.#rejectResultWaiters(error);
+    this.status = SUBJECT_ANALYSIS_STATUS.error;
+    this.statusMessage = 'El analizador de sujeto se detuvo. Probá nuevamente.';
+  }
+
+  #destroyWorker() {
+    this._initCleanup?.();
+    const listeners = this._workerListeners;
+    if (listeners) {
+      listeners.worker.removeEventListener('message', listeners.onMessage);
+      listeners.worker.removeEventListener('error', listeners.onError);
+      listeners.worker.removeEventListener(
+        'messageerror',
+        listeners.onMessageError,
+      );
+      this._workerListeners = null;
+    }
+    this.worker?.terminate?.();
+    this.worker = null;
+    this.ready = false;
   }
 
   setProfile(profile = {}) {
@@ -150,23 +266,29 @@ export class SubjectAnalyzer {
     this.previousMask = null;
     this.lastInferenceTs = 0;
     this.lastTimestampMs = 0;
+    this._requestId += 1;
     this._busy = false;
+    this._pendingBitmap?.close?.();
     this._pendingBitmap = null;
     this._pendingMeta = null;
+    this.#rejectResultWaiters(new Error('subject_analysis_reset'));
     this._analyzeErrors = 0;
     this.worker?.postMessage({ type: 'reset' });
     if (options.hard) {
-      this.worker?.postMessage({ type: 'dispose' });
-      this.worker?.terminate?.();
-      this.worker = null;
-      this.ready = false;
+      this._generation += 1;
+      const rejectInit = this._rejectInit;
+      this._loadPromise = null;
+      rejectInit?.(new Error('subject_analyzer_reset'));
+      this.#destroyWorker();
       this.status = SUBJECT_ANALYSIS_STATUS.idle;
+      this.statusMessage = '';
       this.cache.invalidate();
     }
   }
 
   dispose() {
     this.reset({ hard: true });
+    this._disposed = true;
   }
 
   async analyze(source, timestampMs, renderProfile = null) {
@@ -176,8 +298,19 @@ export class SubjectAnalyzer {
     const tsSec = (timestampMs || 0) / 1000;
     const cached = this.cache.getAt(tsSec);
     if (cached && this.cache.ready) {
-      this.lastFrame = this.#finalizeFrame(cached, cached.mask || this.lastMask);
+      this.lastFrame = this.#finalizeFrame(
+        cached,
+        cached.mask || this.lastMask,
+      );
       this.status = SUBJECT_ANALYSIS_STATUS.ready;
+      return this.lastFrame;
+    }
+    const waitForResult = renderProfile?.detectorIntervalMs === 0;
+    if (
+      waitForResult &&
+      this.lastFrame &&
+      Math.abs((this.lastFrame.timestamp || 0) - (timestampMs || 0)) < 1
+    ) {
       return this.lastFrame;
     }
 
@@ -187,7 +320,9 @@ export class SubjectAnalyzer {
       now - this.lastInferenceTs >= this.inferenceIntervalMs;
 
     if (!this.ready) {
-      void this.ensureReady();
+      if (this.status !== SUBJECT_ANALYSIS_STATUS.error) {
+        void this.ensureReady().catch(() => {});
+      }
       return this.lastFrame;
     }
 
@@ -211,16 +346,21 @@ export class SubjectAnalyzer {
       });
       this._pendingBitmap?.close?.();
       this._pendingBitmap = bitmap;
+      const requestId = ++this._requestId;
       this._pendingMeta = {
-        id: ++this._requestId,
+        id: requestId,
         timestampMs: Math.max(0, Math.round(timestampMs || 0)),
         width: bitmap.width,
         height: bitmap.height,
         sourceWidth: width,
         sourceHeight: height,
       };
+      const resultPromise = waitForResult
+        ? this.#waitForResult(requestId)
+        : null;
       this._dispatchPending();
       this.lastInferenceTs = now;
+      if (resultPromise) return await resultPromise;
     } catch (error) {
       console.error('Subject analyze enqueue failed:', error);
     }
@@ -236,17 +376,23 @@ export class SubjectAnalyzer {
     const bitmap = this._pendingBitmap;
     this._pendingBitmap = null;
     this._pendingMeta = null;
-    this.worker.postMessage(
-      {
-        type: 'analyze',
-        id: meta.id,
-        timestampMs: meta.timestampMs,
-        width: meta.width,
-        height: meta.height,
-        bitmap,
-      },
-      [bitmap],
-    );
+    try {
+      this.worker.postMessage(
+        {
+          type: 'analyze',
+          id: meta.id,
+          timestampMs: meta.timestampMs,
+          width: meta.width,
+          height: meta.height,
+          bitmap,
+        },
+        [bitmap],
+      );
+    } catch (error) {
+      bitmap.close?.();
+      this._busy = false;
+      this.#handleWorkerFailure(error);
+    }
   }
 
   #handleWorkerMessage(message = {}) {
@@ -254,6 +400,10 @@ export class SubjectAnalyzer {
       this._busy = false;
       this._analyzeErrors = 0;
       if (message.id !== this._requestId) {
+        this.#settleResultWaiter(
+          message.id,
+          new Error('subject_analysis_superseded'),
+        );
         this._dispatchPending();
         return;
       }
@@ -272,10 +422,8 @@ export class SubjectAnalyzer {
         this.status = SUBJECT_ANALYSIS_STATUS.simplified;
       }
 
-      this.lastMask = mask;
-      this.lastFrame = frame
-        ? this.#finalizeFrame(frame, mask)
-        : this.lastFrame;
+      this.lastMask = frame ? mask : null;
+      this.lastFrame = frame ? this.#finalizeFrame(frame, mask) : null;
       this.status = frame
         ? this.useSimplifiedMode
           ? SUBJECT_ANALYSIS_STATUS.simplified
@@ -297,12 +445,17 @@ export class SubjectAnalyzer {
           regions: frame.regions,
         });
       }
+      this.#settleResultWaiter(message.id, null, this.lastFrame);
       this._dispatchPending();
       return;
     }
     if (message.type === 'error') {
       this._busy = false;
       console.error('Subject worker error:', message.message);
+      this.#settleResultWaiter(
+        message.id,
+        new Error(message.message || 'subject_worker_error'),
+      );
       this._analyzeErrors += 1;
       if (
         this._analyzeErrors >= 4 ||
@@ -317,6 +470,31 @@ export class SubjectAnalyzer {
         this.status = SUBJECT_ANALYSIS_STATUS.analyzing;
       }
       this._dispatchPending();
+    }
+  }
+
+  #waitForResult(requestId) {
+    return new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        this._resultWaiters.delete(requestId);
+        reject(new Error('subject_analysis_timeout'));
+      }, 15_000);
+      this._resultWaiters.set(requestId, { resolve, reject, timeoutId });
+    });
+  }
+
+  #settleResultWaiter(requestId, error = null, value = null) {
+    const waiter = this._resultWaiters.get(requestId);
+    if (!waiter) return;
+    clearTimeout(waiter.timeoutId);
+    this._resultWaiters.delete(requestId);
+    if (error) waiter.reject(error);
+    else waiter.resolve(value);
+  }
+
+  #rejectResultWaiters(error) {
+    for (const [requestId] of this._resultWaiters) {
+      this.#settleResultWaiter(requestId, error);
     }
   }
 

@@ -5,16 +5,6 @@ import {
 } from '@mediapipe/tasks-vision';
 import { SubjectMotionAnalyzer } from './subject-motion.mjs';
 
-import {
-  MEDIAPIPE_POSE_LANDMARKER_MODEL,
-  MEDIAPIPE_SELFIE_SEGMENTER_MODEL,
-  MEDIAPIPE_TASKS_VISION_WASM_BASE,
-} from './mediapipe-paths.mjs';
-
-const WASM_BASE = MEDIAPIPE_TASKS_VISION_WASM_BASE;
-const POSE_MODEL = MEDIAPIPE_POSE_LANDMARKER_MODEL;
-const SEGMENTER_MODEL = MEDIAPIPE_SELFIE_SEGMENTER_MODEL;
-
 let poseLandmarker = null;
 let imageSegmenter = null;
 let motionAnalyzer = new SubjectMotionAnalyzer();
@@ -24,16 +14,21 @@ let maskTargetWidth = 256;
 let busy = false;
 let pending = null;
 let lastTimestampMs = 0;
+let assetUrls = null;
+let segmenterLoadPromise = null;
+let segmenterUnavailable = false;
 
 self.onmessage = async (event) => {
   const message = event.data || {};
   try {
     if (message.type === 'init') {
-      await ensureModels(message.maskWidth || 256);
+      await ensureModels(message.assets, message.maskWidth || 256);
       self.postMessage({ type: 'ready', segmenter: !!imageSegmenter });
       return;
     }
     if (message.type === 'reset') {
+      pending?.bitmap?.close?.();
+      pending = null;
       motionAnalyzer.reset();
       lastTimestampMs = 0;
       self.postMessage({ type: 'reset' });
@@ -49,6 +44,8 @@ self.onmessage = async (event) => {
       return;
     }
   } catch (error) {
+    if (message.type === 'init') disposeModels();
+    message.bitmap?.close?.();
     self.postMessage({
       type: 'error',
       id: message.id,
@@ -57,13 +54,18 @@ self.onmessage = async (event) => {
   }
 };
 
-async function ensureModels(width) {
+async function ensureModels(assets, width) {
   maskTargetWidth = width || 256;
   if (poseLandmarker) return;
+  const { wasmBaseUrl, poseModelUrl, segmenterModelUrl } = assets || {};
+  if (!wasmBaseUrl || !poseModelUrl || !segmenterModelUrl) {
+    throw new Error('subject_asset_urls_missing');
+  }
+  assetUrls = assets;
 
-  const vision = await FilesetResolver.forVisionTasks(WASM_BASE);
+  const vision = await FilesetResolver.forVisionTasks(wasmBaseUrl, true);
   poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
-    baseOptions: { modelAssetPath: POSE_MODEL, delegate: 'CPU' },
+    baseOptions: { modelAssetPath: poseModelUrl, delegate: 'CPU' },
     runningMode: 'IMAGE',
     numPoses: 1,
     outputSegmentationMasks: true,
@@ -71,21 +73,46 @@ async function ensureModels(width) {
     minPosePresenceConfidence: 0.4,
     minTrackingConfidence: 0.4,
   });
+}
 
-  try {
-    imageSegmenter = await ImageSegmenter.createFromOptions(vision, {
-      baseOptions: { modelAssetPath: SEGMENTER_MODEL, delegate: 'CPU' },
-      runningMode: 'IMAGE',
-      outputCategoryMask: true,
-      outputConfidenceMasks: false,
-    });
-  } catch (error) {
-    console.warn('Subject worker: segmenter unavailable', error);
-    imageSegmenter = null;
-  }
+async function ensureImageSegmenter() {
+  if (imageSegmenter) return imageSegmenter;
+  if (segmenterUnavailable || !assetUrls) return null;
+  if (segmenterLoadPromise) return segmenterLoadPromise;
+  segmenterLoadPromise = (async () => {
+    try {
+      const vision = await FilesetResolver.forVisionTasks(
+        assetUrls.wasmBaseUrl,
+        true,
+      );
+      // The module loader is stateful. A distinct URL re-runs its factory for
+      // the fallback task instead of reusing the consumed Pose module import.
+      vision.wasmLoaderPath += '?subject-task=image-segmenter';
+      imageSegmenter = await ImageSegmenter.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath: assetUrls.segmenterModelUrl,
+          delegate: 'CPU',
+        },
+        runningMode: 'IMAGE',
+        outputCategoryMask: true,
+        outputConfidenceMasks: false,
+      });
+      return imageSegmenter;
+    } catch (error) {
+      segmenterUnavailable = true;
+      console.warn('Subject worker: segmenter unavailable', error);
+      return null;
+    } finally {
+      segmenterLoadPromise = null;
+    }
+  })();
+  return segmenterLoadPromise;
 }
 
 function disposeModels() {
+  pending?.bitmap?.close?.();
+  pending = null;
+  busy = false;
   poseLandmarker?.close?.();
   imageSegmenter?.close?.();
   poseLandmarker = null;
@@ -94,9 +121,13 @@ function disposeModels() {
   analysisCanvas = null;
   analysisCtx = null;
   lastTimestampMs = 0;
+  assetUrls = null;
+  segmenterLoadPromise = null;
+  segmenterUnavailable = false;
 }
 
 function queueAnalyze(message) {
+  pending?.bitmap?.close?.();
   pending = message;
   if (busy) return;
   void runPending();
@@ -127,12 +158,16 @@ async function runPending() {
 async function analyzeFrame(message) {
   const { id, timestampMs, width, height, bitmap } = message;
   if (!poseLandmarker || !bitmap) {
+    bitmap?.close?.();
     throw new Error('worker_not_ready');
   }
 
   const canvas = ensureCanvas(width, height);
-  analysisCtx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  bitmap.close?.();
+  try {
+    analysisCtx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  } finally {
+    bitmap.close?.();
+  }
 
   const ts = Math.max(0, Math.round(timestampMs || 0));
   if (ts + 500 < lastTimestampMs) {
@@ -163,29 +198,38 @@ async function analyzeFrame(message) {
   let maskHeight = 0;
   let segmentationSource = 'none';
 
-  const poseMask = poseResult?.segmentationMasks?.[0];
-  if (poseMask) {
-    const packed = packMaskFromMpMask(poseMask, maskTargetWidth);
-    if (packed) {
-      maskBuffer = packed.buffer;
-      maskWidth = packed.width;
-      maskHeight = packed.height;
-      segmentationSource = 'pose';
+  try {
+    const poseMask = poseResult?.segmentationMasks?.[0];
+    if (poseMask) {
+      const packed = packMaskFromMpMask(poseMask, maskTargetWidth);
+      if (packed) {
+        maskBuffer = packed.buffer;
+        maskWidth = packed.width;
+        maskHeight = packed.height;
+        segmentationSource = 'pose';
+      }
     }
+  } finally {
+    poseResult?.close?.();
   }
 
-  if (!maskBuffer && imageSegmenter) {
+  if (!maskBuffer && (imageSegmenter || !segmenterUnavailable)) {
     try {
-      const segResult = imageSegmenter.segment(canvas);
-      const categoryMask = segResult?.categoryMask;
-      if (categoryMask) {
-        const packed = packMaskFromMpMask(categoryMask, maskTargetWidth);
-        if (packed) {
-          maskBuffer = packed.buffer;
-          maskWidth = packed.width;
-          maskHeight = packed.height;
-          segmentationSource = 'segmenter';
+      const segmenter = imageSegmenter || (await ensureImageSegmenter());
+      const segResult = segmenter?.segment(canvas);
+      try {
+        const categoryMask = segResult?.categoryMask;
+        if (categoryMask) {
+          const packed = packMaskFromMpMask(categoryMask, maskTargetWidth);
+          if (packed) {
+            maskBuffer = packed.buffer;
+            maskWidth = packed.width;
+            maskHeight = packed.height;
+            segmentationSource = 'segmenter';
+          }
         }
+      } finally {
+        segResult?.close?.();
       }
     } catch (error) {
       console.warn('Subject worker: segment failed', error);
@@ -242,21 +286,17 @@ function packMaskFromMpMask(mask, targetWidth) {
   if (!srcW || !srcH) return null;
 
   let src = null;
-  try {
-    if (typeof mask.hasUint8Array === 'function' && mask.hasUint8Array()) {
-      src = mask.getAsUint8Array();
-    } else if (
-      typeof mask.hasFloat32Array === 'function' &&
-      mask.hasFloat32Array()
-    ) {
-      const floats = mask.getAsFloat32Array();
-      src = new Uint8Array(floats.length);
-      for (let i = 0; i < floats.length; i++) {
-        src[i] = floats[i] > 0.5 ? 255 : 0;
-      }
+  if (typeof mask.hasUint8Array === 'function' && mask.hasUint8Array()) {
+    src = mask.getAsUint8Array();
+  } else if (
+    typeof mask.hasFloat32Array === 'function' &&
+    mask.hasFloat32Array()
+  ) {
+    const floats = mask.getAsFloat32Array();
+    src = new Uint8Array(floats.length);
+    for (let i = 0; i < floats.length; i++) {
+      src[i] = floats[i] > 0.5 ? 255 : 0;
     }
-  } finally {
-    mask.close?.();
   }
   if (!src?.length) return null;
 

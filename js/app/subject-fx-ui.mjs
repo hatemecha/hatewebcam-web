@@ -19,14 +19,29 @@ function seedToVariation(seed = 0) {
 
 function getSubjectStatusMeta(analyzer, bypass) {
   if (bypass) {
-    return { tone: 'muted', label: 'Bypass activo', detail: '', showRetry: false };
+    return {
+      tone: 'muted',
+      label: 'Bypass activo',
+      detail: '',
+      showRetry: false,
+    };
   }
   const status = analyzer?.status || 'idle';
   switch (status) {
     case SUBJECT_ANALYSIS_STATUS.preparing:
-      return { tone: 'pending', label: 'Preparando sujeto…', detail: '', showRetry: false };
+      return {
+        tone: 'pending',
+        label: 'Preparando sujeto…',
+        detail: '',
+        showRetry: false,
+      };
     case SUBJECT_ANALYSIS_STATUS.analyzing:
-      return { tone: 'pending', label: 'Analizando sujeto…', detail: '', showRetry: false };
+      return {
+        tone: 'pending',
+        label: 'Analizando sujeto…',
+        detail: '',
+        showRetry: false,
+      };
     case SUBJECT_ANALYSIS_STATUS.detected:
       return {
         tone: 'ready',
@@ -35,7 +50,12 @@ function getSubjectStatusMeta(analyzer, bypass) {
         showRetry: false,
       };
     case SUBJECT_ANALYSIS_STATUS.ready:
-      return { tone: 'ready', label: 'Sujeto listo', detail: '', showRetry: false };
+      return {
+        tone: 'ready',
+        label: 'Sujeto listo',
+        detail: '',
+        showRetry: false,
+      };
     case SUBJECT_ANALYSIS_STATUS.simplified:
       return {
         tone: 'warning',
@@ -44,7 +64,12 @@ function getSubjectStatusMeta(analyzer, bypass) {
         showRetry: false,
       };
     case SUBJECT_ANALYSIS_STATUS.lost:
-      return { tone: 'warning', label: 'Sin sujeto en frame', detail: '', showRetry: true };
+      return {
+        tone: 'warning',
+        label: 'Sin sujeto en frame',
+        detail: '',
+        showRetry: true,
+      };
     case SUBJECT_ANALYSIS_STATUS.error:
       return {
         tone: 'error',
@@ -53,7 +78,12 @@ function getSubjectStatusMeta(analyzer, bypass) {
         showRetry: true,
       };
     default:
-      return { tone: 'muted', label: 'Esperando análisis', detail: '', showRetry: false };
+      return {
+        tone: 'muted',
+        label: 'Esperando análisis',
+        detail: '',
+        showRetry: false,
+      };
   }
 }
 
@@ -78,16 +108,19 @@ export function applySubjectFxUIMixin(proto) {
 
     const config = item.config || this.snapshotSubjectFxConfig();
     const preset = config.preset || 'anatomy';
-    const basicControls = SUBJECT_BASIC_CONTROLS[preset] || SUBJECT_BASIC_CONTROLS.anatomy;
-    const status = getSubjectStatusMeta(this.subjectFxEffect?.analyzer, this.subjectFxBypass);
+    const basicControls =
+      SUBJECT_BASIC_CONTROLS[preset] || SUBJECT_BASIC_CONTROLS.anatomy;
+    const status = getSubjectStatusMeta(
+      this.subjectFxEffect?.analyzer,
+      this.subjectFxBypass,
+    );
     const outsideClip = !this.isPlayheadInsideSelectedSubjectClip(item);
     const variation = seedToVariation(config.seed);
     const hint = SUBJECT_PRESET_HINTS[preset] || '';
     const fxActive = !this.subjectFxBypass;
 
     const presetButtons = SUBJECT_PRESET_IDS.map((presetId) => {
-      const spanClass =
-        presetId === 'dissolve' ? ' subject-preset-span-2' : '';
+      const spanClass = presetId === 'dissolve' ? ' subject-preset-span-2' : '';
       return `
       <button type="button"
         class="subject-preset-btn${config.preset === presetId ? ' is-active' : ''}${spanClass}"
@@ -128,16 +161,24 @@ export function applySubjectFxUIMixin(proto) {
               <span class="subject-status-dot" aria-hidden="true"></span>
               <span class="subject-status-text">${status.label}</span>
             </div>
-            ${status.showRetry ? `
-            <button type="button" class="btn btn-compact subject-retry-btn" id="btnSubjectRetry">Reintentar</button>` : ''}
+            ${
+              status.showRetry
+                ? `
+            <button type="button" class="btn btn-compact subject-retry-btn" id="btnSubjectRetry">Reintentar</button>`
+                : ''
+            }
           </div>
         </header>
 
-        ${outsideClip ? `
+        ${
+          outsideClip
+            ? `
         <div class="subject-playhead-note">
           <span>Playhead fuera del clip.</span>
           <button type="button" class="btn btn-compact" id="btnSubjectGoToClip">Ir al clip</button>
-        </div>` : ''}
+        </div>`
+            : ''
+        }
 
         <div class="subject-preset-grid" role="list">${presetButtons}</div>
         <p class="subject-preset-hint">${hint}</p>
@@ -183,7 +224,8 @@ export function applySubjectFxUIMixin(proto) {
       </div>
     `;
 
-    this.btnSubjectBypass = this.subjectFxInspectorHost.querySelector('#chkSubjectBypass');
+    this.btnSubjectBypass =
+      this.subjectFxInspectorHost.querySelector('#chkSubjectBypass');
     this.updateSubjectFxBypassUI?.();
 
     this.subjectFxInspectorHost
@@ -208,14 +250,24 @@ export function applySubjectFxUIMixin(proto) {
     bindSlider('sldSubjectDensity', 'valSubjectDensity', 'density');
     bindSlider('sldSubjectPersistence', 'valSubjectPersistence', 'persistence');
     bindSlider('sldSubjectScale', 'valSubjectScale', 'scale', 0.01);
-    bindSlider('sldSubjectMotionInfluence', 'valSubjectMotionInfluence', 'motionInfluence');
-    bindSlider('sldSubjectBeatInfluence', 'valSubjectBeatInfluence', 'beatInfluence');
+    bindSlider(
+      'sldSubjectMotionInfluence',
+      'valSubjectMotionInfluence',
+      'motionInfluence',
+    );
+    bindSlider(
+      'sldSubjectBeatInfluence',
+      'valSubjectBeatInfluence',
+      'beatInfluence',
+    );
 
     this.subjectFxInspectorHost
       .querySelectorAll('[data-subject-reactivity]')
       .forEach((button) => {
         button.addEventListener('click', () => {
-          this.commitSubjectFxConfig({ reactivity: button.dataset.subjectReactivity });
+          this.commitSubjectFxConfig({
+            reactivity: button.dataset.subjectReactivity,
+          });
           this.renderSubjectFxInspector();
         });
       });
@@ -233,12 +285,15 @@ export function applySubjectFxUIMixin(proto) {
       .querySelector('#chkSubjectBypass')
       ?.addEventListener('change', (event) => {
         const shouldBypass = !event.target.checked;
-        if (shouldBypass !== !!this.subjectFxBypass) this.toggleSubjectFxBypass();
+        if (shouldBypass !== !!this.subjectFxBypass)
+          this.toggleSubjectFxBypass();
       });
     this.subjectFxInspectorHost
       .querySelector('#btnSubjectGoToClip')
       ?.addEventListener('click', () => {
-        void this.seekVideo(Math.min(item.endTime - 0.05, item.startTime + 0.05));
+        void this.seekVideo(
+          Math.min(item.endTime - 0.05, item.startTime + 0.05),
+        );
       });
     this.subjectFxInspectorHost
       .querySelector('#btnSubjectRetry')
@@ -253,7 +308,9 @@ export function applySubjectFxUIMixin(proto) {
     this.subjectFxInspectorHost
       .querySelector('#btnSubjectAdvanced')
       ?.addEventListener('click', (event) => {
-        const panel = this.subjectFxInspectorHost.querySelector('#subjectAdvancedPanel');
+        const panel = this.subjectFxInspectorHost.querySelector(
+          '#subjectAdvancedPanel',
+        );
         const open = panel?.classList.toggle('hidden') === false;
         event.currentTarget.textContent = open ? 'Advanced ▾' : 'Advanced ▸';
         event.currentTarget.setAttribute('aria-expanded', String(open));
@@ -265,7 +322,9 @@ export function applySubjectFxUIMixin(proto) {
     if (this.btnSubjectBypass) {
       this.btnSubjectBypass.checked = !bypass;
     }
-    const pill = this.subjectFxInspectorHost?.querySelector('.subject-status-pill');
+    const pill = this.subjectFxInspectorHost?.querySelector(
+      '.subject-status-pill',
+    );
     if (pill && bypass) {
       pill.className = 'subject-status-pill subject-status-pill--muted';
       const text = pill.querySelector('.subject-status-text');

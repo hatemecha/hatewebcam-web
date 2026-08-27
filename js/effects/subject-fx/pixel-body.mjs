@@ -1,5 +1,8 @@
 import { seededRange } from '../../subject/subject-prng.mjs';
-import { mapNormToCanvas } from '../../subject/subject-frame-map.mjs';
+import {
+  drawSubjectMask,
+  mapNormToCanvas,
+} from '../../subject/subject-frame-map.mjs';
 
 export class PixelBodyEngine {
   render(
@@ -21,7 +24,10 @@ export class PixelBodyEngine {
     ctx.save();
 
     if (frame.mask && sourceCanvas && !frame.simplified) {
-      const grid = Math.max(6, Math.round(config.gridSize * (1.1 - dissolve * 0.25)));
+      const grid = Math.max(
+        6,
+        Math.round(config.gridSize * (1.1 - dissolve * 0.25)),
+      );
       const mask = frame.mask;
       const subjectAlpha = Math.max(0, 1 - dissolve * 1.05);
       const digitalAlpha = dissolve;
@@ -42,7 +48,11 @@ export class PixelBodyEngine {
       for (let gy = 0; gy < mask.height; gy += 2) {
         for (let gx = 0; gx < mask.width; gx += 2) {
           if (mask.data[gy * mask.width + gx] < 128) continue;
-          const mapped = mapNormToCanvas(gx / mask.width, gy / mask.height, drawMetrics);
+          const mapped = mapNormToCanvas(
+            gx / mask.width,
+            gy / mask.height,
+            drawMetrics,
+          );
           const noise = seededRange(seed, 0, 1, clipId, gx, gy, 'dissolve');
           if (noise > dissolve) continue;
           const cell = grid * (0.7 + noise * 0.6);
@@ -86,19 +96,11 @@ export class PixelBodyEngine {
   }
 
   #drawMaskedSource(ctx, drawMetrics, frame, sourceCanvas) {
-    const mask = frame.mask;
     const overlay = document.createElement('canvas');
     overlay.width = sourceCanvas.width;
     overlay.height = sourceCanvas.height;
     const octx = overlay.getContext('2d');
-    const step = 2;
-    for (let gy = 0; gy < mask.height; gy += step) {
-      for (let gx = 0; gx < mask.width; gx += step) {
-        if (mask.data[gy * mask.width + gx] < 128) continue;
-        const mapped = mapNormToCanvas(gx / mask.width, gy / mask.height, drawMetrics);
-        octx.fillRect(mapped.x, mapped.y, step + 1, step + 1);
-      }
-    }
+    drawSubjectMask(octx, frame.mask, drawMetrics);
     ctx.drawImage(sourceCanvas, 0, 0);
     ctx.globalCompositeOperation = 'destination-in';
     ctx.drawImage(overlay, 0, 0);

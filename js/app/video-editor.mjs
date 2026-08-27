@@ -142,7 +142,7 @@ export function applyLocalvideoeditorMixin(proto) {
     this.updateTimelineClipboardStatus();
     this.appliedTimelineItemIds = {};
     this.appliedTimelineSubjectId = '';
-    this.resetSubjectFxTemporalState?.();
+    this.resetSubjectFxTemporalState?.({ hard: true });
     this.timelineDetectorSyncPromise = null;
     this.timelineDetectorSyncForce = false;
     this.videoBaseImageSettings = null;
@@ -531,10 +531,16 @@ export function applyLocalvideoeditorMixin(proto) {
       );
     if (this.inspectorAdjustmentsHost) {
       this.inspectorAdjustmentsHost.classList.toggle('hidden', !hasSelection);
-      this.inspectorAdjustmentsHost.classList.toggle('is-subject-fx', isSubject);
+      this.inspectorAdjustmentsHost.classList.toggle(
+        'is-subject-fx',
+        isSubject,
+      );
     }
     if (this.adjustContextNav)
-      this.adjustContextNav.classList.toggle('hidden', !hasSelection || isSubject);
+      this.adjustContextNav.classList.toggle(
+        'hidden',
+        !hasSelection || isSubject,
+      );
     if (this.effectsControlsSlot)
       this.effectsControlsSlot.classList.toggle('hidden', isSubject);
     if (this.adjustContextHelp)
@@ -2509,6 +2515,13 @@ export function applyLocalvideoeditorMixin(proto) {
     );
     await this.syncVideoTimelineDetectorsAt(time, false);
     await this.syncVideoTimelineSubjectAt?.(time, false);
+    if (this.subjectFxEffect?.active && !this.subjectFxBypass) {
+      await this.subjectFxEffect.analyze(
+        this.videoEl,
+        time * 1000,
+        this.renderEngine.getProfile('export'),
+      );
+    }
     this.updateVideoExportProgress(
       frameIndex,
       this.videoExportTotalFrames || 0,

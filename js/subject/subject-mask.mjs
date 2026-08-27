@@ -16,7 +16,10 @@ export class SubjectMask {
   constructor(width, height, data) {
     this.width = width;
     this.height = height;
-    this.data = data instanceof Uint8Array ? data : new Uint8Array(data || width * height);
+    this.data =
+      data instanceof Uint8Array
+        ? data
+        : new Uint8Array(data || width * height);
     this.coverage = 0;
     this.bounds = null;
     this.contour = [];
@@ -150,11 +153,9 @@ export function pickRandomMaskPoint(mask, seed, clipId, index, rng) {
   const bounds = mask.bounds;
   for (let attempt = 0; attempt < 24; attempt++) {
     const nx =
-      bounds.minX +
-      random(seed, clipId, index, attempt, 'x') * bounds.width;
+      bounds.minX + random(seed, clipId, index, attempt, 'x') * bounds.width;
     const ny =
-      bounds.minY +
-      random(seed, clipId, index, attempt, 'y') * bounds.height;
+      bounds.minY + random(seed, clipId, index, attempt, 'y') * bounds.height;
     if (mask.sampleMask(nx, ny) > 0.45) {
       return { x: nx, y: ny };
     }

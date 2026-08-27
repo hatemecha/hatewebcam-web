@@ -1,4 +1,9 @@
 import { expect, test } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
+
+const SUBJECT_VIDEO_FIXTURE = fileURLToPath(
+  new URL('../fixtures/subject-init.webm', import.meta.url),
+);
 
 test('video editor shell loads without fatal errors', async ({ page }) => {
   const fatalMessages = [];
@@ -22,9 +27,7 @@ test('video editor shell loads without fatal errors', async ({ page }) => {
   await expect(page.locator('#videoExportDetails')).toContainText(
     'Importá un video',
   );
-  await expect(
-    page.locator('[data-effect-type="subject"]'),
-  ).toHaveCount(2);
+  await expect(page.locator('[data-effect-type="subject"]')).toHaveCount(2);
   expect(fatalMessages).toEqual([]);
 });
 
@@ -87,10 +90,74 @@ test('runtime vendor assets are served from dist', async ({ request }) => {
   for (const path of [
     '/vendor/mediabunny/mediabunny.min.mjs',
     '/vendor/mediapipe/face_mesh/face_mesh.js',
+    '/vendor/mediapipe/tasks-vision/wasm/vision_wasm_internal.js',
+    '/vendor/mediapipe/tasks-vision/wasm/vision_wasm_internal.wasm',
+    '/vendor/mediapipe/pose_landmarker/pose_landmarker_lite.task',
+    '/vendor/mediapipe/image_segmenter/selfie_segmenter.tflite',
   ]) {
     const response = await request.get(path);
     expect(response.ok()).toBeTruthy();
   }
+});
+
+test('Subject FX initializes its production Worker and MediaPipe assets', async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const failures = [];
+  const requestedSubjectAssets = new Set();
+  const requiredAssets = [
+    'vision_wasm_module_internal.js',
+    'vision_wasm_module_internal.wasm',
+    'pose_landmarker_lite.task',
+    'selfie_segmenter.tflite',
+  ];
+
+  page.on('pageerror', (error) => failures.push(`pageerror: ${error.message}`));
+  page.on('console', (message) => {
+    const knownMediaPipeNoise = [
+      'OpenGL error checking is disabled',
+      'Created TensorFlow Lite XNNPACK delegate for CPU',
+      'Feedback manager requires a model with a single signature inference',
+    ];
+    if (knownMediaPipeNoise.some((text) => message.text().includes(text))) {
+      return;
+    }
+    if (message.type() === 'error' || message.type() === 'warning') {
+      failures.push(`console.${message.type()}: ${message.text()}`);
+    }
+  });
+  page.on('requestfailed', (request) => {
+    failures.push(
+      `requestfailed: ${request.url()} ${request.failure()?.errorText || ''}`,
+    );
+  });
+  page.on('response', (response) => {
+    const asset = requiredAssets.find((name) => response.url().endsWith(name));
+    if (!asset) return;
+    if (response.ok()) requestedSubjectAssets.add(asset);
+    else failures.push(`HTTP ${response.status()}: ${response.url()}`);
+  });
+
+  await page.goto('/');
+  await page.getByRole('tab', { name: /video/i }).click();
+  await page.locator('#videoFileInput').setInputFiles(SUBJECT_VIDEO_FIXTURE);
+  await expect(page.locator('#videoTimelineShell')).toBeVisible();
+  await page
+    .locator('.timeline-palette-chip[data-effect-type="subject"]')
+    .click();
+
+  await expect(page.locator('.timeline-item-label')).toContainText('ANATOMY');
+  await page.locator('#btnVideoPlay').click();
+  await page.waitForTimeout(3000);
+  expect(failures).toEqual([]);
+  await expect
+    .poll(() => [...requestedSubjectAssets].sort(), { timeout: 45_000 })
+    .toEqual([...requiredAssets].sort());
+  await expect(page.locator('.subject-status-text')).not.toContainText(
+    /No se pudo|error/i,
+  );
+  expect(failures).toEqual([]);
 });
 
 test('language follows the browser and a discreet persisted override', async ({

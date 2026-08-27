@@ -28,8 +28,7 @@ function seededRandom(seed, ...parts) {
 
 function pickSize(seed, clipId, index, scale = 1) {
   const roll = seededRandom(seed, clipId, index, 'tier');
-  const tier =
-    roll < 0.55 ? 'micro' : roll < 0.88 ? 'small' : 'medium';
+  const tier = roll < 0.55 ? 'micro' : roll < 0.88 ? 'small' : 'medium';
   const [min, max] = SIZE_TIERS[tier];
   return seededRange(seed, min, max, clipId, index, 'size') * scale;
 }
@@ -71,13 +70,11 @@ export class FragmentEngine {
       this.lastSeed = seed;
     }
 
-    const maxCount = Math.max(
-      3,
-      Math.round(config.density * intensity * 22),
-    );
+    const maxCount = Math.max(3, Math.round(config.density * intensity * 22));
     const regions = frame.regions || {};
     const strongest = getStrongestMotionRegion(regions);
-    const spawnRate = 0.35 + intensity * config.density * 0.8 + beatStrength * 0.35;
+    const spawnRate =
+      0.35 + intensity * config.density * 0.8 + beatStrength * 0.35;
     this.spawnCooldown -= spawnRate;
 
     while (this.spawnCooldown <= 0 && this.fragments.length < maxCount) {
@@ -125,7 +122,9 @@ export class FragmentEngine {
           age: fragment.age + 1,
         };
       })
-      .filter((fragment) => fragment.life > 0.08 && fragment.age < fragment.maxAge);
+      .filter(
+        (fragment) => fragment.life > 0.08 && fragment.age < fragment.maxAge,
+      );
 
     while (this.fragments.length > maxCount) {
       this.fragments.shift();
@@ -167,7 +166,14 @@ export class FragmentEngine {
       kind = 'edge';
       const point =
         frame.mask.contour[
-          seededInt(seed, 0, frame.mask.contour.length - 1, clipId, index, 'edge')
+          seededInt(
+            seed,
+            0,
+            frame.mask.contour.length - 1,
+            clipId,
+            index,
+            'edge',
+          )
         ];
       anchor = point;
     } else if (beatStrength > 0.45 && modeRoll < 0.85) {
@@ -176,7 +182,9 @@ export class FragmentEngine {
     } else {
       const regionNames = Object.keys(JOINT_SPAWN);
       const regionName =
-        regionNames[seededInt(seed, 0, regionNames.length - 1, clipId, index, 'joint')];
+        regionNames[
+          seededInt(seed, 0, regionNames.length - 1, clipId, index, 'joint')
+        ];
       const joints = JOINT_SPAWN[regionName];
       const jointIndex =
         joints[seededInt(seed, 0, joints.length - 1, clipId, index, 'ji')];
@@ -213,7 +221,9 @@ export class FragmentEngine {
           0.08,
       life: 1,
       age: 0,
-      maxAge: Math.round(12 + persistenceToFrames(persistence) + beatStrength * 8),
+      maxAge: Math.round(
+        12 + persistenceToFrames(persistence) + beatStrength * 8,
+      ),
       rotation: seededRange(seed, -8, 8, clipId, index, 'rot'),
     };
   }
@@ -226,14 +236,16 @@ export class FragmentEngine {
       if (alpha < 0.03) return;
 
       if (frame?.mask && !frame.simplified) {
-        const centerX = (fragment.x + fragment.size / 2) / sourceCanvas.width;
-        const centerY = (fragment.y + fragment.size / 2) / sourceCanvas.height;
-        if (frame.mask.sampleMask(centerX, centerY) < 0.2) return;
+        if (frame.mask.sampleMask(fragment.anchorX, fragment.anchorY) < 0.2)
+          return;
       }
 
       ctx.save();
       ctx.globalAlpha = alpha * 0.94;
-      ctx.translate(fragment.x + fragment.size / 2, fragment.y + fragment.size / 2);
+      ctx.translate(
+        fragment.x + fragment.size / 2,
+        fragment.y + fragment.size / 2,
+      );
       ctx.rotate((fragment.rotation * Math.PI) / 180);
       ctx.drawImage(
         sourceCanvas,

@@ -1,7 +1,18 @@
-/** MediaPipe asset paths shared by worker and app (no app imports). */
-export const MEDIAPIPE_TASKS_VISION_WASM_BASE =
-  'vendor/mediapipe/tasks-vision/wasm';
-export const MEDIAPIPE_POSE_LANDMARKER_MODEL =
-  'vendor/mediapipe/pose_landmarker/pose_landmarker_lite.task';
-export const MEDIAPIPE_SELFIE_SEGMENTER_MODEL =
-  'vendor/mediapipe/image_segmenter/selfie_segmenter.tflite';
+const SUBJECT_ASSET_PATHS = Object.freeze({
+  wasmBaseUrl: 'vendor/mediapipe/tasks-vision/wasm',
+  poseModelUrl: 'vendor/mediapipe/pose_landmarker/pose_landmarker_lite.task',
+  segmenterModelUrl: 'vendor/mediapipe/image_segmenter/selfie_segmenter.tflite',
+});
+
+/** Resolve static assets against the page URL before crossing into a Worker. */
+export function resolveSubjectAssetUrls(baseUrl) {
+  if (!baseUrl) throw new Error('subject_asset_base_url_missing');
+  return Object.fromEntries(
+    Object.entries(SUBJECT_ASSET_PATHS).map(([key, path]) => [
+      key,
+      new URL(path, baseUrl).href.replace(/\/$/, ''),
+    ]),
+  );
+}
+
+export { SUBJECT_ASSET_PATHS };

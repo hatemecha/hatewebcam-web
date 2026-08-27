@@ -1,8 +1,6 @@
 /** Deterministic PRNG for reproducible Subject FX (preview/export parity). */
 export function hashSeed(parts) {
-  const text = parts
-    .map((part) => String(part ?? ''))
-    .join('\u001f');
+  const text = parts.map((part) => String(part ?? '')).join('\u001f');
   let hash = 2166136261;
   for (let i = 0; i < text.length; i++) {
     hash ^= text.charCodeAt(i);

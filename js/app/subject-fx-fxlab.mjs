@@ -64,9 +64,15 @@ export function applySubjectFxLabMixin(proto) {
     const regions = frame?.regions || {};
     const strongest = getStrongestMotionRegion(regions);
     const seg = effect?.analyzer?.segmentationSource || 'none';
-    const simplified = effect?.analyzer?.useSimplifiedMode ? 'FALLBACK' : 'AVAILABLE';
+    const simplified = effect?.analyzer?.useSimplifiedMode
+      ? 'FALLBACK'
+      : 'AVAILABLE';
 
-    if (this.subjectFxLabMode === 'overlay' && this.canvas && this.previewWrapper) {
+    if (
+      this.subjectFxLabMode === 'overlay' &&
+      this.canvas &&
+      this.previewWrapper
+    ) {
       this.subjectFxLabOverlay.classList.remove('hidden');
       const rect = this.canvas.getBoundingClientRect();
       const wrapperRect = this.previewWrapper.getBoundingClientRect();
@@ -78,7 +84,12 @@ export function applySubjectFxLabMixin(proto) {
       this.subjectFxLabOverlay.style.top = `${rect.top - wrapperRect.top}px`;
 
       const octx = this.subjectFxLabOverlay.getContext('2d');
-      octx.clearRect(0, 0, this.subjectFxLabOverlay.width, this.subjectFxLabOverlay.height);
+      octx.clearRect(
+        0,
+        0,
+        this.subjectFxLabOverlay.width,
+        this.subjectFxLabOverlay.height,
+      );
       const drawMetrics = this.getVideoDrawMetrics?.(this.canvas, 'preview');
       if (frame && drawMetrics) {
         if (mask?.data?.length) {
@@ -88,7 +99,11 @@ export function applySubjectFxLabMixin(proto) {
           for (let y = 0; y < mask.height; y += step) {
             for (let x = 0; x < mask.width; x += step) {
               if (mask.data[y * mask.width + x] < 128) continue;
-              const p = mapNormToCanvas(x / mask.width, y / mask.height, drawMetrics);
+              const p = mapNormToCanvas(
+                x / mask.width,
+                y / mask.height,
+                drawMetrics,
+              );
               octx.fillRect(p.x, p.y, step + 1, step + 1);
             }
           }
