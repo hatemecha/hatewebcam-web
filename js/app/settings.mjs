@@ -25,13 +25,13 @@ export function applyStorageMixin(proto) {
   };
 
   proto.loadConfig = function () {
-    return this.loadJsonStorage(this.STORAGE_KEY, {});
+    return this.settingsStore.loadObject(this.STORAGE_KEY);
   };
   proto.saveConfig = function (cfg) {
     return this.saveJsonStorage(this.STORAGE_KEY, cfg);
   };
   proto.loadProfiles = function () {
-    return this.loadJsonStorage(this.PROFILES_KEY, {});
+    return this.settingsStore.loadObject(this.PROFILES_KEY);
   };
   proto.saveProfiles = function (p) {
     return this.saveJsonStorage(this.PROFILES_KEY, p);

@@ -49,6 +49,14 @@ export class BlinkDetection {
     return 'Detección de Pestañeos';
   }
 
+  dispose() {
+    this._disposeOwnFaceMesh();
+    this.landmarkSource = null;
+    this.blinkCallback = null;
+    this.ready = false;
+    this.reset();
+  }
+
   getDetectionSummary() {
     if (this.initError) return { status: 'error', detected: false };
     const detected = performance.now() - this._lastBlinkTs < 900;

@@ -48,6 +48,23 @@ export class FaceDetection {
     return 'Detector de Caras';
   }
 
+  dispose() {
+    const mesh = this.faceMesh;
+    this.faceMesh = null;
+    this.ready = false;
+    this._processing = false;
+    this._faces = [];
+    if (!mesh || typeof mesh.close !== 'function') return;
+    try {
+      const closeResult = mesh.close();
+      closeResult?.catch?.((error) => {
+        console.warn('FaceDetection: no se pudo cerrar FaceMesh.', error);
+      });
+    } catch (error) {
+      console.warn('FaceDetection: no se pudo cerrar FaceMesh.', error);
+    }
+  }
+
   getDetectionSummary() {
     if (this.initError) return { status: 'error', count: 0 };
     const now = performance.now();

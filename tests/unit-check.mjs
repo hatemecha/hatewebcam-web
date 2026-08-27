@@ -35,6 +35,7 @@ import {
   normalizePerformanceMode,
 } from '../js/app/constants.mjs';
 import { EditAssistController } from '../js/app/edit-assist-controller.mjs';
+import { SettingsStore } from '../js/app/settings-store.mjs';
 import { applyEffectsMixin } from '../js/app/effects.mjs';
 import { applyCameraMixin } from '../js/app/camera.mjs';
 import { applyRenderLoopMixin } from '../js/app/render.mjs';
@@ -55,6 +56,25 @@ function mockGlobal(name, value) {
     if (descriptor) Object.defineProperty(globalThis, name, descriptor);
     else delete globalThis[name];
   };
+}
+
+function checkSettingsStoreRejectsNonObjectState() {
+  for (const raw of ['null', '"unexpected"', '[]', '42']) {
+    const store = new SettingsStore({
+      storage: { getItem: () => raw },
+    });
+    assert.deepEqual(
+      store.loadObject('settings'),
+      {},
+      `stored ${raw} must fall back to a settings object`,
+    );
+  }
+
+  const saved = { flipH: true };
+  const store = new SettingsStore({
+    storage: { getItem: () => JSON.stringify(saved) },
+  });
+  assert.deepEqual(store.loadObject('settings'), saved);
 }
 
 async function checkCameraStreamCleanup() {
@@ -273,6 +293,7 @@ function checkReusableMorphologyBuffers() {
 
 function checkBlinkDetectionUsesRefinedEyeLandmarks() {
   let options;
+  let closeCalls = 0;
   class FaceMesh {
     setOptions(value) {
       options = value;
@@ -281,9 +302,14 @@ function checkBlinkDetectionUsesRefinedEyeLandmarks() {
     initialize() {
       return Promise.resolve();
     }
+    close() {
+      closeCalls += 1;
+      return Promise.resolve();
+    }
   }
   const restoreFaceMesh = mockGlobal('FaceMesh', FaceMesh);
   const effect = new BlinkDetection();
+  effect.dispose();
   restoreFaceMesh();
   assert.equal(
     options.refineLandmarks,
@@ -300,6 +326,7 @@ function checkBlinkDetectionUsesRefinedEyeLandmarks() {
     0.35,
     'eye smoothing must prioritize low latency',
   );
+  assert.equal(closeCalls, 1, 'disabled blink detection must close FaceMesh');
 }
 
 async function checkBlinkCallbackClearsWhenBlobDisabled() {
@@ -336,6 +363,7 @@ async function checkBlinkCallbackClearsWhenBlobDisabled() {
 
 function checkFaceDetectionUsesRefinedEyeLandmarks() {
   let options;
+  let closeCalls = 0;
   class FaceMesh {
     setOptions(value) {
       options = value;
@@ -344,12 +372,17 @@ function checkFaceDetectionUsesRefinedEyeLandmarks() {
     initialize() {
       return Promise.resolve();
     }
+    close() {
+      closeCalls += 1;
+      return Promise.resolve();
+    }
   }
   const restoreDocument = mockGlobal('document', {
     createElement: () => ({ getContext: () => ({}) }),
   });
   const restoreFaceMesh = mockGlobal('FaceMesh', FaceMesh);
   const effect = new FaceDetection();
+  effect.dispose();
   restoreFaceMesh();
   restoreDocument();
   assert.equal(
@@ -374,6 +407,7 @@ function checkFaceDetectionUsesRefinedEyeLandmarks() {
   );
   assert.equal(effect.showBox, true, 'face boxes must be enabled by default');
   assert.equal(effect.showBlur, false, 'face blur must be opt-in');
+  assert.equal(closeCalls, 1, 'disabled face detection must close FaceMesh');
   effect.setConfig({ labelSize: 99 });
   assert.equal(
     effect.getConfig().labelSize,
@@ -1936,6 +1970,7 @@ function checkObservedExportProgressAndTimelineTicks() {
 }
 
 await checkCameraStreamCleanup();
+checkSettingsStoreRejectsNonObjectState();
 checkCameraPreservesSupportedFps();
 checkReusableMorphologyBuffers();
 checkBlinkDetectionUsesRefinedEyeLandmarks();

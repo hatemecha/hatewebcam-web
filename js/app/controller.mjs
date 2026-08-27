@@ -200,7 +200,7 @@ export class AppController {
     this.imageSettings = { ...DEFAULT_IMAGE_SETTINGS };
   }
 
-  start() {
+  async start() {
     setupDom(this);
     if (
       !this.videoEl ||
@@ -211,12 +211,11 @@ export class AppController {
       !this.btnTakePhoto ||
       !this.btnRecord
     ) {
-      console.error(
+      throw new Error(
         'HateWebcam: faltan elementos base del DOM para iniciar la app.',
       );
-      return;
     }
-    this.init();
+    await this.init();
   }
 }
 

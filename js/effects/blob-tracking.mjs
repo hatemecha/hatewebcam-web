@@ -69,6 +69,16 @@ export class BlobTracking {
     return 'Detector de Objetos';
   }
 
+  dispose() {
+    if (this._worker) {
+      this._worker.onmessage = null;
+      this._worker.onerror = null;
+      this._worker.terminate();
+      this._worker = null;
+    }
+    this._workerBusy = false;
+  }
+
   getDetectionSummary() {
     const count = this._trackedBlobs.length;
     return { status: count > 0 ? 'detected' : 'searching', count };

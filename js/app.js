@@ -10,7 +10,7 @@ const i18n = initializeI18n();
 try {
   await loadAppTemplates();
   i18n.translateDocument();
-  new AppController().start();
+  await new AppController().start();
 } catch (err) {
   console.error(err);
   document.body.innerHTML = `

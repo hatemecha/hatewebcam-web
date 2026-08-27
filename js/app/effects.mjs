@@ -39,8 +39,10 @@ export function applyEffectsMixin(proto) {
         if (this.colorPickSection)
           this.colorPickSection.classList.remove('hidden');
       } else {
-        if (this.blobTrackingEffect)
+        if (this.blobTrackingEffect) {
           this.effectManager.removeEffect(this.blobTrackingEffect);
+          this.blobTrackingEffect.dispose?.();
+        }
         this.blobTrackingEffect = null;
         if (this.blinkDetectionEffect)
           this.blinkDetectionEffect.setBlinkCallback(null);
@@ -107,8 +109,10 @@ export function applyEffectsMixin(proto) {
           setTimeout(() => this.hideStatus(this.captureStatus), 1200);
         }
       } else {
-        if (this.faceDetectionEffect)
+        if (this.faceDetectionEffect) {
           this.effectManager.removeEffect(this.faceDetectionEffect);
+          this.faceDetectionEffect.dispose?.();
+        }
         this.faceDetectionEffect = null;
         this.syncBlinkLandmarkSource();
       }
@@ -168,8 +172,10 @@ export function applyEffectsMixin(proto) {
           setTimeout(() => this.hideStatus(this.captureStatus), 1200);
         }
       } else {
-        if (this.blinkDetectionEffect)
+        if (this.blinkDetectionEffect) {
           this.effectManager.removeEffect(this.blinkDetectionEffect);
+          this.blinkDetectionEffect.dispose?.();
+        }
         this.blinkDetectionEffect = null;
       }
     }

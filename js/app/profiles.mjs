@@ -35,7 +35,12 @@ export function applyProfilesMixin(proto) {
       config.face = this.faceDetectionEffect.getConfig();
     if (this.blinkDetectionEffect)
       config.blink = this.blinkDetectionEffect.getConfig();
-    profiles[name] = config;
+    Object.defineProperty(profiles, name, {
+      value: config,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
     this.saveProfiles(profiles);
     this.updateProfilesList();
     this.profileSelect.value = name;

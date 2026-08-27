@@ -17,6 +17,13 @@ export class SettingsStore {
     }
   }
 
+  loadObject(key, fallbackValue = {}) {
+    const value = this.loadJson(key, fallbackValue);
+    return value !== null && typeof value === 'object' && !Array.isArray(value)
+      ? value
+      : fallbackValue;
+  }
+
   saveJson(key, value) {
     try {
       this.storage?.setItem(key, JSON.stringify(value));
