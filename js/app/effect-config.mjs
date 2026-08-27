@@ -25,7 +25,9 @@ export function applyEffectConfigUIMixin(proto) {
       bt.boxColor,
       this.DEFAULT_QUICK_DETECTOR_SETTINGS.blobBoxColor,
     );
+    const targetColor = this.normalizeHexColor(bt.targetColor, '#00c853');
     bt.boxColor = boxColor;
+    bt.targetColor = targetColor;
     const el = this.createSection(
       'Detector de objetos por color',
       `
@@ -48,13 +50,29 @@ export function applyEffectConfigUIMixin(proto) {
         </div>
       </div>
 
-      <div class="config-block" id="cfgColorBlock" ${bt.detectionMode !== 'manual' ? 'style="display:none"' : ''}>
-        <div class="config-block-title">Sensibilidad del color</div>
+      <div class="config-block ${bt.detectionMode === 'manual' ? '' : 'hidden'}" id="cfgColorBlock">
+        <div class="config-block-title">Color objetivo</div>
+        <div class="target-color-control">
+          <label class="color-picker-btn target-color-picker">
+            <span class="color-swatch" id="targetColorSwatch" style="background:${targetColor}"></span>
+            <span class="target-color-copy">
+              <strong>Color a detectar</strong>
+              <small id="targetColorValue">${targetColor.toUpperCase()}</small>
+            </span>
+            <input type="color" id="inpTargetColor" value="${targetColor}" aria-label="Color a detectar">
+          </label>
+          <button type="button" class="btn target-color-eyedropper" id="btnPickTargetColor">
+            <i class="fa-solid fa-eye-dropper" aria-hidden="true"></i>
+            Elegir en el video
+          </button>
+        </div>
+        <div class="status-msg hidden" id="cfgTargetColorStatus" role="status" aria-live="polite"></div>
+        <div class="config-subsection-title">Sensibilidad</div>
         <div class="help-text">Si la detección es demasiado estricta, subí este valor. Si detecta demasiado, bajalo.</div>
         ${this.slider('sldTolerance', 'valTolerance', 'Tolerancia', bt._tolerance, 10, 100)}
 
-        <button class="btn" id="btnAdvancedHsv" style="font-size:11px;margin-top:4px">Ajustes avanzados (HSV manual)</button>
-        <div id="hsvAdvanced" class="hidden" style="margin-top:8px">
+        <button type="button" class="btn config-advanced-toggle" id="btnAdvancedHsv">Ajustes avanzados (HSV manual)</button>
+        <div id="hsvAdvanced" class="config-advanced-panel hidden">
           <div class="help-text">Estos controles permiten ajustar el rango de color manualmente usando el modelo HSV (Tono, Saturación, Brillo).</div>
           ${this.slider('sldHMin', 'valHMin', 'Tono mínimo (H)', bt.hsvMin[0], 0, 180)}
           ${this.slider('sldSMin', 'valSMin', 'Saturación mín. (S)', bt.hsvMin[1], 0, 255)}
@@ -105,8 +123,10 @@ export function applyEffectConfigUIMixin(proto) {
       el.querySelectorAll('input[name="detMode"]').forEach((r) => {
         r.addEventListener('change', (e) => {
           bt.detectionMode = e.target.value;
-          el.querySelector('#cfgColorBlock').style.display =
-            bt.detectionMode === 'manual' ? '' : 'none';
+          el.querySelector('#cfgColorBlock').classList.toggle(
+            'hidden',
+            bt.detectionMode !== 'manual',
+          );
           el.querySelectorAll('.radio-option').forEach((o) =>
             o.classList.remove('selected'),
           );
@@ -125,6 +145,21 @@ export function applyEffectConfigUIMixin(proto) {
       const btnAdv = el.querySelector('#btnAdvancedHsv');
       const hsvAdv = el.querySelector('#hsvAdvanced');
       btnAdv.addEventListener('click', () => hsvAdv.classList.toggle('hidden'));
+
+      const targetInput = el.querySelector('#inpTargetColor');
+      const targetSwatch = el.querySelector('#targetColorSwatch');
+      const targetValue = el.querySelector('#targetColorValue');
+      const targetStatus = el.querySelector('#cfgTargetColorStatus');
+      targetInput.addEventListener('input', (event) => {
+        if (!bt.setColorFromHex(event.target.value)) return;
+        targetSwatch.style.background = bt.targetColor;
+        targetValue.textContent = bt.targetColor.toUpperCase();
+        this.showStatus(targetStatus, 'Color objetivo actualizado.', 'success');
+        this.scheduleSaveActiveEffectSettings();
+      });
+      el.querySelector('#btnPickTargetColor').addEventListener('click', () =>
+        this.enableColorPick(targetStatus),
+      );
 
       this.bindSlider(el, 'sldHMin', 'valHMin', (v) => (bt.hsvMin[0] = v));
       this.bindSlider(el, 'sldSMin', 'valSMin', (v) => (bt.hsvMin[1] = v));

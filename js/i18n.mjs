@@ -44,6 +44,10 @@ const ENGLISH_REPLACEMENTS = Object.entries({
   'Elegí si querés buscar un color específico, zonas de mucha luz o zonas oscuras.':
     'Choose whether to detect a specific color, bright areas or dark areas.',
   'Un color específico': 'A specific color',
+  'Color objetivo actualizado.': 'Target color updated.',
+  'Color objetivo': 'Target color',
+  'Color a detectar': 'Color to detect',
+  'Elegir en el video': 'Pick from video',
   'Si la detección es demasiado estricta, subí este valor. Si detecta demasiado, bajalo.':
     'Raise this value if detection is too strict. Lower it if too much is detected.',
   'Estos controles permiten ajustar el rango de color manualmente usando el modelo HSV (Tono, Saturación, Brillo).':
@@ -143,8 +147,7 @@ const ENGLISH_REPLACEMENTS = Object.entries({
   'La línea roja marca el corte. Click sobre un clip de efecto.':
     'The red line marks the cut. Click an effect clip.',
   'Arrastrá los bordes rojos en VIDEO.': 'Drag the red edges on VIDEO.',
-  'Arrastrá a una pista o hacé doble click.':
-    'Drag onto a track or double-click.',
+  'Hacé click o arrastrá a una pista.': 'Click or drag onto a track.',
   'Línea de tiempo. Arrastrá para elegir un tramo o mover el cursor.':
     'Timeline. Drag to select a range or move the playhead.',
   'Cortar todos los efectos en cada marcador':
@@ -169,6 +172,9 @@ const ENGLISH_REPLACEMENTS = Object.entries({
   'Importá un video para editar': 'Import a video to edit',
   'Importá un video': 'Import a video',
   'Importar video': 'Import video',
+  'Retomar una edición': 'Resume an edit',
+  'Abrí un proyecto .hatewebcam.json. Después te pediremos el video original.':
+    'Open a .hatewebcam.json project. We will ask for the original video next.',
   'Arrastrá efectos a la timeline': 'Drag effects onto the timeline',
   'Exportá el resultado': 'Export the result',
   'Cómo editar': 'How to edit',

@@ -180,7 +180,7 @@
       </button>
     </div>
     <span class="timeline-palette-hint"
-      >Arrastrá a una pista o hacé doble click.</span
+      >Hacé click o arrastrá a una pista.</span
     >
   </div>
   <div class="timeline-viewport" id="timelineViewport">
@@ -364,7 +364,6 @@
       aria-selected="true"
       aria-controls="inspectorPanelProject"
       data-tab="project"
-      title="Importar y exportar"
     >
       Proyecto
     </button>
@@ -376,7 +375,6 @@
       aria-selected="false"
       aria-controls="inspectorPanelEffect"
       data-tab="effect"
-      title="Duración del efecto seleccionado"
     >
       Clip
     </button>
@@ -388,7 +386,6 @@
       aria-selected="false"
       aria-controls="inspectorPanelAdjust"
       data-tab="adjust"
-      title="Opciones del efecto activo"
     >
       Ajustes
     </button>
@@ -405,7 +402,14 @@
       aria-labelledby="tabInspectorProject"
     >
       <div class="panel-section">
-        <div class="section-title">Video</div>
+        <div class="section-title">Proyecto</div>
+        <div class="video-project-resume">
+          <p class="video-project-resume-title">Retomar una edición</p>
+          <p class="help-text">
+            Abrí un proyecto .hatewebcam.json. Después te pediremos el video
+            original.
+          </p>
+        </div>
         <div class="help-text" id="videoProjectHelp">
           MP4, WebM y otros formatos compatibles. La exportación estable usa
           WebM sin audio.
@@ -482,7 +486,7 @@
               />
             </label>
           </div>
-          <div class="btn-row edit-assist-actions">
+          <div class="btn-row edit-assist-actions edit-assist-tempo-actions">
             <button type="button" class="btn" id="btnEditAssistHalf" disabled>
               Usar mitad
             </button>
@@ -517,7 +521,7 @@
               <option value="8">Cada 8 beats</option>
             </select>
           </div>
-          <div class="btn-row edit-assist-actions">
+          <div class="btn-row edit-assist-actions edit-assist-marker-actions">
             <button type="button" class="btn" id="btnEditAssistBeat" disabled>
               Cada beat
             </button>
@@ -688,11 +692,12 @@
               <option value="alternate-beat">Alternar cada beat</option>
             </select>
           </div>
-          <div class="btn-row">
+          <div class="btn-row clip-actions">
             <button type="button" class="btn" id="btnOpenEffectAdjust">
               <i class="fa-solid fa-sliders"></i> Editar ajustes
             </button>
             <button type="button" class="btn danger" id="btnDeleteVideoEffect">
+              <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
               Eliminar clip
             </button>
           </div>

@@ -175,12 +175,16 @@ function checkReusableMorphologyBuffers() {
   );
 
   effect.setColorFromPixel(255, 0, 0);
+  assert.equal(effect.targetColor, '#ff0000');
   assert.deepEqual(
     Array.from(effect.hsvMin),
     [150, 195, 195],
     'red selection must wrap the hue range',
   );
   assert.deepEqual(Array.from(effect.hsvMax), [30, 255, 255]);
+  assert.equal(effect.setColorFromHex('#00c853'), true);
+  assert.equal(effect.targetColor, '#00c853');
+  assert.equal(effect.setColorFromHex('invalid'), false);
 
   const blob = { x: 0, y: 0, width: 20, height: 20, area: 400, cx: 10, cy: 10 };
   effect._stabilizeBlobs([blob], 0);

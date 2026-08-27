@@ -38,6 +38,7 @@ export class BlobTracking {
 
     // Tolerance for color picking
     this._tolerance = 30;
+    this.targetColor = '#00c853';
 
     // Process on a downscaled copy for better performance
     this.processScale = 0.45;
@@ -581,7 +582,13 @@ export class BlobTracking {
    * Set color from a picked pixel (RGB)
    */
   setColorFromPixel(r, g, b) {
-    const [h, s, v] = this.rgbToHsv(r, g, b);
+    const channels = [r, g, b].map((value) =>
+      Math.max(0, Math.min(255, Math.round(Number(value) || 0))),
+    );
+    this.targetColor = `#${channels
+      .map((value) => value.toString(16).padStart(2, '0'))
+      .join('')}`;
+    const [h, s, v] = this.rgbToHsv(...channels);
     const tol = this._tolerance;
 
     let hMin = h - tol;
@@ -602,6 +609,19 @@ export class BlobTracking {
     this.detectionMode = 'manual';
   }
 
+  setColorFromHex(value) {
+    const match = /^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(
+      String(value || ''),
+    );
+    if (!match) return false;
+    this.setColorFromPixel(
+      parseInt(match[1], 16),
+      parseInt(match[2], 16),
+      parseInt(match[3], 16),
+    );
+    return true;
+  }
+
   getConfig() {
     return {
       hsvMin: this.hsvMin,
@@ -617,6 +637,7 @@ export class BlobTracking {
       showCentroid: this.showCentroid,
       labelSize: this.labelSize,
       tolerance: this._tolerance,
+      targetColor: this.targetColor,
       detectionMode: this.detectionMode,
       processScale: this.processScale,
       processIntervalMs: this.processIntervalMs,
@@ -641,6 +662,8 @@ export class BlobTracking {
     if (config.labelSize != null)
       this.labelSize = this._normalizeLabelSize(config.labelSize);
     if (config.tolerance != null) this._tolerance = config.tolerance;
+    if (/^#[\da-f]{6}$/i.test(config.targetColor || ''))
+      this.targetColor = config.targetColor.toLowerCase();
     if (config.detectionMode) this.detectionMode = config.detectionMode;
     if (config.processScale != null) this.processScale = config.processScale;
     if (config.processIntervalMs != null) {

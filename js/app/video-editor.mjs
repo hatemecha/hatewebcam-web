@@ -778,6 +778,12 @@ export function applyLocalvideoeditorMixin(proto) {
     this.removeTimelineDragGhost();
     this.clearTimelineDropTargets();
     this.updateEffectTrackHighlight();
+    if (moved) {
+      this.suppressPaletteClick = true;
+      setTimeout(() => {
+        this.suppressPaletteClick = false;
+      }, 0);
+    }
     if (!moved || !this.videoSourceFile) return;
     if (!this.getTimelineRowFromClientY(event.clientY)) {
       this.showStatus(
@@ -796,6 +802,20 @@ export function applyLocalvideoeditorMixin(proto) {
     this.timelineEffectPalette
       .querySelectorAll('.timeline-palette-chip')
       .forEach((chip) => {
+        chip.addEventListener('click', (event) => {
+          if (
+            this.suppressPaletteClick ||
+            !this.videoSourceFile ||
+            this.isVideoExporting ||
+            chip.disabled
+          )
+            return;
+          event.preventDefault();
+          void this.addTimelineEffectClip(
+            chip.dataset.effectType,
+            this.videoEl.currentTime || this.videoTimeline.trimStart,
+          );
+        });
         chip.addEventListener('pointerdown', (event) => {
           if (
             !this.videoSourceFile ||

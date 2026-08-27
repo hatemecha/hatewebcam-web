@@ -16,10 +16,58 @@ test('video editor shell loads without fatal errors', async ({ page }) => {
   await expect(page.locator('#btnChooseVideo')).toBeHidden();
   await expect(page.locator('#btnEditAssistAnalyze')).toBeHidden();
   await expect(page.locator('#btnExportVideo')).toBeDisabled();
+  await expect(page.locator('#tabInspectorAdjust')).not.toHaveAttribute(
+    'title',
+  );
   await expect(page.locator('#videoExportDetails')).toContainText(
     'Importá un video',
   );
   expect(fatalMessages).toEqual([]);
+});
+
+test('video empty state stays usable on a narrow screen', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await page.getByRole('tab', { name: /video/i }).click();
+
+  await expect(page.locator('#btnPreviewImportVideo')).toBeVisible();
+  await expect(page.locator('#videoInspector')).toBeVisible();
+  await expect(page.locator('.video-project-resume')).toBeVisible();
+  await expect(page.locator('.video-inspector-tabs')).toBeHidden();
+
+  const layout = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+    previewTop: document
+      .querySelector('#previewWrapper')
+      .getBoundingClientRect().top,
+    inspectorTop: document
+      .querySelector('#videoInspector')
+      .getBoundingClientRect().top,
+    previewBottom: document
+      .querySelector('#previewWrapper')
+      .getBoundingClientRect().bottom,
+  }));
+
+  expect(layout.scrollWidth).toBe(layout.clientWidth);
+  expect(layout.inspectorTop).toBeGreaterThanOrEqual(layout.previewBottom);
+});
+
+test('specific-color detection exposes an editable target color', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await page.locator('#chkBlobTracking').check();
+  await page.locator('#btnToggleAdvancedOptions').click();
+
+  const targetColor = page.locator('#inpTargetColor');
+  await expect(targetColor).toBeVisible();
+  await targetColor.fill('#2a7fff');
+  await expect(targetColor).toHaveValue('#2a7fff');
+  await expect(page.locator('#targetColorValue')).toHaveText('#2A7FFF');
+  await expect(page.locator('#cfgTargetColorStatus')).toContainText(
+    'Color objetivo actualizado.',
+  );
 });
 
 test('template boot failure shows a visible error', async ({ page }) => {

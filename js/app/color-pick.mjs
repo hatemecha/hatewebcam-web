@@ -1,18 +1,21 @@
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyColorPickMixin(proto) {
-  proto.enableColorPick = function () {
+  proto.enableColorPick = function (statusTarget = null) {
+    const nextStatus =
+      statusTarget?.nodeType === 1 ? statusTarget : this.colorPickStatus;
     if (!this.blobTrackingEffect) {
       this.showStatus(
-        this.colorPickStatus,
+        nextStatus,
         'Primero activá "Detectar objetos por color"',
         'warning',
       );
       return;
     }
+    this.activeColorPickStatus = nextStatus;
     this.colorPickMode = true;
     this.canvas.classList.add('color-pick-mode');
     this.showStatus(
-      this.colorPickStatus,
+      nextStatus,
       'Hacé click en el video para elegir un color',
       'info',
     );
@@ -52,14 +55,19 @@ export function applyColorPickMixin(proto) {
       );
       this.colorPickMode = false;
       this.canvas.classList.remove('color-pick-mode');
+      this.saveActiveEffectSettings();
+      this.renderEffectConfig();
+      const nextStatus =
+        this.sourceMode === 'video'
+          ? document.querySelector('#cfgTargetColorStatus')
+          : this.colorPickStatus;
       this.showStatus(
-        this.colorPickStatus,
+        nextStatus,
         'Color seleccionado. Ya podés mover el objeto.',
         'success',
       );
-      this.saveActiveEffectSettings();
-      this.renderEffectConfig();
-      setTimeout(() => this.hideStatus(this.colorPickStatus), 2500);
+      this.activeColorPickStatus = null;
+      setTimeout(() => this.hideStatus(nextStatus), 2500);
     }
   };
 }

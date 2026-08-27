@@ -215,7 +215,8 @@ export function estimateTempoFromAudioBuffer(audioBuffer, options = {}) {
 
 export async function extractMediaAudioSamples(file, options = {}) {
   if (!file) throw new Error('audio_file_unavailable');
-  const mediabunny = options.mediaModule || (await import(MEDIABUNNY_URL));
+  const mediabunny =
+    options.mediaModule || (await import(/* @vite-ignore */ MEDIABUNNY_URL));
   const { Input, BlobSource, ALL_FORMATS, AudioSampleSink } = mediabunny;
   const input = new Input({
     source: new BlobSource(file),

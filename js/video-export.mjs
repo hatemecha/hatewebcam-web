@@ -657,7 +657,7 @@ export function formatExportDebugInfo({
 }
 
 async function loadMediabunny() {
-  return import(MEDIABUNNY_URL);
+  return import(/* @vite-ignore */ MEDIABUNNY_URL);
 }
 
 async function prepareAudioCopy({
