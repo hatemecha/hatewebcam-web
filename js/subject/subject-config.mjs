@@ -75,7 +75,37 @@ const MODULE_DEFAULTS = Object.freeze({
     slices: 6,
     displacement: 0.2,
   }),
+  backgroundMosaic: Object.freeze({
+    enabled: false,
+    gridSize: 18,
+    coverage: 0.32,
+    opacity: 0.5,
+    hold: 420,
+    speed: 1,
+  }),
+  hudAnnotations: Object.freeze({
+    enabled: false,
+    density: 0.55,
+    opacity: 0.82,
+    fontSize: 9,
+    lineWidth: 0.6,
+    color: '#e8e8e4',
+    hold: 380,
+    speed: 1,
+  }),
 });
+
+/** Scale a module density by the global density macro relative to preset baseline. */
+export function scaleDensityByGlobal(
+  moduleDensity,
+  globalDensity,
+  presetDensity = 0.55,
+) {
+  const baseline = Math.max(0.01, Number(presetDensity) || 0.55);
+  const global = clamp01(globalDensity, baseline);
+  const local = clamp01(moduleDensity, baseline);
+  return clamp01((local * global) / baseline);
+}
 
 function clamp01(value, fallback = 0) {
   const num = Number(value);
@@ -144,6 +174,32 @@ function mergeModule(name, source = {}) {
   if (name === 'rgb') {
     merged.split = clampNumber(merged.split, 0, 12, defaults.split);
     merged.jitter = clamp01(merged.jitter, defaults.jitter);
+  }
+  if (name === 'backgroundMosaic') {
+    merged.gridSize = clampNumber(
+      merged.gridSize,
+      6,
+      48,
+      defaults.gridSize,
+    );
+    merged.coverage = clamp01(merged.coverage, defaults.coverage);
+    merged.opacity = clamp01(merged.opacity, defaults.opacity);
+    merged.hold = clampNumber(merged.hold, 80, 2000, defaults.hold);
+    merged.speed = clampNumber(merged.speed, 0.1, 4, defaults.speed);
+  }
+  if (name === 'hudAnnotations') {
+    merged.density = clamp01(merged.density, defaults.density);
+    merged.opacity = clamp01(merged.opacity, defaults.opacity);
+    merged.fontSize = clampNumber(merged.fontSize, 7, 14, defaults.fontSize);
+    merged.lineWidth = clampNumber(
+      merged.lineWidth,
+      0.35,
+      2,
+      defaults.lineWidth,
+    );
+    merged.color = normalizeHex(merged.color, defaults.color);
+    merged.hold = clampNumber(merged.hold, 60, 2000, defaults.hold);
+    merged.speed = clampNumber(merged.speed, 0.1, 4, defaults.speed);
   }
   return merged;
 }

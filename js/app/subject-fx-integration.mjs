@@ -277,7 +277,17 @@ export function applySubjectFxIntegrationMixin(proto) {
   proto.commitSubjectFxConfig = function (partial = {}) {
     const item = this.getSelectedVideoEffectItem?.();
     if (!item || item.type !== 'subject') return;
-    const config = normalizeSubjectConfig({ ...item.config, ...partial });
+    const merged = { ...item.config, ...partial };
+    if (partial.modules && item.config?.modules) {
+      merged.modules = { ...item.config.modules };
+      for (const [moduleName, modulePatch] of Object.entries(partial.modules)) {
+        merged.modules[moduleName] = {
+          ...item.config.modules[moduleName],
+          ...modulePatch,
+        };
+      }
+    }
+    const config = normalizeSubjectConfig(merged);
     this.pushTimelineHistory?.();
     this.videoTimeline.upsert({ ...item, config });
     this.subjectFxEffect?.setConfig(config);

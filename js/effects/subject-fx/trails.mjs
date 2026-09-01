@@ -6,6 +6,9 @@ import {
 
 const HISTORY_MAX_WIDTH = 400;
 
+/** Simulation is authored against a 30fps media clock. */
+const MEDIA_FRAME_MS = 1000 / 30;
+
 export class TrailEngine {
   constructor() {
     this.history = [];
@@ -14,6 +17,7 @@ export class TrailEngine {
     this._echoCanvas = null;
     this._echoCtx = null;
     this.lastMediaMs = null;
+    this.lastMediaBucket = null;
   }
 
   reset() {
@@ -22,6 +26,7 @@ export class TrailEngine {
     }
     this.history = [];
     this.lastMediaMs = null;
+    this.lastMediaBucket = null;
   }
 
   update({
@@ -45,6 +50,12 @@ export class TrailEngine {
       this.reset();
     }
     this.lastMediaMs = mediaMs;
+
+    const mediaBucket = Math.floor(mediaMs / MEDIA_FRAME_MS);
+    if (this.lastMediaBucket === mediaBucket && this.history.length > 0) {
+      return;
+    }
+    this.lastMediaBucket = mediaBucket;
 
     const snapshot = this.#captureSnapshot(
       sourceCanvas,

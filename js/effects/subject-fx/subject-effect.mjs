@@ -2,7 +2,9 @@ import { SubjectAnalyzer } from '../../subject/subject-analyzer.mjs';
 import {
   createDefaultSubjectConfig,
   normalizeSubjectConfig,
+  scaleDensityByGlobal,
 } from '../../subject/subject-config.mjs';
+import { SUBJECT_PRESETS } from './subject-presets.mjs';
 import { renderBodyMap } from './body-map.mjs';
 import { FragmentEngine } from './fragments.mjs';
 import { TrailEngine } from './trails.mjs';
@@ -10,6 +12,8 @@ import { SmearEngine } from '../../rendering/subject-webgl-renderer.mjs';
 import { ScanEngine } from './scan.mjs';
 import { PixelBodyEngine } from './pixel-body.mjs';
 import { RgbBreakupEngine } from './rgb-breakup.mjs';
+import { BackgroundMosaicEngine } from './background-mosaic.mjs';
+import { renderHudAnnotations } from './hud-annotations.mjs';
 
 function clamp01(value) {
   return Math.min(1, Math.max(0, Number(value) || 0));
@@ -27,6 +31,7 @@ export class SubjectFxEffect {
     this.scan = new ScanEngine();
     this.pixelBody = new PixelBodyEngine();
     this.rgb = new RgbBreakupEngine();
+    this.backgroundMosaic = new BackgroundMosaicEngine();
     this.config = createDefaultSubjectConfig('anatomy');
     this.active = false;
     this.bypass = false;
@@ -185,6 +190,41 @@ export class SubjectFxEffect {
     return this.analyzer.getStatusLabel();
   }
 
+  #getPresetBaselineDensity() {
+    const preset =
+      SUBJECT_PRESETS[this.config.preset] || SUBJECT_PRESETS.anatomy;
+    return preset.density ?? 0.55;
+  }
+
+  #scaledModuleConfig(moduleName) {
+    const base = this.config.modules?.[moduleName];
+    if (!base) return base;
+    const presetDensity = this.#getPresetBaselineDensity();
+    const scaled = { ...base };
+    if (Object.prototype.hasOwnProperty.call(base, 'density')) {
+      scaled.density = scaleDensityByGlobal(
+        base.density,
+        this.config.density,
+        presetDensity,
+      );
+    }
+    if (Object.prototype.hasOwnProperty.call(base, 'lineDensity')) {
+      scaled.lineDensity = scaleDensityByGlobal(
+        base.lineDensity,
+        this.config.density,
+        presetDensity,
+      );
+    }
+    if (Object.prototype.hasOwnProperty.call(base, 'coverage')) {
+      scaled.coverage = scaleDensityByGlobal(
+        base.coverage,
+        this.config.density,
+        presetDensity,
+      );
+    }
+    return scaled;
+  }
+
   processFullFrame(ctx, canvas, video, renderProfile, options = {}) {
     if (!this.active || this.bypass || !video) return;
     const timestampMs = (options.mediaTime ?? video.currentTime ?? 0) * 1000;
@@ -213,6 +253,24 @@ export class SubjectFxEffect {
     this._sourceSnapshot.getContext('2d').drawImage(canvas, 0, 0);
 
     const modules = this.config.modules;
+    const mosaicConfig = this.#scaledModuleConfig('backgroundMosaic');
+    if (mosaicConfig?.enabled) {
+      ctx.save();
+      this.backgroundMosaic.render(
+        ctx,
+        canvas,
+        frame,
+        mosaicConfig,
+        intensity,
+        this.config.seed,
+        this.clipId,
+        this._sourceSnapshot,
+        options.drawMetrics,
+        timestampMs,
+      );
+      ctx.restore();
+    }
+
     if (modules.smear?.enabled) {
       this.smear.apply(
         ctx,
@@ -240,7 +298,7 @@ export class SubjectFxEffect {
 
     this.fragments.update({
       frame,
-      config: modules.fragments,
+      config: this.#scaledModuleConfig('fragments') || modules.fragments,
       intensity,
       seed: this.config.seed,
       clipId: this.clipId,
@@ -298,7 +356,7 @@ export class SubjectFxEffect {
         ctx,
         canvas,
         frame,
-        modules.scan,
+        this.#scaledModuleConfig('scan') || modules.scan,
         intensity,
         drawMetrics,
       );
@@ -325,9 +383,24 @@ export class SubjectFxEffect {
         ctx,
         canvas,
         frame,
-        modules.bodyMap,
+        this.#scaledModuleConfig('bodyMap') || modules.bodyMap,
         intensity,
         drawMetrics,
+      );
+    }
+
+    const hudConfig = this.#scaledModuleConfig('hudAnnotations');
+    if (hudConfig?.enabled) {
+      renderHudAnnotations(
+        ctx,
+        canvas,
+        frame,
+        hudConfig,
+        intensity,
+        this.config.seed,
+        this.clipId,
+        drawMetrics,
+        mediaTimeMs ?? frame.timestamp ?? 0,
       );
     }
   }

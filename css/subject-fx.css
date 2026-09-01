@@ -230,6 +230,10 @@
   border-top: 1px solid var(--border);
 }
 
+.subject-advanced-toggle-row {
+  margin-bottom: 6px;
+}
+
 .subject-advanced-note,
 .subject-playhead-note {
   font-size: 11px;

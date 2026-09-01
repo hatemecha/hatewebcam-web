@@ -120,7 +120,10 @@ export function applySubjectFxUIMixin(proto) {
     const fxActive = !this.subjectFxBypass;
 
     const presetButtons = SUBJECT_PRESET_IDS.map((presetId) => {
-      const spanClass = presetId === 'dissolve' ? ' subject-preset-span-2' : '';
+      const spanClass =
+        presetId === 'dissolve' || presetId === 'signal-map'
+          ? ' subject-preset-span-2'
+          : '';
       return `
       <button type="button"
         class="subject-preset-btn${config.preset === presetId ? ' is-active' : ''}${spanClass}"
@@ -151,6 +154,34 @@ export function applySubjectFxUIMixin(proto) {
         max,
       );
     };
+
+    const mosaic = config.modules?.backgroundMosaic || {};
+    const hud = config.modules?.hudAnnotations || {};
+
+    const advancedSignalControls =
+      preset === 'signal-map' || mosaic.enabled || hud.enabled
+        ? `
+          <label class="subject-power-toggle subject-advanced-toggle-row">
+            <input type="checkbox" id="chkSubjectMosaic" ${mosaic.enabled ? 'checked' : ''} />
+            <span>Mosaic</span>
+          </label>
+          ${this.slider(
+            'sldSubjectMosaicGrid',
+            'valSubjectMosaicGrid',
+            'Block size',
+            Math.round((mosaic.gridSize ?? 18) * (100 / 48)),
+            13,
+            100,
+          )}
+          ${this.slider(
+            'sldSubjectHudDensity',
+            'valSubjectHudDensity',
+            'HUD density',
+            Math.round((hud.density ?? 0.55) * 100),
+            0,
+            100,
+          )}`
+        : '';
 
     this.subjectFxInspectorHost.innerHTML = `
       <div class="subject-inspector">
@@ -216,6 +247,7 @@ export function applySubjectFxUIMixin(proto) {
         </footer>
 
         <div id="subjectAdvancedPanel" class="subject-advanced-panel hidden">
+          ${advancedSignalControls}
           ${this.slider('sldSubjectMotionInfluence', 'valSubjectMotionInfluence', 'Influencia movimiento', Math.round(config.motionInfluence * 100), 0, 100)}
           ${this.slider('sldSubjectBeatInfluence', 'valSubjectBeatInfluence', 'Influencia beat', Math.round(config.beatInfluence * 100), 0, 100)}
           <button type="button" class="btn btn-compact" id="btnSubjectPreAnalyze">Preanalizar clip</button>
@@ -260,6 +292,46 @@ export function applySubjectFxUIMixin(proto) {
       'valSubjectBeatInfluence',
       'beatInfluence',
     );
+
+    const bindModuleSlider = (inputId, valueId, moduleName, key, scale = 0.01) => {
+      const input = this.subjectFxInspectorHost.querySelector(`#${inputId}`);
+      const value = this.subjectFxInspectorHost.querySelector(`#${valueId}`);
+      if (!input) return;
+      input.addEventListener('input', () => {
+        if (value) value.textContent = input.value;
+        const patchValue =
+          key === 'gridSize'
+            ? Math.round(Number(input.value) * (48 / 100))
+            : Number(input.value) * scale;
+        this.commitSubjectFxConfig({
+          modules: { [moduleName]: { [key]: patchValue } },
+        });
+      });
+    };
+
+    bindModuleSlider(
+      'sldSubjectMosaicGrid',
+      'valSubjectMosaicGrid',
+      'backgroundMosaic',
+      'gridSize',
+      48 / 100,
+    );
+    bindModuleSlider(
+      'sldSubjectHudDensity',
+      'valSubjectHudDensity',
+      'hudAnnotations',
+      'density',
+    );
+
+    this.subjectFxInspectorHost
+      .querySelector('#chkSubjectMosaic')
+      ?.addEventListener('change', (event) => {
+        this.commitSubjectFxConfig({
+          modules: {
+            backgroundMosaic: { enabled: event.target.checked },
+          },
+        });
+      });
 
     this.subjectFxInspectorHost
       .querySelectorAll('[data-subject-reactivity]')

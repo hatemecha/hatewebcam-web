@@ -6,6 +6,8 @@ export const SUBJECT_PRESET_HINTS = Object.freeze({
   anatomy: 'Tracking corporal técnico y estructural.',
   scan: 'Barridos y contorno sobre la silueta detectada.',
   dissolve: 'Transición entre cuerpo real y representación digital.',
+  'signal-map':
+    'Anotaciones técnicas, mosaico de fondo y eco de silueta — editorial y contenido.',
 });
 
 export const SUBJECT_BASIC_CONTROLS = Object.freeze({
@@ -16,6 +18,7 @@ export const SUBJECT_BASIC_CONTROLS = Object.freeze({
   smear: ['amount', 'reactivity', 'persistence'],
   scan: ['amount', 'reactivity', 'density'],
   dissolve: ['amount', 'reactivity', 'scale'],
+  'signal-map': ['amount', 'reactivity', 'density'],
 });
 
 export const SUBJECT_PRESET_IDS = Object.freeze([
@@ -26,6 +29,7 @@ export const SUBJECT_PRESET_IDS = Object.freeze([
   'anatomy',
   'scan',
   'dissolve',
+  'signal-map',
 ]);
 
 export const SUBJECT_PRESET_LABELS = Object.freeze({
@@ -36,6 +40,7 @@ export const SUBJECT_PRESET_LABELS = Object.freeze({
   anatomy: 'ANATOMY',
   scan: 'SCAN',
   dissolve: 'DISSOLVE',
+  'signal-map': 'SIGNAL MAP',
 });
 
 const baseModules = (overrides = {}) => ({
@@ -108,6 +113,26 @@ const baseModules = (overrides = {}) => ({
     slices: 5,
     displacement: 0.15,
     ...overrides.rgb,
+  },
+  backgroundMosaic: {
+    enabled: false,
+    gridSize: 18,
+    coverage: 0.32,
+    opacity: 0.5,
+    hold: 420,
+    speed: 1,
+    ...overrides.backgroundMosaic,
+  },
+  hudAnnotations: {
+    enabled: false,
+    density: 0.55,
+    opacity: 0.82,
+    fontSize: 9,
+    lineWidth: 0.6,
+    color: '#e8e8e4',
+    hold: 380,
+    speed: 1,
+    ...overrides.hudAnnotations,
   },
 });
 
@@ -294,6 +319,59 @@ export const SUBJECT_PRESETS = Object.freeze({
         threshold: 0.3,
       },
       rgb: { enabled: true, split: 0.9, jitter: 0.08 },
+    }),
+  }),
+  'signal-map': Object.freeze({
+    amount: 0.6,
+    reactivity: 'motion',
+    density: 0.44,
+    persistence: 0.38,
+    scale: 1,
+    color: '#e8e8e4',
+    seed: 85007,
+    motionInfluence: 0.55,
+    beatInfluence: 0.28,
+    modules: baseModules({
+      bodyMap: {
+        showSkeleton: false,
+        showJoints: false,
+        showLabels: false,
+        showCoordinates: false,
+        showVelocity: false,
+        showCenter: false,
+      },
+      fragments: { enabled: false },
+      trails: {
+        enabled: true,
+        mode: 'silhouette',
+        copies: 3,
+        spacing: 0.12,
+        decay: 0.78,
+        opacity: 0.16,
+        motionInfluence: 0.45,
+      },
+      smear: { enabled: false },
+      scan: { enabled: false },
+      pixelBody: { enabled: false },
+      rgb: { enabled: false },
+      backgroundMosaic: {
+        enabled: true,
+        gridSize: 20,
+        coverage: 0.28,
+        opacity: 0.48,
+        hold: 460,
+        speed: 0.95,
+      },
+      hudAnnotations: {
+        enabled: true,
+        density: 0.58,
+        opacity: 0.84,
+        fontSize: 9,
+        lineWidth: 0.55,
+        color: '#e8e8e4',
+        hold: 400,
+        speed: 1,
+      },
     }),
   }),
 });
