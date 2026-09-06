@@ -14,6 +14,21 @@ function isFxLabEnabled() {
   return new URLSearchParams(window.location.search).get('fxlab') === '1';
 }
 
+const BUFFER_SLOTS = [
+  ['source', 'SOURCE'],
+  ['mask', 'MASK'],
+  ['motion', 'MOTION'],
+  ['field', 'FIELD'],
+  ['history', 'HISTORY'],
+  ['output', 'OUTPUT'],
+];
+
+// Dev-only inspector for the Visual FX renderer graph: shows the actual
+// intermediate GPU buffers (control field / drift field / history /
+// palette output) side by side with the source and the person mask, so the
+// pipeline can be built and debugged like the node network it mirrors.
+// Never shown to a normal user - opt-in via `?fxlab=1` or a localStorage
+// flag, same as before.
 /** @param {import('./controller.mjs').AppController} proto */
 export function applySubjectFxLabMixin(proto) {
   proto.ensureSubjectFxLab = function () {
@@ -27,14 +42,22 @@ export function applySubjectFxLabMixin(proto) {
     panel.innerHTML = `
       <div class="subject-fx-lab-title">FX Lab</div>
       <pre id="subjectFxLabOutput"></pre>
+      <div class="subject-fx-lab-buffers hidden" id="subjectFxLabBuffers">
+        ${BUFFER_SLOTS.map(
+          ([key, label]) =>
+            `<div class="subject-fx-lab-slot"><span>${label}</span><canvas data-buffer-slot="${key}"></canvas></div>`,
+        ).join('')}
+      </div>
       <div class="subject-fx-lab-actions">
-        <button type="button" class="btn btn-compact" data-fxlab-mode="overlay">Mask+Pose</button>
+        <button type="button" class="btn btn-compact is-active" data-fxlab-mode="overlay">Mask+Pose</button>
+        <button type="button" class="btn btn-compact" data-fxlab-mode="buffers">Buffers</button>
         <button type="button" class="btn btn-compact" data-fxlab-mode="stats">Stats</button>
         <button type="button" class="btn btn-compact" id="btnFxLabCapture">Capture</button>
       </div>
     `;
     this.previewWrapper?.appendChild(panel);
     this.subjectFxLabOutput = panel.querySelector('#subjectFxLabOutput');
+    this.subjectFxLabBuffers = panel.querySelector('#subjectFxLabBuffers');
     this.subjectFxLabOverlay = document.createElement('canvas');
     this.subjectFxLabOverlay.className = 'subject-fx-lab-overlay hidden';
     this.previewWrapper?.appendChild(this.subjectFxLabOverlay);
@@ -56,6 +79,43 @@ export function applySubjectFxLabMixin(proto) {
     });
   };
 
+  proto.updateSubjectFxLabBuffers = function (effect) {
+    if (!this.subjectFxLabBuffers) return;
+    // GPU readback is comparatively slow - only pay for it while this
+    // specific dev panel is open, and no more than a few times a second.
+    const now = performance.now();
+    if ((this._fxLabBufferTs || 0) + 200 > now) return;
+    this._fxLabBufferTs = now;
+    const buffers = effect?.renderer?.getDebugBuffers?.() || {};
+    const mask = effect?.analyzer?.lastMask;
+    if (mask?.data?.length && !buffers.mask) {
+      const canvas = document.createElement('canvas');
+      canvas.width = mask.width;
+      canvas.height = mask.height;
+      const ctx = canvas.getContext('2d');
+      const imageData = ctx.createImageData(mask.width, mask.height);
+      for (let i = 0; i < mask.data.length; i++) {
+        const v = mask.data[i];
+        imageData.data[i * 4] = v;
+        imageData.data[i * 4 + 1] = v;
+        imageData.data[i * 4 + 2] = v;
+        imageData.data[i * 4 + 3] = 255;
+      }
+      ctx.putImageData(imageData, 0, 0);
+      buffers.mask = canvas;
+    }
+    for (const [key] of BUFFER_SLOTS) {
+      const target = this.subjectFxLabBuffers.querySelector(
+        `[data-buffer-slot="${key}"]`,
+      );
+      const source = buffers[key];
+      if (!target || !source) continue;
+      target.width = source.width;
+      target.height = source.height;
+      target.getContext('2d').drawImage(source, 0, 0);
+    }
+  };
+
   proto.updateSubjectFxLab = function () {
     if (!this._subjectFxLabReady) return;
     const effect = this.subjectFxEffect;
@@ -67,6 +127,13 @@ export function applySubjectFxLabMixin(proto) {
     const simplified = effect?.analyzer?.useSimplifiedMode
       ? 'FALLBACK'
       : 'AVAILABLE';
+
+    this.subjectFxLabBuffers?.classList.toggle(
+      'hidden',
+      this.subjectFxLabMode !== 'buffers',
+    );
+    if (this.subjectFxLabMode === 'buffers')
+      this.updateSubjectFxLabBuffers(effect);
 
     if (
       this.subjectFxLabMode === 'overlay' &&
@@ -127,13 +194,14 @@ export function applySubjectFxLabMixin(proto) {
 
     if (!this.subjectFxLabOutput) return;
     const lines = [
-      `preset: ${effect?.config?.preset || '-'}`,
+      `system: ${effect?.config?.system || '-'}`,
       `variation: ${((effect?.config?.seed || 0) % 999) + 1}`,
       `segmentation: ${seg} (${simplified})`,
       `motion: ${(frame?.motionEnergy || 0).toFixed(3)}`,
       `strongest: ${strongest?.name || '-'} (${(strongest?.speed || 0).toFixed(3)})`,
       `mask cov: ${mask ? (mask.getMaskCoverage?.() || 0).toFixed(3) : '-'}`,
       `status: ${effect?.analyzer?.status || '-'}`,
+      `renderer: ${effect?.renderer?.failed ? 'CPU fallback' : 'GPU'}`,
       `preview fps: ${effect?.previewFps ?? '-'}`,
     ];
     this.subjectFxLabOutput.textContent = lines.join('\n');

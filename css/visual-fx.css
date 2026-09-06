@@ -230,8 +230,15 @@
   border-top: 1px solid var(--border);
 }
 
-.subject-advanced-toggle-row {
-  margin-bottom: 6px;
+.subject-tuning-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 4px;
+}
+
+.subject-tuning-select select {
+  width: 100%;
 }
 
 .subject-advanced-note,
@@ -273,6 +280,8 @@
   bottom: 8px;
   z-index: 6;
   max-width: 220px;
+  max-height: calc(100% - 16px);
+  overflow-y: auto;
   background: color-mix(in srgb, var(--bg-card) 92%, transparent);
   color: var(--text);
   padding: 8px;
@@ -294,6 +303,34 @@
 .subject-fx-lab pre {
   margin: 0 0 6px;
   white-space: pre-wrap;
+}
+
+.subject-fx-lab-buffers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  margin-bottom: 6px;
+  width: 260px;
+}
+
+.subject-fx-lab-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.subject-fx-lab-slot span {
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: var(--gray-dim);
+}
+
+.subject-fx-lab-slot canvas {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border: 1px solid var(--border-light);
+  image-rendering: pixelated;
 }
 
 .subject-fx-lab-overlay {
@@ -334,12 +371,6 @@
   cursor: pointer;
   padding: 10px 0;
   color: var(--gray-light);
-}
-.visual-module-group {
-  border-top: 1px solid var(--border);
-}
-.visual-module-group summary {
-  font-size: 11px;
 }
 .subject-variation-controls {
   flex-wrap: wrap;

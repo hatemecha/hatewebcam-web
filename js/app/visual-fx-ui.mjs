@@ -1,10 +1,16 @@
 import {
-  VISUAL_PRESETS,
-  VISUAL_MODULES,
+  VISUAL_SYSTEMS,
+  VISUAL_SYSTEM_IDS,
+  TUNING_SCHEMA,
+  PALETTE_OPTIONS,
+  MACRO_LABELS,
   normalizeVisualConfig,
 } from '../visual-fx/config.mjs';
 
-// Existing timeline/controller hook names remain stable; all creative state is Visual FX v3.
+// Compact instrument panel: a system picker, "Aplicar a", four curated
+// macros, and a Tuning drawer that only ever shows the handful of extra
+// parameters that make sense for the active system. No preset gallery, no
+// per-uniform slider wall.
 export function applySubjectFxUIMixin(proto) {
   proto.getSubjectVariationNumber = (seed) =>
     (Math.abs(Math.round(seed)) % 999) + 1;
@@ -14,6 +20,7 @@ export function applySubjectFxUIMixin(proto) {
       item?.type === 'subject' && time >= item.startTime && time < item.endTime
     );
   };
+
   proto.renderSubjectFxInspector = function () {
     const host = this.subjectFxInspectorHost,
       item = this.getSelectedVideoEffectItem?.();
@@ -21,44 +28,48 @@ export function applySubjectFxUIMixin(proto) {
     host.classList.toggle('hidden', item?.type !== 'subject');
     if (item?.type !== 'subject') return;
     const c = normalizeVisualConfig(item.config),
-      recipe = VISUAL_PRESETS[c.preset];
+      system = VISUAL_SYSTEMS[c.system],
+      tuningSchema = TUNING_SCHEMA[c.system];
     const focused = host.contains(document.activeElement)
       ? document.activeElement?.id
       : null;
-    const advanced = host.querySelector('details')?.open || false;
-    const openGroups = new Set(
-      [...host.querySelectorAll('[data-visual-group][open]')].map(
-        (el) => el.dataset.visualGroup,
-      ),
-    );
-    const groups = {
-      Tiempo: ['feedback', 'recursion'],
-      Espacio: ['flow', 'sorting', 'pixel', 'tiles', 'fragments'],
-      Textura: ['posterize', 'dither', 'threshold', 'edges'],
-      Color: ['rgb', 'scan', 'monochrome'],
-    };
-    const slider = (key, label, value) =>
+    const tuningOpen = host.querySelector('details')?.open || false;
+
+    const macroSlider = (key) =>
       this.slider(
-        `visual-${key}`,
-        `visual-value-${key}`,
-        label,
-        Math.round(value * 100),
+        `visual-macro-${key}`,
+        `visual-value-macro-${key}`,
+        MACRO_LABELS[key],
+        Math.round(c.macros[key] * 100),
         0,
         100,
       );
+    const tuningControl = (field) => {
+      if (field.key === 'palette') return '';
+      return this.slider(
+        `visual-tuning-${field.key}`,
+        `visual-value-tuning-${field.key}`,
+        field.label,
+        Math.round(
+          ((c.tuning[field.key] - field.min) / (field.max - field.min)) * 100,
+        ),
+        0,
+        100,
+      );
+    };
+    const paletteField = tuningSchema.find((field) => field.key === 'palette');
+
     host.innerHTML = `<div class="subject-inspector">
       <header class="subject-inspector-head"><div class="subject-inspector-title">Visual FX</div></header>
       ${!this.isPlayheadInsideSelectedSubjectClip(item) ? '<div class="subject-playhead-note"><span>Fuera del clip.</span><button class="btn btn-compact" id="visual-go">Ir al clip</button></div>' : ''}
-      <div class="subject-preset-grid" role="group" aria-label="Estilo visual">${Object.entries(
-        VISUAL_PRESETS,
-      )
-        .map(
-          ([id, p]) =>
-            `<button type="button" class="subject-preset-btn${c.preset === id ? ' is-active' : ''}" data-subject-preset="${id}" aria-pressed="${c.preset === id}">${p.label}</button>`,
-        )
-        .join('')}</div>
-      <p class="subject-preset-hint">${recipe.hint}</p>
-      <div class="subject-field-label">Aplicar a</div><div class="subject-segmented" role="group" aria-label="Aplicar a">${[
+      <div class="subject-field-label">Sistema</div>
+      <div class="subject-preset-grid" role="group" aria-label="Sistema">${VISUAL_SYSTEM_IDS.map(
+        (id) =>
+          `<button type="button" class="subject-preset-btn${c.system === id ? ' is-active' : ''}" data-visual-system="${id}" aria-pressed="${c.system === id}">${VISUAL_SYSTEMS[id].label}</button>`,
+      ).join('')}</div>
+      <p class="subject-preset-hint">${system.hint}</p>
+      <div class="subject-field-label">Aplicar a</div>
+      <div class="subject-segmented" role="group" aria-label="Aplicar a">${[
         ['all', 'Todo'],
         ['person', 'Persona'],
         ['background', 'Fondo'],
@@ -69,27 +80,37 @@ export function applySubjectFxUIMixin(proto) {
         )
         .join('')}</div>
       <p id="subjectFxInlineStatus" class="subject-preset-hint" role="status"></p>
-      <div class="subject-controls">${slider('amount', 'Intensidad', c.amount)}${slider('movement', 'Movimiento', c.movement)}${c.modules.feedback > 0 ? slider('persistence', 'Persistencia', c.persistence) : ''}</div>
-      <details class="subject-advanced-panel" ${advanced ? 'open' : ''}><summary class="subject-advanced-toggle">Más ajustes</summary>
-        ${Object.entries(groups)
-          .map(
-            ([name, keys]) =>
-              `<details class="visual-module-group" data-visual-group="${name}" ${openGroups.has(name) ? 'open' : ''}><summary>${name}</summary>${keys.map((key) => slider(key, VISUAL_MODULES[key], c.modules[key])).join('')}</details>`,
-          )
-          .join('')}
-        <div class="subject-variation-controls"><span>Variación ${this.getSubjectVariationNumber(c.seed)}</span><button class="btn btn-compact" id="visual-variation">Cambiar</button></div>
-        <p class="subject-advanced-note">Combiná técnicas. Al buscar otro momento, el eco empieza de nuevo.</p>
+      <div class="subject-controls">${['intensity', 'memory', 'structure', 'movement'].map(macroSlider).join('')}</div>
+      <details class="subject-advanced-panel" ${tuningOpen ? 'open' : ''}><summary class="subject-advanced-toggle">Tuning &#9656;</summary>
+        <div class="subject-tuning-body">
+          ${tuningSchema.map(tuningControl).join('')}
+          ${
+            paletteField
+              ? `<div class="subject-field-label">${paletteField.label}</div>
+                 <div class="select-wrapper subject-tuning-select"><select id="visual-tuning-palette">${PALETTE_OPTIONS.map(
+                   (opt) =>
+                     `<option value="${opt.id}" ${c.tuning.palette === opt.id ? 'selected' : ''}>${opt.label}</option>`,
+                 ).join('')}</select></div>`
+              : ''
+          }
+          <div class="subject-variation-controls">
+            <span>Variación ${this.getSubjectVariationNumber(c.seed)}</span>
+            <button class="btn btn-compact" id="visual-variation">Cambiar</button>
+            <button class="btn btn-compact" id="visual-restart" title="Limpiar el estado de la simulación">Reiniciar</button>
+          </div>
+        </div>
       </details>
       <footer class="subject-footer-row"><label class="subject-power-toggle"><input type="checkbox" id="chkSubjectBypass" ${!this.subjectFxBypass ? 'checked' : ''}><span>FX activo</span></label></footer>
     </div>`;
     // Error strings are text, never interpolated into markup.
     host.querySelector('#subjectFxInlineStatus').textContent =
       this.subjectFxEffect?.getStatusLabel() || '';
+
     host
-      .querySelectorAll('[data-subject-preset]')
+      .querySelectorAll('[data-visual-system]')
       .forEach((button) =>
         button.addEventListener('click', () =>
-          this.applySubjectPresetToSelection(button.dataset.subjectPreset),
+          this.applySubjectPresetToSelection(button.dataset.visualSystem),
         ),
       );
     host.querySelectorAll('[data-visual-target]').forEach((button) =>
@@ -98,21 +119,35 @@ export function applySubjectFxUIMixin(proto) {
         this.renderSubjectFxInspector();
       }),
     );
-    host.querySelectorAll('input[type="range"]').forEach((input) =>
+    host.querySelectorAll('[id^="visual-macro-"]').forEach((input) =>
       input.addEventListener('input', () => {
-        const key = input.id.slice(7),
+        const key = input.id.slice('visual-macro-'.length),
           value = Number(input.value) / 100;
-        host.querySelector(`#visual-value-${key}`).textContent = input.value;
-        if (key === 'feedback')
-          host.querySelector('#visual-recursion').disabled = value === 0;
-        this.commitSubjectFxConfig(
-          Object.hasOwn(VISUAL_MODULES, key)
-            ? { modules: { [key]: value } }
-            : { [key]: value },
-        );
+        host.querySelector(`#visual-value-macro-${key}`).textContent =
+          input.value;
+        this.commitSubjectFxConfig({ macros: { [key]: value } });
       }),
     );
-    host.querySelector('#visual-recursion').disabled = c.modules.feedback === 0;
+    host.querySelectorAll('[id^="visual-tuning-"]').forEach((input) => {
+      if (input.tagName === 'SELECT') return;
+      const key = input.id.slice('visual-tuning-'.length);
+      const field = tuningSchema.find((candidate) => candidate.key === key);
+      if (!field) return;
+      input.addEventListener('input', () => {
+        const pct = Number(input.value) / 100;
+        const value = field.min + pct * (field.max - field.min);
+        host.querySelector(`#visual-value-tuning-${key}`).textContent =
+          input.value;
+        this.commitSubjectFxConfig({ tuning: { [key]: value } });
+      });
+    });
+    host
+      .querySelector('#visual-tuning-palette')
+      ?.addEventListener('change', (e) => {
+        this.commitSubjectFxConfig({
+          tuning: { palette: Number(e.target.value) },
+        });
+      });
     this.btnSubjectBypass = host.querySelector('#chkSubjectBypass');
     this.btnSubjectBypass.addEventListener('change', () =>
       this.toggleSubjectFxBypass(),
@@ -120,6 +155,9 @@ export function applySubjectFxUIMixin(proto) {
     host
       .querySelector('#visual-variation')
       .addEventListener('click', () => this.stepSubjectVariation(1));
+    host
+      .querySelector('#visual-restart')
+      .addEventListener('click', () => this.restartVisualFxSimulation?.());
     host
       .querySelector('#visual-go')
       ?.addEventListener('click', () => void this.seekVideo(item.startTime));

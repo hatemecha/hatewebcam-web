@@ -337,7 +337,7 @@ export function applyVideoEditorTimelineMixin(proto) {
       el.dataset.type = item.type;
       const label =
         item.type === 'subject'
-          ? SUBJECT_PRESET_LABELS[item.config?.preset] || 'VISUAL FX'
+          ? SUBJECT_PRESET_LABELS[item.config?.system] || 'VISUAL FX'
           : meta.trackLabel;
       el.innerHTML = `
         <span class="timeline-item-handle start" aria-hidden="true"></span>

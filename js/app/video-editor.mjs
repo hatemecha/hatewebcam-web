@@ -639,7 +639,7 @@ export function applyLocalvideoeditorMixin(proto) {
       return { ...config, automation: this.getSelectedAutomationMode() };
     }
     if (type === 'subject') {
-      return createDefaultSubjectConfig('feedback');
+      return createDefaultSubjectConfig('recursive');
     }
     return {
       ...(this.blinkDetectionEffect

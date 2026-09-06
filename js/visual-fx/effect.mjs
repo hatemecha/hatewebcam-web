@@ -3,7 +3,7 @@ import {
   drawSubjectMask,
   getVideoDrawMetrics,
 } from '../subject/subject-frame-map.mjs';
-import { normalizeVisualConfig } from './config.mjs';
+import { normalizeVisualConfig, visualConfigTopologyKey } from './config.mjs';
 import { VisualRenderer } from './renderer.mjs';
 
 export class VisualFxEffect {
@@ -22,7 +22,11 @@ export class VisualFxEffect {
   }
   setConfig(raw) {
     const next = normalizeVisualConfig(raw);
-    if (JSON.stringify(next) !== JSON.stringify(this.config))
+    // Only a topology change (system, or a topology-flagged tuning value
+    // such as internal resolution) restarts the simulation. Macros, target
+    // and every other tuning value are state-safe: the running feedback
+    // loop keeps evolving while the user drags a slider.
+    if (visualConfigTopologyKey(next) !== visualConfigTopologyKey(this.config))
       this.resetTemporalState();
     this.config = next;
   }
@@ -89,7 +93,12 @@ export class VisualFxEffect {
     return this.renderer.failed ? 'Modo compatible: detalle reducido.' : '';
   }
   processFullFrame(ctx, canvas, video, profile, options = {}) {
-    if (!this.active || this.bypass || !video || this.config.amount === 0)
+    if (
+      !this.active ||
+      this.bypass ||
+      !video ||
+      this.config.macros.intensity === 0
+    )
       return;
     const time = options.mediaTime ?? video.currentTime ?? 0;
     if (

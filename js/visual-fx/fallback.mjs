@@ -1,67 +1,93 @@
-// Bounded CPU mode for browsers without WebGL. Same recipes, reduced spatial detail.
-export function processCompatiblePixels(source, config, time, work) {
-  const m = config.modules;
-  work.width = Math.max(1, Math.min(320, source.width));
+// Bounded CPU mode for browsers without WebGL. This is a deliberately
+// reduced approximation of the GPU graph (no separate control-field/drift
+// buffers), built from the same macro language so a system still reads as
+// "the same instrument, less detailed" rather than a different effect.
+const clamp01 = (v) => Math.max(0, Math.min(1, v));
+const lerp = (a, b, t) => a + (b - a) * clamp01(t);
+
+function hash(x, y, seed) {
+  const s = Math.sin(x * 127.1 + y * 311.7 + seed) * 43758.5453;
+  return s - Math.floor(s);
+}
+
+const SYSTEM_SPIN = { recursive: 1, flow: 0, pixelfield: 0, trace: 0.3 };
+const SYSTEM_GRID = { recursive: 0, flow: 0.3, pixelfield: 1, trace: 0.2 };
+
+export function processCompatiblePixels(
+  source,
+  config,
+  time,
+  delta,
+  hasHistory,
+  work,
+  previous,
+) {
+  const { system, macros, seed } = config;
+  const maxWidth = system === 'pixelfield' ? 160 : 240;
+  work.width = Math.max(1, Math.min(maxWidth, source.width));
   work.height = Math.max(
     1,
     Math.round((work.width * source.height) / source.width),
   );
   const ctx = work.getContext('2d', { willReadFrequently: true });
-  ctx.drawImage(source, 0, 0, work.width, work.height);
   const { width: w, height: h } = work;
-  const input = ctx.getImageData(0, 0, w, h),
-    output = ctx.createImageData(w, h);
-  const t = time * (0.15 + config.movement * 1.8);
-  const sample = (x, y, c) =>
-    input.data[
-      (Math.max(0, Math.min(h - 1, Math.floor(y))) * w +
-        Math.max(0, Math.min(w - 1, Math.floor(x)))) *
-        4 +
-        c
-    ];
-  const cell = Math.max(
-    1,
-    Math.round(((1 + m.pixel * 28 * config.scale) * w) / 640),
-  );
-  for (let y = 0; y < h; y++)
-    for (let x = 0; x < w; x++) {
-      const band = Math.floor((y / h) * 32),
-        phase =
-          Math.sin(band * 127.1 + Math.floor(t * 7) * 311.7 + config.seed) *
-          43758.5453;
-      let px =
-        Math.floor(x / cell) * cell +
-        m.flow * w * 0.035 * Math.sin((y / h) * 19 + t * 1.7) +
-        m.fragments * (phase - Math.floor(phase) - 0.5) * w * 0.24;
-      const tile = Math.sin(
-        Math.floor((x / w) * 10) * 127 +
-          Math.floor((y / h) * 7) * 311 +
-          Math.floor(t * 2) +
-          config.seed,
-      );
-      px += m.tiles * w * 0.12 * tile;
-      const py = Math.floor(y / cell) * cell + m.tiles * h * 0.12 * tile;
-      px += m.sorting * w * 0.04 * (sample(px, py, 0) / 255);
-      const r = sample(px + m.rgb * w * 0.012, py, 0),
-        g = sample(px, py, 1),
-        b = sample(px - m.rgb * w * 0.012, py, 2);
-      const gray = 0.299 * r + 0.587 * g + 0.114 * b;
-      const edge =
-        Math.abs(sample(px + 1, py + 1, 1) - sample(px - 1, py - 1, 1)) * 4;
-      for (let c = 0; c < 3; c++) {
-        let v = [r, g, b][c] * (1 - m.monochrome) + gray * m.monochrome;
-        v = v * (1 - m.edges) + edge * m.edges;
-        v += (((x % 2) + 2 * (y % 2)) / 4 - 0.375) * m.dither * 127;
-        v = v * (1 - m.threshold) + (v >= 122 ? 255 : 0) * m.threshold;
-        if (m.posterize > 0) {
-          const levels = Math.max(2, 16 - m.posterize * 14);
-          v = (Math.round((v / 255) * levels) / levels) * 255;
-        }
-        v *= 1 - m.scan * 0.3 * (0.5 + 0.5 * Math.sin(y * Math.PI - t * 3));
-        output.data[(y * w + x) * 4 + c] = v;
+
+  const cellBase =
+    lerp(1, 10, macros.structure) * lerp(1, 3, SYSTEM_GRID[system]);
+  const cell = Math.max(1, Math.round(cellBase));
+  const flowAmt = lerp(0.002, 0.03, macros.movement) * w;
+
+  ctx.drawImage(source, 0, 0, w, h);
+  if (cell > 1 || flowAmt > 0.5) {
+    const input = ctx.getImageData(0, 0, w, h);
+    const output = ctx.createImageData(w, h);
+    const t = time * lerp(0.1, 1.2, macros.movement);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const bandPhase =
+          hash(Math.floor(y / 6), Math.floor(t * 2), seed) - 0.5;
+        let sx = Math.floor(x / cell) * cell + bandPhase * flowAmt;
+        let sy = Math.floor(y / cell) * cell;
+        sx = Math.max(0, Math.min(w - 1, Math.round(sx)));
+        sy = Math.max(0, Math.min(h - 1, Math.round(sy)));
+        const srcIdx = (sy * w + sx) * 4;
+        const dstIdx = (y * w + x) * 4;
+        output.data[dstIdx] = input.data[srcIdx];
+        output.data[dstIdx + 1] = input.data[srcIdx + 1];
+        output.data[dstIdx + 2] = input.data[srcIdx + 2];
+        output.data[dstIdx + 3] = 255;
       }
-      output.data[(y * w + x) * 4 + 3] = 255;
     }
-  ctx.putImageData(output, 0, 0);
+    ctx.putImageData(output, 0, 0);
+  }
+
+  if (macros.structure > 0.05) {
+    const levels = Math.max(2, Math.round(lerp(3, 12, macros.structure)));
+    const imageData = ctx.getImageData(0, 0, w, h);
+    const data = imageData.data;
+    for (let i = 0; i < data.length; i += 4) {
+      for (let c = 0; c < 3; c++) {
+        const v = data[i + c] / 255;
+        data[i + c] = Math.round((Math.round(v * levels) / levels) * 255);
+      }
+    }
+    ctx.putImageData(imageData, 0, 0);
+  }
+
+  const memory = lerp(0.0, 0.94, macros.memory);
+  if (hasHistory && memory > 0.01 && previous?.width === work.width) {
+    ctx.save();
+    ctx.globalAlpha =
+      Math.pow(memory, Math.max(0.01, delta)) * macros.intensity;
+    ctx.translate(w / 2, h / 2);
+    ctx.rotate(SYSTEM_SPIN[system] * 0.01 * delta * macros.movement);
+    ctx.scale(
+      1 - macros.structure * 0.002 * delta,
+      1 - macros.structure * 0.002 * delta,
+    );
+    ctx.drawImage(previous, -w / 2, -h / 2, w, h);
+    ctx.restore();
+  }
+
   return work;
 }

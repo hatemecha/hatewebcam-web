@@ -148,7 +148,7 @@ test('Visual FX only initializes person assets when requested', async ({
     .locator('.timeline-palette-chip[data-effect-type="subject"]')
     .click();
 
-  await expect(page.locator('.timeline-item-label')).toContainText('Feedback');
+  await expect(page.locator('.timeline-item-label')).toContainText('Recursive');
   expect([...requestedSubjectAssets]).toEqual([]);
   await page.locator('#visual-target-person').click();
   await page.locator('#btnVideoPlay').click();

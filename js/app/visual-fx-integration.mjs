@@ -69,11 +69,14 @@ export function applySubjectFxIntegrationMixin(proto) {
       return;
     }
 
-    if (force || item.id !== effect.clipId) {
-      effect.onSeek();
-    }
+    // Only a genuinely different clip resets the running simulation.
+    // `force` re-applies the latest config on the *same* clip (a macro
+    // commit, a bypass toggle, a paused-preview refresh) and must never
+    // restart feedback state on its own - `effect.setConfig` below already
+    // decides state-safety at the topology level.
+    if (item.id !== effect.clipId) effect.onSeek();
 
-    effect.setConfig(item.config || createDefaultSubjectConfig('feedback'));
+    effect.setConfig(item.config || createDefaultSubjectConfig('recursive'));
     effect.setActive(true, item.id);
     effect.flipH = this.getEffectiveFlipH?.() ?? false;
 
@@ -93,6 +96,13 @@ export function applySubjectFxIntegrationMixin(proto) {
     this.subjectFxEffect?.analyzer?.reset({ hard: !!options.hard });
     this.appliedTimelineSubjectId = '';
     this._subjectFxSyncRequestId = (this._subjectFxSyncRequestId || 0) + 1;
+  };
+
+  // Discrete, manual "Reiniciar" action for the inspector: clears the
+  // running feedback state without touching the saved config.
+  proto.restartVisualFxSimulation = function () {
+    this.subjectFxEffect?.resetTemporalState();
+    this.refreshPausedVideoPreview?.();
   };
 
   proto.updateSubjectFxStatus = function (message = '') {
@@ -121,13 +131,13 @@ export function applySubjectFxIntegrationMixin(proto) {
     if (this.subjectFxEffect?.active) {
       return this.subjectFxEffect.getConfig();
     }
-    return createDefaultSubjectConfig('feedback');
+    return createDefaultSubjectConfig('recursive');
   };
 
-  proto.applySubjectPresetToSelection = function (presetId) {
+  proto.applySubjectPresetToSelection = function (systemId) {
     const item = this.getSelectedVideoEffectItem?.();
     if (!item || item.type !== 'subject') return;
-    const next = applySubjectPreset(item.config, presetId);
+    const next = applySubjectPreset(item.config, systemId);
     this.pushTimelineHistory?.();
     this.videoTimeline.upsert({ ...item, config: next });
     this.subjectFxEffect?.setConfig(next);
@@ -155,15 +165,17 @@ export function applySubjectFxIntegrationMixin(proto) {
     const item = this.getSelectedVideoEffectItem?.();
     if (!item || item.type !== 'subject') return;
     const merged = { ...item.config, ...partial };
-    if (partial.modules && item.config?.modules) {
-      merged.modules = { ...item.config.modules };
-      for (const [moduleName, modulePatch] of Object.entries(partial.modules)) {
-        merged.modules[moduleName] = modulePatch;
-      }
+    if (partial.macros && item.config?.macros) {
+      merged.macros = { ...item.config.macros, ...partial.macros };
+    }
+    if (partial.tuning && item.config?.tuning) {
+      merged.tuning = { ...item.config.tuning, ...partial.tuning };
     }
     const config = normalizeSubjectConfig(merged);
     this.pushTimelineHistory?.();
     this.videoTimeline.upsert({ ...item, config });
+    // Applies immediately: `setConfig` only restarts the simulation for a
+    // real topology change, so dragging a macro slider never resets it.
     this.subjectFxEffect?.setConfig(config);
     void this.syncVideoTimelineSubject(true);
   };

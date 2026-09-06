@@ -2017,15 +2017,26 @@ function checkSubjectTimelineType() {
 
 function checkSubjectConfigNormalization() {
   const config = normalizeSubjectConfig({
-    preset: 'fragment',
-    amount: 2,
-    reactivity: 'motion-beat',
+    system: 'flow',
+    macros: { intensity: 2, movement: 0.4 },
+    tuning: { palette: 99 },
     seed: 42,
   });
-  assert.equal(config.preset, 'fragment');
-  assert.equal(config.amount, 1);
+  assert.equal(config.system, 'flow');
+  assert.equal(config.macros.intensity, 1);
+  assert.equal(config.macros.movement, 0.4);
   assert.equal(config.target, 'all');
-  assert.ok(config.modules.tiles > 0);
+  assert.equal(config.tuning.palette, 4, 'palette must clamp to its max');
+
+  // Legacy v3 shape (preset/amount) still resolves to a valid v4 config.
+  const legacy = normalizeSubjectConfig({
+    preset: 'fragment',
+    amount: 0.75,
+    reactivity: 'motion-beat',
+    seed: 7,
+  });
+  assert.equal(legacy.system, 'flow');
+  assert.equal(legacy.macros.intensity, 0.75);
 }
 
 function checkSubjectProjectMigration() {
