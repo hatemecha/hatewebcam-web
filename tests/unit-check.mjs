@@ -44,11 +44,10 @@ import {
   createDefaultSubjectConfig,
   migrateProjectToV2,
   normalizeSubjectConfig,
-  scaleDensityByGlobal,
-} from '../js/subject/subject-config.mjs';
+} from '../js/visual-fx/config.mjs';
 import { SubjectMotionAnalyzer } from '../js/subject/subject-motion.mjs';
 import { createSeededRandom, seededInt } from '../js/subject/subject-prng.mjs';
-import { applySubjectFxIntegrationMixin } from '../js/app/subject-fx-integration.mjs';
+import { applySubjectFxIntegrationMixin } from '../js/app/visual-fx-integration.mjs';
 import {
   SubjectMask,
   normalizeMaskBuffer,
@@ -70,21 +69,6 @@ import {
   SubjectAnalyzer,
 } from '../js/subject/subject-analyzer.mjs';
 import { resolveSubjectAssetUrls } from '../js/subject/mediapipe-paths.mjs';
-import { SubjectFxEffect } from '../js/effects/subject-fx/subject-effect.mjs';
-import { FragmentEngine } from '../js/effects/subject-fx/fragments.mjs';
-import { TrailEngine } from '../js/effects/subject-fx/trails.mjs';
-import { SmearEngine } from '../js/rendering/subject-webgl-renderer.mjs';
-import {
-  shouldMosaicCell,
-  mosaicTimeBucket,
-  BackgroundMosaicEngine,
-} from '../js/effects/subject-fx/background-mosaic.mjs';
-import {
-  buildHudAnnotations,
-  hudNumericValue,
-  hudTimeBucket,
-} from '../js/effects/subject-fx/hud-annotations.mjs';
-import { SUBJECT_PRESETS } from '../js/effects/subject-fx/subject-presets.mjs';
 import {
   estimateTempoFromSamples,
   extractMediaAudioSamples,
@@ -2040,8 +2024,8 @@ function checkSubjectConfigNormalization() {
   });
   assert.equal(config.preset, 'fragment');
   assert.equal(config.amount, 1);
-  assert.equal(config.reactivity, 'motion-beat');
-  assert.equal(config.modules.fragments.enabled, true);
+  assert.equal(config.target, 'all');
+  assert.ok(config.modules.tiles > 0);
 }
 
 function checkSubjectProjectMigration() {
@@ -2093,20 +2077,6 @@ function checkSubjectMotionEnergy() {
   assert.ok(first);
   assert.ok(second);
   assert.ok(second.motionEnergy >= first.motionEnergy);
-}
-
-function checkSubjectBeatIntegration() {
-  const timeline = new VideoTimeline(8);
-  timeline.addMarkers([
-    { time: 1, kind: 'beat', source: 'edit-assist', strength: 1 },
-  ]);
-  const app = {
-    videoTimeline: timeline,
-    clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
-  };
-  applySubjectFxIntegrationMixin(app);
-  assert.ok(app.getSubjectBeatStrength(1) > 0.8);
-  assert.ok(app.getSubjectBeatStrength(2) < 0.05);
 }
 
 async function checkSubjectMaskPipeline() {
@@ -2225,326 +2195,6 @@ async function checkSubjectCachedMaskNotStale() {
     frame.mask,
     null,
     'cached timestamps must not reuse an unrelated lastMask',
-  );
-}
-
-function checkSubjectMediaTimeBeatEnvelope() {
-  const effect = new SubjectFxEffect({
-    analyzer: { assetUrls: resolveSubjectAssetUrls('http://localhost:4173/') },
-  });
-  effect.config.reactivity = 'beat';
-  effect.config.amount = 1;
-  effect.config.beatInfluence = 1;
-  effect.setBeatPulse(1, 1000);
-  assert.equal(effect.beatEnvelope, 1);
-  effect.computeIntensity(null, 0, { mediaTimeMs: 1000, tick: true });
-  assert.ok(effect.beatEnvelope >= 0.99);
-  effect.computeIntensity(null, 0, { mediaTimeMs: 1500, tick: true });
-  const decayed = effect.beatEnvelope;
-  assert.ok(decayed < 1 && decayed > 0);
-  effect.computeIntensity(null, 0, { mediaTimeMs: 1500, tick: true });
-  assert.equal(
-    effect.beatEnvelope,
-    decayed,
-    'same media timestamp must not advance envelope twice',
-  );
-  effect.computeIntensity(null, 0, { mediaTimeMs: 2500, tick: false });
-  assert.equal(
-    effect.beatEnvelope,
-    decayed,
-    'pure intensity read must not tick envelope',
-  );
-}
-
-function checkSubjectFragmentMediaDeterminism() {
-  const metrics = getVideoDrawMetrics({
-    canvasWidth: 320,
-    canvasHeight: 180,
-    sourceWidth: 320,
-    sourceHeight: 180,
-  });
-  const landmarks = Array.from({ length: 33 }, (_, i) => ({
-    x: 0.4 + (i % 5) * 0.02,
-    y: 0.4 + Math.floor(i / 5) * 0.02,
-    z: 0,
-    visibility: 1,
-  }));
-  const frameBase = {
-    landmarks,
-    center: { x: 0.5, y: 0.5 },
-    motionEnergy: 0.4,
-    regions: {
-      leftHand: {
-        name: 'leftHand',
-        position: { x: 0.45, y: 0.42 },
-        velocity: { x: 0.1, y: -0.05 },
-        speed: 0.12,
-        direction: 0.3,
-      },
-    },
-  };
-  const config = {
-    enabled: true,
-    density: 0.8,
-    spread: 0.5,
-    motionInfluence: 0.6,
-  };
-  const sourceCanvas = { width: 320, height: 180 };
-
-  const run = (times) => {
-    const engine = new FragmentEngine();
-    for (const t of times) {
-      engine.update({
-        frame: { ...frameBase, timestamp: t },
-        config,
-        intensity: 1,
-        seed: 42,
-        clipId: 'clip',
-        drawMetrics: metrics,
-        sourceCanvas,
-        beatStrength: 0.2,
-        scale: 1,
-        persistence: 0.5,
-        mediaTimeMs: t,
-      });
-    }
-    return engine.fragments.map((fragment) => ({
-      serial: fragment.serial,
-      x: Number(fragment.x.toFixed(3)),
-      y: Number(fragment.y.toFixed(3)),
-      age: fragment.age,
-      life: Number(fragment.life.toFixed(4)),
-    }));
-  };
-
-  const coarse = [];
-  for (let t = 0; t <= 333.333; t += 1000 / 30) coarse.push(t);
-  const fine = [];
-  for (let t = 0; t <= 333.333; t += 1000 / 60) fine.push(t);
-  assert.deepEqual(
-    run(coarse),
-    run(fine),
-    'fragment simulation must follow media time, not render call frequency',
-  );
-
-  const engine = new FragmentEngine();
-  engine.update({
-    frame: { ...frameBase, timestamp: 0 },
-    config,
-    intensity: 1,
-    seed: 7,
-    clipId: 'a',
-    drawMetrics: metrics,
-    sourceCanvas,
-    mediaTimeMs: 0,
-  });
-  for (let i = 1; i <= 8; i++) {
-    engine.update({
-      frame: { ...frameBase, timestamp: i * (1000 / 30) },
-      config,
-      intensity: 1,
-      seed: 7,
-      clipId: 'a',
-      drawMetrics: metrics,
-      sourceCanvas,
-      mediaTimeMs: i * (1000 / 30),
-    });
-  }
-  const serials = engine.fragments.map((fragment) => fragment.serial);
-  assert.ok(serials.length > 0);
-  assert.equal(new Set(serials).size, serials.length);
-  assert.ok(Math.max(...serials) >= serials.length);
-  engine.fragments = engine.fragments.slice(0, 1);
-  engine.update({
-    frame: { ...frameBase, timestamp: 9 * (1000 / 30) },
-    config,
-    intensity: 1,
-    seed: 7,
-    clipId: 'a',
-    drawMetrics: metrics,
-    sourceCanvas,
-    mediaTimeMs: 9 * (1000 / 30),
-  });
-  const nextSerials = engine.fragments.map((fragment) => fragment.serial);
-  assert.ok(
-    nextSerials.every((serial) => serial >= 1),
-    'spawnSerial must stay monotonic even after fragments are removed',
-  );
-  assert.ok(Math.max(...nextSerials) > Math.max(...serials));
-}
-
-function checkSubjectEchoOwnsSnapshots() {
-  const restore = mockGlobal('document', {
-    createElement(tag) {
-      assert.equal(tag, 'canvas');
-      const state = {
-        globalAlpha: 1,
-        globalCompositeOperation: 'source-over',
-        fillStyle: '',
-        strokeStyle: '',
-      };
-      return {
-        width: 0,
-        height: 0,
-        getContext() {
-          return {
-            clearRect() {},
-            drawImage() {},
-            save() {},
-            restore() {},
-            beginPath() {},
-            rect() {},
-            clip() {},
-            get globalAlpha() {
-              return state.globalAlpha;
-            },
-            set globalAlpha(value) {
-              state.globalAlpha = value;
-            },
-            get globalCompositeOperation() {
-              return state.globalCompositeOperation;
-            },
-            set globalCompositeOperation(value) {
-              state.globalCompositeOperation = value;
-            },
-            set fillStyle(value) {
-              state.fillStyle = value;
-            },
-            set strokeStyle(value) {
-              state.strokeStyle = value;
-            },
-            fillRect() {},
-            stroke() {},
-            arc() {},
-            fill() {},
-            moveTo() {},
-            lineTo() {},
-            closePath() {},
-            createImageData(w, h) {
-              return {
-                data: new Uint8ClampedArray(w * h * 4),
-                width: w,
-                height: h,
-              };
-            },
-            putImageData() {},
-          };
-        },
-      };
-    },
-  });
-  try {
-    const trails = new TrailEngine();
-    const sourceCanvas = { width: 1280, height: 720, __id: 'live' };
-    const mask = new SubjectMask(8, 8, new Uint8Array(64).fill(200));
-    trails.update({
-      frame: {
-        timestamp: 100,
-        center: { x: 0.5, y: 0.5 },
-        motionEnergy: 0.3,
-        mask,
-        landmarks: [{ x: 0.5, y: 0.5 }],
-        regions: {},
-      },
-      config: {
-        enabled: true,
-        copies: 4,
-        spacing: 0.4,
-        decay: 0.8,
-        opacity: 0.5,
-        motionInfluence: 0.5,
-      },
-      intensity: 1,
-      width: 1280,
-      height: 720,
-      sourceCanvas,
-      mediaTimeMs: 100,
-    });
-    trails.update({
-      frame: {
-        timestamp: 200,
-        center: { x: 0.51, y: 0.5 },
-        motionEnergy: 0.4,
-        mask,
-        landmarks: [{ x: 0.51, y: 0.5 }],
-        regions: {},
-      },
-      config: {
-        enabled: true,
-        copies: 4,
-        spacing: 0.4,
-        decay: 0.8,
-        opacity: 0.5,
-        motionInfluence: 0.5,
-      },
-      intensity: 1,
-      width: 1280,
-      height: 720,
-      sourceCanvas,
-      mediaTimeMs: 200,
-    });
-    assert.equal(trails.history.length, 2);
-    assert.notEqual(trails.history[0].canvas, sourceCanvas);
-    assert.notEqual(trails.history[1].canvas, sourceCanvas);
-    assert.ok(trails.history[0].ownsCanvas);
-    assert.ok(trails.history[0].canvas.width <= 400);
-    assert.ok(trails.history[0].mask?.data instanceof Uint8Array);
-  } finally {
-    restore();
-  }
-}
-
-function checkSubjectSmearQuietFeedbackAdvances() {
-  const smear = new SmearEngine();
-  const calls = [];
-  smear.renderer = {
-    reset() {},
-    applySmear(source, options) {
-      calls.push({ ...options });
-      return source;
-    },
-  };
-  const frame = {
-    motionEnergy: 0.01,
-    regions: {},
-    mask: null,
-  };
-  const config = {
-    enabled: true,
-    threshold: 0.2,
-    subjectOnly: true,
-    spread: 0.5,
-    decay: 0.85,
-  };
-  const drew = smear.apply(
-    { drawImage() {} },
-    { width: 64, height: 64 },
-    frame,
-    config,
-    1,
-    { width: 64, height: 64 },
-    null,
-  );
-  assert.equal(drew, false);
-  assert.equal(calls.length, 1, 'quiet motion must still update feedback');
-  assert.equal(calls[0].dx, 0);
-  assert.equal(calls[0].dy, 0);
-  assert.ok(calls[0].mix > 0);
-  assert.ok(calls[0].decay > 0);
-
-  smear.apply(
-    { drawImage() {} },
-    { width: 64, height: 64 },
-    frame,
-    config,
-    1,
-    { width: 64, height: 64 },
-    null,
-  );
-  assert.equal(
-    calls.length,
-    2,
-    'feedback must keep advancing across quiet frames',
   );
 }
 
@@ -2767,239 +2417,9 @@ async function checkSubjectClipAwaitsEffectBeforeAnalyzer() {
   await app.addTimelineEffectClip('subject', 0);
   assert.equal(
     readyCalls,
-    1,
-    'Subject clip preload must await the effect before accessing its analyzer',
-  );
-}
-
-function checkSignalMapPresetDefaults() {
-  const config = createDefaultSubjectConfig('signal-map');
-  assert.equal(config.preset, 'signal-map');
-  assert.equal(config.modules.backgroundMosaic.enabled, true);
-  assert.equal(config.modules.hudAnnotations.enabled, true);
-  assert.equal(config.modules.bodyMap.showSkeleton, false);
-  assert.equal(config.modules.rgb.enabled, false);
-  assert.equal(config.modules.trails.enabled, true);
-  assert.equal(config.modules.trails.mode, 'silhouette');
-}
-
-function checkSignalMapConfigNormalization() {
-  const config = normalizeSubjectConfig({
-    preset: 'signal-map',
-    modules: {
-      backgroundMosaic: {
-        gridSize: 4,
-        coverage: 2,
-        opacity: -1,
-        hold: 10,
-        speed: 9,
-      },
-      hudAnnotations: {
-        density: 1.5,
-        fontSize: 20,
-        lineWidth: 5,
-        color: 'bad',
-      },
-    },
-  });
-  assert.equal(config.modules.backgroundMosaic.gridSize, 6);
-  assert.equal(config.modules.backgroundMosaic.coverage, 1);
-  assert.equal(config.modules.backgroundMosaic.opacity, 0);
-  assert.equal(config.modules.backgroundMosaic.hold, 80);
-  assert.equal(config.modules.backgroundMosaic.speed, 4);
-  assert.equal(config.modules.hudAnnotations.density, 1);
-  assert.equal(config.modules.hudAnnotations.fontSize, 14);
-  assert.equal(config.modules.hudAnnotations.lineWidth, 2);
-  assert.match(config.modules.hudAnnotations.color, /^#[0-9a-f]{6}$/);
-}
-
-function checkScaleDensityByGlobalMacro() {
-  const presetDensity = SUBJECT_PRESETS.anatomy.density;
-  const atDefault = scaleDensityByGlobal(0.42, presetDensity, presetDensity);
-  assert.ok(Math.abs(atDefault - 0.42) < 0.001);
-  const doubled = scaleDensityByGlobal(0.42, presetDensity * 2, presetDensity);
-  assert.ok(Math.abs(doubled - 0.84) < 0.001);
-  const halved = scaleDensityByGlobal(0.42, presetDensity * 0.5, presetDensity);
-  assert.ok(Math.abs(halved - 0.21) < 0.001);
-}
-
-function checkHudAnnotationsDeterminism() {
-  const metrics = getVideoDrawMetrics({
-    canvasWidth: 640,
-    canvasHeight: 360,
-    sourceWidth: 640,
-    sourceHeight: 360,
-  });
-  const landmarks = Array.from({ length: 33 }, (_, index) => ({
-    x: 0.45 + (index % 7) * 0.02,
-    y: 0.35 + (index % 5) * 0.04,
-    visibility: 1,
-  }));
-  const frame = { landmarks };
-  const config = { density: 0.6, hold: 400, speed: 1 };
-  const a = buildHudAnnotations(frame, config, 42, 'clip-a', 1200, metrics);
-  const b = buildHudAnnotations(frame, config, 42, 'clip-a', 1200, metrics);
-  assert.deepEqual(a, b);
-  assert.ok(a.length >= 4 && a.length <= 7);
-  const c = buildHudAnnotations(frame, config, 42, 'clip-a', 5000, metrics);
-  assert.notDeepEqual(
-    a.map((entry) => entry.value),
-    c.map((entry) => entry.value),
-  );
-  assert.equal(hudTimeBucket(0, 400, 1), 0);
-  assert.equal(hudNumericValue(7, 'clip', 0, 0), hudNumericValue(7, 'clip', 0, 0));
-}
-
-function checkBackgroundMosaicDeterminism() {
-  assert.equal(
-    shouldMosaicCell(9, 'clip', 3, 4, 5, 0.5),
-    shouldMosaicCell(9, 'clip', 3, 4, 5, 0.5),
-  );
-  let evolved = false;
-  for (let bucket = 0; bucket < 12; bucket++) {
-    if (
-      shouldMosaicCell(9, 'clip', 0, 4, 5, 0.5) !==
-      shouldMosaicCell(9, 'clip', bucket, 4, 5, 0.5)
-    ) {
-      evolved = true;
-      break;
-    }
-  }
-  assert.equal(evolved, true, 'mosaic pattern should evolve across time buckets');
-  assert.equal(mosaicTimeBucket(840, 420, 1), 2);
-  assert.equal(mosaicTimeBucket(840, 420, 2), 4);
-}
-
-function checkBackgroundMosaicDisabledNoCanvasAlloc() {
-  const engine = new BackgroundMosaicEngine();
-  assert.equal(engine._workCanvas, null);
-  const ctx = {
-    save() {},
-    restore() {},
-    drawImage() {},
-  };
-  engine.render(
-    ctx,
-    { width: 320, height: 180 },
-    { landmarks: [] },
-    { enabled: false, coverage: 0.5 },
-    1,
-    1,
-    'clip',
-    { width: 320, height: 180 },
-    getVideoDrawMetrics({
-      canvasWidth: 320,
-      canvasHeight: 180,
-      sourceWidth: 320,
-      sourceHeight: 180,
-    }),
     0,
+    'Visual FX activation must not initialize person analysis',
   );
-  assert.equal(engine._workCanvas, null);
-}
-
-function checkSubjectFxNestedModuleCommit() {
-  const timeline = new VideoTimeline(8);
-  const item = timeline.upsert({
-    id: 'subject-nested',
-    type: 'subject',
-    startTime: 0,
-    endTime: 8,
-    config: createDefaultSubjectConfig('signal-map'),
-  });
-  const app = {
-    videoTimeline: timeline,
-    getSelectedVideoEffectItem: () => item,
-    pushTimelineHistory() {},
-    subjectFxEffect: { setConfig() {} },
-    syncVideoTimelineSubject() {},
-  };
-  applySubjectFxIntegrationMixin(app);
-  const beforeGrid = item.config.modules.backgroundMosaic.gridSize;
-  const beforeHud = item.config.modules.hudAnnotations.density;
-  app.commitSubjectFxConfig({
-    modules: { backgroundMosaic: { gridSize: 24 } },
-  });
-  const updated = timeline.items.find((entry) => entry.id === 'subject-nested');
-  assert.equal(updated.config.modules.backgroundMosaic.gridSize, 24);
-  assert.equal(updated.config.modules.hudAnnotations.density, beforeHud);
-  assert.notEqual(updated.config.modules.backgroundMosaic.gridSize, beforeGrid);
-}
-
-function checkTrailMediaBucketDedup() {
-  const restore = mockGlobal('document', {
-    createElement(tag) {
-      assert.equal(tag, 'canvas');
-      return {
-        width: 0,
-        height: 0,
-        getContext() {
-          return {
-            clearRect() {},
-            drawImage() {},
-          };
-        },
-      };
-    },
-  });
-  try {
-    const trails = new TrailEngine();
-    const sourceCanvas = { width: 320, height: 180 };
-    const frame = {
-      timestamp: 100,
-      center: { x: 0.5, y: 0.5 },
-      motionEnergy: 0.2,
-      mask: null,
-      landmarks: [{ x: 0.5, y: 0.5 }],
-      regions: {},
-    };
-    const config = { enabled: true, copies: 4, spacing: 0.1, decay: 0.7, opacity: 0.3, motionInfluence: 0.5 };
-    trails.update({
-      frame,
-      config,
-      intensity: 1,
-      width: 320,
-      height: 180,
-      sourceCanvas,
-      mediaTimeMs: 100,
-    });
-    assert.equal(trails.history.length, 1);
-    trails.update({
-      frame,
-      config,
-      intensity: 1,
-      width: 320,
-      height: 180,
-      sourceCanvas,
-      mediaTimeMs: 110,
-    });
-    assert.equal(trails.history.length, 1);
-    trails.update({
-      frame,
-      config,
-      intensity: 1,
-      width: 320,
-      height: 180,
-      sourceCanvas,
-      mediaTimeMs: 140,
-    });
-    assert.equal(trails.history.length, 2);
-  } finally {
-    restore();
-  }
-}
-
-function checkExistingProjectGetsNewModules() {
-  const legacy = normalizeSubjectConfig({
-    preset: 'anatomy',
-    amount: 0.5,
-    modules: {
-      bodyMap: { showLabels: true },
-    },
-  });
-  assert.equal(legacy.modules.backgroundMosaic.enabled, false);
-  assert.equal(legacy.modules.hudAnnotations.enabled, false);
-  assert.equal(typeof legacy.modules.backgroundMosaic.gridSize, 'number');
 }
 
 await checkCameraStreamCleanup();
@@ -3015,15 +2435,10 @@ checkSubjectConfigNormalization();
 checkSubjectProjectMigration();
 checkSubjectDeterministicPrng();
 checkSubjectMotionEnergy();
-checkSubjectBeatIntegration();
 await checkSubjectMaskPipeline();
 await checkSubjectLocalMotion();
 checkSubjectAnalysisCache();
 await checkSubjectCachedMaskNotStale();
-checkSubjectMediaTimeBeatEnvelope();
-checkSubjectFragmentMediaDeterminism();
-checkSubjectEchoOwnsSnapshots();
-checkSubjectSmearQuietFeedbackAdvances();
 checkSubjectAdaptiveQualityPreserved();
 checkSubjectFrameMap();
 checkSubjectBypassToggle();
@@ -3031,15 +2446,6 @@ checkSubjectVariationStep();
 checkSubjectAssetUrlResolution();
 await checkSubjectAnalyzerInitRetryLifecycle();
 await checkSubjectClipAwaitsEffectBeforeAnalyzer();
-checkSignalMapPresetDefaults();
-checkSignalMapConfigNormalization();
-checkScaleDensityByGlobalMacro();
-checkHudAnnotationsDeterminism();
-checkBackgroundMosaicDeterminism();
-checkBackgroundMosaicDisabledNoCanvasAlloc();
-checkSubjectFxNestedModuleCommit();
-checkTrailMediaBucketDedup();
-checkExistingProjectGetsNewModules();
 checkAudioTempoAnalyzer();
 checkEditAssistManualControls();
 await checkMediaAudioExtraction();

@@ -21,7 +21,7 @@
     "dev": "vite",
     "build": "vite build && node scripts/copy-templates.mjs",
     "preview": "vite preview",
-    "test": "node tests/smoke-check.mjs && node tests/unit-check.mjs",
+    "test": "node tests/smoke-check.mjs && node tests/unit-check.mjs && node tests/visual-fx-check.mjs",
     "test:browser": "playwright test",
     "lint": "eslint .",
     "format": "prettier --write .",

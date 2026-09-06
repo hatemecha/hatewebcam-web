@@ -3,9 +3,8 @@ import {
   createDefaultSubjectConfig,
   migrateProjectToV2,
   normalizeSubjectConfig,
-} from '../subject/subject-config.mjs';
-import { SUBJECT_PRESET_LABELS } from '../effects/subject-fx/subject-presets.mjs';
-import { SUBJECT_ANALYSIS_STATUS } from '../subject/subject-analyzer.mjs';
+} from '../visual-fx/config.mjs';
+import { SUBJECT_PRESET_LABELS } from '../visual-fx/config.mjs';
 import { resolveSubjectAssetUrls } from '../subject/mediapipe-paths.mjs';
 
 /** @param {import('./controller.mjs').AppController} proto */
@@ -13,54 +12,26 @@ export function applySubjectFxIntegrationMixin(proto) {
   proto.ensureSubjectFxEffect = async function () {
     if (this.subjectFxEffect) return this.subjectFxEffect;
     if (this._subjectFxLoadPromise) return this._subjectFxLoadPromise;
-    this._subjectFxLoadPromise =
-      import('../effects/subject-fx/subject-effect.mjs')
-        .then(({ SubjectFxEffect }) => {
-          this.subjectFxEffect = new SubjectFxEffect({
-            analyzer: {
-              assetUrls: resolveSubjectAssetUrls(document.baseURI),
-            },
-          });
-          return this.subjectFxEffect;
-        })
-        .finally(() => {
-          this._subjectFxLoadPromise = null;
+    this._subjectFxLoadPromise = import('../visual-fx/effect.mjs')
+      .then(({ VisualFxEffect }) => {
+        this.subjectFxEffect = new VisualFxEffect({
+          analyzer: {
+            assetUrls: resolveSubjectAssetUrls(document.baseURI),
+          },
         });
+        return this.subjectFxEffect;
+      })
+      .finally(() => {
+        this._subjectFxLoadPromise = null;
+      });
     return this._subjectFxLoadPromise;
-  };
-
-  proto.getSubjectSourceKey = function () {
-    const file = this.videoSourceFile;
-    if (!file) return '';
-    return `${file.name}:${file.size}:${this.videoTimeline?.duration || 0}`;
-  };
-
-  proto.getSubjectBeatStrength = function (mediaTime) {
-    const markers = (this.videoTimeline?.markers || []).filter(
-      (marker) =>
-        marker.source === 'edit-assist' &&
-        (marker.kind === 'beat' || marker.kind === 'bar'),
-    );
-    let best = 0;
-    markers.forEach((marker) => {
-      const delta = Math.abs(marker.time - mediaTime);
-      if (delta > 0.18) return;
-      const strength = clamp01(
-        marker.strength ?? (marker.kind === 'bar' ? 0.9 : 0.65),
-      );
-      const envelope = clamp01(1 - delta / 0.18);
-      best = Math.max(best, strength * envelope);
-    });
-    return best;
   };
 
   proto.getSubjectFxStatusMessage = function () {
     if (this.subjectFxBypass) return '';
     const effect = this.subjectFxEffect;
     if (!effect?.active) return '';
-    if (effect.analyzer?.status === SUBJECT_ANALYSIS_STATUS.error) {
-      return effect.analyzer.statusMessage || 'No se pudo detectar el sujeto.';
-    }
+
     return effect.getStatusLabel();
   };
 
@@ -69,68 +40,9 @@ export function applySubjectFxIntegrationMixin(proto) {
     this.subjectFxEffect?.setBypass?.(this.subjectFxBypass);
     this.updateSubjectFxBypassUI?.();
     this.renderSubjectFxInspector?.();
+    this.refreshPausedVideoPreview?.();
     if (!this.subjectFxBypass) {
       void this.syncVideoTimelineSubject(true);
-    }
-  };
-
-  proto.startSubjectPreAnalysis = async function () {
-    if (!this.videoSourceFile || this.subjectPreAnalysisRunning) return;
-    const effect = await this.ensureSubjectFxEffect();
-    await effect.analyzer.ensureReady();
-    const cache = effect.analyzer.cache;
-    const sourceKey = this.getSubjectSourceKey();
-    cache.invalidate(sourceKey);
-    cache.duration = this.videoTimeline.duration;
-    cache.sourceKey = sourceKey;
-    cache.running = true;
-    cache.ready = false;
-    cache.progress = 0;
-    cache.samples = [];
-
-    this.subjectPreAnalysisRunning = true;
-    this.updateSubjectFxStatus(cache.getProgressLabel());
-
-    const trimStart = this.videoTimeline.trimStart;
-    const trimEnd = this.videoTimeline.trimEnd;
-    const step = 1 / 12;
-    const originalTime = this.videoEl.currentTime;
-
-    try {
-      for (let time = trimStart; time <= trimEnd; time += step) {
-        if (!this.subjectPreAnalysisRunning) break;
-        await this.seekVideoForExport(time);
-        await effect.analyzer.analyze(this.videoEl, time * 1000, {
-          detectorIntervalMs: 0,
-          quality: 'best',
-        });
-        const frame = effect.analyzer.lastFrame;
-        if (frame) {
-          cache.addSample({
-            timestamp: time * 1000,
-            landmarks: frame.landmarks,
-            center: frame.center,
-            boundingBox: frame.boundingBox,
-            motionEnergy: frame.motionEnergy,
-            movementDirection: frame.movementDirection,
-            jointVelocities: frame.jointVelocities,
-            wristVelocities: frame.wristVelocities,
-            confidence: frame.confidence,
-            regions: frame.regions,
-          });
-        }
-        cache.progress =
-          (time - trimStart) / Math.max(0.001, trimEnd - trimStart);
-        this.updateSubjectFxStatus(cache.getProgressLabel());
-      }
-      cache.markReady();
-      this.updateSubjectFxStatus('✓ Sujeto analizado');
-    } catch (error) {
-      console.error('Subject pre-analysis failed:', error);
-      this.updateSubjectFxStatus('No se pudo completar el análisis.');
-    } finally {
-      this.subjectPreAnalysisRunning = false;
-      this.videoEl.currentTime = originalTime;
     }
   };
 
@@ -142,16 +54,12 @@ export function applySubjectFxIntegrationMixin(proto) {
     const item = active.find((entry) => entry.type === 'subject');
     const nextId = item?.id || '';
     if (!force && this.appliedTimelineSubjectId === nextId) {
-      if (item && this.subjectFxEffect?.active && !this.subjectFxBypass) {
-        const beat = this.getSubjectBeatStrength(mediaTime);
-        if (beat > 0) this.subjectFxEffect.setBeatPulse(beat, mediaTime * 1000);
-      }
       return;
     }
 
-    this.appliedTimelineSubjectId = nextId;
     const effect = await this.ensureSubjectFxEffect();
     if (syncRequestId !== this._subjectFxSyncRequestId) return;
+    this.appliedTimelineSubjectId = nextId;
     effect.setBypass(!!this.subjectFxBypass);
 
     if (!item) {
@@ -165,27 +73,9 @@ export function applySubjectFxIntegrationMixin(proto) {
       effect.onSeek();
     }
 
-    effect.setActive(false);
-    try {
-      await effect.analyzer.ensureReady();
-    } catch (error) {
-      console.warn('Subject FX preload failed:', error);
-      if (syncRequestId === this._subjectFxSyncRequestId) {
-        effect.setActive(false);
-        this.updateSubjectFxStatus(
-          effect.analyzer.statusMessage || 'No se pudo iniciar Subject FX.',
-        );
-      }
-      return;
-    }
-    if (syncRequestId !== this._subjectFxSyncRequestId) return;
-
-    effect.setConfig(item.config || createDefaultSubjectConfig('anatomy'));
+    effect.setConfig(item.config || createDefaultSubjectConfig('feedback'));
     effect.setActive(true, item.id);
     effect.flipH = this.getEffectiveFlipH?.() ?? false;
-
-    const beat = this.getSubjectBeatStrength(mediaTime);
-    if (beat > 0) effect.setBeatPulse(beat, mediaTime * 1000);
 
     this.updateSubjectFxStatus(
       this.getSubjectFxStatusMessage?.() || effect.getStatusLabel(),
@@ -195,6 +85,7 @@ export function applySubjectFxIntegrationMixin(proto) {
   proto.syncVideoTimelineSubject = async function (force = false) {
     if (this.sourceMode !== 'video' || !this.videoSourceFile) return;
     await this.syncVideoTimelineSubjectAt(this.videoEl.currentTime || 0, force);
+    if (force) this.refreshPausedVideoPreview?.();
   };
 
   proto.resetSubjectFxTemporalState = function (options = {}) {
@@ -202,8 +93,6 @@ export function applySubjectFxIntegrationMixin(proto) {
     this.subjectFxEffect?.analyzer?.reset({ hard: !!options.hard });
     this.appliedTimelineSubjectId = '';
     this._subjectFxSyncRequestId = (this._subjectFxSyncRequestId || 0) + 1;
-    this._subjectAutoAnalysisStarted = false;
-    this.subjectPreAnalysisRunning = false;
   };
 
   proto.updateSubjectFxStatus = function (message = '') {
@@ -232,7 +121,7 @@ export function applySubjectFxIntegrationMixin(proto) {
     if (this.subjectFxEffect?.active) {
       return this.subjectFxEffect.getConfig();
     }
-    return createDefaultSubjectConfig('anatomy');
+    return createDefaultSubjectConfig('feedback');
   };
 
   proto.applySubjectPresetToSelection = function (presetId) {
@@ -262,18 +151,6 @@ export function applySubjectFxIntegrationMixin(proto) {
     void this.syncVideoTimelineSubject(true);
   };
 
-  proto.randomizeSubjectSeed = function () {
-    const item = this.getSelectedVideoEffectItem?.();
-    if (!item || item.type !== 'subject') return;
-    const seed = Math.floor(Math.random() * 999999);
-    const config = normalizeSubjectConfig({ ...item.config, seed });
-    this.pushTimelineHistory?.();
-    this.videoTimeline.upsert({ ...item, config });
-    this.subjectFxEffect?.setConfig(config);
-    this.renderSubjectFxInspector?.();
-    void this.syncVideoTimelineSubject(true);
-  };
-
   proto.commitSubjectFxConfig = function (partial = {}) {
     const item = this.getSelectedVideoEffectItem?.();
     if (!item || item.type !== 'subject') return;
@@ -281,10 +158,7 @@ export function applySubjectFxIntegrationMixin(proto) {
     if (partial.modules && item.config?.modules) {
       merged.modules = { ...item.config.modules };
       for (const [moduleName, modulePatch] of Object.entries(partial.modules)) {
-        merged.modules[moduleName] = {
-          ...item.config.modules[moduleName],
-          ...modulePatch,
-        };
+        merged.modules[moduleName] = modulePatch;
       }
     }
     const config = normalizeSubjectConfig(merged);
@@ -305,10 +179,6 @@ export function applySubjectFxIntegrationMixin(proto) {
     });
     return migrated;
   };
-}
-
-function clamp01(value) {
-  return Math.min(1, Math.max(0, Number(value) || 0));
 }
 
 export { normalizeSubjectConfig, migrateProjectToV2, SUBJECT_PRESET_LABELS };

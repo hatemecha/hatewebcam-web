@@ -107,7 +107,10 @@ for (const file of javascriptFiles) {
   }
 
   const source = readFileSync(resolve(rootDir, file), 'utf8');
-  if (/(?<![.\w$])(?:clamp|escapeHtml)\s*\(/.test(source)) {
+  if (
+    file.startsWith('js/app/') &&
+    /(?<![.\w$])(?:clamp|escapeHtml)\s*\(/.test(source)
+  ) {
     fail(`${file} calls a controller helper without this.`);
   }
   if (file !== 'js/app/dom.mjs' && /(?<![.\w$])\$\s*\(/.test(source)) {

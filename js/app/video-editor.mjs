@@ -7,7 +7,7 @@ import {
 import { VideoTimeline } from '../editor/video-timeline.mjs';
 import { applyVideoEditorClipboardMixin } from './video-editor-clipboard.mjs';
 import { applyVideoEditorTimelineMixin } from './video-editor-timeline.mjs';
-import { createDefaultSubjectConfig } from '../subject/subject-config.mjs';
+import { createDefaultSubjectConfig } from '../visual-fx/config.mjs';
 
 const VIDEO_END_EPSILON = 0.001;
 const VIDEO_EXPORT_PLAYBACK_RATE = 4;
@@ -639,7 +639,7 @@ export function applyLocalvideoeditorMixin(proto) {
       return { ...config, automation: this.getSelectedAutomationMode() };
     }
     if (type === 'subject') {
-      return createDefaultSubjectConfig('anatomy');
+      return createDefaultSubjectConfig('feedback');
     }
     return {
       ...(this.blinkDetectionEffect
@@ -2433,11 +2433,7 @@ export function applyLocalvideoeditorMixin(proto) {
     if (!this.videoSourceFile || this.isVideoExporting) return;
     const previous = this.videoEl.currentTime || 0;
     const next = this.clampVideoSeekTime(time);
-    if (
-      this.subjectFxEffect?.active &&
-      Math.abs(next - previous) > 0.04 &&
-      (next < previous - 0.02 || Math.abs(next - previous) > 0.35)
-    ) {
+    if (this.subjectFxEffect?.active && next !== previous) {
       this.subjectFxEffect.onSeek?.();
     }
     this.videoEl.currentTime = next;

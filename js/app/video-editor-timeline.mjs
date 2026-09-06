@@ -1,4 +1,4 @@
-import { SUBJECT_PRESET_LABELS } from '../effects/subject-fx/subject-presets.mjs';
+import { SUBJECT_PRESET_LABELS } from '../visual-fx/config.mjs';
 
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyVideoEditorTimelineMixin(proto) {
@@ -171,17 +171,7 @@ export function applyVideoEditorTimelineMixin(proto) {
           console.warn('Detector preload failed:', err);
         }
       }
-      if (type === 'subject') {
-        try {
-          const effect = await this.ensureSubjectFxEffect?.();
-          if (!effect?.analyzer) {
-            throw new Error('subject_fx_analyzer_unavailable');
-          }
-          await effect.analyzer.ensureReady();
-        } catch (err) {
-          console.warn('Subject FX preload failed:', err);
-        }
-      }
+      if (type === 'subject') await this.ensureSubjectFxEffect?.();
       this.selectVideoEffect(saved.id);
       void this.syncVideoTimelineEffects(true);
       this.showStatus(
@@ -347,7 +337,7 @@ export function applyVideoEditorTimelineMixin(proto) {
       el.dataset.type = item.type;
       const label =
         item.type === 'subject'
-          ? SUBJECT_PRESET_LABELS[item.config?.preset] || 'SUBJECT'
+          ? SUBJECT_PRESET_LABELS[item.config?.preset] || 'VISUAL FX'
           : meta.trackLabel;
       el.innerHTML = `
         <span class="timeline-item-handle start" aria-hidden="true"></span>

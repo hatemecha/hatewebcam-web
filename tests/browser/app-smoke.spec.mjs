@@ -100,7 +100,7 @@ test('runtime vendor assets are served from dist', async ({ request }) => {
   }
 });
 
-test('Subject FX initializes its production Worker and MediaPipe assets', async ({
+test('Visual FX only initializes person assets when requested', async ({
   page,
 }) => {
   test.setTimeout(60_000);
@@ -117,6 +117,7 @@ test('Subject FX initializes its production Worker and MediaPipe assets', async 
   page.on('console', (message) => {
     const knownMediaPipeNoise = [
       'OpenGL error checking is disabled',
+      'GPU stall due to ReadPixels',
       'Created TensorFlow Lite XNNPACK delegate for CPU',
       'Feedback manager requires a model with a single signature inference',
     ];
@@ -147,14 +148,16 @@ test('Subject FX initializes its production Worker and MediaPipe assets', async 
     .locator('.timeline-palette-chip[data-effect-type="subject"]')
     .click();
 
-  await expect(page.locator('.timeline-item-label')).toContainText('ANATOMY');
+  await expect(page.locator('.timeline-item-label')).toContainText('Feedback');
+  expect([...requestedSubjectAssets]).toEqual([]);
+  await page.locator('#visual-target-person').click();
   await page.locator('#btnVideoPlay').click();
   await page.waitForTimeout(3000);
   expect(failures).toEqual([]);
   await expect
     .poll(() => [...requestedSubjectAssets].sort(), { timeout: 45_000 })
     .toEqual([...requiredAssets].sort());
-  await expect(page.locator('.subject-status-text')).not.toContainText(
+  await expect(page.locator('#subjectFxInlineStatus')).not.toContainText(
     /No se pudo|error/i,
   );
   expect(failures).toEqual([]);

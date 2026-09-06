@@ -126,8 +126,8 @@ const ENGLISH_REPLACEMENTS = Object.entries({
     'MP4 or WebM. Stable export uses WebM without audio.',
   'Importá un video primero. Después arrastrá Look, Color, Caras u Ojos a la timeline.':
     'Import a video first. Then drag Look, Color, Faces or Eyes onto the timeline.',
-  'Importá un video primero. Después arrastrá Look, Subject FX, Color, Caras u Ojos a la timeline.':
-    'Import a video first. Then drag Look, Subject FX, Color, Faces or Eyes onto the timeline.',
+  'Importá un video primero. Después arrastrá Look, Visual FX, Color, Caras u Ojos a la timeline.':
+    'Import a video first. Then drag Look, Visual FX, Color, Faces or Eyes onto the timeline.',
   'Hacé click en un clip de la timeline para ver cuándo empieza y termina. Los ajustes visuales están en la pestaña Ajustes.':
     'Click a timeline clip to see when it starts and ends. Visual settings are in the Settings tab.',
   'Mové o estirá el clip en la timeline, o editá los tiempos acá abajo.':
@@ -138,9 +138,9 @@ const ENGLISH_REPLACEMENTS = Object.entries({
     'Select a timeline clip to edit its options here.',
   'Arrastrá Look, Color, Caras u Ojos desde la barra de arriba.':
     'Drag Look, Color, Faces or Eyes from the bar above.',
-  'Arrastrá Look, Subject FX, Color, Caras u Ojos desde la barra de arriba.':
-    'Drag Look, Subject FX, Color, Faces or Eyes from the bar above.',
-  'FX de sujeto': 'Subject FX',
+  'Arrastrá Look, Visual FX, Color, Caras u Ojos desde la barra de arriba.':
+    'Drag Look, Visual FX, Color, Faces or Eyes from the bar above.',
+  'Visual FX': 'Visual FX',
   'Intensidad del efecto': 'Amount',
   Reactividad: 'Reactivity',
   Densidad: 'Density',

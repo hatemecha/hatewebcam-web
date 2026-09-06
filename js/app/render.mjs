@@ -247,7 +247,7 @@ export function applyRenderLoopMixin(proto) {
           this.subjectFxEffect?.active &&
           !this.subjectFxInspectorHost?.classList.contains('hidden')
         ) {
-          const nextStatus = this.subjectFxEffect.analyzer?.status || '';
+          const nextStatus = this.subjectFxEffect.getStatusLabel();
           if (nextStatus !== this._subjectFxInspectorStatus) {
             this._subjectFxInspectorStatus = nextStatus;
             this.renderSubjectFxInspector?.();
@@ -540,6 +540,20 @@ export function applyRenderLoopMixin(proto) {
     targetCtx.fillRect(0, 0, targetCanvas.width, targetCanvas.height);
     targetCtx.restore();
 
+    if (this.subjectFxEffect?.active && !this.subjectFxBypass) {
+      this.subjectFxEffect.processFullFrame(
+        targetCtx,
+        analysisCanvas,
+        this.videoEl,
+        this.renderEngine.getProfile('export'),
+        {
+          mediaTime: this.videoEl.currentTime,
+          mode: `${mode}-chroma`,
+          drawMetrics: this.getVideoDrawMetrics(analysisCanvas, mode),
+        },
+      );
+    }
+
     if (this.faceDetectionEffect) {
       this.faceDetectionEffect.flipH = this.getEffectiveFlipH();
       this.faceDetectionEffect.flipV = this.flipV;
@@ -582,16 +596,18 @@ export function applyRenderLoopMixin(proto) {
     const renderProfile = this.renderEngine.getProfile(profileName);
 
     if (this.subjectFxEffect?.active && !this.subjectFxBypass) {
-      const beatStrength = this.getSubjectBeatStrength?.(
-        this.videoEl.currentTime || 0,
-      );
       const drawMetrics = this.getVideoDrawMetrics(targetCanvas, mode);
       this.subjectFxEffect.processFullFrame(
         targetCtx,
         targetCanvas,
         this.videoEl,
         renderProfile,
-        { mediaTime: this.videoEl.currentTime, beatStrength, drawMetrics },
+        {
+          mediaTime: this.videoEl.currentTime,
+          drawMetrics,
+          mode,
+          invalidate: () => this.refreshPausedVideoPreview?.(),
+        },
       );
     }
 
@@ -615,19 +631,6 @@ export function applyRenderLoopMixin(proto) {
       this.videoEl,
       renderProfile,
     );
-
-    if (this.subjectFxEffect?.active && !this.subjectFxBypass) {
-      const beatStrength = this.getSubjectBeatStrength?.(
-        this.videoEl.currentTime || 0,
-      );
-      const drawMetrics = this.getVideoDrawMetrics(targetCanvas, mode);
-      this.subjectFxEffect.processOverlay(targetCtx, targetCanvas, {
-        ...renderProfile,
-        beatStrength,
-        drawMetrics,
-        mediaTime: this.videoEl.currentTime,
-      });
-    }
   };
 
   proto.applySharpenFilter = function (imageData, amount) {

@@ -16,7 +16,7 @@ export {
 
 export const TIMELINE_EFFECT_META = Object.freeze({
   look: { label: 'Look', trackLabel: 'LOOK', row: 1 },
-  subject: { label: 'FX de sujeto', trackLabel: 'SUBJECT', row: 2 },
+  subject: { label: 'Visual FX', trackLabel: 'VISUAL FX', row: 2 },
   blob: { label: 'Color', trackLabel: 'COLOR', row: 3 },
   face: { label: 'Caras', trackLabel: 'CARAS', row: 4 },
   blink: { label: 'Ojos', trackLabel: 'OJOS', row: 5 },
@@ -107,14 +107,14 @@ export const DEFAULT_QUICK_DETECTOR_SETTINGS = {
 export const ADJUST_CONTEXT_HELP = {
   look: 'Orientación, encuadre, presets y ajuste fino para la pista VIDEO y tramos LOOK.',
   subject:
-    'FX generativos reactivos al cuerpo, movimiento y beat para tramos SUBJECT.',
+    'Procesamiento creativo de imagen, color y ecos temporales para tramos Visual FX.',
   blob: 'Seguimiento por color para tramos en la pista COLOR.',
   face: 'Detección y estilo de caras en la pista CARAS.',
   blink: 'Detección de pestañeos en la pista OJOS.',
 };
 export const ADJUST_CONTEXT_VIDEO_HELP = {
   look: 'Ajustá orientación, filtros y look del clip seleccionado. Solo se ve cuando el cursor está dentro de su tramo.',
-  subject: 'Preset, intensidad y reactividad del clip SUBJECT seleccionado.',
+  subject: 'Estilo, intensidad y movimiento del clip Visual FX seleccionado.',
   blob: 'Elegí color, sensibilidad y aspecto del tracking. El detector se enciende solo dentro del clip COLOR.',
   face: 'Elegí recuadro, blur, pixelado y etiqueta. La detección se enciende sola cuando el cursor entra en el clip CARAS.',
   blink:

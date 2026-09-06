@@ -1,4 +1,4 @@
-/* Subject FX inspector + timeline accents (Graphite Bench) */
+/* Visual FX inspector + timeline accents (Graphite Bench) */
 
 #inspectorAdjustmentsHost.is-subject-fx #effectsControlsSlot,
 #inspectorAdjustmentsHost.is-subject-fx #adjustClipStatus {
@@ -317,4 +317,39 @@
   .subject-segmented {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+/* Visual FX uses the editor's surfaces and spacing, including on narrow screens. */
+.subject-inspector {
+  padding: 12px;
+}
+.subject-inspector .subject-segmented {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.subject-inspector .subject-preset-btn,
+.subject-inspector .subject-segment {
+  min-height: 34px;
+}
+.subject-inspector summary {
+  cursor: pointer;
+  padding: 10px 0;
+  color: var(--gray-light);
+}
+.visual-module-group {
+  border-top: 1px solid var(--border);
+}
+.visual-module-group summary {
+  font-size: 11px;
+}
+.subject-variation-controls {
+  flex-wrap: wrap;
+  justify-content: space-between;
+  padding-top: 8px;
+}
+.subject-inspector :focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+.subject-preset-hint:empty {
+  display: none;
 }

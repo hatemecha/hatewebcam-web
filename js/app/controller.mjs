@@ -52,8 +52,8 @@ import { TimelineView } from './timeline-view.mjs';
 import { EditAssistController } from './edit-assist-controller.mjs';
 import { RenderEngine } from './render-engine.mjs';
 import { VideoExportSession } from './video-export-session.mjs';
-import { applySubjectFxIntegrationMixin } from './subject-fx-integration.mjs';
-import { applySubjectFxUIMixin } from './subject-fx-ui.mjs';
+import { applySubjectFxIntegrationMixin } from './visual-fx-integration.mjs';
+import { applySubjectFxUIMixin } from './visual-fx-ui.mjs';
 import { applySubjectFxLabMixin } from './subject-fx-fxlab.mjs';
 
 export class AppController {
