@@ -83,6 +83,7 @@ export function withSubjectVideoTransform(ctx, metrics, drawFn) {
 
 let _maskScratch = null;
 let _maskScratchCtx = null;
+let _maskScratchImageData = null;
 
 function ensureMaskScratch(width, height) {
   if (typeof document === 'undefined') return null;
@@ -93,6 +94,9 @@ function ensureMaskScratch(width, height) {
   if (_maskScratch.width !== width || _maskScratch.height !== height) {
     _maskScratch.width = width;
     _maskScratch.height = height;
+    // Reallocated only when the mask's own resolution changes (rare - it
+    // tracks the analyzer's fixed mask width), not once per rendered frame.
+    _maskScratchImageData = _maskScratchCtx.createImageData(width, height);
   }
   return _maskScratch;
 }
@@ -107,7 +111,7 @@ export function drawSubjectMask(
   const temp = ensureMaskScratch(mask.width, mask.height);
   if (!temp || !_maskScratchCtx) return;
   const tempCtx = _maskScratchCtx;
-  const imageData = tempCtx.createImageData(mask.width, mask.height);
+  const imageData = _maskScratchImageData;
   for (let index = 0; index < mask.data.length; index++) {
     imageData.data[index * 4 + 3] = mask.data[index];
   }

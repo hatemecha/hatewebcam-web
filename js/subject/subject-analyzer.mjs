@@ -6,6 +6,7 @@ import {
 } from './subject-mask.mjs';
 import { buildLocalMotionRegions } from './subject-local-motion.mjs';
 import { SubjectAnalysisCache } from './subject-cache.mjs';
+import { perfDev } from '../app/perf-dev.mjs';
 
 export const SUBJECT_ANALYSIS_STATUS = Object.freeze({
   idle: 'idle',
@@ -344,6 +345,7 @@ export class SubjectAnalyzer {
     }
 
     if (!shouldInfer || this._busy) {
+      if (this._busy) perfDev.count('subjectSkippedWhileBusy');
       if (cachedFrame) {
         this.lastFrame = cachedFrame;
         this.status = SUBJECT_ANALYSIS_STATUS.ready;
@@ -354,17 +356,22 @@ export class SubjectAnalyzer {
     try {
       const width = source.videoWidth || source.width || 640;
       const height = source.videoHeight || source.height || 480;
+      // `analysisScale` already folds in the adaptive-quality factor (see
+      // #recomputeRuntimeQuality). Multiplying by `runtimeQuality` again
+      // here squared the quality factor - at quality 0.6 the analysis image
+      // shrank to 0.36x instead of 0.6x, which could make MediaPipe lose
+      // the person entirely under load. `runtimeQuality` is applied exactly
+      // once, via `analysisScale`.
       const bitmap = await createImageBitmap(source, {
-        resizeWidth: Math.max(
-          1,
-          Math.round(width * this.analysisScale * this.runtimeQuality),
-        ),
-        resizeHeight: Math.max(
-          1,
-          Math.round(height * this.analysisScale * this.runtimeQuality),
-        ),
+        resizeWidth: Math.max(1, Math.round(width * this.analysisScale)),
+        resizeHeight: Math.max(1, Math.round(height * this.analysisScale)),
         resizeQuality: 'low',
       });
+      perfDev.gauge(
+        'subjectAnalysisResolution',
+        `${bitmap.width}x${bitmap.height}`,
+      );
+      perfDev.gauge('subjectRuntimeQuality', this.adaptiveQuality);
       this._pendingBitmap?.close?.();
       this._pendingBitmap = bitmap;
       const requestId = ++this._requestId;
@@ -397,6 +404,8 @@ export class SubjectAnalyzer {
     const bitmap = this._pendingBitmap;
     this._pendingBitmap = null;
     this._pendingMeta = null;
+    this._dispatchTs = perfDev.mark();
+    perfDev.count('subjectInferences');
     try {
       this.worker.postMessage(
         {
@@ -420,7 +429,15 @@ export class SubjectAnalyzer {
     if (message.type === 'result') {
       this._busy = false;
       this._analyzeErrors = 0;
+      if (this._dispatchTs) {
+        perfDev.record(
+          'subjectInferenceLatencyMs',
+          performance.now() - this._dispatchTs,
+        );
+        this._dispatchTs = 0;
+      }
       if (message.id !== this._requestId) {
+        perfDev.count('subjectSupersededResults');
         this.#settleResultWaiter(
           message.id,
           new Error('subject_analysis_superseded'),

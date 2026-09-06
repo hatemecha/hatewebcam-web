@@ -6,7 +6,7 @@ import {
   applyVisualSystem,
   visualConfigTopologyKey,
 } from '../js/visual-fx/config.mjs';
-import { VisualFxEffect } from '../js/visual-fx/effect.mjs';
+import { VisualFxEffect, maskStaleBudgetSec } from '../js/visual-fx/effect.mjs';
 import { applySubjectFxIntegrationMixin } from '../js/app/visual-fx-integration.mjs';
 import { VideoTimeline } from '../js/editor/video-timeline.mjs';
 
@@ -250,3 +250,76 @@ console.log('Visual FX unit checks passed.');
     'forced re-syncs of the same clip must not call onSeek again',
   );
 }
+
+// Mask staleness: the budget scales with how slowly the analyzer is
+// currently allowed to run (Persona/Fondo must tolerate normal inference
+// lag under load), but stays bounded so a genuinely stuck detector still
+// falls back to the raw frame instead of showing an ancient mask forever.
+{
+  assert.equal(maskStaleBudgetSec({ inferenceIntervalMs: 40 }), 0.2);
+  assert.ok(
+    Math.abs(maskStaleBudgetSec({ inferenceIntervalMs: 120 }) - 0.48) < 1e-9,
+  );
+  assert.equal(
+    maskStaleBudgetSec({ inferenceIntervalMs: 10_000 }),
+    0.9,
+    'the tolerance must stay bounded even for a very slow detector',
+  );
+  assert.equal(
+    maskStaleBudgetSec({}),
+    maskStaleBudgetSec({ inferenceIntervalMs: 80 }),
+    'a missing interval must fall back to a sane default, not 0',
+  );
+}
+
+// Adaptive preview quality: gradual, hysteretic steps - never a single-
+// sample jump straight to the floor, never flip-flopping every second, and
+// never blocked from recovering once FPS has genuinely been fine for a
+// while. Uses an injected clock (one call per simulated second) instead of
+// a real 2.5s sleep.
+{
+  let quality = 1;
+  const probe = new VisualFxEffect({
+    analysisAdapter: { analyze() {}, reset() {}, dispose() {} },
+    renderer: { reset() {}, dispose() {} },
+  });
+  probe.analyzer.setRuntimeQuality = (factor) => {
+    quality = factor;
+  };
+
+  let t = 0;
+  const tick = (fps) => probe.adaptPreviewQuality(fps, (t += 1000));
+
+  tick(15); // a single bad sample
+  assert.equal(quality, 1, 'one low sample must not drop quality');
+
+  tick(15); // two consecutive bad samples, 1s apart
+  assert.ok(quality < 1, 'sustained low FPS must eventually lower quality');
+  assert.ok(quality >= 0.6, 'quality must never fall below the safety floor');
+  const afterFirstDrop = quality;
+
+  tick(30); // recovery starts right after a drop - blocked by cooldown
+  assert.equal(
+    quality,
+    afterFirstDrop,
+    'one good sample right after a drop must not undo it (cooldown)',
+  );
+
+  for (let i = 0; i < 6; i++) tick(15);
+  assert.ok(
+    quality <= afterFirstDrop,
+    'sustained low FPS may keep lowering quality, never raise it back up',
+  );
+  assert.ok(quality >= 0.6, 'quality must still never go below the floor');
+
+  // Now genuinely recover: several consecutive good samples, spaced past
+  // the cooldown each time, must eventually raise quality all the way back.
+  for (let i = 0; i < 12; i++) tick(30);
+  assert.equal(
+    quality,
+    1,
+    'sustained high FPS for long enough must fully restore quality',
+  );
+}
+
+console.log('Visual FX performance/scheduling checks passed.');

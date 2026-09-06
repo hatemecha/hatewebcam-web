@@ -248,6 +248,10 @@ export function applyVideoEditorTimelineMixin(proto) {
   proto.renderVideoTimeline = function () {
     if (!this.timelineItems || !this.videoTimelineEl || !this.timelineTrackArea)
       return;
+    this.videoTimelineEl.style.setProperty(
+      '--timeline-track-count',
+      String(this.getTimelineTrackCount()),
+    );
     const duration = Math.max(0.001, this.videoTimeline.duration);
     const percent = (time) => `${this.clamp((time / duration) * 100, 0, 100)}%`;
 
@@ -324,7 +328,7 @@ export function applyVideoEditorTimelineMixin(proto) {
       });
     }
 
-    this.timelineItems.innerHTML = '';
+    this.clearTimelineItemElements();
     this.videoTimeline.items.forEach((item) => {
       const meta = this.TIMELINE_EFFECT_META[item.type] || {
         trackLabel: item.type,
@@ -344,6 +348,7 @@ export function applyVideoEditorTimelineMixin(proto) {
         <span class="timeline-item-label">${label}</span>
         <span class="timeline-item-handle end" aria-hidden="true"></span>
       `;
+      this.appendTimelineClip(el, item.type);
       this.positionTimelineRowElement(
         el,
         item.startTime,
@@ -353,7 +358,6 @@ export function applyVideoEditorTimelineMixin(proto) {
       el.addEventListener('pointerdown', (event) =>
         this.beginTimelineDrag(event, item, el),
       );
-      this.timelineItems.appendChild(el);
     });
     this.renderTimelineRuler();
     this.updateEffectTrackHighlight();

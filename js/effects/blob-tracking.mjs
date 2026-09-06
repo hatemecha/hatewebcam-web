@@ -1,3 +1,5 @@
+import { perfDev } from '../app/perf-dev.mjs';
+
 /**
  * BlobTracking — Canvas-based HSV color detection
  * Optimized for lower CPU usage and more stable detections.
@@ -214,6 +216,13 @@ export class BlobTracking {
       );
       worker.onmessage = (event) => {
         this._workerBusy = false;
+        if (this._workerDispatchTs) {
+          perfDev.record(
+            'blobAnalysisLatencyMs',
+            performance.now() - this._workerDispatchTs,
+          );
+          this._workerDispatchTs = 0;
+        }
         if (event.data?.seq !== this._workerSeq) return;
         this._stabilizeBlobs(event.data.blobs || []);
       };
@@ -231,6 +240,8 @@ export class BlobTracking {
     if (!this._worker || this._workerBusy) return false;
     this._workerBusy = true;
     this._workerSeq += 1;
+    this._workerDispatchTs = perfDev.mark();
+    perfDev.count('blobAnalyses');
     const areaScale = scale * scale;
     try {
       this._worker.postMessage(

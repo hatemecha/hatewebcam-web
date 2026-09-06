@@ -1,3 +1,5 @@
+import { perfDev } from '../app/perf-dev.mjs';
+
 /**
  * FaceDetection — MediaPipe Face Mesh-based face detection
  * Draws bounding boxes around detected faces, accounting for canvas transforms
@@ -124,6 +126,13 @@ export class FaceDetection {
 
   _onResults(results) {
     this._processing = false;
+    if (this._inferenceStartTs) {
+      perfDev.record(
+        'faceInferenceLatencyMs',
+        performance.now() - this._inferenceStartTs,
+      );
+      this._inferenceStartTs = 0;
+    }
     const now = performance.now();
     const previousFaces = this._faces.slice();
     const reusedFaceIds = new Set();
@@ -511,6 +520,8 @@ export class FaceDetection {
       ) {
         this._lastProcessTs = now;
         this._processing = true;
+        this._inferenceStartTs = perfDev.mark();
+        perfDev.count('faceInferences');
         this.faceMesh.send({ image: video }).catch(() => {
           this._processing = false;
         });

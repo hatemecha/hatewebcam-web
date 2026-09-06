@@ -1,5 +1,6 @@
 import { WebGLFilterRenderer } from './webgl-filter-renderer.mjs';
 import { metricsFromApp } from '../subject/subject-frame-map.mjs';
+import { perfDev } from './perf-dev.mjs';
 
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyRenderLoopMixin(proto) {
@@ -218,6 +219,7 @@ export function applyRenderLoopMixin(proto) {
           this.frameCount % 30 === 0,
         );
 
+        const frameStart = perfDev.mark();
         try {
           if (this.isRecording) {
             this.renderSourceFrameBuffer(true);
@@ -229,12 +231,14 @@ export function applyRenderLoopMixin(proto) {
           console.error('Render frame fallback error:', renderErr);
           this.drawBaseFrame(this.ctx, this.canvas, 'preview');
         }
+        perfDev.record('frameRenderMs', performance.now() - frameStart);
 
         // FPS
         this.frameCount++;
         const now = performance.now();
         if (now - this.lastFpsTime >= 1000) {
           this.fpsInfo.textContent = `${this.frameCount} FPS`;
+          perfDev.gauge('previewFps', this.frameCount);
           this.handlePreviewFpsSample?.(this.frameCount);
           this.frameCount = 0;
           this.lastFpsTime = now;

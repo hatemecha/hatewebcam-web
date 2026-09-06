@@ -1,3 +1,5 @@
+import { perfDev } from '../app/perf-dev.mjs';
+
 /**
  * BlinkDetection — MediaPipe Face Mesh blink detection
  * Port of the Python BlinkDetection effect
@@ -271,6 +273,10 @@ export class BlinkDetection {
         return;
       this._lastProcessTs = now;
       this._faceMeshProcessing = true;
+      // Only reachable when there is no shared `landmarkSource` (Face
+      // detector off) - counts here should stay at 0 whenever Face + Blink
+      // are both active, confirming the shared-inference path is used.
+      perfDev.count('blinkOwnFaceMeshInferences');
       this.faceMesh.send({ image: video }).catch(() => {
         this._faceMeshProcessing = false;
       });

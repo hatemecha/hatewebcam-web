@@ -32,6 +32,7 @@ import { calculateTimelineTickInterval } from '../js/app/timeline-view.mjs';
 import {
   DEFAULT_IMAGE_SETTINGS,
   PERFORMANCE_MODE_PRESETS,
+  TIMELINE_TRACK_COUNT,
   normalizePerformanceMode,
 } from '../js/app/constants.mjs';
 import { EditAssistController } from '../js/app/edit-assist-controller.mjs';
@@ -807,11 +808,93 @@ function checkTimelineClipSnappingHelper() {
     2.5,
     'timeline cursor must snap to markers',
   );
+  assert.equal(
+    app.getTimelineTrackCount(),
+    6,
+    'timeline layout must include the video row plus every effect track',
+  );
   assert.deepEqual(
     app.getTimelineRowStyle(2),
-    { top: 'calc(2 * 20%)', height: '20%' },
-    'timeline clips must fill the full effect row height',
+    { top: 'calc(2 * 100% / 6)', height: 'calc(100% / 6)' },
+    'timeline clips must fill one of the six track rows',
   );
+  assert.deepEqual(
+    app.getTimelineRowStyle(4),
+    { top: 'calc(4 * 100% / 6)', height: 'calc(100% / 6)' },
+    'face clips must sit in the faces row, not the eyes row',
+  );
+}
+
+function checkTimelineClipsMountInTheirTrack() {
+  assert.equal(TIMELINE_TRACK_COUNT, 6);
+  const faceTrack = {
+    classList: { contains: (name) => name === 'timeline-track-effects' },
+    child: null,
+    appendChild(el) {
+      this.child = el;
+      el.parent = this;
+    },
+  };
+  const blobTrack = {
+    classList: { contains: (name) => name === 'timeline-track-effects' },
+    child: null,
+    appendChild(el) {
+      this.child = el;
+      el.parent = this;
+    },
+  };
+  const app = {
+    videoTimeline: { duration: 10 },
+    clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
+    timelineItems: { innerHTML: 'stale', appendChild() {} },
+    timelineTrackArea: {
+      querySelector(selector) {
+        if (selector.includes('"face"')) return faceTrack;
+        if (selector.includes('"blob"')) return blobTrack;
+        return null;
+      },
+      querySelectorAll() {
+        return [faceTrack.child, blobTrack.child].filter(Boolean);
+      },
+    },
+  };
+  applyLocalvideoeditorMixin(app);
+  const faceEl = {
+    style: {},
+    parent: null,
+    closest(selector) {
+      return selector === '.timeline-track-effects' ? this.parent : null;
+    },
+  };
+  const blobEl = {
+    style: {},
+    parent: null,
+    closest(selector) {
+      return selector === '.timeline-track-effects' ? this.parent : null;
+    },
+  };
+  app.appendTimelineClip(faceEl, 'face');
+  app.appendTimelineClip(blobEl, 'blob');
+  app.positionTimelineRowElement(faceEl, 0, 2, 4);
+  app.positionTimelineRowElement(blobEl, 0, 2, 3);
+  assert.equal(
+    faceTrack.child,
+    faceEl,
+    'face clips must live in the faces track',
+  );
+  assert.equal(
+    blobTrack.child,
+    blobEl,
+    'color clips must live in the color track',
+  );
+  assert.equal(
+    faceEl.style.top,
+    '',
+    'in-track clips must not use overlay row offsets',
+  );
+  assert.equal(faceEl.style.height, '');
+  assert.equal(faceEl.style.left, '0%');
+  assert.equal(faceEl.style.width, '20%');
 }
 
 function checkTimelineMarkerIntervalsForInsertion() {
@@ -2388,6 +2471,236 @@ async function checkSubjectAnalyzerInitRetryLifecycle() {
   }
 }
 
+// The analysis image resolution must fold in the adaptive-quality factor
+// exactly once. Squaring it (baseScale * quality * quality again at the
+// createImageBitmap call) can shrink the image enough that MediaPipe loses
+// the person entirely under load - see effect.mjs's adaptPreviewQuality.
+async function checkSubjectAnalysisScaleAppliedOnce() {
+  class InstantWorker {
+    constructor() {
+      this.listeners = new Map();
+    }
+    addEventListener(type, fn) {
+      if (!this.listeners.has(type)) this.listeners.set(type, new Set());
+      this.listeners.get(type).add(fn);
+    }
+    removeEventListener(type, fn) {
+      this.listeners.get(type)?.delete(fn);
+    }
+    postMessage(message) {
+      if (message.type === 'init') {
+        queueMicrotask(() =>
+          this.listeners
+            .get('message')
+            ?.forEach((fn) => fn({ data: { type: 'ready' } })),
+        );
+      } else if (message.type === 'analyze') {
+        // Resolve immediately so `_busy` clears between quality levels -
+        // this test is about the resolution sent, not about scheduling.
+        queueMicrotask(() =>
+          this.listeners
+            .get('message')
+            ?.forEach((fn) =>
+              fn({ data: { type: 'result', id: message.id, frame: null } }),
+            ),
+        );
+      }
+    }
+    terminate() {}
+  }
+  const restoreWorker = mockGlobal('Worker', InstantWorker);
+  const requested = [];
+  const restoreBitmap = mockGlobal(
+    'createImageBitmap',
+    async (source, opts) => {
+      requested.push({ width: opts.resizeWidth, height: opts.resizeHeight });
+      return { width: opts.resizeWidth, height: opts.resizeHeight, close() {} };
+    },
+  );
+  try {
+    const analyzer = new SubjectAnalyzer({
+      assetUrls: resolveSubjectAssetUrls('http://localhost:4173/'),
+    });
+    await analyzer.ensureReady();
+    // A fresh Node process's performance.now() can itself be under 80ms
+    // (the constructor's default inferenceIntervalMs), which would make
+    // the interval gate - not the thing under test here - decide whether
+    // createImageBitmap runs. Force it open.
+    analyzer.inferenceIntervalMs = 0;
+    for (const quality of [1, 0.8, 0.6]) {
+      requested.length = 0;
+      analyzer.setRuntimeQuality(quality);
+      analyzer.inferenceIntervalMs = 0;
+      await analyzer.analyze({ videoWidth: 640, videoHeight: 480 }, 0);
+      await Promise.resolve();
+      await Promise.resolve();
+      assert.equal(requested.length, 1);
+      const expected = Math.round(640 * analyzer.baseAnalysisScale * quality);
+      assert.equal(
+        requested[0].width,
+        expected,
+        `quality ${quality} must scale the analysis width exactly once (got ${requested[0].width}, expected ${expected})`,
+      );
+    }
+  } finally {
+    restoreWorker();
+    restoreBitmap();
+  }
+}
+
+// Bounded backpressure: while one inference is in flight, any number of
+// additional analyze() calls (the video "getting ahead" of a slow detector)
+// must not start a second concurrent inference, and must not accumulate an
+// unbounded backlog of queued frames.
+async function checkSubjectAnalyzerBoundedBackpressure() {
+  class ControlledWorker {
+    constructor() {
+      this.listeners = new Map();
+      this.analyzeCount = 0;
+    }
+    addEventListener(type, fn) {
+      if (!this.listeners.has(type)) this.listeners.set(type, new Set());
+      this.listeners.get(type).add(fn);
+    }
+    removeEventListener(type, fn) {
+      this.listeners.get(type)?.delete(fn);
+    }
+    postMessage(message) {
+      if (message.type === 'init') {
+        queueMicrotask(() => this._emit({ type: 'ready' }));
+      } else if (message.type === 'analyze') {
+        this.analyzeCount++;
+        this.lastId = message.id;
+      }
+    }
+    resolvePending() {
+      const id = this.lastId;
+      this._emit({ type: 'result', id, frame: null });
+    }
+    _emit(data) {
+      this.listeners.get('message')?.forEach((fn) => fn({ data }));
+    }
+    terminate() {}
+  }
+  const restoreWorker = mockGlobal('Worker', ControlledWorker);
+  const restoreBitmap = mockGlobal('createImageBitmap', async () => ({
+    width: 100,
+    height: 100,
+    close() {},
+  }));
+  try {
+    const analyzer = new SubjectAnalyzer({
+      assetUrls: resolveSubjectAssetUrls('http://localhost:4173/'),
+    });
+    await analyzer.ensureReady();
+    // Force the interval gate open so only the busy-gate is under test.
+    analyzer.inferenceIntervalMs = 0;
+    const worker = analyzer.worker;
+
+    await analyzer.analyze({ videoWidth: 640, videoHeight: 480 }, 0);
+    assert.equal(
+      worker.analyzeCount,
+      1,
+      'the first frame starts one inference',
+    );
+
+    // The video "advances" 20 more frames while the worker is still busy.
+    for (let i = 1; i <= 20; i++) {
+      await analyzer.analyze({ videoWidth: 640, videoHeight: 480 }, i * 16);
+    }
+    assert.equal(
+      worker.analyzeCount,
+      1,
+      'no additional inference may start while one is already in flight',
+    );
+
+    worker.resolvePending();
+    await Promise.resolve();
+    assert.ok(
+      worker.analyzeCount <= 2,
+      'resolving one inference must not replay a backlog of the skipped frames',
+    );
+  } finally {
+    restoreWorker();
+    restoreBitmap();
+  }
+}
+
+// A superseded (stale) result must never overwrite a newer one - the
+// requestId check in #handleWorkerMessage is what "latest-frame-wins"
+// actually depends on.
+async function checkSubjectAnalyzerDiscardsSupersededResults() {
+  class ManualWorker {
+    constructor() {
+      this.listeners = new Map();
+      this.sent = [];
+    }
+    addEventListener(type, fn) {
+      if (!this.listeners.has(type)) this.listeners.set(type, new Set());
+      this.listeners.get(type).add(fn);
+    }
+    removeEventListener(type, fn) {
+      this.listeners.get(type)?.delete(fn);
+    }
+    postMessage(message) {
+      if (message.type === 'init') {
+        queueMicrotask(() => this._emit({ type: 'ready' }));
+      } else if (message.type === 'analyze') {
+        this.sent.push(message.id);
+      }
+    }
+    respond(id, timestampMs) {
+      this._emit({
+        type: 'result',
+        id,
+        frame: { timestamp: timestampMs, landmarks: [], confidence: 1 },
+      });
+    }
+    _emit(data) {
+      this.listeners.get('message')?.forEach((fn) => fn({ data }));
+    }
+    terminate() {}
+  }
+  const restoreWorker = mockGlobal('Worker', ManualWorker);
+  const restoreBitmap = mockGlobal('createImageBitmap', async () => ({
+    width: 100,
+    height: 100,
+    close() {},
+  }));
+  try {
+    const analyzer = new SubjectAnalyzer({
+      assetUrls: resolveSubjectAssetUrls('http://localhost:4173/'),
+    });
+    await analyzer.ensureReady();
+    analyzer.inferenceIntervalMs = 0;
+    const worker = analyzer.worker;
+
+    await analyzer.analyze({ videoWidth: 640, videoHeight: 480 }, 100);
+    const firstId = worker.sent[0];
+    // A second, newer request is issued once the first "arrives" late.
+    worker.respond(firstId, 100);
+    await Promise.resolve();
+    await analyzer.analyze({ videoWidth: 640, videoHeight: 480 }, 200);
+    const secondId = worker.sent[1];
+    worker.respond(secondId, 200);
+    await Promise.resolve();
+    assert.equal(analyzer.lastFrame.timestamp, 200);
+
+    // Now simulate the *first* request's result arriving late, after the
+    // second has already been processed - it must be dropped, not applied.
+    worker.respond(firstId, 100);
+    await Promise.resolve();
+    assert.equal(
+      analyzer.lastFrame.timestamp,
+      200,
+      'a stale/superseded result must never replace a newer one',
+    );
+  } finally {
+    restoreWorker();
+    restoreBitmap();
+  }
+}
+
 async function checkSubjectClipAwaitsEffectBeforeAnalyzer() {
   let readyCalls = 0;
   const saved = {
@@ -2456,6 +2769,9 @@ checkSubjectBypassToggle();
 checkSubjectVariationStep();
 checkSubjectAssetUrlResolution();
 await checkSubjectAnalyzerInitRetryLifecycle();
+await checkSubjectAnalysisScaleAppliedOnce();
+await checkSubjectAnalyzerBoundedBackpressure();
+await checkSubjectAnalyzerDiscardsSupersededResults();
 await checkSubjectClipAwaitsEffectBeforeAnalyzer();
 checkAudioTempoAnalyzer();
 checkEditAssistManualControls();
@@ -2463,6 +2779,7 @@ await checkMediaAudioExtraction();
 checkStableExportDefaults();
 checkEditorExportPresets();
 checkTimelineClipSnappingHelper();
+checkTimelineClipsMountInTheirTrack();
 checkTimelineMarkerIntervalsForInsertion();
 checkTimelineClipboardBasics();
 checkProjectJsonRoundTrip();

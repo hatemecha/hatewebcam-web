@@ -5,6 +5,24 @@ import {
 } from '../subject/subject-frame-map.mjs';
 import { normalizeVisualConfig, visualConfigTopologyKey } from './config.mjs';
 import { VisualRenderer } from './renderer.mjs';
+import { perfDev } from '../app/perf-dev.mjs';
+
+// Never below 0.6 here: the analyzer's own floor (0.35) exists for other
+// callers, but this preview-quality ladder keeps enough resolution that
+// MediaPipe keeps finding the person even under sustained load.
+const QUALITY_LEVELS = Object.freeze([1, 0.85, 0.7, 0.6]);
+const QUALITY_COOLDOWN_MS = 2500;
+
+// A mask is unusable after a real seek/source change (handled separately -
+// those null out `maskTime`, which always short-circuits below). Short of
+// that, this is the only budget for "the inference is a little behind the
+// playhead", so it should track how slow inference is currently allowed to
+// run rather than being one fixed number: a detector intentionally sampling
+// every ~120ms under load must not have its result thrown away every frame.
+export function maskStaleBudgetSec(analyzer) {
+  const intervalMs = analyzer?.inferenceIntervalMs || 80;
+  return Math.max(0.2, Math.min(0.9, (intervalMs * 4) / 1000));
+}
 
 export class VisualFxEffect {
   constructor(options = {}) {
@@ -64,8 +82,37 @@ export class VisualFxEffect {
     this.composite = null;
   }
   // Kept as timeline integration hooks; image motion comes from media time.
-  adaptPreviewQuality(fps) {
-    this.analyzer.setRuntimeQuality(fps < 22 ? 0.6 : 1);
+  // Gradual, hysteretic quality steps rather than a single-sample binary
+  // switch: a lone low-FPS second must not immediately shrink the analysis
+  // image (that can make MediaPipe lose the person outright), and quality
+  // must not flip high/low every second once it changes. Two consecutive
+  // low samples are required to step down; three consecutive good samples
+  // to step back up; and any change is followed by a cooldown.
+  adaptPreviewQuality(fps, now = performance.now()) {
+    const state = (this._qualityAdaptState ||= {
+      level: 0,
+      lowStreak: 0,
+      highStreak: 0,
+      lastChangeTs: -Infinity,
+    });
+    const levels = QUALITY_LEVELS;
+    if (fps < 20) state.lowStreak++;
+    else state.lowStreak = 0;
+    if (fps >= 27) state.highStreak++;
+    else state.highStreak = 0;
+    const cooledDown = now - state.lastChangeTs > QUALITY_COOLDOWN_MS;
+    if (cooledDown && state.lowStreak >= 2 && state.level < levels.length - 1) {
+      state.level++;
+      state.lastChangeTs = now;
+      state.lowStreak = 0;
+      state.highStreak = 0;
+    } else if (cooledDown && state.highStreak >= 3 && state.level > 0) {
+      state.level--;
+      state.lastChangeTs = now;
+      state.lowStreak = 0;
+      state.highStreak = 0;
+    }
+    this.analyzer.setRuntimeQuality(levels[state.level]);
   }
   async analyze(video, timestamp, profile) {
     if (!this.active || this.bypass || this.config.target === 'all')
@@ -140,8 +187,18 @@ export class VisualFxEffect {
       return;
     }
     const mask = this.analyzer.lastMask;
-    if (!mask || this.maskTime === null || Math.abs(time - this.maskTime) > 0.2)
+    const maskAgeSec =
+      this.maskTime === null ? -1 : Math.abs(time - this.maskTime);
+    perfDev.gauge('subjectMaskAgeMs', maskAgeSec < 0 ? -1 : maskAgeSec * 1000);
+    if (
+      !mask ||
+      this.maskTime === null ||
+      maskAgeSec > maskStaleBudgetSec(this.analyzer)
+    ) {
+      if (mask && this.maskTime !== null)
+        perfDev.count('subjectMaskDiscardedStale');
       return;
+    }
     this.composite ||= document.createElement('canvas');
     if (
       this.composite.width !== canvas.width ||

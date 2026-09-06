@@ -2155,15 +2155,16 @@ body.is-resizing-editor[data-resize-axis='horizontal'] {
 }
 
 .timeline-tracks {
+  --timeline-track-count: 6;
   position: absolute;
   inset: 22px 0 0;
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
+  grid-template-columns: 88px minmax(0, 1fr);
 }
 
 .timeline-track-labels {
   display: grid;
-  grid-template-rows: repeat(5, 1fr);
+  grid-template-rows: repeat(var(--timeline-track-count), minmax(0, 1fr));
   border-right: 1px solid #2a2a2a;
   background: #141414;
 }
@@ -2171,21 +2172,33 @@ body.is-resizing-editor[data-resize-axis='horizontal'] {
 .timeline-track-label {
   display: flex;
   align-items: center;
+  min-height: 0;
   padding: 0 10px;
   border-bottom: 1px solid #222;
   color: var(--text-secondary);
   font: 11px var(--mono);
   letter-spacing: 0.5px;
+  white-space: nowrap;
 }
 
 .timeline-track-area {
   position: relative;
   display: grid;
-  grid-template-rows: repeat(5, 1fr);
+  grid-template-rows: repeat(var(--timeline-track-count), minmax(0, 1fr));
+}
+
+.timeline-track-area > .timeline-playhead,
+.timeline-track-area > .timeline-cut-guide,
+.timeline-track-area > .timeline-selection,
+.timeline-track-area > .timeline-markers,
+.timeline-track-area > .timeline-items {
+  grid-column: 1;
+  grid-row: 1 / -1;
 }
 
 .timeline-track {
   position: relative;
+  min-height: 0;
   border-bottom: 1px solid #1f1f1f;
   background: rgba(255, 255, 255, 0.01);
 }
@@ -2305,6 +2318,12 @@ body.is-resizing-editor[data-resize-axis='horizontal'] {
   user-select: none;
 }
 
+.timeline-track-effects > .timeline-item {
+  top: 3px;
+  bottom: 3px;
+  height: auto;
+}
+
 .timeline-item.is-dragging {
   cursor: grabbing;
   opacity: 0.92;
@@ -2412,7 +2431,7 @@ body.video-mode[data-editor-tool='cut'] .timeline-item {
 .timeline-cut-guide {
   position: absolute;
   z-index: 7;
-  top: 20%;
+  top: calc(100% / var(--timeline-track-count));
   bottom: 0;
   display: none;
   width: 2px;

@@ -8,6 +8,7 @@ import { VideoTimeline } from '../editor/video-timeline.mjs';
 import { applyVideoEditorClipboardMixin } from './video-editor-clipboard.mjs';
 import { applyVideoEditorTimelineMixin } from './video-editor-timeline.mjs';
 import { createDefaultSubjectConfig } from '../visual-fx/config.mjs';
+import { TIMELINE_TRACK_COUNT } from './constants.mjs';
 
 const VIDEO_END_EPSILON = 0.001;
 const VIDEO_EXPORT_PLAYBACK_RATE = 4;
@@ -147,7 +148,7 @@ export function applyLocalvideoeditorMixin(proto) {
     this.timelineDetectorSyncForce = false;
     this.videoBaseImageSettings = null;
     this.editAssist?.reset();
-    this.timelineItems.innerHTML = '';
+    this.clearTimelineItemElements();
     this.videoPlaceholderLoading = false;
     if (this.sourceMode === 'video') {
       void this.resetVideoTimelineDetectors();
@@ -505,11 +506,20 @@ export function applyLocalvideoeditorMixin(proto) {
     if (!this.adjustClipStatus || this.sourceMode !== 'video') return;
     const item = this.getSelectedVideoEffectItem();
     if (!item) {
-      this.adjustClipStatus.classList.add('hidden');
-      this.adjustClipStatus.classList.remove('is-live');
+      if (this._adjustClipStatusKey !== 'empty') {
+        this._adjustClipStatusKey = 'empty';
+        this.adjustClipStatus.classList.add('hidden');
+        this.adjustClipStatus.classList.remove('is-live');
+      }
       return;
     }
     const active = this.isPlayheadInSelectedClip();
+    // This runs every render tick while a clip is selected; the underlying
+    // state (item id + in/out-of-clip) only actually changes occasionally,
+    // so skip the textContent/classList writes otherwise.
+    const key = `${item.id}:${item.startTime}:${item.endTime}:${active}`;
+    if (this._adjustClipStatusKey === key) return;
+    this._adjustClipStatusKey = key;
     this.adjustClipStatus.textContent = active
       ? `Tramo ${this.formatDurationDetailed(item.startTime)} - ${this.formatDurationDetailed(item.endTime)} · Vista previa activa`
       : `Tramo ${this.formatDurationDetailed(item.startTime)} - ${this.formatDurationDetailed(item.endTime)} · Mové el cursor al clip para previsualizar`;
@@ -730,7 +740,7 @@ export function applyLocalvideoeditorMixin(proto) {
     const bounds = this.timelineTrackArea.getBoundingClientRect();
     if (clientY < bounds.top || clientY > bounds.bottom) return null;
     const ratio = this.clamp((clientY - bounds.top) / bounds.height, 0, 0.999);
-    const row = Math.floor(ratio * 6);
+    const row = Math.floor(ratio * this.getTimelineTrackCount());
     if (row <= 0) return null;
     return (
       Object.keys(this.TIMELINE_EFFECT_META).find(
@@ -776,11 +786,12 @@ export function applyLocalvideoeditorMixin(proto) {
       });
       const duration = Math.max(0.001, this.videoTimeline.duration);
       const row = this.TIMELINE_EFFECT_META[type]?.row || 1;
+      const rowSize = bounds.height / this.getTimelineTrackCount();
       this.timelineDragGhost.classList.add('is-timeline-preview');
       this.timelineDragGhost.style.left = `${bounds.left + (startTime / duration) * bounds.width}px`;
-      this.timelineDragGhost.style.top = `${bounds.top + row * bounds.height * 0.2}px`;
+      this.timelineDragGhost.style.top = `${bounds.top + row * rowSize}px`;
       this.timelineDragGhost.style.width = `${Math.max(12, ((endTime - startTime) / duration) * bounds.width)}px`;
-      this.timelineDragGhost.style.height = `${bounds.height * 0.2}px`;
+      this.timelineDragGhost.style.height = `${rowSize}px`;
       return;
     }
     this.timelineDragGhost.classList.remove('is-timeline-preview');
@@ -1291,10 +1302,33 @@ export function applyLocalvideoeditorMixin(proto) {
     }
   };
 
+  proto.getTimelineTrackCount = function () {
+    return TIMELINE_TRACK_COUNT;
+  };
+
+  proto.getTimelineItemElements = function () {
+    return this.timelineTrackArea
+      ? this.timelineTrackArea.querySelectorAll('.timeline-item')
+      : [];
+  };
+
+  proto.clearTimelineItemElements = function () {
+    this.getTimelineItemElements().forEach((el) => el.remove());
+    if (this.timelineItems) this.timelineItems.innerHTML = '';
+  };
+
+  proto.appendTimelineClip = function (el, type) {
+    const track = this.timelineTrackArea?.querySelector(
+      `.timeline-track-effects[data-track="${type}"]`,
+    );
+    (track || this.timelineItems)?.appendChild(el);
+  };
+
   proto.getTimelineRowStyle = function (rowIndex) {
+    const count = this.getTimelineTrackCount();
     return {
-      top: `calc(${rowIndex} * 20%)`,
-      height: '20%',
+      top: `calc(${rowIndex} * 100% / ${count})`,
+      height: `calc(100% / ${count})`,
     };
   };
 
@@ -1305,6 +1339,11 @@ export function applyLocalvideoeditorMixin(proto) {
     rowIndex,
   ) {
     this.positionTimelineElement(el, startTime, endTime);
+    if (el.closest?.('.timeline-track-effects')) {
+      el.style.top = '';
+      el.style.height = '';
+      return;
+    }
     const rowStyle = this.getTimelineRowStyle(rowIndex);
     el.style.top = rowStyle.top;
     el.style.height = rowStyle.height;
@@ -1503,9 +1542,7 @@ export function applyLocalvideoeditorMixin(proto) {
     this.videoEffectType.value = item.type;
     this.videoEffectStart.value = item.startTime.toFixed(2);
     this.videoEffectEnd.value = item.endTime.toFixed(2);
-    this.timelineItems
-      .querySelectorAll('.timeline-item')
-      .forEach((candidate) => {
+    this.getTimelineItemElements().forEach((candidate) => {
         candidate.classList.toggle(
           'is-selected',
           this.selectedVideoEffectIds?.has(candidate.dataset.id),
@@ -2378,13 +2415,31 @@ export function applyLocalvideoeditorMixin(proto) {
   proto.updateVideoTransport = function () {
     if (this.sourceMode !== 'video') return;
     const duration = this.videoTimeline.duration || 0;
-    this.videoSeek.value = String(this.videoEl.currentTime || 0);
-    this.videoTimeLabel.textContent = `${this.formatDurationDetailed(this.videoEl.currentTime || 0)} / ${this.formatDurationDetailed(duration)}`;
-    this.btnVideoPlay.innerHTML = this.videoEl.paused
-      ? '<i class="fa-solid fa-play"></i>'
-      : '<i class="fa-solid fa-pause"></i>';
-    if (duration > 0)
-      this.timelinePlayhead.style.left = `${this.clamp((this.videoEl.currentTime / duration) * 100, 0, 100)}%`;
+    const currentTime = this.videoEl.currentTime || 0;
+    this.videoSeek.value = String(currentTime);
+
+    // Called every render tick during playback; the play/pause icon in
+    // particular changes at most a few times per session, so an innerHTML
+    // rewrite 30-60 times a second was pure waste.
+    const timeLabel = `${this.formatDurationDetailed(currentTime)} / ${this.formatDurationDetailed(duration)}`;
+    if (this._lastVideoTimeLabel !== timeLabel) {
+      this._lastVideoTimeLabel = timeLabel;
+      this.videoTimeLabel.textContent = timeLabel;
+    }
+    const paused = this.videoEl.paused;
+    if (this._lastVideoPlayPaused !== paused) {
+      this._lastVideoPlayPaused = paused;
+      this.btnVideoPlay.innerHTML = paused
+        ? '<i class="fa-solid fa-play"></i>'
+        : '<i class="fa-solid fa-pause"></i>';
+    }
+    if (duration > 0) {
+      const left = `${this.clamp((currentTime / duration) * 100, 0, 100)}%`;
+      if (this._lastPlayheadLeft !== left) {
+        this._lastPlayheadLeft = left;
+        this.timelinePlayhead.style.left = left;
+      }
+    }
   };
 
   proto.getVideoPlayableEnd = function (end = this.videoTimeline?.trimEnd) {

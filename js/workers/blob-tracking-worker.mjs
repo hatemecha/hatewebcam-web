@@ -30,9 +30,33 @@ function dilate(mask, out, w, h) {
   }
 }
 
+// Scratch buffers are sized once per (width, height) pair and reused across
+// messages - this worker receives a new frame roughly every 16-33ms, and
+// re-allocating four full-frame typed arrays every single time was pure GC
+// pressure for no behavioral benefit (the buffers are fully overwritten by
+// `.fill(0)` / the flood fill below before being read).
+let cachedW = 0;
+let cachedH = 0;
+let mask = null;
+let morphA = null;
+let morphB = null;
+let visited = null;
+let queue = null;
+
+function ensureBuffers(w, h) {
+  if (cachedW === w && cachedH === h && mask) return;
+  cachedW = w;
+  cachedH = h;
+  const size = w * h;
+  mask = new Uint8Array(size);
+  morphA = new Uint8Array(size);
+  morphB = new Uint8Array(size);
+  visited = new Uint8Array(size);
+  queue = new Int32Array(size);
+}
+
 function findBlobs(mask, w, h) {
-  const visited = new Uint8Array(w * h);
-  const queue = new Int32Array(w * h);
+  visited.fill(0);
   const blobs = [];
 
   for (let y = 0; y < h; y++) {
@@ -122,9 +146,7 @@ self.onmessage = (event) => {
     maxObjects,
   } = event.data;
   const data = new Uint8ClampedArray(buffer);
-  const mask = new Uint8Array(width * height);
-  const morphA = new Uint8Array(mask.length);
-  const morphB = new Uint8Array(mask.length);
+  ensureBuffers(width, height);
   const hMin = hsvMin[0];
   const hMax = hsvMax[0];
   const sMin = hsvMin[1];

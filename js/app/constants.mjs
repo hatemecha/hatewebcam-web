@@ -21,6 +21,7 @@ export const TIMELINE_EFFECT_META = Object.freeze({
   face: { label: 'Caras', trackLabel: 'CARAS', row: 4 },
   blink: { label: 'Ojos', trackLabel: 'OJOS', row: 5 },
 });
+export const TIMELINE_TRACK_COUNT = 1 + Object.keys(TIMELINE_EFFECT_META).length;
 export const DEFAULT_TIMELINE_EFFECT_DURATION = 3;
 export const DEFAULT_IMAGE_SETTINGS = {
   blackAndWhite: false,
