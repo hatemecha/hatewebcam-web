@@ -147,7 +147,7 @@ const legacy = {
     items: [
       {
         id: 'a',
-        type: 'subject',
+        type: 'visual-fx',
         startTime: 0,
         endTime: 2,
         config: { preset: 'dissolve', amount: 0.4 },
@@ -200,7 +200,7 @@ console.log('Visual FX unit checks passed.');
     sourceMode: 'video',
     videoSourceFile: {},
     videoTimeline: {
-      activeAt: () => [{ id: 'clip', type: 'subject', config: {} }],
+      activeAt: () => [{ id: 'clip', type: 'visual-fx', config: {} }],
     },
   };
   applyVisualFxIntegrationMixin(app2);
@@ -236,7 +236,7 @@ console.log('Visual FX unit checks passed.');
     sourceMode: 'video',
     videoSourceFile: {},
     videoTimeline: {
-      activeAt: () => [{ id: 'same-clip', type: 'subject', config: {} }],
+      activeAt: () => [{ id: 'same-clip', type: 'visual-fx', config: {} }],
     },
   };
   applyVisualFxIntegrationMixin(app3);

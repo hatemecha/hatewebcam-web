@@ -2256,17 +2256,32 @@ function checkSubjectTimelineType() {
   const timeline = new VideoTimeline(10);
   timeline.setTrim(0, 10);
   const subject = timeline.add(
-    'subject',
+    'visual-fx',
     1,
     4,
     createDefaultVisualConfig('anatomy'),
   );
-  assert.equal(subject.type, 'subject');
-  assert.throws(() => timeline.add('subject', 2, 5), /superponer/);
+  assert.equal(subject.type, 'visual-fx');
+  assert.throws(() => timeline.add('visual-fx', 2, 5), /superponer/);
   assert.deepEqual(
     Array.from(timeline.activeAt(2), (item) => item.type),
-    ['subject'],
+    ['visual-fx'],
   );
+  const legacy = VideoTimeline.fromJSON(
+    {
+      items: [
+        {
+          id: 'legacy',
+          type: 'subject',
+          startTime: 0,
+          endTime: 1,
+          config: createDefaultVisualConfig('recursive'),
+        },
+      ],
+    },
+    5,
+  );
+  assert.equal(legacy.items[0].type, 'visual-fx');
 }
 
 function checkSubjectConfigNormalization() {
@@ -2301,7 +2316,7 @@ function checkSubjectProjectMigration() {
       items: [
         {
           id: 's1',
-          type: 'subject',
+          type: 'visual-fx',
           startTime: 1,
           endTime: 3,
           config: { preset: 'anatomy', amount: 0.5 },
@@ -2534,7 +2549,7 @@ function checkSubjectVariationStep() {
   const timeline = new VideoTimeline(8);
   const item = timeline.upsert({
     id: 'subject-1',
-    type: 'subject',
+    type: 'visual-fx',
     startTime: 0,
     endTime: 8,
     config: createDefaultVisualConfig('fragment'),
@@ -2876,14 +2891,14 @@ async function checkSubjectClipAwaitsEffectBeforeAnalyzer() {
   let readyCalls = 0;
   const saved = {
     id: 'subject-async',
-    type: 'subject',
+    type: 'visual-fx',
     startTime: 0,
     endTime: 2,
     config: createDefaultVisualConfig('anatomy'),
   };
   const app = {
     videoSourceFile: {},
-    TIMELINE_EFFECT_META: { subject: { label: 'FX de sujeto' } },
+    TIMELINE_EFFECT_META: { 'visual-fx': { label: 'Visual FX' } },
     DEFAULT_TIMELINE_EFFECT_DURATION: 3,
     videoTimeline: { upsert: () => saved },
     pushTimelineHistory() {},
@@ -2909,7 +2924,7 @@ async function checkSubjectClipAwaitsEffectBeforeAnalyzer() {
   app.resolveTimelineInsertionTimes = () => ({ startTime: 0, endTime: 2 });
   app.snapshotVideoEffectConfig = () => saved.config;
   app.selectVideoEffect = () => {};
-  await app.addTimelineEffectClip('subject', 0);
+  await app.addTimelineEffectClip('visual-fx', 0);
   assert.equal(
     readyCalls,
     0,

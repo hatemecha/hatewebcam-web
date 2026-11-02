@@ -1,6 +1,11 @@
 /** Small, dependency-free timeline model used by the local video editor. */
+import {
+  normalizeTimelineClipType,
+  VISUAL_FX_CLIP_TYPE,
+} from './timeline-clip-types.mjs';
+
 export class VideoTimeline {
-  static TYPES = ['look', 'subject', 'blob', 'face', 'blink'];
+  static TYPES = ['look', VISUAL_FX_CLIP_TYPE, 'blob', 'face', 'blink'];
   static MARKER_KINDS = ['manual', 'beat', 'bar', 'section'];
   static MARKER_SOURCES = ['user', 'edit-assist'];
 
@@ -39,7 +44,7 @@ export class VideoTimeline {
         typeof crypto !== 'undefined' && crypto.randomUUID
           ? crypto.randomUUID()
           : `${Date.now()}-${Math.random()}`,
-      type,
+      type: normalizeTimelineClipType(type),
       startTime,
       endTime,
       config:
@@ -50,10 +55,12 @@ export class VideoTimeline {
   }
 
   upsert(candidate) {
-    if (!VideoTimeline.TYPES.includes(candidate.type))
+    const type = normalizeTimelineClipType(candidate.type);
+    if (!VideoTimeline.TYPES.includes(type))
       throw new Error('Tipo de efecto inválido.');
     const item = {
       ...candidate,
+      type,
       startTime: this.#time(candidate.startTime),
       endTime: this.#time(candidate.endTime),
     };
@@ -222,7 +229,7 @@ export class VideoTimeline {
     (data.items || []).forEach((item) => {
       timeline.upsert({
         id: item.id,
-        type: item.type,
+        type: normalizeTimelineClipType(item.type),
         startTime: item.startTime,
         endTime: item.endTime,
         config: clone(item.config),

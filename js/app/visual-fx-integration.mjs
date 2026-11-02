@@ -6,6 +6,7 @@ import {
 } from '../visual-fx/config.mjs';
 import { VISUAL_SYSTEM_LABELS } from '../visual-fx/config.mjs';
 import { resolveSubjectAssetUrls } from '../subject/mediapipe-paths.mjs';
+import { isVisualFxClipType } from '../editor/timeline-clip-types.mjs';
 
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyVisualFxIntegrationMixin(proto) {
@@ -46,12 +47,15 @@ export function applyVisualFxIntegrationMixin(proto) {
     }
   };
 
-  proto.syncVideoTimelineVisualFxAt = async function (mediaTime, force = false) {
+  proto.syncVideoTimelineVisualFxAt = async function (
+    mediaTime,
+    force = false,
+  ) {
     if (this.sourceMode !== 'video' || !this.videoSourceFile) return;
     const syncRequestId = (this._visualFxSyncRequestId || 0) + 1;
     this._visualFxSyncRequestId = syncRequestId;
     const active = this.videoTimeline.activeAt(mediaTime);
-    const item = active.find((entry) => entry.type === 'subject');
+    const item = active.find((entry) => isVisualFxClipType(entry.type));
     const nextId = item?.id || '';
     if (!force && this.appliedVisualFxClipId === nextId) {
       return;
@@ -87,7 +91,10 @@ export function applyVisualFxIntegrationMixin(proto) {
 
   proto.syncVideoTimelineVisualFx = async function (force = false) {
     if (this.sourceMode !== 'video' || !this.videoSourceFile) return;
-    await this.syncVideoTimelineVisualFxAt(this.videoEl.currentTime || 0, force);
+    await this.syncVideoTimelineVisualFxAt(
+      this.videoEl.currentTime || 0,
+      force,
+    );
     if (force) this.refreshPausedVideoPreview?.();
   };
 
@@ -136,7 +143,7 @@ export function applyVisualFxIntegrationMixin(proto) {
 
   proto.applyVisualSystemToSelection = function (systemId) {
     const item = this.getSelectedVideoEffectItem?.();
-    if (!item || item.type !== 'subject') return;
+    if (!item || !isVisualFxClipType(item.type)) return;
     const next = applyVisualSystem(item.config, systemId);
     this.pushTimelineHistory?.();
     this.videoTimeline.upsert({ ...item, config: next });
@@ -148,7 +155,7 @@ export function applyVisualFxIntegrationMixin(proto) {
 
   proto.stepVisualFxVariation = function (delta = 1) {
     const item = this.getSelectedVideoEffectItem?.();
-    if (!item || item.type !== 'subject') return;
+    if (!item || !isVisualFxClipType(item.type)) return;
     const live =
       this.videoTimeline?.items?.find((entry) => entry.id === item.id) || item;
     const current = live.config?.seed ?? 18412;
@@ -163,7 +170,7 @@ export function applyVisualFxIntegrationMixin(proto) {
 
   proto.commitVisualFxConfig = function (partial = {}) {
     const item = this.getSelectedVideoEffectItem?.();
-    if (!item || item.type !== 'subject') return;
+    if (!item || !isVisualFxClipType(item.type)) return;
     const merged = { ...item.config, ...partial };
     if (partial.macros && item.config?.macros) {
       merged.macros = { ...item.config.macros, ...partial.macros };
@@ -183,7 +190,7 @@ export function applyVisualFxIntegrationMixin(proto) {
   proto.normalizeEditorProjectV2 = function (project) {
     const migrated = migrateProjectToV2(project);
     migrated.timeline.items = (migrated.timeline.items || []).map((item) => {
-      if (item.type !== 'subject') return item;
+      if (!isVisualFxClipType(item.type)) return item;
       return {
         ...item,
         config: normalizeVisualConfig(item.config || {}),

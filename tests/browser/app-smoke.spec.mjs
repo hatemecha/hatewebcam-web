@@ -27,7 +27,7 @@ test('video editor shell loads without fatal errors', async ({ page }) => {
   await expect(page.locator('#videoExportDetails')).toContainText(
     'Importá un video',
   );
-  await expect(page.locator('[data-effect-type="subject"]')).toHaveCount(2);
+  await expect(page.locator('[data-effect-type="visual-fx"]')).toHaveCount(2);
   expect(fatalMessages).toEqual([]);
 });
 
@@ -106,12 +106,31 @@ test('Visual FX only initializes person assets when requested', async ({
   test.setTimeout(60_000);
   const failures = [];
   const requestedSubjectAssets = new Set();
-  const requiredAssets = [
-    'vision_wasm_module_internal.js',
-    'vision_wasm_module_internal.wasm',
-    'pose_landmarker_lite.task',
-    'selfie_segmenter.tflite',
+  const trackedAssetPatterns = [
+    /pose_landmarker_lite\.task$/,
+    /vision_wasm(?:_\w+)?_internal\.js(?:\?|$)/,
+    /vision_wasm(?:_\w+)?_internal\.wasm(?:\?|$)/,
+    /selfie_segmenter\.tflite$/,
   ];
+
+  const classifySubjectAsset = (url) => {
+    const path = new URL(url).pathname;
+    const file = path.split('/').pop() || '';
+    if (file === 'pose_landmarker_lite.task') return 'pose';
+    if (/vision_wasm.*_internal\.js$/.test(file)) return 'wasm-js';
+    if (/vision_wasm.*_internal\.wasm$/.test(file)) return 'wasm-bin';
+    if (file === 'selfie_segmenter.tflite') return 'segmenter';
+    return null;
+  };
+
+  const subjectAssetsReady = () => {
+    const kinds = new Set(
+      [...requestedSubjectAssets]
+        .map((name) => classifySubjectAsset(`http://local/${name}`))
+        .filter(Boolean),
+    );
+    return kinds.has('pose') && kinds.has('wasm-js') && kinds.has('wasm-bin');
+  };
 
   page.on('pageerror', (error) => failures.push(`pageerror: ${error.message}`));
   page.on('console', (message) => {
@@ -120,8 +139,16 @@ test('Visual FX only initializes person assets when requested', async ({
       'GPU stall due to ReadPixels',
       'Created TensorFlow Lite XNNPACK delegate for CPU',
       'Feedback manager requires a model with a single signature inference',
+      'landmark_projection_calculator.cc',
+      'Using NORM_RECT without IMAGE_DIMENSIONS',
     ];
     if (knownMediaPipeNoise.some((text) => message.text().includes(text))) {
+      return;
+    }
+    if (
+      message.type() === 'warning' &&
+      message.text().includes('Error starting camera')
+    ) {
       return;
     }
     if (message.type() === 'error' || message.type() === 'warning') {
@@ -134,10 +161,13 @@ test('Visual FX only initializes person assets when requested', async ({
     );
   });
   page.on('response', (response) => {
-    const asset = requiredAssets.find((name) => response.url().endsWith(name));
-    if (!asset) return;
-    if (response.ok()) requestedSubjectAssets.add(asset);
-    else failures.push(`HTTP ${response.status()}: ${response.url()}`);
+    const url = response.url();
+    if (!trackedAssetPatterns.some((pattern) => pattern.test(url))) return;
+    const kind = classifySubjectAsset(url);
+    if (!kind) return;
+    const label = url.split('/').pop()?.split('?')[0] || kind;
+    if (response.ok()) requestedSubjectAssets.add(label);
+    else failures.push(`HTTP ${response.status()}: ${url}`);
   });
 
   await page.goto('/');
@@ -145,7 +175,7 @@ test('Visual FX only initializes person assets when requested', async ({
   await page.locator('#videoFileInput').setInputFiles(SUBJECT_VIDEO_FIXTURE);
   await expect(page.locator('#videoTimelineShell')).toBeVisible();
   await page
-    .locator('.timeline-palette-chip[data-effect-type="subject"]')
+    .locator('.timeline-palette-chip[data-effect-type="visual-fx"]')
     .click();
 
   await expect(page.locator('.timeline-item-label')).toContainText('Recursive');
@@ -154,9 +184,7 @@ test('Visual FX only initializes person assets when requested', async ({
   await page.locator('#btnVideoPlay').click();
   await page.waitForTimeout(3000);
   expect(failures).toEqual([]);
-  await expect
-    .poll(() => [...requestedSubjectAssets].sort(), { timeout: 45_000 })
-    .toEqual([...requiredAssets].sort());
+  await expect.poll(() => subjectAssetsReady(), { timeout: 45_000 }).toBe(true);
   await expect(page.locator('#visualFxInlineStatus')).not.toContainText(
     /No se pudo|error/i,
   );

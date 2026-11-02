@@ -6,6 +6,7 @@ import {
   MACRO_LABELS,
   normalizeVisualConfig,
 } from '../visual-fx/config.mjs';
+import { isVisualFxClipType } from '../editor/timeline-clip-types.mjs';
 
 // Compact instrument panel: a system picker, "Aplicar a", four curated
 // macros, and a Tuning drawer that only ever shows the handful of extra
@@ -17,7 +18,9 @@ export function applyVisualFxUIMixin(proto) {
   proto.isPlayheadInsideSelectedVisualFxClip = function (item) {
     const time = this.videoEl?.currentTime || 0;
     return (
-      item?.type === 'subject' && time >= item.startTime && time < item.endTime
+      isVisualFxClipType(item?.type) &&
+      time >= item.startTime &&
+      time < item.endTime
     );
   };
 
@@ -25,8 +28,8 @@ export function applyVisualFxUIMixin(proto) {
     const host = this.visualFxInspectorHost,
       item = this.getSelectedVideoEffectItem?.();
     if (!host) return;
-    host.classList.toggle('hidden', item?.type !== 'subject');
-    if (item?.type !== 'subject') return;
+    host.classList.toggle('hidden', !isVisualFxClipType(item?.type));
+    if (!isVisualFxClipType(item?.type)) return;
     const c = normalizeVisualConfig(item.config),
       system = VISUAL_SYSTEMS[c.system],
       tuningSchema = TUNING_SCHEMA[c.system];

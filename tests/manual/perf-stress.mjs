@@ -43,7 +43,7 @@ async function addClip(type) {
     .click();
 }
 
-await addClip('subject');
+await addClip('visual-fx');
 await page.locator('[data-visual-system="recursive"]').click();
 await page.locator('#visual-target-person').click();
 
@@ -59,7 +59,7 @@ await page.waitForTimeout(2500);
 // Other detector types don't share the same inspector host, so re-select
 // the subject clip explicitly each time.
 async function reselectSubjectClip() {
-  await page.locator('.timeline-item[data-type="subject"]').first().click();
+  await page.locator('.timeline-item[data-type="visual-fx"]').first().click();
   // Selecting a clip switches the inspector to the "Clip" tab; the target
   // (Persona/Fondo) buttons live under "Ajustes".
   await page.locator('#tabInspectorAdjust').click();

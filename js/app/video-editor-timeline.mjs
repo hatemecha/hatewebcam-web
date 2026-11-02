@@ -1,4 +1,5 @@
 import { VISUAL_SYSTEM_LABELS } from '../visual-fx/config.mjs';
+import { isVisualFxClipType } from '../editor/timeline-clip-types.mjs';
 
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyVideoEditorTimelineMixin(proto) {
@@ -171,7 +172,7 @@ export function applyVideoEditorTimelineMixin(proto) {
           console.warn('Detector preload failed:', err);
         }
       }
-      if (type === 'subject') await this.ensureVisualFxEffect?.();
+      if (isVisualFxClipType(type)) await this.ensureVisualFxEffect?.();
       this.selectVideoEffect(saved.id);
       void this.syncVideoTimelineEffects(true);
       this.showStatus(
@@ -200,7 +201,7 @@ export function applyVideoEditorTimelineMixin(proto) {
       this.videoEffectStart.value = item.startTime.toFixed(2);
       this.videoEffectEnd.value = item.endTime.toFixed(2);
       this.applyVideoEffectItemConfig(item);
-      if (item.type === 'subject') {
+      if (isVisualFxClipType(item.type)) {
         const t = this.videoEl?.currentTime || 0;
         if (t < item.startTime || t >= item.endTime) {
           void this.seekVideo(
@@ -339,10 +340,9 @@ export function applyVideoEditorTimelineMixin(proto) {
       el.className = `timeline-item${item.id === this.selectedVideoEffectId || selectedIds.has(item.id) ? ' is-selected' : ''}`;
       el.dataset.id = item.id;
       el.dataset.type = item.type;
-      const label =
-        item.type === 'subject'
-          ? VISUAL_SYSTEM_LABELS[item.config?.system] || 'VISUAL FX'
-          : meta.trackLabel;
+      const label = isVisualFxClipType(item.type)
+        ? VISUAL_SYSTEM_LABELS[item.config?.system] || 'VISUAL FX'
+        : meta.trackLabel;
       el.innerHTML = `
         <span class="timeline-item-handle start" aria-hidden="true"></span>
         <span class="timeline-item-label">${label}</span>

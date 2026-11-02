@@ -82,8 +82,7 @@ export function applyVideoEditorClipboardMixin(proto) {
     const newIds = [];
     // Paste is all or nothing: a clip that lands outside the trim used to
     // leave the earlier ones applied plus a history entry.
-    const snapshot =
-      this.editorHistory?.snapshot?.(this.videoTimeline) || null;
+    const snapshot = this.editorHistory?.snapshot?.(this.videoTimeline) || null;
     try {
       this.timelineClipboard.items.forEach((clip) => {
         const offset = clip.startTime - this.timelineClipboard.origin;

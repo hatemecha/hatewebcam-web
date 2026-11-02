@@ -234,7 +234,7 @@ for (const width of [320, 768, 1024, 1440])
         ),
       );
     await page
-      .locator('.timeline-palette-chip[data-effect-type="subject"]')
+      .locator('.timeline-palette-chip[data-effect-type="visual-fx"]')
       .click();
     await expect(page.locator('[data-visual-system]')).toHaveCount(4);
     await page.locator('[data-visual-system="trace"]').click();
@@ -253,7 +253,7 @@ for (const width of [320, 768, 1024, 1440])
     expect(assets).toEqual([]);
     expect(errors).toEqual([]);
     await page.locator('#visual-restart').click();
-    await page.locator('.subject-inspector-title').scrollIntoViewIfNeeded();
+    await page.locator('.vfx-inspector-title').scrollIntoViewIfNeeded();
     await page.screenshot({
       path: `test-results/visual-fx-ui-${width}.png`,
       fullPage: true,
@@ -273,7 +273,7 @@ test('macro and target commits keep playback stable without console errors', asy
       fileURLToPath(new URL('../fixtures/subject-init.webm', import.meta.url)),
     );
   await page
-    .locator('.timeline-palette-chip[data-effect-type="subject"]')
+    .locator('.timeline-palette-chip[data-effect-type="visual-fx"]')
     .click();
   await page.locator('[data-visual-system="recursive"]').click();
   // The engine-level guarantee (no reset on macro/target commits) is
@@ -356,7 +356,7 @@ test('Visual FX completes a real WebM export', async ({ page }) => {
       fileURLToPath(new URL('../fixtures/subject-init.webm', import.meta.url)),
     );
   await page
-    .locator('.timeline-palette-chip[data-effect-type="subject"]')
+    .locator('.timeline-palette-chip[data-effect-type="visual-fx"]')
     .click();
   await page.locator('[data-visual-system="flow"]').click();
   // Use the existing export UI and encoder, not a substitute capture path.
