@@ -1,202 +1,61 @@
 # hatewebcam
 
-Aplicación web para usar la cámara con filtros en tiempo real, detectores visuales (color, caras y pestañeos), captura de foto/video y vista previa antes de descargar.
+Webcam y editor de video **local** en el navegador: filtros en vivo, detectores visuales, captura y exportación sin cuentas ni subidas.
 
-> **Versión:** 0.1.0 — proyecto personal; la interfaz y la compatibilidad entre navegadores pueden seguir evolucionando.
+**Usar en línea:** [hatemecha.github.io/hatewebcam-web](https://hatemecha.github.io/hatewebcam-web/) · versión **0.1.0** (beta; la UI puede cambiar)
 
-![Vista de hatewebcam con detección de color y caras](docs/images/webcam-desktop.jpg)
+![Vista de hatewebcam](docs/images/webcam-desktop.jpg)
 
-## Qué ofrece
+## Qué hace
 
-- Vista previa en vivo con controles de imagen.
-- Captura de **foto (JPEG)** y **video (MP4/WebM según compatibilidad)**.
-- Vista previa post-captura con metadata (resolución, formato, tamaño, etc.).
-- Opción de mejorar la foto desde la vista previa antes de descargar.
-- Detectores: objetos por color, caras (Face Mesh) y pestañeos.
-- Perfiles guardados en el navegador para recuperar configuraciones.
-- Interfaz responsive con HUD dedicado en móviles.
-- Interfaz en español e inglés, con detección automática y selector persistente.
-- Editor local de video con recorte y efectos por intervalos sobre una timeline interactiva.
+- Vista previa con filtros y ajuste fino.
+- Foto (JPEG) y video (MP4/WebM según el navegador), con vista previa antes de descargar.
+- Detectores: color, caras (Face Mesh) y pestañeos.
+- Perfiles guardados en `localStorage`.
+- Interfaz responsive (HUD móvil) en **español e inglés**.
+- Editor de video con timeline, efectos por intervalos y **Visual FX** (GPU local).
+- Todo el runtime está en `vendor/` (sin CDN).
 
-## Requisitos
+## Usar
 
-- Node.js `^20.19.0` o `>=22.12.0` para desarrollo y build.
-- Navegador moderno (recomendado: Chrome/Edge actual).
-- Cámara disponible y permisos habilitados.
-- Servir la app desde `localhost` o `https` (no usar `file://`).
-- No requiere CDN en runtime: iconos, Face Mesh y exportación están vendorizados en `vendor/`.
+1. Abrí la [app en vivo](https://hatemecha.github.io/hatewebcam-web/) o servila en `localhost` / `https` (no `file://`).
+2. Permití acceso a la cámara (modo Webcam) o importá un video (pestaña Video).
+3. Ajustá, capturá o editá; descargá el resultado al disco.
 
-## Inicio rápido
+Guías más largas: [Visual FX](docs/visual-fx.md) · [CHANGELOG](CHANGELOG.md)
 
-### Opción recomendada (GitHub Pages)
+## Desarrollar
 
-La forma correcta de usar el proyecto es esta URL:
-
-```text
-https://hatemecha.github.io/hatewebcam-web/
-```
-
-### Opción local (desarrollo recomendado)
-
-Desde la carpeta del proyecto:
+Requisitos: Node `^20.19.0` o `>=22.12.0`, cámara opcional para pruebas manuales.
 
 ```bash
 npm ci
-npm run dev
-```
-
-Luego abre:
-
-```text
-http://localhost:5173
-```
-
-Checks útiles:
-
-```bash
+npm run dev      # http://localhost:5173
 npm test
 npm run lint
-npm run build
-npm run preview
-```
-
-### Publicación y caché
-
-GitHub Pages se publica desde el artefacto `dist` generado por Vite mediante
-`.github/workflows/pages.yml`. En **Settings → Pages**, la fuente debe ser
-**GitHub Actions**. Vite genera nombres con hash de contenido para CSS,
-JavaScript, fuentes y workers; por eso un despliegue nuevo cambia las URLs de
-los assets modificados sin mantener versiones manuales en `index.html`.
-
-La opción `base: './'` de `vite.config.mjs` permite que esos assets funcionen
-tanto en preview local como bajo la ruta `/hatewebcam-web/` de GitHub Pages.
-
-Alternativa para servir el código fuente sin Vite (sin HMR ni build de producción):
-
-```bash
-python -m http.server 8080
-```
-
-## Uso básico
-
-1. Abre la app y permite acceso a la cámara.
-2. Elige cámara si tienes más de una.
-3. Ajusta filtros rápidos o ajuste fino.
-4. Activa detectores si los necesitas.
-5. Saca una foto o graba video.
-6. En la vista previa decide: `Descargar` o `Descartar`.
-
-## Editor de video
-
-![Editor de video de hatewebcam en inglés](docs/images/video-editor-desktop.jpg)
-
-1. Abre la pestaña `Video` y elige un archivo local.
-2. Arrastra los extremos de la timeline para recortar y marca intervalos de efectos.
-3. Arrastrá **Visual FX**, Look, Color, Caras u Ojos desde la paleta; ajustá macros en el inspector.
-4. Pulsa `M` para marcadores en el playhead. Con el imán activo, trims y clips se alinean a marcadores.
-5. Exportá desde el inspector de proyecto; el modal bloquea la edición hasta la descarga.
-
-### Visual FX (videoclip)
-
-Instrumento GPU con feedback temporal sobre planos ya filmados (cuerpo, movimiento y beat):
-
-1. Importá el video.
-2. Arrastrá **Visual FX** a la timeline.
-3. Elegí sistema (**Recursive**, **Flow**, **Pixelfield**, **Trace**) y paleta.
-4. Reproducí y ajustá macros (**Intensidad**, **Memoria**, **Estructura**, **Movimiento**).
-5. Exportá con **Video + efectos** o **Solo efectos chroma** para compositar en otro editor.
-
-El análisis corporal (MediaPipe Pose) corre localmente; no se sube nada al servidor.
-
-### Composición en Premiere o DaVinci Resolve
-
-- **Capa de efectos:** preset de exportación **Chroma** → WebM con fondo verde o azul, sin video base ni audio. Importá el master y la capa chroma, aplicá Ultra Key / Chroma Key y alineá por timecode de archivo.
-- **Clip terminado:** **Balanceado** o **Alta** → WebM con video y efectos baked (sin ProRes/DNxHR; limitación del navegador).
-- **MP4 con audio:** activá **Mostrar opciones experimentales** y elegí preset **MP4 experimental** o formato MP4; la copia de audio solo funciona si el codec original es compatible con MP4.
-- Los FPS de exportación se ajustan a valores estándar (23.976, 24, 25, 29.97, 30, etc.) según el material.
-
-### Grabación de cámara
-
-- Formato: automático, MP4 o WebM según lo que soporte `MediaRecorder`.
-- Las fotos se descargan en JPEG.
-
-### Exportación del editor
-
-- Modo `Video + efectos`: Auto/MP4/WebM. Auto prefiere WebM VP9/VP8 por velocidad; MP4 H.264 queda disponible como opción explícita.
-- Modo `Solo efectos chroma`: WebM con fondo verde o azul, sin audio y sin video base, pensado para componer en otro editor.
-- La resolución, FPS y bitrate se calculan según el preset: `fast` puede bajar a 720p/30, `balanced` a 1080p/30, `high` mantiene tamaño original hasta 60 FPS y `chroma` exporta overlays en WebM.
-- `Copiar audio original` intenta copia packet-level solo si el codec es compatible con el contenedor elegido; si no lo es, exporta sin audio e informa el motivo.
-- No se integra `ffmpeg.wasm`.
-
-## Verificación
-
-Para ejecutar checks básicos de sintaxis y estructura:
-
-```bash
-npm test
-npm run lint
-npm run build
 npm run test:browser
+npm run build
 ```
 
-## Persistencia de configuración
+CI en `main`: formato, lint, tests, Playwright y build; si pasa, despliega GitHub Pages desde el mismo artefacto.
 
-La app guarda ajustes en `localStorage` del navegador:
+| Doc                                | Contenido             |
+| ---------------------------------- | --------------------- |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Issues y PRs          |
+| [DESIGN.md](DESIGN.md)             | Sistema visual        |
+| [PRODUCT.md](PRODUCT.md)           | Producto y límites    |
+| [SECURITY.md](SECURITY.md)         | Reportes de seguridad |
 
-- `hatewebcam_config`: configuración general.
-- `hatewebcam_profiles`: perfiles guardados.
-- `hatewebcam_locale`: idioma elegido manualmente (`es` o `en`).
+Licencia [MIT](LICENSE) · terceros en [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) · Alex Romero (`hatemecha`)
 
-Si necesitás resetear todo, limpia esos valores desde DevTools o borra datos del sitio.
+---
 
-## Dependencias Runtime
+## English
 
-Están vendorizadas para que la app sea local/offline en runtime:
+**hatewebcam** is a privacy-first browser app for live webcam filters, visual detectors, photo/video capture, and a local timeline editor with GPU Visual FX. No backend, no accounts, no uploads at runtime.
 
-- Font Awesome 6.5.1: `vendor/fontawesome/`.
-- MediaPipe Face Mesh 0.4.1633559619: `vendor/mediapipe/face_mesh/`.
-- Mediabunny 1.49.0: `vendor/mediabunny/`.
+**Try it:** [hatemecha.github.io/hatewebcam-web](https://hatemecha.github.io/hatewebcam-web/)
 
-## Privacidad
+**Develop:** `npm ci && npm run dev` → open `http://localhost:5173`. Run `npm test`, `npm run lint`, and `npm run test:browser` before pushing. See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/visual-fx.md](docs/visual-fx.md).
 
-- El procesamiento principal se realiza en el navegador.
-- Las capturas se descargan localmente por el usuario.
-- Los ajustes y perfiles se guardan únicamente en `localStorage`.
-- La aplicación no incluye telemetría, analytics ni backend propio.
-- En runtime no solicita recursos a CDN; las únicas navegaciones externas son enlaces iniciados por el usuario.
-
-## Limitaciones conocidas
-
-- La cámara requiere `https` o `localhost` y permiso explícito del navegador.
-- Los formatos y codecs disponibles dependen de `MediaRecorder`, WebCodecs y del navegador/sistema operativo.
-- Face Mesh usa WebAssembly y puede consumir recursos apreciables en equipos o móviles modestos.
-- La exportación puede omitir audio cuando el codec original no es compatible con el contenedor elegido.
-
-## Estructura del proyecto
-
-- `js/app/`: controladores y UI de webcam/editor (`js/app/video-editor/` export y proyecto).
-- `js/core/`, `js/editor/`, `js/effects/`: lógica reutilizable de cámara, timeline y detectores.
-- `templates/`: fragmentos HTML cargados por la aplicación.
-- `vendor/`: dependencias de runtime vendorizadas con sus licencias.
-- `tests/`: checks unitarios, de estructura y de navegador.
-- `DESIGN.md`: sistema visual (superficies, tipografía, estados).
-- `PRODUCT.md`: propósito, usuarios y límites del producto.
-
-La aplicación es estática: no necesita backend ni cuentas privadas para ejecutarse o mantener un fork funcional.
-
-## Seguridad / CSP
-
-- La app no sube archivos a servidores ni carga scripts desde CDN en runtime.
-- La CSP mantiene `unsafe-eval`, `wasm-unsafe-eval` y `blob:` por compatibilidad con MediaPipe Face Mesh, WebAssembly, Workers locales y exportación.
-- Los websockets a `localhost` en la CSP existen para el servidor de desarrollo de Vite; no se usan en GitHub Pages.
-- Para reportar un problema de seguridad, consultá [SECURITY.md](SECURITY.md).
-
-## Contribuir
-
-Los bugs y propuestas se gestionan en [GitHub Issues](https://github.com/hatemecha/hatewebcam-web/issues). Antes de enviar cambios, consultá [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Licencia
-
-El código propio se distribuye bajo [MIT](LICENSE). Los componentes vendorizados conservan sus licencias; consultá [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-
-Mantenido por Alex Romero (`hatemecha`). El historial reciente está en [CHANGELOG.md](CHANGELOG.md). El número `0.1.0` en `package.json` marca la beta; no hay promesa de semver mientras el estado sea beta.
+Processing stays on-device; formats depend on your browser’s `MediaRecorder` / WebCodecs support.

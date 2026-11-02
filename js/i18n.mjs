@@ -545,8 +545,7 @@ const ENGLISH_REPLACEMENTS = Object.entries({
   'Proyecto restaurado con el video reimportado':
     'Project restored with the imported video',
   'No se pudo cargar el proyecto.': 'The project could not be loaded.',
-  'No se pudo guardar el look del clip:':
-    'The clip look could not be saved:',
+  'No se pudo guardar el look del clip:': 'The clip look could not be saved:',
   'No se pudo actualizar el clip seleccionado:':
     'The selected clip could not be updated:',
   'No pude leer el audio de este video.':
@@ -565,13 +564,13 @@ const ENGLISH_REPLACEMENTS = Object.entries({
     'MediaPipe Face Mesh could not be loaded:',
   'No se pudo iniciar el análisis corporal. Probá nuevamente o desactivá Visual FX.':
     'Body analysis could not start. Try again or turn off Visual FX.',
-  'No se pudo iniciar el análisis corporal.':
-    'Body analysis could not start.',
+  'No se pudo iniciar el análisis corporal.': 'Body analysis could not start.',
   'El analizador de sujeto se detuvo. Probá nuevamente.':
     'The subject analyzer stopped. Try again.',
   'No se pudo detectar una persona. Podés usar Todo.':
     'No person detected. You can use All.',
-  'Buscando persona. Podés usar Todo.': 'Looking for a person. You can use All.',
+  'Buscando persona. Podés usar Todo.':
+    'Looking for a person. You can use All.',
   Todo: 'All',
   'Este navegador no permite analizar audio.':
     'This browser cannot analyze audio.',
@@ -662,10 +661,10 @@ const ENGLISH_REPLACEMENTS = Object.entries({
   ' FPS · midiendo velocidad real': ' FPS · measuring real speed',
   ' fps reales · ': ' real fps · ',
   ' transcurridos': ' elapsed',
-  'Memoria': 'Memory',
-  'Alta': 'High',
-  'Exacta': 'Exact',
-  'Borrador': 'Draft',
+  Memoria: 'Memory',
+  Alta: 'High',
+  Exacta: 'Exact',
+  Borrador: 'Draft',
   ' caras': ' faces',
   ' cara': ' face',
   Mitad: 'Half',

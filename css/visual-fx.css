@@ -264,12 +264,12 @@
   font-size: 10px;
 }
 
-.timeline-item[data-type='subject'] {
+.timeline-item[data-type='visual-fx'] {
   background: color-mix(in srgb, var(--brand) 34%, var(--bg-card));
   border-color: color-mix(in srgb, var(--brand) 55%, transparent);
 }
 
-.timeline-item[data-type='subject'].is-selected {
+.timeline-item[data-type='visual-fx'].is-selected {
   outline-color: var(--brand);
   background: color-mix(in srgb, var(--brand) 52%, var(--bg-card));
 }
@@ -328,7 +328,7 @@
 .visual-fx-lab-slot canvas {
   width: 100%;
   aspect-ratio: 16 / 9;
-  background: #000;
+  background: var(--surface-0, #101112);
   border: 1px solid var(--border-light);
   image-rendering: pixelated;
 }
