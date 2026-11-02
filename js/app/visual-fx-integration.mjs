@@ -1,71 +1,71 @@
 import {
-  applySubjectPreset,
-  createDefaultSubjectConfig,
+  applyVisualSystem,
+  createDefaultVisualConfig,
   migrateProjectToV2,
-  normalizeSubjectConfig,
+  normalizeVisualConfig,
 } from '../visual-fx/config.mjs';
-import { SUBJECT_PRESET_LABELS } from '../visual-fx/config.mjs';
+import { VISUAL_SYSTEM_LABELS } from '../visual-fx/config.mjs';
 import { resolveSubjectAssetUrls } from '../subject/mediapipe-paths.mjs';
 
 /** @param {import('./controller.mjs').AppController} proto */
-export function applySubjectFxIntegrationMixin(proto) {
-  proto.ensureSubjectFxEffect = async function () {
-    if (this.subjectFxEffect) return this.subjectFxEffect;
-    if (this._subjectFxLoadPromise) return this._subjectFxLoadPromise;
-    this._subjectFxLoadPromise = import('../visual-fx/effect.mjs')
+export function applyVisualFxIntegrationMixin(proto) {
+  proto.ensureVisualFxEffect = async function () {
+    if (this.visualFxEffect) return this.visualFxEffect;
+    if (this._visualFxLoadPromise) return this._visualFxLoadPromise;
+    this._visualFxLoadPromise = import('../visual-fx/effect.mjs')
       .then(({ VisualFxEffect }) => {
-        this.subjectFxEffect = new VisualFxEffect({
+        this.visualFxEffect = new VisualFxEffect({
           analyzer: {
             assetUrls: resolveSubjectAssetUrls(document.baseURI),
           },
         });
-        return this.subjectFxEffect;
+        return this.visualFxEffect;
       })
       .finally(() => {
-        this._subjectFxLoadPromise = null;
+        this._visualFxLoadPromise = null;
       });
-    return this._subjectFxLoadPromise;
+    return this._visualFxLoadPromise;
   };
 
-  proto.getSubjectFxStatusMessage = function () {
-    if (this.subjectFxBypass) return '';
-    const effect = this.subjectFxEffect;
+  proto.getVisualFxStatusMessage = function () {
+    if (this.visualFxBypass) return '';
+    const effect = this.visualFxEffect;
     if (!effect?.active) return '';
 
     return effect.getStatusLabel();
   };
 
-  proto.toggleSubjectFxBypass = function () {
-    this.subjectFxBypass = !this.subjectFxBypass;
-    this.subjectFxEffect?.setBypass?.(this.subjectFxBypass);
-    this.updateSubjectFxBypassUI?.();
-    this.renderSubjectFxInspector?.();
+  proto.toggleVisualFxBypass = function () {
+    this.visualFxBypass = !this.visualFxBypass;
+    this.visualFxEffect?.setBypass?.(this.visualFxBypass);
+    this.updateVisualFxBypassUI?.();
+    this.renderVisualFxInspector?.();
     this.refreshPausedVideoPreview?.();
-    if (!this.subjectFxBypass) {
-      void this.syncVideoTimelineSubject(true);
+    if (!this.visualFxBypass) {
+      void this.syncVideoTimelineVisualFx(true);
     }
   };
 
-  proto.syncVideoTimelineSubjectAt = async function (mediaTime, force = false) {
+  proto.syncVideoTimelineVisualFxAt = async function (mediaTime, force = false) {
     if (this.sourceMode !== 'video' || !this.videoSourceFile) return;
-    const syncRequestId = (this._subjectFxSyncRequestId || 0) + 1;
-    this._subjectFxSyncRequestId = syncRequestId;
+    const syncRequestId = (this._visualFxSyncRequestId || 0) + 1;
+    this._visualFxSyncRequestId = syncRequestId;
     const active = this.videoTimeline.activeAt(mediaTime);
     const item = active.find((entry) => entry.type === 'subject');
     const nextId = item?.id || '';
-    if (!force && this.appliedTimelineSubjectId === nextId) {
+    if (!force && this.appliedVisualFxClipId === nextId) {
       return;
     }
 
-    const effect = await this.ensureSubjectFxEffect();
-    if (syncRequestId !== this._subjectFxSyncRequestId) return;
-    this.appliedTimelineSubjectId = nextId;
-    effect.setBypass(!!this.subjectFxBypass);
+    const effect = await this.ensureVisualFxEffect();
+    if (syncRequestId !== this._visualFxSyncRequestId) return;
+    this.appliedVisualFxClipId = nextId;
+    effect.setBypass(!!this.visualFxBypass);
 
     if (!item) {
       effect.setActive(false);
       effect.resetTemporalState();
-      this.updateSubjectFxStatus('');
+      this.updateVisualFxStatus('');
       return;
     }
 
@@ -76,42 +76,42 @@ export function applySubjectFxIntegrationMixin(proto) {
     // decides state-safety at the topology level.
     if (item.id !== effect.clipId) effect.onSeek();
 
-    effect.setConfig(item.config || createDefaultSubjectConfig('recursive'));
+    effect.setConfig(item.config || createDefaultVisualConfig('recursive'));
     effect.setActive(true, item.id);
     effect.flipH = this.getEffectiveFlipH?.() ?? false;
 
-    this.updateSubjectFxStatus(
-      this.getSubjectFxStatusMessage?.() || effect.getStatusLabel(),
+    this.updateVisualFxStatus(
+      this.getVisualFxStatusMessage?.() || effect.getStatusLabel(),
     );
   };
 
-  proto.syncVideoTimelineSubject = async function (force = false) {
+  proto.syncVideoTimelineVisualFx = async function (force = false) {
     if (this.sourceMode !== 'video' || !this.videoSourceFile) return;
-    await this.syncVideoTimelineSubjectAt(this.videoEl.currentTime || 0, force);
+    await this.syncVideoTimelineVisualFxAt(this.videoEl.currentTime || 0, force);
     if (force) this.refreshPausedVideoPreview?.();
   };
 
-  proto.resetSubjectFxTemporalState = function (options = {}) {
-    this.subjectFxEffect?.resetTemporalState();
-    this.subjectFxEffect?.analyzer?.reset({ hard: !!options.hard });
-    this.appliedTimelineSubjectId = '';
-    this._subjectFxSyncRequestId = (this._subjectFxSyncRequestId || 0) + 1;
+  proto.resetVisualFxTemporalState = function (options = {}) {
+    this.visualFxEffect?.resetTemporalState();
+    this.visualFxEffect?.analyzer?.reset({ hard: !!options.hard });
+    this.appliedVisualFxClipId = '';
+    this._visualFxSyncRequestId = (this._visualFxSyncRequestId || 0) + 1;
   };
 
   // Discrete, manual "Reiniciar" action for the inspector: clears the
   // running feedback state without touching the saved config.
   proto.restartVisualFxSimulation = function () {
-    this.subjectFxEffect?.resetTemporalState();
+    this.visualFxEffect?.resetTemporalState();
     this.refreshPausedVideoPreview?.();
   };
 
-  proto.updateSubjectFxStatus = function (message = '') {
-    if (this.subjectFxStatus) {
-      this.subjectFxStatus.textContent = message;
-      this.subjectFxStatus.classList.toggle('is-active', !!message);
+  proto.updateVisualFxStatus = function (message = '') {
+    if (this.visualFxStatus) {
+      this.visualFxStatus.textContent = message;
+      this.visualFxStatus.classList.toggle('is-active', !!message);
     }
-    const inline = this.subjectFxInspectorHost?.querySelector(
-      '#subjectFxInlineStatus',
+    const inline = this.visualFxInspectorHost?.querySelector(
+      '#visualFxInlineStatus',
     );
     if (inline) {
       inline.textContent = message;
@@ -119,49 +119,49 @@ export function applySubjectFxIntegrationMixin(proto) {
     }
   };
 
-  proto.updateSubjectFxBypassUI = function () {
-    const bypass = !!this.subjectFxBypass;
-    if (this.btnSubjectBypass) {
-      this.btnSubjectBypass.checked = !bypass;
-      this.btnSubjectBypass.setAttribute('aria-checked', String(!bypass));
+  proto.updateVisualFxBypassUI = function () {
+    const bypass = !!this.visualFxBypass;
+    if (this.btnVisualFxBypass) {
+      this.btnVisualFxBypass.checked = !bypass;
+      this.btnVisualFxBypass.setAttribute('aria-checked', String(!bypass));
     }
   };
 
-  proto.snapshotSubjectFxConfig = function () {
-    if (this.subjectFxEffect?.active) {
-      return this.subjectFxEffect.getConfig();
+  proto.snapshotVisualFxConfig = function () {
+    if (this.visualFxEffect?.active) {
+      return this.visualFxEffect.getConfig();
     }
-    return createDefaultSubjectConfig('recursive');
+    return createDefaultVisualConfig('recursive');
   };
 
-  proto.applySubjectPresetToSelection = function (systemId) {
+  proto.applyVisualSystemToSelection = function (systemId) {
     const item = this.getSelectedVideoEffectItem?.();
     if (!item || item.type !== 'subject') return;
-    const next = applySubjectPreset(item.config, systemId);
+    const next = applyVisualSystem(item.config, systemId);
     this.pushTimelineHistory?.();
     this.videoTimeline.upsert({ ...item, config: next });
-    this.subjectFxEffect?.setConfig(next);
-    this.renderSubjectFxInspector?.();
+    this.visualFxEffect?.setConfig(next);
+    this.renderVisualFxInspector?.();
     this.renderVideoTimeline?.();
-    void this.syncVideoTimelineSubject(true);
+    void this.syncVideoTimelineVisualFx(true);
   };
 
-  proto.stepSubjectVariation = function (delta = 1) {
+  proto.stepVisualFxVariation = function (delta = 1) {
     const item = this.getSelectedVideoEffectItem?.();
     if (!item || item.type !== 'subject') return;
     const live =
       this.videoTimeline?.items?.find((entry) => entry.id === item.id) || item;
     const current = live.config?.seed ?? 18412;
     const seed = (current + delta * 137 + 999983) % 999999;
-    const config = normalizeSubjectConfig({ ...live.config, seed });
+    const config = normalizeVisualConfig({ ...live.config, seed });
     this.pushTimelineHistory?.();
     this.videoTimeline.upsert({ ...live, config });
-    this.subjectFxEffect?.setConfig(config);
-    this.renderSubjectFxInspector?.();
-    void this.syncVideoTimelineSubject(true);
+    this.visualFxEffect?.setConfig(config);
+    this.renderVisualFxInspector?.();
+    void this.syncVideoTimelineVisualFx(true);
   };
 
-  proto.commitSubjectFxConfig = function (partial = {}) {
+  proto.commitVisualFxConfig = function (partial = {}) {
     const item = this.getSelectedVideoEffectItem?.();
     if (!item || item.type !== 'subject') return;
     const merged = { ...item.config, ...partial };
@@ -171,13 +171,13 @@ export function applySubjectFxIntegrationMixin(proto) {
     if (partial.tuning && item.config?.tuning) {
       merged.tuning = { ...item.config.tuning, ...partial.tuning };
     }
-    const config = normalizeSubjectConfig(merged);
+    const config = normalizeVisualConfig(merged);
     this.pushTimelineHistory?.();
     this.videoTimeline.upsert({ ...item, config });
     // Applies immediately: `setConfig` only restarts the simulation for a
     // real topology change, so dragging a macro slider never resets it.
-    this.subjectFxEffect?.setConfig(config);
-    void this.syncVideoTimelineSubject(true);
+    this.visualFxEffect?.setConfig(config);
+    void this.syncVideoTimelineVisualFx(true);
   };
 
   proto.normalizeEditorProjectV2 = function (project) {
@@ -186,11 +186,11 @@ export function applySubjectFxIntegrationMixin(proto) {
       if (item.type !== 'subject') return item;
       return {
         ...item,
-        config: normalizeSubjectConfig(item.config || {}),
+        config: normalizeVisualConfig(item.config || {}),
       };
     });
     return migrated;
   };
 }
 
-export { normalizeSubjectConfig, migrateProjectToV2, SUBJECT_PRESET_LABELS };
+export { normalizeVisualConfig, migrateProjectToV2, VISUAL_SYSTEM_LABELS };

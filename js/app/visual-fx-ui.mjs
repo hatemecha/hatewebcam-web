@@ -11,18 +11,18 @@ import {
 // macros, and a Tuning drawer that only ever shows the handful of extra
 // parameters that make sense for the active system. No preset gallery, no
 // per-uniform slider wall.
-export function applySubjectFxUIMixin(proto) {
-  proto.getSubjectVariationNumber = (seed) =>
+export function applyVisualFxUIMixin(proto) {
+  proto.getVisualFxVariationNumber = (seed) =>
     (Math.abs(Math.round(seed)) % 999) + 1;
-  proto.isPlayheadInsideSelectedSubjectClip = function (item) {
+  proto.isPlayheadInsideSelectedVisualFxClip = function (item) {
     const time = this.videoEl?.currentTime || 0;
     return (
       item?.type === 'subject' && time >= item.startTime && time < item.endTime
     );
   };
 
-  proto.renderSubjectFxInspector = function () {
-    const host = this.subjectFxInspectorHost,
+  proto.renderVisualFxInspector = function () {
+    const host = this.visualFxInspectorHost,
       item = this.getSelectedVideoEffectItem?.();
     if (!host) return;
     host.classList.toggle('hidden', item?.type !== 'subject');
@@ -59,64 +59,64 @@ export function applySubjectFxUIMixin(proto) {
     };
     const paletteField = tuningSchema.find((field) => field.key === 'palette');
 
-    host.innerHTML = `<div class="subject-inspector">
-      <header class="subject-inspector-head"><div class="subject-inspector-title">Visual FX</div></header>
-      ${!this.isPlayheadInsideSelectedSubjectClip(item) ? '<div class="subject-playhead-note"><span>Fuera del clip.</span><button class="btn btn-compact" id="visual-go">Ir al clip</button></div>' : ''}
-      <div class="subject-field-label">Sistema</div>
-      <div class="subject-preset-grid" role="group" aria-label="Sistema">${VISUAL_SYSTEM_IDS.map(
+    host.innerHTML = `<div class="vfx-inspector">
+      <header class="vfx-inspector-head"><div class="vfx-inspector-title">Visual FX</div></header>
+      ${!this.isPlayheadInsideSelectedVisualFxClip(item) ? '<div class="vfx-playhead-note"><span>Fuera del clip.</span><button class="btn btn-compact" id="visual-go">Ir al clip</button></div>' : ''}
+      <div class="vfx-field-label">Sistema</div>
+      <div class="vfx-preset-grid" role="group" aria-label="Sistema">${VISUAL_SYSTEM_IDS.map(
         (id) =>
-          `<button type="button" class="subject-preset-btn${c.system === id ? ' is-active' : ''}" data-visual-system="${id}" aria-pressed="${c.system === id}">${VISUAL_SYSTEMS[id].label}</button>`,
+          `<button type="button" class="vfx-preset-btn${c.system === id ? ' is-active' : ''}" data-visual-system="${id}" aria-pressed="${c.system === id}">${VISUAL_SYSTEMS[id].label}</button>`,
       ).join('')}</div>
-      <p class="subject-preset-hint">${system.hint}</p>
-      <div class="subject-field-label">Aplicar a</div>
-      <div class="subject-segmented" role="group" aria-label="Aplicar a">${[
+      <p class="vfx-preset-hint">${system.hint}</p>
+      <div class="vfx-field-label">Aplicar a</div>
+      <div class="vfx-segmented" role="group" aria-label="Aplicar a">${[
         ['all', 'Todo'],
         ['person', 'Persona'],
         ['background', 'Fondo'],
       ]
         .map(
           ([id, label]) =>
-            `<button type="button" id="visual-target-${id}" class="subject-segment${c.target === id ? ' is-active' : ''}" data-visual-target="${id}" aria-pressed="${c.target === id}">${label}</button>`,
+            `<button type="button" id="visual-target-${id}" class="vfx-segment${c.target === id ? ' is-active' : ''}" data-visual-target="${id}" aria-pressed="${c.target === id}">${label}</button>`,
         )
         .join('')}</div>
-      <p id="subjectFxInlineStatus" class="subject-preset-hint" role="status"></p>
-      <div class="subject-controls">${['intensity', 'memory', 'structure', 'movement'].map(macroSlider).join('')}</div>
-      <details class="subject-advanced-panel" ${tuningOpen ? 'open' : ''}><summary class="subject-advanced-toggle">Tuning &#9656;</summary>
-        <div class="subject-tuning-body">
+      <p id="visualFxInlineStatus" class="vfx-preset-hint" role="status"></p>
+      <div class="vfx-controls">${['intensity', 'memory', 'structure', 'movement'].map(macroSlider).join('')}</div>
+      <details class="vfx-advanced-panel" ${tuningOpen ? 'open' : ''}><summary class="vfx-advanced-toggle">Tuning &#9656;</summary>
+        <div class="vfx-tuning-body">
           ${tuningSchema.map(tuningControl).join('')}
           ${
             paletteField
-              ? `<div class="subject-field-label">${paletteField.label}</div>
-                 <div class="select-wrapper subject-tuning-select"><select id="visual-tuning-palette">${PALETTE_OPTIONS.map(
+              ? `<div class="vfx-field-label">${paletteField.label}</div>
+                 <div class="select-wrapper vfx-tuning-select"><select id="visual-tuning-palette">${PALETTE_OPTIONS.map(
                    (opt) =>
                      `<option value="${opt.id}" ${c.tuning.palette === opt.id ? 'selected' : ''}>${opt.label}</option>`,
                  ).join('')}</select></div>`
               : ''
           }
-          <div class="subject-variation-controls">
-            <span>Variación ${this.getSubjectVariationNumber(c.seed)}</span>
+          <div class="vfx-variation-controls">
+            <span>Variación ${this.getVisualFxVariationNumber(c.seed)}</span>
             <button class="btn btn-compact" id="visual-variation">Cambiar</button>
             <button class="btn btn-compact" id="visual-restart" title="Limpiar el estado de la simulación">Reiniciar</button>
           </div>
         </div>
       </details>
-      <footer class="subject-footer-row"><label class="subject-power-toggle"><input type="checkbox" id="chkSubjectBypass" ${!this.subjectFxBypass ? 'checked' : ''}><span>FX activo</span></label></footer>
+      <footer class="vfx-footer-row"><label class="vfx-power-toggle"><input type="checkbox" id="chkVisualFxBypass" ${!this.visualFxBypass ? 'checked' : ''}><span>FX activo</span></label></footer>
     </div>`;
     // Error strings are text, never interpolated into markup.
-    host.querySelector('#subjectFxInlineStatus').textContent =
-      this.subjectFxEffect?.getStatusLabel() || '';
+    host.querySelector('#visualFxInlineStatus').textContent =
+      this.visualFxEffect?.getStatusLabel() || '';
 
     host
       .querySelectorAll('[data-visual-system]')
       .forEach((button) =>
         button.addEventListener('click', () =>
-          this.applySubjectPresetToSelection(button.dataset.visualSystem),
+          this.applyVisualSystemToSelection(button.dataset.visualSystem),
         ),
       );
     host.querySelectorAll('[data-visual-target]').forEach((button) =>
       button.addEventListener('click', () => {
-        this.commitSubjectFxConfig({ target: button.dataset.visualTarget });
-        this.renderSubjectFxInspector();
+        this.commitVisualFxConfig({ target: button.dataset.visualTarget });
+        this.renderVisualFxInspector();
       }),
     );
     host.querySelectorAll('[id^="visual-macro-"]').forEach((input) =>
@@ -125,7 +125,7 @@ export function applySubjectFxUIMixin(proto) {
           value = Number(input.value) / 100;
         host.querySelector(`#visual-value-macro-${key}`).textContent =
           input.value;
-        this.commitSubjectFxConfig({ macros: { [key]: value } });
+        this.commitVisualFxConfig({ macros: { [key]: value } });
       }),
     );
     host.querySelectorAll('[id^="visual-tuning-"]').forEach((input) => {
@@ -138,23 +138,23 @@ export function applySubjectFxUIMixin(proto) {
         const value = field.min + pct * (field.max - field.min);
         host.querySelector(`#visual-value-tuning-${key}`).textContent =
           input.value;
-        this.commitSubjectFxConfig({ tuning: { [key]: value } });
+        this.commitVisualFxConfig({ tuning: { [key]: value } });
       });
     });
     host
       .querySelector('#visual-tuning-palette')
       ?.addEventListener('change', (e) => {
-        this.commitSubjectFxConfig({
+        this.commitVisualFxConfig({
           tuning: { palette: Number(e.target.value) },
         });
       });
-    this.btnSubjectBypass = host.querySelector('#chkSubjectBypass');
-    this.btnSubjectBypass.addEventListener('change', () =>
-      this.toggleSubjectFxBypass(),
+    this.btnVisualFxBypass = host.querySelector('#chkVisualFxBypass');
+    this.btnVisualFxBypass.addEventListener('change', () =>
+      this.toggleVisualFxBypass(),
     );
     host
       .querySelector('#visual-variation')
-      .addEventListener('click', () => this.stepSubjectVariation(1));
+      .addEventListener('click', () => this.stepVisualFxVariation(1));
     host
       .querySelector('#visual-restart')
       .addEventListener('click', () => this.restartVisualFxSimulation?.());

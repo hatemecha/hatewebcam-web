@@ -132,7 +132,7 @@ uniforms no longer exist.
 The old subject-bound effects, HUD, preset/config layer and smear renderer were
 removed in the prior refactor and stay removed. Person analysis, local assets,
 workers, caching and mask transforms remain untouched. Controller field names
-(`subjectFxEffect`, `subjectFxBypass`, ...) and the timeline's `subject` wire type
+(`visualFxEffect`, `visualFxBypass`, ...) and the timeline's `subject` wire type
 are intentionally kept as compatibility boundaries, not renamed for their own sake -
 they are not dependencies of the image renderer, which is entirely new.
 

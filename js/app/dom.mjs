@@ -133,8 +133,8 @@ export function setupDom(app) {
   app.inspectorSplitter = $('#inspectorSplitter');
   app.timelineSplitter = $('#timelineSplitter');
   app.inspectorAdjustmentsHost = $('#inspectorAdjustmentsHost');
-  app.subjectFxInspectorHost = $('#subjectFxInspectorHost');
-  app.subjectFxStatus = $('#subjectFxStatus');
+  app.visualFxInspectorHost = $('#visualFxInspectorHost');
+  app.visualFxStatus = $('#visualFxStatus');
   app.inspectorAdjustNoVideo = $('#inspectorAdjustNoVideo');
   app.inspectorAdjustNoClip = $('#inspectorAdjustNoClip');
   app.inspectorWorkflowSteps = $('#inspectorWorkflowSteps');

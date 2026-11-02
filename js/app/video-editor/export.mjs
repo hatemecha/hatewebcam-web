@@ -379,8 +379,8 @@ export function applyVideoEditorExportMixin(proto) {
     if (!this.videoSourceFile || this.isVideoExporting) return;
     const previous = this.videoEl.currentTime || 0;
     const next = this.clampVideoSeekTime(time);
-    if (this.subjectFxEffect?.active && next !== previous) {
-      this.subjectFxEffect.onSeek?.();
+    if (this.visualFxEffect?.active && next !== previous) {
+      this.visualFxEffect.onSeek?.();
     }
     this.videoEl.currentTime = next;
     this.updateVideoTransport();
@@ -456,9 +456,9 @@ export function applyVideoEditorExportMixin(proto) {
       { stage: 'detectors', time },
     );
     await this.syncVideoTimelineDetectorsAt(time, false);
-    await this.syncVideoTimelineSubjectAt?.(time, false);
-    if (this.subjectFxEffect?.active && !this.subjectFxBypass) {
-      await this.subjectFxEffect.analyze(
+    await this.syncVideoTimelineVisualFxAt?.(time, false);
+    if (this.visualFxEffect?.active && !this.visualFxBypass) {
+      await this.visualFxEffect.analyze(
         this.videoEl,
         time * 1000,
         this.renderEngine.getProfile('export'),
@@ -695,8 +695,8 @@ export function applyVideoEditorExportMixin(proto) {
         face: '',
         blink: '',
       };
-      this.appliedTimelineSubjectId = '';
-      this.resetSubjectFxTemporalState?.();
+      this.appliedVisualFxClipId = '';
+      this.resetVisualFxTemporalState?.();
       this.videoExportRecoveredSource = false;
       this.videoExportSession.start(0);
       this.videoExportProgress.value = 0;

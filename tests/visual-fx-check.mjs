@@ -7,7 +7,7 @@ import {
   visualConfigTopologyKey,
 } from '../js/visual-fx/config.mjs';
 import { VisualFxEffect, maskStaleBudgetSec } from '../js/visual-fx/effect.mjs';
-import { applySubjectFxIntegrationMixin } from '../js/app/visual-fx-integration.mjs';
+import { applyVisualFxIntegrationMixin } from '../js/app/visual-fx-integration.mjs';
 import { VideoTimeline } from '../js/editor/video-timeline.mjs';
 
 for (const system of VISUAL_SYSTEM_IDS) {
@@ -140,7 +140,7 @@ assert.equal(effect.maskTime, null);
 }
 
 const app = {};
-applySubjectFxIntegrationMixin(app);
+applyVisualFxIntegrationMixin(app);
 const legacy = {
   version: 1,
   timeline: {
@@ -167,10 +167,10 @@ const item = timeline.upsert(migrated.timeline.items[0]);
 Object.assign(app, {
   videoTimeline: timeline,
   getSelectedVideoEffectItem: () => timeline.items[0],
-  syncVideoTimelineSubject() {},
+  syncVideoTimelineVisualFx() {},
 });
 const otherTuning = { ...timeline.items[0].config.tuning };
-app.commitSubjectFxConfig({ macros: { memory: 0.22 } });
+app.commitVisualFxConfig({ macros: { memory: 0.22 } });
 assert.equal(timeline.items[0].config.macros.memory, 0.22);
 assert.deepEqual(timeline.items[0].config.tuning, otherTuning);
 assert.equal(timeline.activeAt(1)[0].id, item.id);
@@ -203,10 +203,10 @@ console.log('Visual FX unit checks passed.');
       activeAt: () => [{ id: 'clip', type: 'subject', config: {} }],
     },
   };
-  applySubjectFxIntegrationMixin(app2);
-  app2.ensureSubjectFxEffect = () => loaded;
-  const first = app2.syncVideoTimelineSubjectAt(0),
-    second = app2.syncVideoTimelineSubjectAt(0.03);
+  applyVisualFxIntegrationMixin(app2);
+  app2.ensureVisualFxEffect = () => loaded;
+  const first = app2.syncVideoTimelineVisualFxAt(0),
+    second = app2.syncVideoTimelineVisualFxAt(0.03);
   resolveLoad(fx);
   await Promise.all([first, second]);
   assert.equal(fx.active, true);
@@ -239,11 +239,11 @@ console.log('Visual FX unit checks passed.');
       activeAt: () => [{ id: 'same-clip', type: 'subject', config: {} }],
     },
   };
-  applySubjectFxIntegrationMixin(app3);
-  app3.ensureSubjectFxEffect = () => fx;
-  await app3.syncVideoTimelineSubjectAt(0, true);
+  applyVisualFxIntegrationMixin(app3);
+  app3.ensureVisualFxEffect = () => fx;
+  await app3.syncVideoTimelineVisualFxAt(0, true);
   assert.equal(onSeekCalls, 1, 'first sync of a clip must seek once');
-  for (let i = 0; i < 10; i++) await app3.syncVideoTimelineSubjectAt(0, true);
+  for (let i = 0; i < 10; i++) await app3.syncVideoTimelineVisualFxAt(0, true);
   assert.equal(
     onSeekCalls,
     1,

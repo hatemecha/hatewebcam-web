@@ -549,7 +549,7 @@ export function applyEventsMixin(proto) {
       this.clearPendingCapture(true);
       if (this.isRunning) this.cameraManager.stop();
       if (this.videoObjectUrl) URL.revokeObjectURL(this.videoObjectUrl);
-      this.subjectFxEffect?.dispose?.();
+      this.visualFxEffect?.dispose?.();
     });
   };
 

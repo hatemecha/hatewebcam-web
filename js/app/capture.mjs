@@ -23,7 +23,7 @@ export function applyCaptureMixin(proto) {
       e.key.toLowerCase() === 'b' &&
       !['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target?.tagName)
     ) {
-      this.toggleSubjectFxBypass?.();
+      this.toggleVisualFxBypass?.();
     }
   };
 

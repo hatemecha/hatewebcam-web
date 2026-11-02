@@ -245,16 +245,16 @@ export function applyRenderLoopMixin(proto) {
         }
         this.updateEffectsInfo?.();
         this.updateVideoTransport();
-        this.updateSubjectFxLab?.();
+        this.updateVisualFxLab?.();
         if (
           this.sourceMode === 'video' &&
-          this.subjectFxEffect?.active &&
-          !this.subjectFxInspectorHost?.classList.contains('hidden')
+          this.visualFxEffect?.active &&
+          !this.visualFxInspectorHost?.classList.contains('hidden')
         ) {
-          const nextStatus = this.subjectFxEffect.getStatusLabel();
-          if (nextStatus !== this._subjectFxInspectorStatus) {
-            this._subjectFxInspectorStatus = nextStatus;
-            this.renderSubjectFxInspector?.();
+          const nextStatus = this.visualFxEffect.getStatusLabel();
+          if (nextStatus !== this._visualFxInspectorStatus) {
+            this._visualFxInspectorStatus = nextStatus;
+            this.renderVisualFxInspector?.();
           }
         }
       }
@@ -588,8 +588,8 @@ export function applyRenderLoopMixin(proto) {
     targetCtx.fillRect(0, 0, targetCanvas.width, targetCanvas.height);
     targetCtx.restore();
 
-    if (this.subjectFxEffect?.active && !this.subjectFxBypass) {
-      this.subjectFxEffect.processFullFrame(
+    if (this.visualFxEffect?.active && !this.visualFxBypass) {
+      this.visualFxEffect.processFullFrame(
         targetCtx,
         analysisCanvas,
         this.videoEl,
@@ -646,9 +646,9 @@ export function applyRenderLoopMixin(proto) {
       mode === 'preview' && this.isMobileViewport() ? 'mobile' : mode;
     const renderProfile = this.renderEngine.getProfile(profileName);
 
-    if (this.subjectFxEffect?.active && !this.subjectFxBypass) {
+    if (this.visualFxEffect?.active && !this.visualFxBypass) {
       const drawMetrics = this.getVideoDrawMetrics(targetCanvas, mode);
-      this.subjectFxEffect.processFullFrame(
+      this.visualFxEffect.processFullFrame(
         targetCtx,
         targetCanvas,
         this.videoEl,

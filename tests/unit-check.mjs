@@ -42,13 +42,13 @@ import { applyCameraMixin } from '../js/app/camera.mjs';
 import { applyRenderLoopMixin } from '../js/app/render.mjs';
 import { applyLocalvideoeditorMixin } from '../js/app/video-editor.mjs';
 import {
-  createDefaultSubjectConfig,
+  createDefaultVisualConfig,
   migrateProjectToV2,
-  normalizeSubjectConfig,
+  normalizeVisualConfig,
 } from '../js/visual-fx/config.mjs';
 import { SubjectMotionAnalyzer } from '../js/subject/subject-motion.mjs';
 import { createSeededRandom, seededInt } from '../js/subject/subject-prng.mjs';
-import { applySubjectFxIntegrationMixin } from '../js/app/visual-fx-integration.mjs';
+import { applyVisualFxIntegrationMixin } from '../js/app/visual-fx-integration.mjs';
 import {
   SubjectMask,
   normalizeMaskBuffer,
@@ -2259,7 +2259,7 @@ function checkSubjectTimelineType() {
     'subject',
     1,
     4,
-    createDefaultSubjectConfig('anatomy'),
+    createDefaultVisualConfig('anatomy'),
   );
   assert.equal(subject.type, 'subject');
   assert.throws(() => timeline.add('subject', 2, 5), /superponer/);
@@ -2270,7 +2270,7 @@ function checkSubjectTimelineType() {
 }
 
 function checkSubjectConfigNormalization() {
-  const config = normalizeSubjectConfig({
+  const config = normalizeVisualConfig({
     system: 'flow',
     macros: { intensity: 2, movement: 0.4 },
     tuning: { palette: 99 },
@@ -2283,7 +2283,7 @@ function checkSubjectConfigNormalization() {
   assert.equal(config.tuning.palette, 4, 'palette must clamp to its max');
 
   // Legacy v3 shape (preset/amount) still resolves to a valid v4 config.
-  const legacy = normalizeSubjectConfig({
+  const legacy = normalizeVisualConfig({
     preset: 'fragment',
     amount: 0.75,
     reactivity: 'motion-beat',
@@ -2517,17 +2517,17 @@ function checkSubjectFrameMap() {
 
 function checkSubjectBypassToggle() {
   const app = {
-    subjectFxBypass: false,
-    btnSubjectBypass: { checked: true, setAttribute() {} },
-    subjectFxEffect: { setBypass() {}, resetTemporalState() {} },
-    syncVideoTimelineSubject() {},
-    renderSubjectFxInspector() {},
+    visualFxBypass: false,
+    btnVisualFxBypass: { checked: true, setAttribute() {} },
+    visualFxEffect: { setBypass() {}, resetTemporalState() {} },
+    syncVideoTimelineVisualFx() {},
+    renderVisualFxInspector() {},
   };
-  applySubjectFxIntegrationMixin(app);
-  app.toggleSubjectFxBypass();
-  assert.equal(app.subjectFxBypass, true);
-  app.updateSubjectFxBypassUI();
-  assert.equal(app.btnSubjectBypass.checked, false);
+  applyVisualFxIntegrationMixin(app);
+  app.toggleVisualFxBypass();
+  assert.equal(app.visualFxBypass, true);
+  app.updateVisualFxBypassUI();
+  assert.equal(app.btnVisualFxBypass.checked, false);
 }
 
 function checkSubjectVariationStep() {
@@ -2537,22 +2537,22 @@ function checkSubjectVariationStep() {
     type: 'subject',
     startTime: 0,
     endTime: 8,
-    config: createDefaultSubjectConfig('fragment'),
+    config: createDefaultVisualConfig('fragment'),
   });
   const app = {
     videoTimeline: timeline,
     getSelectedVideoEffectItem: () => item,
     pushTimelineHistory() {},
-    subjectFxEffect: { setConfig() {} },
-    renderSubjectFxInspector() {},
-    syncVideoTimelineSubject() {},
+    visualFxEffect: { setConfig() {} },
+    renderVisualFxInspector() {},
+    syncVideoTimelineVisualFx() {},
   };
-  applySubjectFxIntegrationMixin(app);
+  applyVisualFxIntegrationMixin(app);
   const before = item.config.seed;
-  app.stepSubjectVariation(1);
+  app.stepVisualFxVariation(1);
   const updated = timeline.items.find((entry) => entry.id === 'subject-1');
   assert.notEqual(updated.config.seed, before);
-  app.stepSubjectVariation(1);
+  app.stepVisualFxVariation(1);
   const again = timeline.items.find((entry) => entry.id === 'subject-1');
   assert.notEqual(again.config.seed, updated.config.seed);
 }
@@ -2879,7 +2879,7 @@ async function checkSubjectClipAwaitsEffectBeforeAnalyzer() {
     type: 'subject',
     startTime: 0,
     endTime: 2,
-    config: createDefaultSubjectConfig('anatomy'),
+    config: createDefaultVisualConfig('anatomy'),
   };
   const app = {
     videoSourceFile: {},
@@ -2888,7 +2888,7 @@ async function checkSubjectClipAwaitsEffectBeforeAnalyzer() {
     videoTimeline: { upsert: () => saved },
     pushTimelineHistory() {},
     snapshotVideoEffectConfig: () => saved.config,
-    ensureSubjectFxEffect: async () => {
+    ensureVisualFxEffect: async () => {
       await Promise.resolve();
       return {
         analyzer: {

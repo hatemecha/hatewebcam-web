@@ -52,9 +52,9 @@ import { TimelineView } from './timeline-view.mjs';
 import { EditAssistController } from './edit-assist-controller.mjs';
 import { RenderEngine } from './render-engine.mjs';
 import { VideoExportSession } from './video-export-session.mjs';
-import { applySubjectFxIntegrationMixin } from './visual-fx-integration.mjs';
-import { applySubjectFxUIMixin } from './visual-fx-ui.mjs';
-import { applySubjectFxLabMixin } from './subject-fx-fxlab.mjs';
+import { applyVisualFxIntegrationMixin } from './visual-fx-integration.mjs';
+import { applyVisualFxUIMixin } from './visual-fx-ui.mjs';
+import { applyVisualFxLabMixin } from './visual-fx-lab.mjs';
 
 export class AppController {
   constructor() {
@@ -235,6 +235,6 @@ applyUIHelpersMixin(AppController.prototype);
 applyProfilesMixin(AppController.prototype);
 applyCaptureMixin(AppController.prototype);
 applyModalfocusmanagementMixin(AppController.prototype);
-applySubjectFxIntegrationMixin(AppController.prototype);
-applySubjectFxUIMixin(AppController.prototype);
-applySubjectFxLabMixin(AppController.prototype);
+applyVisualFxIntegrationMixin(AppController.prototype);
+applyVisualFxUIMixin(AppController.prototype);
+applyVisualFxLabMixin(AppController.prototype);

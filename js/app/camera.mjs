@@ -270,8 +270,8 @@ export function applyCameraMixin(proto) {
   };
 
   proto.handlePreviewFpsSample = function (fps) {
-    if (this.sourceMode === 'video' && this.subjectFxEffect?.active) {
-      this.subjectFxEffect.adaptPreviewQuality?.(fps);
+    if (this.sourceMode === 'video' && this.visualFxEffect?.active) {
+      this.visualFxEffect.adaptPreviewQuality?.(fps);
     }
     if (
       this.imageSettings.performanceMode !== 'auto' ||

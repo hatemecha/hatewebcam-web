@@ -91,11 +91,10 @@ python -m http.server 8080
 ![Editor de video de hatewebcam en inglés](docs/images/video-editor-desktop.jpg)
 
 1. Abre la pestaña `Video` y elige un archivo local.
-2. Arrastra los extremos de la timeline para recortar y marca sobre ella los intervalos de efectos.
-3. Arrastrá **Subject FX** a la pista SUBJECT, elegí un preset (Anatomy, Fragment, Smear, etc.) y ajustá intensidad/reactividad.
-4. Configura un look o detector y agrégalo al tramo marcado.
-5. Pulsa `M` para agregar o quitar marcadores en el playhead. Con el imán activo, trims, clips y cursor ajustan también a esos marcadores.
-6. Exporta; un modal bloquea la edición hasta iniciar la descarga final.
+2. Arrastra los extremos de la timeline para recortar y marca intervalos de efectos.
+3. Arrastrá **Visual FX**, Look, Color, Caras u Ojos desde la paleta; ajustá macros en el inspector.
+4. Pulsa `M` para marcadores en el playhead. Con el imán activo, trims y clips se alinean a marcadores.
+5. Exportá desde el inspector de proyecto; el modal bloquea la edición hasta la descarga.
 
 ### Visual FX (videoclip)
 

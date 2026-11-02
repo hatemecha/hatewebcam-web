@@ -259,11 +259,3 @@ export function migrateProjectToV2(project) {
     throw new Error('invalid_project');
   return { ...project, version: 2, timeline: { ...project.timeline } };
 }
-
-// Narrow compatibility names: the timeline/project adapter and older call
-// sites still spell these the "subject" way. Keeping the alias avoids a
-// naming-only churn across files that have nothing to do with rendering.
-export const createDefaultSubjectConfig = createDefaultVisualConfig;
-export const normalizeSubjectConfig = normalizeVisualConfig;
-export const applySubjectPreset = applyVisualSystem;
-export const SUBJECT_PRESET_LABELS = VISUAL_SYSTEM_LABELS;

@@ -157,7 +157,7 @@ test('Visual FX only initializes person assets when requested', async ({
   await expect
     .poll(() => [...requestedSubjectAssets].sort(), { timeout: 45_000 })
     .toEqual([...requiredAssets].sort());
-  await expect(page.locator('#subjectFxInlineStatus')).not.toContainText(
+  await expect(page.locator('#visualFxInlineStatus')).not.toContainText(
     /No se pudo|error/i,
   );
   expect(failures).toEqual([]);

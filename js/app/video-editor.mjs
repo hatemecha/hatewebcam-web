@@ -3,7 +3,7 @@ import { applyVideoEditorClipboardMixin } from './video-editor-clipboard.mjs';
 import { applyVideoEditorTimelineMixin } from './video-editor-timeline.mjs';
 import { applyVideoEditorProjectMixin } from './video-editor/project-io.mjs';
 import { applyVideoEditorExportMixin } from './video-editor/export.mjs';
-import { createDefaultSubjectConfig } from '../visual-fx/config.mjs';
+import { createDefaultVisualConfig } from '../visual-fx/config.mjs';
 import { TIMELINE_TRACK_COUNT } from './constants.mjs';
 
 const VIDEO_EFFECT_AUTOMATION_MODES = new Set([
@@ -49,7 +49,7 @@ export function applyLocalvideoeditorMixin(proto) {
         .querySelectorAll('.video-only')
         .forEach((el) => el.classList.remove('hidden'));
       this.mountVideoEffectsControls();
-      this.ensureSubjectFxLab?.();
+      this.ensureVisualFxLab?.();
       this.setEditorTool('select');
       this.setInspectorTab('project');
       this.applyTimelineZoom();
@@ -138,8 +138,8 @@ export function applyLocalvideoeditorMixin(proto) {
     this.timelineClipboard = null;
     this.updateTimelineClipboardStatus();
     this.appliedTimelineItemIds = {};
-    this.appliedTimelineSubjectId = '';
-    this.resetSubjectFxTemporalState?.({ hard: true });
+    this.appliedVisualFxClipId = '';
+    this.resetVisualFxTemporalState?.({ hard: true });
     this.timelineDetectorSyncPromise = null;
     this.timelineDetectorSyncForce = false;
     this.videoBaseImageSettings = null;
@@ -390,7 +390,7 @@ export function applyLocalvideoeditorMixin(proto) {
     if (this.inspectorAdjustmentsHost) {
       this.inspectorAdjustmentsHost.classList.toggle('hidden', !hasSelection);
       this.inspectorAdjustmentsHost.classList.toggle(
-        'is-subject-fx',
+        'is-visual-fx',
         isSubject,
       );
     }
@@ -406,7 +406,7 @@ export function applyLocalvideoeditorMixin(proto) {
     if (this.adjustClipStatus)
       this.adjustClipStatus.classList.toggle('hidden', isSubject);
     if (hasSelection) this.updateAdjustmentsContext();
-    if (isSubject) this.renderSubjectFxInspector?.();
+    if (isSubject) this.renderVisualFxInspector?.();
   };
 
   proto.normalizeLookClipConfig = function (config = {}) {
@@ -501,7 +501,7 @@ export function applyLocalvideoeditorMixin(proto) {
       return { ...config, automation: this.getSelectedAutomationMode() };
     }
     if (type === 'subject') {
-      return createDefaultSubjectConfig('recursive');
+      return createDefaultVisualConfig('recursive');
     }
     return {
       ...(this.blinkDetectionEffect
@@ -545,8 +545,8 @@ export function applyLocalvideoeditorMixin(proto) {
     } else if (item.type === 'blink' && this.blinkDetectionEffect) {
       this.blinkDetectionEffect.setConfig(item.config);
     } else if (item.type === 'subject') {
-      this.subjectFxEffect?.setConfig(item.config || {});
-      this.renderSubjectFxInspector?.();
+      this.visualFxEffect?.setConfig(item.config || {});
+      this.renderVisualFxInspector?.();
     }
     this.syncQuickDetectorSettingsFromEffects();
     this.updateQuickDetectorControlsUI();
@@ -857,7 +857,7 @@ export function applyLocalvideoeditorMixin(proto) {
     if (this.btnDeleteVideoEffect)
       this.btnDeleteVideoEffect.disabled = !editing;
     if (this.btnOpenEffectAdjust) this.btnOpenEffectAdjust.disabled = !editing;
-    this.renderSubjectFxInspector?.();
+    this.renderVisualFxInspector?.();
   };
 
   proto.commitSelectedEffectAutomation = function () {
@@ -1976,7 +1976,7 @@ export function applyLocalvideoeditorMixin(proto) {
   proto.syncVideoTimelineEffects = async function (force = false) {
     if (this.sourceMode !== 'video' || !this.videoSourceFile) return;
     this.syncVideoTimelineLookNow({ force });
-    await this.syncVideoTimelineSubject?.(force);
+    await this.syncVideoTimelineVisualFx?.(force);
     await this.syncVideoTimelineDetectors(force);
   };
 
