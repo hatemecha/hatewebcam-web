@@ -1,0 +1,211 @@
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+
+const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+function listJavascriptFiles(dir = 'js') {
+  return readdirSync(resolve(rootDir, dir))
+    .flatMap((entry) => {
+      const relativePath = `${dir}/${entry}`;
+      const absolutePath = resolve(rootDir, relativePath);
+      return statSync(absolutePath).isDirectory()
+        ? listJavascriptFiles(relativePath)
+        : relativePath;
+    })
+    .filter((file) => /\.(mjs|js)$/.test(file))
+    .sort();
+}
+
+const javascriptFiles = listJavascriptFiles();
+const htmlTemplateFiles = [
+  'templates/video-editor.html',
+  'templates/webcam-controls.html',
+  'templates/export-modal.html',
+  'templates/capture-modal.html',
+];
+
+const controllerConstantPattern =
+  /(?<![.\w$])(?:TIMELINE_EFFECT_META|DEFAULT_TIMELINE_EFFECT_DURATION|DEFAULT_IMAGE_SETTINGS|DEFAULT_CAMERA_FPS|DEFAULT_PREVIEW_QUALITY|MEDIAPIPE_FACE_MESH_VERSION|MEDIAPIPE_FACE_MESH_SRC|MEDIAPIPE_CONSOLE_NOISE_PATTERNS|DETECTOR_DEFAULT_BOX_COLOR|DEFAULT_QUICK_DETECTOR_SETTINGS|ADJUST_CONTEXT_HELP|STORAGE_KEY|PROFILES_KEY|COMMON_VIDEO_FPS)\b/;
+const controllerMethodNames = javascriptFiles
+  .filter((file) => file.startsWith('js/app/'))
+  .flatMap((file) =>
+    [
+      ...readFileSync(resolve(rootDir, file), 'utf8').matchAll(
+        /proto\.([\w$]+)\s*=/g,
+      ),
+    ].map((match) => match[1]),
+  );
+
+const requiredHtmlFragments = [
+  'id="videoElement"',
+  'id="previewCanvas"',
+  'id="btnToggleCamera"',
+  'id="cameraSelect"',
+  'id="btnTakePhoto"',
+  'id="btnRecord"',
+  'id="captureTimerSelect"',
+  'id="performanceModeSelect"',
+  'id="captureCountdown"',
+  'id="btnVideoMode"',
+  'id="videoFileInput"',
+  'id="projectFileInput"',
+  'id="btnSaveProject"',
+  'id="btnLoadProject"',
+  'id="videoTimeline"',
+  'id="timelineEffectPalette"',
+  'id="btnExportVideo"',
+  'id="btnHeaderExportVideo"',
+  'id="videoExportDiagnostics"',
+  'id="videoExportModeSelect"',
+  'id="editorExportPresetSelect"',
+  'id="editorExportFormatSelect"',
+  'id="chkEditorCopyAudio"',
+  'id="chkExperimentalExportFeatures"',
+  'id="btnEditAssistAnalyze"',
+  'id="btnEditAssistBeat"',
+  'id="btnEditAssistEvery8"',
+  'id="editAssistBpmInput"',
+  'id="editAssistOffsetInput"',
+  'id="editAssistDensitySelect"',
+  'id="btnEditAssistRegenerate"',
+  'id="btnEditAssistClear"',
+  'id="effectsExportChromaSelect"',
+  'id="videoInspector"',
+  'id="videoEffectAutomationSelect"',
+  'id="inspectorSplitter"',
+  'id="timelineSplitter"',
+  'id="btnToolSelect"',
+  'id="timelinePlayheadHandle"',
+  'id="timelineMarkers"',
+  'id="videoExportModal"',
+  'id="chkMirror"',
+  'id="chkFaceDetection"',
+  'id="chkBlinkDetection"',
+  'js/app.js',
+];
+
+function fail(message) {
+  console.error(`Smoke check failed: ${message}`);
+  process.exit(1);
+}
+
+for (const file of javascriptFiles) {
+  const result = spawnSync(
+    process.execPath,
+    ['--check', resolve(rootDir, file)],
+    {
+      cwd: rootDir,
+      encoding: 'utf8',
+    },
+  );
+
+  if (result.status !== 0) {
+    const output = [result.stdout, result.stderr].filter(Boolean).join('\n');
+    fail(`${file} has a syntax error.\n${output}`);
+  }
+
+  const source = readFileSync(resolve(rootDir, file), 'utf8');
+  if (
+    file.startsWith('js/app/') &&
+    /(?<![.\w$])(?:clamp|escapeHtml)\s*\(/.test(source)
+  ) {
+    fail(`${file} calls a controller helper without this.`);
+  }
+  if (file !== 'js/app/dom.mjs' && /(?<![.\w$])\$\s*\(/.test(source)) {
+    fail(`${file} uses the DOM helper outside dom.mjs.`);
+  }
+  if (
+    file.startsWith('js/app/') &&
+    !['js/app/constants.mjs', 'js/app/controller.mjs'].includes(file) &&
+    controllerConstantPattern.test(source)
+  ) {
+    fail(`${file} accesses a controller constant without this.`);
+  }
+  for (const methodName of controllerMethodNames) {
+    const bareCallbackPattern = new RegExp(
+      `(?:addEventListener\\([^,]+,|requestAnimationFrame\\(|requestVideoFrameCallback\\()\\s*${methodName}\\b`,
+    );
+    if (bareCallbackPattern.test(source))
+      fail(`${file} passes ${methodName} without binding the controller.`);
+  }
+}
+
+const html = readFileSync(resolve(rootDir, 'index.html'), 'utf8');
+const htmlBundle = [
+  html,
+  ...htmlTemplateFiles.map((file) => {
+    const path = resolve(rootDir, file);
+    if (!existsSync(path)) {
+      fail(`missing template ${file}`);
+    }
+    return readFileSync(path, 'utf8');
+  }),
+].join('\n');
+const forbiddenRuntimeFragments = [
+  'https://cdn.jsdelivr.net',
+  'https://esm.sh',
+  'https://cdnjs.cloudflare.com',
+  'webm-muxer',
+];
+for (const file of ['index.html', ...htmlTemplateFiles, ...javascriptFiles]) {
+  const source =
+    file === 'index.html' ? html : readFileSync(resolve(rootDir, file), 'utf8');
+  for (const fragment of forbiddenRuntimeFragments) {
+    if (source.includes(fragment)) {
+      fail(
+        `${file} still references runtime CDN/deprecated dependency ${fragment}`,
+      );
+    }
+  }
+}
+for (const fragment of [
+  'id="videoEditorTemplateSlot"',
+  'id="webcamControlsTemplateSlot"',
+  'id="exportModalTemplateSlot"',
+  'id="captureModalTemplateSlot"',
+]) {
+  if (!html.includes(fragment)) {
+    fail(`index.html is missing template mount ${fragment}`);
+  }
+}
+const appJs = readFileSync(resolve(rootDir, 'js/app.js'), 'utf8');
+if (!appJs.includes("import { AppController } from './app/controller.mjs'")) {
+  fail('app.js must bootstrap AppController from ./app/controller.mjs');
+}
+const controllerJs = readFileSync(
+  resolve(rootDir, 'js/app/controller.mjs'),
+  'utf8',
+);
+if (
+  !controllerJs.includes("from '../video-export.mjs'") &&
+  !controllerJs.includes("from './constants.mjs'")
+) {
+  fail('controller.mjs must wire video export/constants modules');
+}
+const settingsJs = readFileSync(
+  resolve(rootDir, 'js/app/settings.mjs'),
+  'utf8',
+);
+if (settingsJs.includes('...DEFAULT_QUICK_DETECTOR_SETTINGS')) {
+  fail(
+    'settings.mjs must access DEFAULT_QUICK_DETECTOR_SETTINGS through the controller.',
+  );
+}
+const videoEditorJs = readFileSync(
+  resolve(rootDir, 'js/app/video-editor.mjs'),
+  'utf8',
+);
+if (videoEditorJs.includes("import('./video-export.mjs')")) {
+  fail(
+    'video-editor.mjs must import video-export.mjs from its parent directory.',
+  );
+}
+for (const fragment of requiredHtmlFragments) {
+  if (!htmlBundle.includes(fragment)) {
+    fail(`HTML templates are missing ${fragment}`);
+  }
+}
+
+console.log('Smoke check passed.');

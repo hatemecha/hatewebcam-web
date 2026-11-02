@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor and local agent state
+.vscode/
+.idea/
+.cursor/
+.codex/
+.claude/
+.agents/
+.impeccable/
+.omx/
+
+# Build / test artifacts
+dist/
+build/
+coverage/
+test-results/
+playwright-report/
+.playwright-mcp/
+work/
+__pycache__/
+*.pyc
+*.tmp

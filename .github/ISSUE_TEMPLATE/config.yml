@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Código de conducta y cómo contribuir
+    url: https://github.com/hatemecha/hatewebcam-web/blob/main/CONTRIBUTING.md
+    about: Antes de un cambio grande, leé el alcance del proyecto.
+  - name: Avisos de seguridad
+    url: https://github.com/hatemecha/hatewebcam-web/blob/main/SECURITY.md
+    about: Cómo reportar un problema de seguridad.

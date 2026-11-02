@@ -1,0 +1,50 @@
+/* Progressive empty states for Video mode. Tokens: DESIGN.md */
+
+.skip-link:not(:focus):not(:focus-visible) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  z-index: 8;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 8px 12px;
+  overflow: visible;
+  clip: auto;
+  color: var(--text-primary);
+  background: var(--surface-3);
+  border: 1px solid var(--border-light);
+  border-radius: 4px;
+  text-decoration: none;
+}
+
+.header-links .github-mark {
+  display: block;
+}
+
+.video-mode:not(.video-has-source) .video-timeline-shell,
+.video-mode:not(.video-has-source) #timelineSplitter,
+.video-mode:not(.video-has-source) #tabInspectorEffect {
+  display: none;
+}
+
+body.video-mode:not(.video-has-source) .preview-area {
+  grid-template-rows: minmax(150px, 1fr) auto;
+}
+
+body.video-mode:not(.video-has-source) .preview-wrapper {
+  width: min(100% - 24px, calc((100dvh - var(--header-h) - 18px) * 16 / 9));
+}

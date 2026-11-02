@@ -1,0 +1,31 @@
+<div
+  class="capture-preview-modal video-export-modal hidden"
+  id="videoExportModal"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="videoExportTitle"
+>
+  <div class="video-export-card">
+    <div class="section-title accent" id="videoExportTitle">
+      <i class="fa-solid fa-file-export"></i> Exportando video
+    </div>
+    <div class="video-export-summary mono" id="videoExportSummary">
+      Preparando exportación…
+    </div>
+    <progress id="videoExportProgress" max="1" value="0"></progress>
+    <div class="video-export-debug mono" id="videoExportDebug">stage: idle</div>
+    <div class="help-text">
+      No cierres esta pestaña mientras se procesa el archivo.
+    </div>
+    <button type="button" class="btn danger" id="btnCancelVideoExport">
+      Cancelar
+    </button>
+    <button
+      type="button"
+      class="btn primary hidden"
+      id="btnCloseVideoExportModal"
+    >
+      Listo
+    </button>
+  </div>
+</div>

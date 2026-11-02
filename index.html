@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Webcam y editor de video local con filtros, detectores y exportación en el navegador."
+    />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' blob: data: ws://127.0.0.1:* ws://localhost:*; base-uri 'self'; object-src 'none'"
+    />
+    <title>hatewebcam</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css" />
+    <link rel="stylesheet" href="index.css" />
+    <link rel="stylesheet" href="css/visual-fx.css" />
+    <link rel="stylesheet" href="empty-source.css" />
+  </head>
+
+  <body>
+    <a class="skip-link" href="#previewWrapper">Saltar al visor</a>
+    <!-- Header -->
+    <header class="header-bar">
+      <div class="logo">HATEWEBCAM</div>
+      <div class="mode-switch" role="tablist" aria-label="Modo de trabajo">
+        <button
+          type="button"
+          class="mode-tab is-active"
+          id="btnWebcamMode"
+          role="tab"
+          aria-selected="true"
+        >
+          Webcam
+        </button>
+        <button
+          type="button"
+          class="mode-tab"
+          id="btnVideoMode"
+          role="tab"
+          aria-selected="false"
+        >
+          Video
+        </button>
+      </div>
+      <div class="header-actions">
+        <div class="header-video-actions video-only hidden">
+          <button
+            type="button"
+            class="btn primary header-export-btn"
+            id="btnHeaderExportVideo"
+            aria-label="Exportar video"
+            disabled
+          >
+            <i class="fa-solid fa-download"></i> Exportar
+          </button>
+        </div>
+        <label class="language-control" for="languageSelect">
+          <span class="visually-hidden">Idioma</span>
+          <select id="languageSelect" aria-label="Idioma">
+            <option value="es">ES</option>
+            <option value="en">EN</option>
+          </select>
+        </label>
+        <nav class="header-links" aria-label="Enlaces del proyecto">
+          <a
+            href="https://github.com/hatemecha/hatewebcam-web"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Repositorio en GitHub"
+            aria-label="Repositorio en GitHub"
+          >
+            <svg
+              class="github-mark"
+              viewBox="0 0 16 16"
+              width="16"
+              height="16"
+              aria-hidden="true"
+            >
+              <path
+                fill="currentColor"
+                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8"
+              />
+            </svg>
+          </a>
+        </nav>
+      </div>
+    </header>
+
+    <div class="app-container">
+      <!-- Preview -->
+      <main class="preview-area">
+        <div class="preview-wrapper" id="previewWrapper" tabindex="-1">
+          <video
+            id="videoElement"
+            class="preview-source-video"
+            autoplay
+            playsinline
+            muted
+          ></video>
+          <canvas id="previewCanvas"></canvas>
+          <div class="preview-placeholder" id="previewPlaceholder">
+            <div
+              class="preview-placeholder-view preview-placeholder-camera"
+              id="previewPlaceholderCamera"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              <i
+                class="fa-solid fa-video fa-2x"
+                id="cameraStateIcon"
+                aria-hidden="true"
+              ></i>
+              <h2 class="camera-state-title" id="cameraStateTitle">
+                Cámara apagada
+              </h2>
+              <p
+                class="camera-state-message"
+                id="previewPlaceholderCameraMessage"
+              >
+                Encendé la cámara para ver la imagen.
+              </p>
+              <p class="camera-state-hint hidden" id="cameraStateHint"></p>
+              <button
+                type="button"
+                class="btn primary camera-state-action"
+                id="btnCameraStateAction"
+              >
+                <i class="fa-solid fa-play" aria-hidden="true"></i>
+                <span>Encender cámara</span>
+              </button>
+            </div>
+            <div
+              class="preview-placeholder-view preview-placeholder-video hidden"
+              id="previewPlaceholderVideo"
+            >
+              <div class="preview-import-card">
+                <i
+                  class="fa-solid fa-clapperboard fa-2x"
+                  aria-hidden="true"
+                ></i>
+                <p class="preview-import-title">Importá un video para editar</p>
+                <p class="preview-import-hint">
+                  MP4 o WebM. La exportación estable usa WebM sin audio.
+                </p>
+                <button
+                  type="button"
+                  class="btn primary preview-import-btn"
+                  id="btnPreviewImportVideo"
+                >
+                  Importar video
+                </button>
+              </div>
+            </div>
+            <div
+              class="preview-placeholder-view preview-placeholder-loading hidden"
+              id="previewPlaceholderLoading"
+            >
+              <i
+                class="fa-solid fa-spinner fa-spin fa-2x"
+                aria-hidden="true"
+              ></i>
+              <div id="previewPlaceholderLoadingMessage">
+                Leyendo metadata del video...
+              </div>
+            </div>
+          </div>
+          <div
+            class="capture-countdown hidden"
+            id="captureCountdown"
+            role="status"
+            aria-live="off"
+          >
+            <div class="capture-countdown-ring" aria-hidden="true">
+              <div class="capture-countdown-value" id="captureCountdownValue">
+                5
+              </div>
+            </div>
+            <div class="capture-countdown-label">Foto en</div>
+          </div>
+          <div class="capture-flash" id="captureFlash" aria-hidden="true"></div>
+          <div
+            class="recording-hud hidden"
+            id="recordingHud"
+            aria-hidden="true"
+          >
+            <span class="recording-dot"></span>
+            <strong>REC</strong>
+            <span id="recordingHudTime">00:00</span>
+            <span aria-hidden="true">·</span>
+            <span id="recordingHudFormat">WebM</span>
+          </div>
+          <div
+            class="mobile-hud"
+            id="mobileHud"
+            aria-label="Controles rápidos para mobile"
+          >
+            <div class="mobile-fx-backdrop hidden" id="mobileFxBackdrop"></div>
+            <div class="mobile-fx-panel hidden" id="mobileFxPanel">
+              <div class="mobile-fx-header">
+                <span>Ajustes</span>
+                <button
+                  type="button"
+                  class="mobile-fx-close"
+                  id="btnMobileFxClose"
+                  aria-label="Cerrar panel de efectos"
+                >
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              </div>
+              <div class="mobile-preset-row">
+                <button
+                  type="button"
+                  class="mobile-preset-chip"
+                  data-mobile-preset="natural"
+                >
+                  Natural
+                </button>
+                <button
+                  type="button"
+                  class="mobile-preset-chip"
+                  data-mobile-preset="vivid"
+                >
+                  Vivo
+                </button>
+                <button
+                  type="button"
+                  class="mobile-preset-chip"
+                  data-mobile-preset="cinema"
+                >
+                  Cine
+                </button>
+                <button
+                  type="button"
+                  class="mobile-preset-chip"
+                  data-mobile-preset="bw"
+                >
+                  B/N
+                </button>
+              </div>
+              <label class="mobile-inline-field">
+                <span>Temporizador</span>
+                <div class="select-wrapper mobile-select-wrapper">
+                  <select
+                    id="selMobileCaptureTimer"
+                    aria-label="Temporizador de foto"
+                  >
+                    <option value="0">Sin temporizador</option>
+                    <option value="5">5 segundos</option>
+                    <option value="10">10 segundos</option>
+                  </select>
+                </div>
+              </label>
+              <div class="mobile-fx-grid">
+                <button
+                  type="button"
+                  class="mobile-chip-btn"
+                  id="btnMobileBlobToggle"
+                >
+                  Color
+                </button>
+                <button
+                  type="button"
+                  class="mobile-chip-btn"
+                  id="btnMobileFaceToggle"
+                >
+                  Caras
+                </button>
+                <button
+                  type="button"
+                  class="mobile-chip-btn"
+                  id="btnMobileBlinkToggle"
+                >
+                  Pestañeos
+                </button>
+                <button
+                  type="button"
+                  class="mobile-chip-btn"
+                  id="btnMobileColorPick"
+                >
+                  <i class="fa-solid fa-eyedropper"></i>
+                  <span>Elegir color</span>
+                </button>
+              </div>
+              <label class="mobile-inline-field face-visual-toggles">
+                <span>Caras</span>
+                <div class="face-visual-toggle-row">
+                  <label class="checkbox-group">
+                    <input type="checkbox" id="chkMobileFaceShowBox" checked />
+                    <span>Recuadro</span>
+                  </label>
+                  <label class="checkbox-group">
+                    <input type="checkbox" id="chkMobileFaceShowBlur" />
+                    <span>Desenfoque</span>
+                  </label>
+                </div>
+              </label>
+              <div class="mobile-color-row">
+                <label class="mobile-color-chip">
+                  <span>Color</span>
+                  <input
+                    type="color"
+                    id="inpMobileBlobColor"
+                    value="#ff2222"
+                    aria-label="Color tracking objetos"
+                  />
+                </label>
+                <div
+                  class="color-palette mobile-color-palette"
+                  data-color-target="inpMobileBlobColor"
+                  aria-label="Paleta de objetos"
+                ></div>
+                <label class="mobile-color-chip" id="mobileFaceColorChip">
+                  <span>Cara</span>
+                  <input
+                    type="color"
+                    id="inpMobileFaceColor"
+                    value="#ff2222"
+                    aria-label="Color tracking caras"
+                  />
+                </label>
+                <div
+                  class="color-palette mobile-color-palette"
+                  data-color-target="inpMobileFaceColor"
+                  aria-label="Paleta de caras"
+                ></div>
+              </div>
+              <div class="mobile-face-label-wrap" id="mobileFaceLabelWrap">
+                <input
+                  type="text"
+                  id="inpMobileFaceLabel"
+                  class="mobile-text-input"
+                  maxlength="28"
+                  placeholder="Nombre recuadro cara"
+                />
+              </div>
+            </div>
+            <div class="mobile-hud-bottom">
+              <button
+                type="button"
+                class="mobile-dock-btn"
+                id="btnMobileEffectsDock"
+                aria-controls="mobileFxPanel"
+                aria-expanded="false"
+              >
+                <i class="fa-solid fa-sliders"></i>
+                <span>Ajustes</span>
+              </button>
+              <button
+                type="button"
+                class="mobile-dock-btn mobile-mirror-btn"
+                id="btnMobileMirror"
+                aria-pressed="false"
+                title="Espejo en vista y captura"
+              >
+                <i class="fa-solid fa-arrows-left-right" aria-hidden="true"></i>
+                <span>Espejo</span>
+              </button>
+              <button
+                type="button"
+                class="mobile-capture-btn"
+                id="btnMobileTakePhoto"
+                aria-label="Sacar foto"
+              >
+                <i class="fa-solid fa-camera"></i>
+              </button>
+              <button
+                type="button"
+                class="mobile-capture-btn record"
+                id="btnMobileRecord"
+                aria-label="Grabar video"
+              >
+                <i class="fa-solid fa-circle-dot"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="preview-console-footer webcam-only">
+          <div class="desktop-capture-bar" aria-label="Controles de captura">
+            <label class="capture-timer-field" for="captureTimerSelect">
+              <span class="capture-timer-label">Temporizador</span>
+              <span class="select-wrapper capture-timer-select">
+                <select
+                  id="captureTimerSelect"
+                  aria-label="Temporizador de foto"
+                >
+                  <option value="0">0 s</option>
+                  <option value="5">5 s</option>
+                  <option value="10">10 s</option>
+                </select>
+              </span>
+            </label>
+            <div
+              class="capture-bar-status"
+              id="captureStatus"
+              role="status"
+              aria-live="polite"
+            ></div>
+            <div class="capture-actions">
+              <button
+                type="button"
+                class="photo-shutter"
+                id="btnTakePhoto"
+                aria-label="Sacar foto"
+              >
+                <span class="photo-shutter-core" aria-hidden="true"></span>
+                <span class="capture-action-label">Foto</span>
+              </button>
+              <button
+                type="button"
+                class="record-trigger"
+                id="btnRecord"
+                aria-label="Grabar video"
+              >
+                <span class="record-trigger-core" aria-hidden="true"></span>
+                <span class="capture-action-label">Grabar</span>
+              </button>
+            </div>
+          </div>
+          <div class="preview-status-bar">
+            <div class="preview-diagnostics">
+              <span id="resolutionInfo">-</span><span id="fpsInfo">-</span>
+            </div>
+            <div
+              class="detector-chips"
+              id="effectsInfo"
+              aria-label="Estado de detectores"
+            >
+              <span class="detector-chip" id="detectorChipBlob" data-state="off"
+                >Color</span
+              >
+              <span class="detector-chip" id="detectorChipFace" data-state="off"
+                >Caras</span
+              >
+              <span
+                class="detector-chip"
+                id="detectorChipBlink"
+                data-state="off"
+                >Pestañeos</span
+              >
+            </div>
+          </div>
+        </div>
+        <div id="videoEditorTemplateSlot"></div>
+      </main>
+
+      <!-- Controls -->
+      <div id="webcamControlsTemplateSlot"></div>
+    </div>
+
+    <div id="exportModalTemplateSlot"></div>
+
+    <div id="captureModalTemplateSlot"></div>
+    <!-- App -->
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>
