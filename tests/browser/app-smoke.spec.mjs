@@ -181,9 +181,13 @@ test('Visual FX only initializes person assets when requested', async ({
   await expect(page.locator('.timeline-item-label')).toContainText('Recursive');
   expect([...requestedSubjectAssets]).toEqual([]);
   await page.locator('#visual-target-person').click();
-  await page.locator('#btnVideoPlay').click();
-  await page.waitForTimeout(3000);
-  expect(failures).toEqual([]);
+  // The fixture is short: keep a frame inside the effect clip visible while
+  // MediaPipe initializes, instead of racing playback against WASM startup.
+  await page.locator('#videoSeek').evaluate((seek) => {
+    const duration = Number(seek.max) || 1;
+    seek.value = String(Math.min(0.1, duration / 2));
+    seek.dispatchEvent(new Event('input', { bubbles: true }));
+  });
   await expect.poll(() => subjectAssetsReady(), { timeout: 45_000 }).toBe(true);
   await expect(page.locator('#visualFxInlineStatus')).not.toContainText(
     /No se pudo|error/i,
