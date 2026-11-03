@@ -61,8 +61,9 @@
   --sans:
     'IBM Plex Sans', 'Segoe UI Variable Text', 'Segoe UI', Helvetica, Arial,
     sans-serif;
-  --mono: 'IBM Plex Mono', 'Cascadia Mono', 'Segoe UI Mono', Consolas,
-    'Courier New', monospace;
+  --mono:
+    'IBM Plex Mono', 'Cascadia Mono', 'Segoe UI Mono', Consolas, 'Courier New',
+    monospace;
   --grain: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.86' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.10'/%3E%3C/svg%3E");
 }
 
@@ -3373,11 +3374,17 @@ body {
   color: var(--text-primary);
   background:
     var(--grain),
-    radial-gradient(ellipse 90% 70% at 46% 30%, #12151c 0%, #08090b 58%, #050608 100%);
+    radial-gradient(
+      ellipse 90% 70% at 46% 30%,
+      #12151c 0%,
+      #08090b 58%,
+      #050608 100%
+    );
   background-blend-mode: soft-light, normal;
-  background-size: 180px 180px, auto;
+  background-size:
+    180px 180px,
+    auto;
 }
-
 
 /* ---------- Header/ ------------------------------------------------------ */
 
@@ -3601,9 +3608,16 @@ body:not(.video-mode) .preview-area {
     clamp(16px, 2vw, 30px);
   background:
     var(--grain),
-    radial-gradient(ellipse 80% 62% at 50% 38%, #141820 0%, #08090b 62%, #060708 100%);
+    radial-gradient(
+      ellipse 80% 62% at 50% 38%,
+      #141820 0%,
+      #08090b 62%,
+      #060708 100%
+    );
   background-blend-mode: soft-light, normal;
-  background-size: 180px 180px, auto;
+  background-size:
+    180px 180px,
+    auto;
 }
 
 body:not(.video-mode) .preview-wrapper,
@@ -3640,13 +3654,19 @@ body.video-mode .preview-wrapper {
 .preview-placeholder {
   z-index: 6;
   padding: 0;
-  background:
-    radial-gradient(ellipse 64% 70% at 50% 45%, rgba(16, 19, 26, 0.72), rgba(4, 5, 7, 0) 72%);
+  background: radial-gradient(
+    ellipse 64% 70% at 50% 45%,
+    rgba(16, 19, 26, 0.72),
+    rgba(4, 5, 7, 0) 72%
+  );
 }
 
 .preview-placeholder:not(.hidden) {
-  background:
-    radial-gradient(ellipse 64% 70% at 50% 45%, rgba(16, 19, 26, 0.72), rgba(4, 5, 7, 0) 72%);
+  background: radial-gradient(
+    ellipse 64% 70% at 50% 45%,
+    rgba(16, 19, 26, 0.72),
+    rgba(4, 5, 7, 0) 72%
+  );
 }
 
 .preview-placeholder-view {
@@ -3736,7 +3756,8 @@ body.video-mode .preview-wrapper {
 .preview-placeholder-camera[data-state='denied'] .camera-state-action:hover,
 .preview-placeholder-camera[data-state='missing'] .camera-state-action:hover,
 .preview-placeholder-camera[data-state='busy'] .camera-state-action:hover,
-.preview-placeholder-camera[data-state='unsupported'] .camera-state-action:hover,
+.preview-placeholder-camera[data-state='unsupported']
+  .camera-state-action:hover,
 .preview-placeholder-camera[data-state='unknown'] .camera-state-action:hover {
   background: color-mix(in srgb, var(--danger) 10%, transparent);
 }
@@ -6319,7 +6340,6 @@ body.is-resizing-editor .editor-splitter::after {
     color: #fff;
     box-shadow: none;
   }
-
 
   .mobile-capture-btn.record.is-recording {
     border-radius: 50%;

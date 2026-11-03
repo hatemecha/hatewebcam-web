@@ -34,14 +34,6 @@ jobs:
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
 
-      # Temporary diagnostic: capture the exact formatting changes.
-      - name: Generate formatting patch
-        run: |
-          npx prettier --write index.css js/i18n.mjs templates/webcam-controls.html
-          echo 'PRETTIER_PATCH_BEGIN'
-          git diff --no-ext-diff --unified=0 -- index.css js/i18n.mjs templates/webcam-controls.html
-          echo 'PRETTIER_PATCH_END'
-
       - name: Check formatting
         run: npm run format:check
 
