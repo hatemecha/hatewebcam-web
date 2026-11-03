@@ -1,27 +1,27 @@
 ---
 name: HateWebcam
-description: Local-first webcam studio and video editor — warm graphite darkroom, oxide safelight, paper-white actions, quiet preview frame.
+description: Local-first webcam studio and video editor — cold graphite shell, strong signal red, light paper actions.
 colors:
-  surface-0: '#121110'
-  surface-1: '#191816'
-  surface-2: '#21201d'
-  surface-3: '#2c2a26'
-  text-primary: '#f4f1e8'
-  text-secondary: '#b9b3a7'
-  text-muted: '#938c80'
-  brand: '#b0473c'
-  recording: '#e25a4d'
-  success: '#7fb08c'
-  warning: '#c9a069'
-  danger: '#d8756e'
-  focus: '#f5f2e9'
-  border: '#322f2a'
-  border-light: '#423e38'
-  paper: '#f2eee4'
-  ink: '#16150f'
-  brand-soft: 'rgba(176, 71, 60, 0.14)'
-  brand-border: 'rgba(176, 71, 60, 0.5)'
-  border-subtle: 'rgba(244, 241, 232, 0.1)'
+  surface-0: '#08090b'
+  surface-1: '#0e1014'
+  surface-2: '#14181e'
+  surface-3: '#1c2129'
+  text-primary: '#e6e9ef'
+  text-secondary: '#96a0ad'
+  text-muted: '#687080'
+  brand: '#e81919'
+  recording: '#ff3535'
+  success: '#5cb176'
+  warning: '#d4a048'
+  danger: '#ff5c57'
+  focus: '#eef1f6'
+  border: '#222831'
+  border-light: '#2f3640'
+  paper: '#e8ebf0'
+  ink: '#0a0c10'
+  brand-soft: 'rgba(232, 25, 25, 0.18)'
+  brand-border: 'rgba(232, 25, 25, 0.62)'
+  border-subtle: 'rgba(214, 220, 230, 0.09)'
   shadow-ink: 'rgba(0, 0, 0, 0.72)'
   shadow-room: 'rgba(0, 0, 0, 0.42)'
   overlay-dark: 'rgba(17, 17, 17, 0.94)'
@@ -119,17 +119,17 @@ components:
 
 ## Overview
 
-**Creative North Star: "The Darkroom Bench"**
+**Creative North Star: "Cold Bench"**
 
-hatewebcam is a local-first camera and video workstation, so the interface borrows the physical logic of a darkroom bench: warm graphite surfaces, an oxide-red safelight, paper-white actions, and a quiet preview frame at the center. The preview is the print being made; panels, inspectors, and timelines are the tools laid out around it. Grain is present but restrained, so it reads as material rather than noise.
+hatewebcam is a local-first camera and video workstation built like a dim control surface: cold graphite layers, a strong signal red for live state, and cool paper-white for primary actions. The preview is the signal; panels and timelines are tooling around it. Grain stays subtle so the shell reads dark and precise, not cozy.
 
 The product should feel exact and quiet. Controls are compact, labels are readable at normal size, and the accent red is a signal — live, selected, recording — never decoration. Typography is one family, IBM Plex, split between Sans for language and Mono for measurements, timecode, and machine state.
 
 **Key Characteristics:**
 
-- Warm four-step graphite stack (`surface-0` → `surface-3`) with a shared 180px grain tile at low opacity
+- Warm four-step graphite stack → **cold four-step stack** (`surface-0` → `surface-3`) with a shared 180px grain tile at low opacity
 - IBM Plex Sans for copy and controls; IBM Plex Mono for fields, timecode, and status readouts
-- Paper-white primary buttons; oxide red reserved for live, selection, and recording
+- Paper-toned primary buttons; **signal red** reserved for live, selection, recording, and emphasis — saturated, not muted oxide
 - Preview stage with a 1px warm border and capture deck; no faux camera HUD overlays on empty states
 - Three-column header: brand, mode switch, actions; mode tabs use plain Webcam / Video labels
 - Progressive empty states: a framed import card, a plain-language local-processing note, and next steps only before a source exists
@@ -137,35 +137,35 @@ The product should feel exact and quiet. Controls are compact, labels are readab
 
 ## Colors
 
-A warm, low-chroma dark palette. Nothing is pure black or pure grey: every neutral carries a little brown so the stage reads as a lit room rather than a screen.
+A cold, low-chroma dark palette. Neutrals lean blue-grey; the room reads as a shut-down studio rather than a lit darkroom.
 
 ### Primary
 
-- **Oxide Safelight** (`#b0473c`): The only heated accent. Active mode indices, selected tabs, recording affordances, and small state markers. Keep it under roughly 10% of any screen.
-- **Paper** (`#f2eee4`): Primary button fill and focus surfaces. Paper is the action color; red is the state color.
+- **Signal Red** (`#e81919`): The heated accent. Recording, selection, active engagement, logo mark. It should read clearly at a glance — not a dusty safelight.
+- **Paper** (`#e8ebf0`): Primary button fill and focus surfaces. Cool off-white, not cream.
 
 ### Secondary
 
-- **Recording Pulse** (`#e25a4d`): Brighter red for the record dot, recording HUD, and active capture.
+- **Recording Pulse** (`#ff3535`): Brighter red for the record dot, recording HUD, and active capture.
 - **Detector Green** (`#7fb08c`): Detector-on and success states.
 - **Caution Amber** (`#c9a069`): Warnings and countdown emphasis.
 - **Fault Rose** (`#d8756e`): Destructive actions and error feedback.
 
 ### Neutral
 
-- **Darkroom Stack** (`#121110` / `#191816` / `#21201d` / `#2c2a26`): page, panels, inputs, hover.
-- **Paper White** (`#f4f1e8`): primary copy.
-- **Warm Ash** (`#b9b3a7`): descriptions, inactive tabs, secondary values.
-- **Smoke** (`#938c80`): help text, placeholders, muted chrome. Do not go lighter than this for body-adjacent copy.
-- **Hairlines** (`#322f2a` / `#423e38`): dividers, frames, control outlines.
+- **Dark Stack** (`#08090b` / `#0e1014` / `#14181e` / `#1c2129`): page, panels, inputs, hover.
+- **Primary Copy** (`#e6e9ef`): main text.
+- **Secondary** (`#96a0ad`): descriptions, inactive tabs.
+- **Muted** (`#687080`): help text, placeholders.
+- **Hairlines** (`#222831` / `#2f3640`): dividers and control outlines.
 
 ### Named Rules
 
-**The One Heat Rule.** Red marks live, selected, or recording. If red appears on more than a few elements, the signal is lost.
+**The One Heat Rule.** Red marks live, selected, or recording. When it appears, it should be **strong enough to notice** — not a whisper.
 
-**The Paper Action Rule.** Primary actions are paper-white with ink text. Red is not a button fill except when the button represents an active/recording state.
+**The Paper Action Rule.** Primary actions are cool paper with ink text. Red is for state, not default button fills.
 
-**The Warm Neutral Rule.** Never introduce cool grey or pure black into the shell. The stage interior may be near-black (`#070706`) because it is a screen within the room.
+**The Cold Neutral Rule.** Keep the shell on blue-grey graphite. Avoid warm brown creams in surfaces and borders; the preview interior may go near-black (`#030405`).
 
 ## Typography
 
@@ -306,4 +306,4 @@ Borders are 1px. Active states use fill or a bottom inset accent, not thicker ou
 - **Don't** let native button backgrounds leak into the timeline or inspector.
 - **Don't** use red for body text, neutral borders, or ambient decoration.
 - **Don't** show timeline, effect tabs, or clip controls before a source or clip exists.
-- **Don't** introduce pure black or cool grey into the shell; keep the room warm.
+- **Don't** introduce warm brown or cream into panel backgrounds; keep neutrals cold.
