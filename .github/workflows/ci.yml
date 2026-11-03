@@ -34,6 +34,14 @@ jobs:
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
 
+      # Temporary diagnostic: capture the exact formatting changes.
+      - name: Generate formatting patch
+        run: |
+          npx prettier --write index.css js/i18n.mjs templates/webcam-controls.html
+          echo 'PRETTIER_PATCH_BEGIN'
+          git diff --no-ext-diff --unified=0 -- index.css js/i18n.mjs templates/webcam-controls.html
+          echo 'PRETTIER_PATCH_END'
+
       - name: Check formatting
         run: npm run format:check
 
@@ -56,7 +64,7 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: github-pages
+          name: site-dist
           path: dist
           retention-days: 1
 
@@ -78,7 +86,7 @@ jobs:
       - name: Download build artifact
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: github-pages
+          name: site-dist
           path: dist
 
       - name: Configure Pages
