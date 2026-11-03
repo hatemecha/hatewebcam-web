@@ -4,7 +4,7 @@ export function applyCameraMixin(proto) {
     const states = {
       off: {
         title: 'Cámara apagada',
-        message: 'Encendé la cámara para ver la imagen.',
+        message: 'Encendé la cámara para empezar.',
         action: 'Encender cámara',
         icon: 'fa-video-slash',
       },
@@ -52,7 +52,7 @@ export function applyCameraMixin(proto) {
         title: 'No se pudo iniciar la cámara',
         message: 'Revisá los permisos y volvé a intentarlo.',
         action: 'Reintentar',
-        icon: 'fa-circle-exclamation',
+        icon: 'fa-video-slash',
       },
     };
     return { ...(states[state] || states.unknown), state, error };
@@ -84,6 +84,7 @@ export function applyCameraMixin(proto) {
     const changed = this.cameraUiStateKey !== stateKey;
     this.cameraUiStateKey = stateKey;
     this.cameraUiState = state;
+    this.placeholderCamera?.setAttribute('data-state', state);
     if (this.cameraStateTitle) this.cameraStateTitle.textContent = view.title;
     this.setCameraPlaceholderMessage(view.message);
     if (this.cameraStateHint) {
@@ -142,6 +143,10 @@ export function applyCameraMixin(proto) {
     this.previewWrapper?.classList.toggle(
       'is-empty',
       inVideoMode && showPlaceholder,
+    );
+    this.previewWrapper?.classList.toggle(
+      'is-camera-idle',
+      !inVideoMode && !this.isRunning,
     );
 
     if (this.placeholderCamera) {

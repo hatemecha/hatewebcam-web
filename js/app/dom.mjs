@@ -101,6 +101,7 @@ export function setupDom(app) {
   app.videoExportModal = $('#videoExportModal');
   app.videoExportTitle = $('#videoExportTitle');
   app.videoExportSummary = $('#videoExportSummary');
+  app.videoExportHelp = $('#videoExportHelp');
   app.videoExportProgress = $('#videoExportProgress');
   app.videoExportDebug = $('#videoExportDebug');
   app.btnExportVideo = $('#btnExportVideo');
@@ -181,6 +182,7 @@ export function setupDom(app) {
 
   app.chkMirror = $('#chkMirror');
   app.btnMirrorQuick = $('#btnMirrorQuick');
+  app.mirrorQuickValue = $('#mirrorQuickValue');
   app.btnMobileMirror = $('#btnMobileMirror');
   app.chkFlipV = $('#chkFlipV');
   app.rotationSelect = $('#rotationSelect');

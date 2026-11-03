@@ -23,6 +23,18 @@ export class TimelineView {
     this.dragGhost = null;
   }
 
+  formatRulerLabel(seconds, interval) {
+    if (interval >= 1) return this.formatTime(seconds);
+    // Sub-second ticks need decimals or the ruler repeats the same mm:ss label.
+    const decimals = interval >= 0.5 ? 1 : 2;
+    const rounded = Math.round(seconds / interval) * interval;
+    const minutes = Math.floor(rounded / 60);
+    const rest = rounded - minutes * 60;
+    return `${String(minutes).padStart(2, '0')}:${rest
+      .toFixed(decimals)
+      .padStart(decimals + 3, '0')}`;
+  }
+
   renderRuler({ ruler, duration, width }) {
     if (!ruler || !this.document) return;
     const safeDuration = Math.max(0.001, Number(duration) || 0.001);
@@ -39,8 +51,9 @@ export class TimelineView {
 
       const label = this.document.createElement('div');
       label.className = 'timeline-time-label';
+      if (time + interval > safeDuration) label.classList.add('is-end');
       label.style.left = left;
-      label.textContent = this.formatTime(time);
+      label.textContent = this.formatRulerLabel(time, interval);
       ruler.appendChild(label);
     }
   }

@@ -1,76 +1,87 @@
 ---
 name: HateWebcam
-description: Dark utilitarian webcam and video editor — graphite surfaces, film grain, compact controls, brand red for live states.
+description: Local-first webcam studio and video editor — warm graphite darkroom, oxide safelight, paper-white actions, quiet preview frame.
 colors:
-  surface-0: '#101112'
-  surface-1: '#171819'
-  surface-2: '#1e2021'
-  surface-3: '#292b2c'
-  text-primary: '#f0f0ec'
-  text-secondary: '#b3b4b0'
-  text-muted: '#8b8c88'
-  brand: '#a83b38'
-  recording: '#e94339'
-  success: '#69af81'
-  warning: '#c59b59'
-  danger: '#cf635e'
-  focus: '#f3f3ef'
-  border: '#2b2d2e'
-  border-light: '#3a3c3e'
-  brand-soft: 'rgba(168, 59, 56, 0.14)'
-  brand-border: 'rgba(168, 59, 56, 0.55)'
-  border-subtle: 'rgba(255, 255, 255, 0.1)'
+  surface-0: '#121110'
+  surface-1: '#191816'
+  surface-2: '#21201d'
+  surface-3: '#2c2a26'
+  text-primary: '#f4f1e8'
+  text-secondary: '#b9b3a7'
+  text-muted: '#938c80'
+  brand: '#b0473c'
+  recording: '#e25a4d'
+  success: '#7fb08c'
+  warning: '#c9a069'
+  danger: '#d8756e'
+  focus: '#f5f2e9'
+  border: '#322f2a'
+  border-light: '#423e38'
+  paper: '#f2eee4'
+  ink: '#16150f'
+  brand-soft: 'rgba(176, 71, 60, 0.14)'
+  brand-border: 'rgba(176, 71, 60, 0.5)'
+  border-subtle: 'rgba(244, 241, 232, 0.1)'
+  shadow-ink: 'rgba(0, 0, 0, 0.72)'
+  shadow-room: 'rgba(0, 0, 0, 0.42)'
+  overlay-dark: 'rgba(17, 17, 17, 0.94)'
 typography:
   body:
-    fontFamily: "'Aptos', 'Segoe UI Variable Text', 'Segoe UI', Helvetica, Arial, sans-serif"
-    fontSize: '13px'
+    fontFamily: "'IBM Plex Sans', 'Segoe UI Variable Text', 'Segoe UI', Helvetica, Arial, sans-serif"
+    fontSize: '13.5px'
     fontWeight: 400
     lineHeight: 1.5
-  label:
-    fontFamily: "'Cascadia Mono', 'Segoe UI Mono', Consolas, 'Courier New', monospace"
-    fontSize: '9px'
+  section:
+    fontFamily: "'IBM Plex Sans', 'Segoe UI Variable Text', 'Segoe UI', Helvetica, Arial, sans-serif"
+    fontSize: '13px'
     fontWeight: 600
-    lineHeight: 1.4
-    letterSpacing: '1.8px'
+    lineHeight: 1.35
   ui:
-    fontFamily: "'Aptos', 'Segoe UI Variable Text', 'Segoe UI', Helvetica, Arial, sans-serif"
-    fontSize: '12px'
+    fontFamily: "'IBM Plex Sans', 'Segoe UI Variable Text', 'Segoe UI', Helvetica, Arial, sans-serif"
+    fontSize: '12.5px'
     fontWeight: 500
-    lineHeight: 1.5
+    lineHeight: 1.35
+  help:
+    fontFamily: "'IBM Plex Sans', 'Segoe UI Variable Text', 'Segoe UI', Helvetica, Arial, sans-serif"
+    fontSize: '11.5px'
+    fontWeight: 400
+    lineHeight: 1.55
   mono:
-    fontFamily: "'Cascadia Mono', 'Segoe UI Mono', Consolas, 'Courier New', monospace"
+    fontFamily: "'IBM Plex Mono', 'Cascadia Mono', 'Segoe UI Mono', Consolas, 'Courier New', monospace"
     fontSize: '11px'
     fontWeight: 400
     lineHeight: 1.45
   field:
-    fontFamily: "'Cascadia Mono', 'Segoe UI Mono', Consolas, 'Courier New', monospace"
-    fontSize: '10px'
+    fontFamily: "'IBM Plex Mono', 'Cascadia Mono', 'Segoe UI Mono', Consolas, 'Courier New', monospace"
+    fontSize: '10.5px'
     fontWeight: 400
     lineHeight: 1.45
-  status:
-    fontFamily: "'Cascadia Mono', 'Segoe UI Mono', Consolas, 'Courier New', monospace"
-    fontSize: '11px'
-    fontWeight: 400
-    lineHeight: 1.45
-  section:
-    fontFamily: "'Aptos', 'Segoe UI Variable Text', 'Segoe UI', Helvetica, Arial, sans-serif"
-    fontSize: '13px'
-    fontWeight: 600
-    lineHeight: 1.5
+  stage-hud:
+    fontFamily: "'IBM Plex Mono', 'Cascadia Mono', 'Segoe UI Mono', Consolas, 'Courier New', monospace"
+    fontSize: '9.5px'
+    fontWeight: 500
+    lineHeight: 1
+    letterSpacing: '0.14em'
   state-title:
-    fontFamily: "'Aptos', 'Segoe UI Variable Text', 'Segoe UI', Helvetica, Arial, sans-serif"
-    fontSize: '17px'
-    fontWeight: 600
-    lineHeight: 1.3
+    fontFamily: "'IBM Plex Sans', 'Segoe UI Variable Text', 'Segoe UI', Helvetica, Arial, sans-serif"
+    fontSize: '32px'
+    fontWeight: 500
+    lineHeight: 1.15
+  icon:
+    fontFamily: "'Font Awesome 6 Free'"
+    fontSize: '11px'
+    fontWeight: 900
+    lineHeight: 1
 rounded:
-  sm: '4px'
-  md: '6px'
+  sm: '5px'
+  md: '8px'
+  lg: '12px'
 spacing:
   xs: '4px'
   sm: '6px'
   md: '8px'
   lg: '12px'
-  xl: '14px'
+  xl: '16px'
 components:
   button-default:
     backgroundColor: '{colors.surface-2}'
@@ -83,13 +94,13 @@ components:
     rounded: '{rounded.sm}'
     padding: '8px 12px'
   button-primary:
-    backgroundColor: '#202223'
-    textColor: '{colors.text-primary}'
+    backgroundColor: '{colors.paper}'
+    textColor: '{colors.ink}'
     rounded: '{rounded.sm}'
     padding: '8px 12px'
   button-primary-hover:
-    backgroundColor: '{colors.brand-soft}'
-    textColor: '{colors.text-primary}'
+    backgroundColor: '#ffffff'
+    textColor: '{colors.ink}'
     rounded: '{rounded.sm}'
     padding: '8px 12px'
   button-primary-active:
@@ -98,195 +109,201 @@ components:
     rounded: '{rounded.sm}'
     padding: '8px 12px'
   mode-tab-active:
-    backgroundColor: 'transparent'
-    textColor: '{colors.text-primary}'
-    rounded: '0'
-    padding: '0 10px'
+    backgroundColor: '{colors.paper}'
+    textColor: '{colors.ink}'
+    rounded: '3px'
+    padding: '0 14px'
 ---
 
 # Design System: HateWebcam
 
 ## Overview
 
-**Creative North Star: "The Graphite Bench"**
+**Creative North Star: "The Darkroom Bench"**
 
-hatewebcam reads as a dark workshop bench: graphite surfaces, visible film grain, and compact controls arranged for task completion. The preview canvas is the brightest object in the room; panels, headers, and inspectors recede into layered charcoal. Brand red (`#a83b38`) is reserved for mode selection, recording, and primary actions — never as ambient decoration. Obvious workspace context is communicated by position and controls, not explanatory labels.
+hatewebcam is a local-first camera and video workstation, so the interface borrows the physical logic of a darkroom bench: warm graphite surfaces, an oxide-red safelight, paper-white actions, and a quiet preview frame at the center. The preview is the print being made; panels, inspectors, and timelines are the tools laid out around it. Grain is present but restrained, so it reads as material rather than noise.
 
-Typography splits cleanly: sans-serif for controls and body copy, monospace for section labels, selects, inputs, and status chrome. Uppercase micro-labels with wide letter-spacing organize dense panels without adding visual noise.
+The product should feel exact and quiet. Controls are compact, labels are readable at normal size, and the accent red is a signal — live, selected, recording — never decoration. Typography is one family, IBM Plex, split between Sans for language and Mono for measurements, timecode, and machine state.
 
 **Key Characteristics:**
 
-- Dark four-step surface stack (`surface-0` → `surface-3`) with SVG film grain on major shells
-- Compact 13px body / 9px uppercase section labels; controls feel instrument-panel dense
-- Brand red as the only heated accent; semantic greens/ambers for detector and status states
-- Centered capture stage, intent-based right panel on desktop, compact mode switch and bottom HUD on mobile
-- Progressive video empty states reveal import first, then timeline and clip-specific adjustments as context exists
-- Subtle shadows only where content lifts (preview frame, modals, mobile sheets) — not on every button
+- Warm four-step graphite stack (`surface-0` → `surface-3`) with a shared 180px grain tile at low opacity
+- IBM Plex Sans for copy and controls; IBM Plex Mono for fields, timecode, and status readouts
+- Paper-white primary buttons; oxide red reserved for live, selection, and recording
+- Preview stage with a 1px warm border and capture deck; no faux camera HUD overlays on empty states
+- Three-column header: brand, mode switch, actions; mode tabs use plain Webcam / Video labels
+- Progressive empty states: a framed import card, a plain-language local-processing note, and next steps only before a source exists
+- Tight 5px controls and 8px cards; shadows only on the stage and modal layers
 
 ## Colors
 
-A restrained dark palette: warm off-white text on cool graphite surfaces, with one oxide red accent and a small semantic set for live/recording/success/warning/danger states.
+A warm, low-chroma dark palette. Nothing is pure black or pure grey: every neutral carries a little brown so the stage reads as a lit room rather than a screen.
 
 ### Primary
 
-- **Oxide Red** (`#a83b38`): Brand accent — active mode tabs, primary buttons when engaged, favicon stripe, and active preset underlines. Used sparingly; its heat signals "live" or "selected."
+- **Oxide Safelight** (`#b0473c`): The only heated accent. Active mode indices, selected tabs, recording affordances, and small state markers. Keep it under roughly 10% of any screen.
+- **Paper** (`#f2eee4`): Primary button fill and focus surfaces. Paper is the action color; red is the state color.
 
 ### Secondary
 
-- **Recording Pulse** (`#e94339`): Brighter red for active recording states, recording HUD dot, and record triggers when capturing.
-
-### Tertiary
-
-- **Detector Green** (`#69af81`): Success and detector-unit checkbox fills — signals "tracking on" distinct from brand actions.
-- **Caution Amber** (`#c59b59`): Warning states in diagnostics and export feedback.
-- **Fault Rose** (`#cf635e`): Danger/destructive feedback; pairs with `.btn.danger` treatments.
+- **Recording Pulse** (`#e25a4d`): Brighter red for the record dot, recording HUD, and active capture.
+- **Detector Green** (`#7fb08c`): Detector-on and success states.
+- **Caution Amber** (`#c9a069`): Warnings and countdown emphasis.
+- **Fault Rose** (`#d8756e`): Destructive actions and error feedback.
 
 ### Neutral
 
-- **Graphite Stack** (`#101112` / `#171819` / `#1e2021` / `#292b2c`): `surface-0` through `surface-3` — page background, panels, inputs, hovers respectively.
-- **Warm Paper Text** (`#f0f0ec`): Primary copy on dark surfaces.
-- **Ash Secondary** (`#b3b4b0`): Descriptions, slider labels, inactive tab text.
-- **Readable Slate** (`#8b8c88`): Help text, placeholders, muted chrome; raised to preserve legibility at compact sizes.
-- **Hairline Borders** (`#2b2d2e` / `#3a3c3e`): Section dividers and control outlines; often softened to `rgba(255,255,255,0.09–0.12)` on grained panels.
+- **Darkroom Stack** (`#121110` / `#191816` / `#21201d` / `#2c2a26`): page, panels, inputs, hover.
+- **Paper White** (`#f4f1e8`): primary copy.
+- **Warm Ash** (`#b9b3a7`): descriptions, inactive tabs, secondary values.
+- **Smoke** (`#938c80`): help text, placeholders, muted chrome. Do not go lighter than this for body-adjacent copy.
+- **Hairlines** (`#322f2a` / `#423e38`): dividers, frames, control outlines.
 
 ### Named Rules
 
-**The One Heat Rule.** Brand red appears on ≤15% of any screen. If everything looks "active," nothing is.
+**The One Heat Rule.** Red marks live, selected, or recording. If red appears on more than a few elements, the signal is lost.
 
-**The Grain Is Structure Rule.** Major surfaces (body, header, preview area, control panel, mobile HUD) share the same `--grain` SVG tile at 180×180px with `soft-light` blend — do not remove grain from one shell while leaving it on neighbors.
+**The Paper Action Rule.** Primary actions are paper-white with ink text. Red is not a button fill except when the button represents an active/recording state.
+
+**The Warm Neutral Rule.** Never introduce cool grey or pure black into the shell. The stage interior may be near-black (`#070706`) because it is a screen within the room.
 
 ## Typography
 
-**Display Font:** None distinct — the logo uses uppercase tracked sans at 11px, not a display face.
+**Typeface:** IBM Plex Sans (variable, 100–700) and IBM Plex Mono (400/500/600), self-hosted from `vendor/fonts/` with the OFL license.
 
-**Body Font:** Aptos / Segoe UI stack (with system fallbacks)
-
-**Label/Mono Font:** Cascadia Mono / Segoe UI Mono stack — used for section titles, selects, text inputs, header links, mode tabs, and numeric readouts.
-
-**Character:** Compact instrument UI — small sizes, high information density, monospace for anything that reads as "setting" or "status."
+**Character:** A working instrument, not a poster. Sans keeps instructions human; mono keeps numbers, timecodes, and status precise.
 
 ### Hierarchy
 
-- **Logo / Wordmark** (600, 11px, letter-spacing 2.5px, uppercase): Header identity without status or version suffixes.
-- **Section Label** (600, 9px, letter-spacing 1.8px, uppercase, mono): Panel section titles (`.section-title`); `.accent` variant uses brand red.
-- **UI Control** (500, 12px, sans): Buttons, quick-action copy, slider group labels.
-- **Body** (400, 13px, line-height 1.5, sans): Default page text; help text at 11px in muted gray.
-- **Field / Status** (400, 10–11px, mono): Selects, text inputs, diagnostic rows, header utility links.
+- **Wordmark** (600, 11.5px, letter-spacing 0.2em, uppercase, mono): `HATEWEBCAM`, preceded by a 7px oxide square.
+- **Section Title** (600, 13px, sans, sentence case): panel sections. Preceded by a 6px diamond outline; no decorative Font Awesome icons.
+- **UI Control** (500, 12.5px, sans): buttons, toggle copy, field labels.
+- **Help** (400, 11.5px, line-height 1.55, sans, smoke): supporting copy under controls.
+- **Mono Field / Status** (400–500, 10.5–11px, mono): selects, numeric inputs, timecode, diagnostics, file metadata.
+- **State Title** (500, 30–32px, sans, tight leading): camera and import empty states.
 
 ### Named Rules
 
-**The Mono For Settings Rule.** Anything editable or machine-readable (select, text input, timer, export summary) uses the mono stack — do not switch these to sans.
+**The Readable Label Rule.** Do not set functional labels at 9px. Section and control labels live at 11–13px; mono status chips may use 10–11px.
+
+**The Mono For Settings Rule.** Anything editable, measured, or machine-readable uses mono: selects, text inputs, timer, resolution, timecode, export summary.
+
+**The No Icon Paraphrase Rule.** Do not put an icon in front of a heading that already says what it is. One icon set only: Font Awesome solid.
 
 ## Layout
 
-**Desktop shell:** Full-viewport flex row — preview area (`flex: 1`, centered) + fixed-width control panel (`clamp(320px, 30vw, 390px)`, min 320px). Header bar is absolutely positioned across the top (`40px` tall, `46–52px` on large breakpoints). The combined preview and capture console is centered on both axes within the remaining workspace.
+**Desktop shell:** Full-viewport flex row — preview area (`flex: 1`) + control panel (`clamp(336px, 29vw, 408px)`). The stage and capture deck are centered as one unit.
 
-**Preview:** Max width `1180px` (scales up on ≥1600px and ≥2200px breakpoints); wrapper gets border + deep shadow to lift the canvas from the graphite background.
+**Header:** 52px tall, three-column grid: brand block left, mode switch center, actions right. The mode switch is a small segmented control with paper active state and plain labels. It is not a floating tab bar.
 
-**Control panel:** The webcam inspector is intent-based: establish the camera, shape the look, enable detectors, then capture. It begins directly with the first actionable section and carries no introductory copy.
+**Preview:** Max width `1180px`; expands at 1600px and 2200px breakpoints. The stage is a square-cornered frame with a 1px warm border and a deep, soft lift. Empty camera states stay centered copy without decorative brackets or metadata overlays.
 
-**Video editor mode:** Replaces webcam panel with inspector + timeline split; inspector width `clamp(280px, 25vw, 480px)`, timeline height `clamp(240px, 32vh, 420px)`. Empty states are progressive: import is the only prominent first action, advanced project controls stay quiet until a source exists, and adjustment guidance advances from no video to no selected effect clip.
+**Capture deck:** Directly under the stage, sharing its width. A 92px capture bar holds timer, shutter, and record; a 38px status bar holds diagnostics and detector state. The deck is part of the stage, not a separate card.
 
-**Mobile (≤900px):** Control panel becomes off-canvas; preview fills viewport with bottom HUD (`mobile-hud-bottom`) and slide-up FX panel. The compact header contains only the centered Webcam/Video switch. Safe-area insets are respected on the recording HUD.
+**Control panel:** Intent-based: camera source, look, detectors, then capture quality and image controls behind one advanced toggle. Sections are flat, separated by hairlines, with 18px vertical padding.
 
-**Spacing rhythm:** Panel sections pad `12px 14px`; control gaps `5–8px`; preset grids `6px` gap. Section titles sit `9px` above their content block.
+**Video editor mode:** Column layout: preview + splitter + inspector, with a timeline docked below the preview. Inspector width `clamp(300px, 25vw, 400px)`, timeline `clamp(300px, 33vh, 420px)`. The no-source state keeps the inspector visible but reveals only import and project resume; timeline and effect tabs stay hidden until a source exists.
+
+**Mobile (≤900px):** The control panel becomes an off-canvas sheet; the stage fills the viewport above a 94px bottom HUD. The header keeps a compact wordmark plus the mode switch; export, language, and GitHub collapse away. A mirror pill floats above the HUD with a visible label. No-source video mode uses an auto-height stage so the import card is never clipped.
+
+**Spacing rhythm:** Panel sections `18px` vertical / `18px` horizontal; control gaps `6–8px`; chip gaps `6px`.
 
 ## Elevation & Depth
 
-Depth is conveyed primarily through **tonal layering + film grain**, not decorative shadows. Surfaces step from `#101112` (page) to `#171819` (panels) to `#1e2021` (inputs) to `#292b2c` (hover).
-
-Shadows appear only where content must lift above the bench:
+Depth comes from tonal steps and grain. Shadows are reserved for the stage, modal layers, and the mobile sheet.
 
 ### Shadow Vocabulary
 
-- **Preview lift** (`0 24px 70px rgba(0,0,0,0.34), 0 1px 0 rgba(255,255,255,0.09)`): Desktop preview wrapper border frame; this lift is required to keep the optical stage distinct from the graphite bench.
-- **Panel edge** (`-18px 0 48px rgba(0,0,0,0.16)`): Control panel left shadow on desktop.
-- **Header shelf** (`0 8px 24px rgba(0,0,0,0.18)`): Header bar separation.
-- **Modal stack** (`0 24px 80px rgba(0,0,0,0.7)`): Export and capture preview cards.
-- **Mobile sheet** (`0 -20px 50px rgba(0,0,0,0.42)`): Mobile FX panel from bottom.
+- **Stage lift** (`0 0 0 1px rgba(0,0,0,0.55), 0 34px 90px rgba(0,0,0,0.42)`): separates the preview from the room.
+- **Header shelf** (`0 10px 30px rgba(0,0,0,0.18)`): subtle separation under the blurred header.
+- **Modal stack** (`0 24px 80px rgba(0,0,0,0.7)`): capture preview and export cards.
+- **Mobile sheet** (`0 -20px 50px rgba(0,0,0,0.42)`): FX panel rising from the bottom.
 
 ### Named Rules
 
-**The Flat Control Rule.** Buttons and inputs are flat at rest with inset highlights (`inset 0 1px 0 rgba(255,255,255,0.035)`). No drop shadow on standard `.btn`.
+**The Flat Control Rule.** Standard buttons and fields are flat at rest. No drop shadow on `.btn`; hover is a tonal step plus a border shift.
+
+**The Grain Is Structure Rule.** Body, header, panel, stage surround, and mobile HUD share the same grain tile. Keep grain low enough that text never sits on visible noise.
 
 ## Shapes
 
-Corners are **tight, not playful**: `4px` (`--r-sm`) on controls, inputs, and chips; `6px` (`--r`) on cards and modals. The preview frame and flat mode tabs use square corners (`0`). Pills (`border-radius: 999px`) appear only on recording dots and circular shutter/record hardware.
+Corners are tight: `5px` on controls/chips, `8px` on cards and modals, `12px` only on large sheets. The preview frame stays square (`0`). Pills are limited to capture hardware and small status dots; mirror is a full-width row with label + mono state, not a faux switch.
 
-Borders are 1px hairlines in `--border` / `--border-light`, often semi-transparent white on grained surfaces. Active states frequently add an **inset bottom accent** (`inset 0 -2px 0 #e6e6e1` or `inset 0 -3px 0 var(--brand)`) rather than thicker outlines.
+Borders are 1px. Active states use fill or a bottom inset accent, not thicker outlines. The mode switch is the one place where a paper fill indicates selection.
 
 ## Components
 
 ### Buttons
 
-- **Shape:** Slightly rounded rectangles (4px radius), full-width in panels, icon variant 32×32px.
-- **Default:** `surface-2` fill, `border-light` outline, 12px sans label, 8×12px padding.
-- **Primary:** Dark `#202223` fill, brand-tinted border; hover → `brand-soft` background; `.active` → solid brand fill, white text.
-- **Danger / Recording:** Muted rose text or solid brand fill for `.recording`.
-- **Hover / Focus:** Background step to `surface-3`; focus ring `2px solid #f3f3ef` with 2px offset.
+- **Default:** `surface-2` fill, `border-light`, 12.5px sans, 5px radius.
+- **Primary:** paper fill, ink text, 600 weight; hover to pure white; active/engaged to brand red with white text.
+- **Disabled:** transparent fill, `border-light`, smoke text. Disabled primary buttons must not look like enabled paper buttons.
+- **Danger / Recording:** rose outline or solid recording fill.
+- **Focus:** 2px `--focus` ring with 2px offset.
 
-### Mode Switch (Tabs)
+### Mode Switch
 
-- **Style:** Flat navigation on transparent header chrome with no tray or enclosing border; 14px desktop gap compresses to 10px on mobile.
-- **Tab:** Mono 11px uppercase; inactive secondary text, active primary text with a 2px inset brand underline. Mobile reduces horizontal padding from 10px to 8px.
+- **Tray:** `surface-2` at low contrast, 3px padding, 2px gap, 3px radius.
+- **Tab:** 12px sans, 34px min height, with a mono index (`01`, `02`) before the label.
+- **Active:** paper background, ink text, index tinted oxide. No underline; the fill is the state.
 
 ### Chips / Presets
 
-- **Inactive:** Input-surface background, border-light, 10–11px mono/sans.
-- **Active:** Inverted light fill (`#deded9`), dark text (`#111213`), inset brand underline — reads as "pressed into paper."
+- **Inactive:** transparent or `surface-2`, hairline border, smoke text.
+- **Active:** paper fill, ink text. Color chips keep their swatch; the selected outline uses paper, not red.
 
 ### Cards / Containers
 
-- **Panel sections:** No card radius — flat sections divided by 1px borders.
-- **Preview stage:** Square-edged frame with a desktop lift shadow and no card rounding.
-- **Modal cards:** 6px radius, grained `surface-1` background, heavy modal shadow.
-- **Internal padding:** 12–20px depending on density.
+- **Panel sections:** flat, no radius, hairline dividers.
+- **Preview stage:** square frame, warm border, stage lift.
+- **Import card:** no boxed card; the stage itself is the frame. Icon tile, title, hint, format chips, primary CTA, and a local-processing note.
+- **Modals:** 8px radius, `surface-1`, modal stack.
 
 ### Inputs / Fields
 
-- **Select / Text:** Mono 11px, `surface-2` / `#1d1f20` fill, inset highlight shadow, 4px radius.
-- **Checkbox:** Custom 14px squares; default checked → brand fill; detector units → success green fill.
-- **Focus:** Light focus ring on buttons/inputs; field border darkens to `#333`.
+- **Select / Text:** mono 10.5–11px, `surface-2`, inset highlight, 5px radius.
+- **Range:** 3px track, oxide-to-graphite gradient, paper thumb with a dark core.
+- **Checkbox:** 14px square; brand for general toggles, success green for detector units.
+- **Focus:** paper ring; field border lifts to `border-light`.
 
 ### Navigation
 
-- **Header:** Logo left, flat underlined mode switch center-left, actions right (export, compact locale select, icon-only GitHub link).
-- **Mobile header:** Centered mode switch only; secondary actions disappear to protect the live stage.
-- **GitHub link:** Icon-only 32px action with no container label.
+- **Header:** brand + `LOCAL` left, mode switch center, actions right (export in video mode, ES/EN select, GitHub icon).
+- **Mobile header:** compact wordmark + mode switch, nothing else.
+- **Video inspector tabs:** `Proyecto` / `Clip` / `Ajustes`, with an oxide underline on the active tab.
 
 ### Capture Stage (Signature)
 
-- **Frame:** The image stands alone without title strips, calibration decoration, or privacy slogans. The desktop preview uses the named preview lift while mobile stays edge-efficient.
-- **Alignment:** Preview, empty state, and capture console share one horizontal center; the combined stage is vertically centered in the desktop workspace.
+- **Frame:** 1px warm border on the preview. Empty states use a light icon, title, one action, and the local-processing footer — no bracket overlays.
+- **Empty states:** Framed, centered, and specific. The camera state names the state, gives one instruction, one primary action, and a local-processing footer. The video state leads with import, then project resume.
+- **Capture hardware:** Photo is a paper ring with a dark core; record is a red square in a ring. Labels sit below at 10px mono. Disabled hardware dims without disappearing.
 
-### Video Empty State
+### Video Editor
 
-- **No source:** Center one import card in the preview and suppress advanced project controls.
-- **No selected effect:** Reveal the timeline and a short ordered explanation only after a video exists; clip-specific controls appear after selection.
-
-### Capture Hardware (Signature)
-
-- **Photo shutter:** Circular white ring with dark inset core — mimics physical shutter, not a standard button.
-- **Record trigger:** Circular with red dot; recording state adds outer glow ring.
-- **Mobile dock:** Bottom bar with grain, large circular capture buttons centered.
+- **Timeline:** Flat dark tracks with a 88px label column, 10px mono labels, 20px rows. The playhead is a 1px oxide line with a paper cap. Track labels are buttons and must keep a transparent background.
+- **Inspector:** File actions first, then editing assistance, then export. Marker density controls use a 4-column grid; regenerate spans the row.
+- **No source:** Only import and project resume. A three-step "Después de importar" list fills the empty inspector with accurate orientation, then disappears once a source exists.
 
 ## Do's and Don'ts
 
 ### Do:
 
-- **Do** use the four-step surface stack and shared grain texture on every major shell.
-- **Do** keep section titles at 9px uppercase mono with ≥1.8px letter-spacing.
-- **Do** reserve brand red for selection, recording, and primary engagement — use semantic green for detector "on" states.
-- **Do** lift only the preview frame and modals with shadows; keep controls flat.
-- **Do** use mono for selects, inputs, timers, and status readouts.
-- **Do** remove labels that merely explain an obvious workspace or restate the product architecture.
-- **Do** reveal video-editor complexity progressively as source and clip context become available.
+- **Do** keep the preview readable with a simple frame and honest empty-state copy.
+- **Do** use IBM Plex Sans for language and IBM Plex Mono for settings and measurements.
+- **Do** reserve oxide red for live, selected, recording, and primary engagement states.
+- **Do** use paper-white for primary buttons and focus.
+- **Do** keep section titles at 13px sans, sentence case, with the small diamond marker.
+- **Do** reveal video complexity progressively: import, then timeline, then clip-specific controls.
+- **Do** keep the local-processing promise visible in empty states and export copy.
+- **Do** check no-source video on mobile; the import card must fit without clipping.
 
 ### Don't:
 
-- **Don't** introduce light mode or high-chroma gradients — the system is dark graphite only.
-- **Don't** add rounded-xl/ pill buttons in panels — stay at 4px unless mimicking capture hardware.
-- **Don't** use brand red for body text, borders on neutral sections, or decorative backgrounds.
-- **Don't** remove grain from one surface while neighboring shells keep it — the texture is structural.
-- **Don't** add marketing-style display typography — density and clarity beat expression.
-- **Don't** expose advanced video controls before a source exists or clip-specific adjustments before a clip is selected.
+- **Don't** set functional labels at 9px uppercase with 1.8px tracking.
+- **Don't** add decorative icons next to headings or mix icon families.
+- **Don't** use gradients in the wordmark, buttons, or surfaces.
+- **Don't** make disabled primary buttons look like enabled paper buttons.
+- **Don't** let native button backgrounds leak into the timeline or inspector.
+- **Don't** use red for body text, neutral borders, or ambient decoration.
+- **Don't** show timeline, effect tabs, or clip controls before a source or clip exists.
+- **Don't** introduce pure black or cool grey into the shell; keep the room warm.

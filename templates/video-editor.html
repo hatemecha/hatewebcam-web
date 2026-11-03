@@ -422,17 +422,11 @@
       role="tabpanel"
       aria-labelledby="tabInspectorProject"
     >
-      <div class="panel-section">
-        <div class="video-project-resume">
-          <p class="video-project-resume-title">Retomar una edición</p>
-          <p class="help-text">
-            Abrí un proyecto .hatewebcam.json. Después te pediremos el video
-            original.
-          </p>
-        </div>
+      <div class="panel-section video-import-section">
+        <div class="section-title">Archivo de video</div>
         <div class="help-text" id="videoProjectHelp">
-          MP4, WebM y otros formatos compatibles. La exportación estable usa
-          WebM sin audio.
+          Importá un archivo local. MP4, WebM o MOV si el navegador lo soporta.
+          La exportación estable usa WebM sin audio.
         </div>
         <input
           type="file"
@@ -443,6 +437,11 @@
         <button type="button" class="btn primary" id="btnChooseVideo">
           <i class="fa-solid fa-folder-open"></i> Importar video
         </button>
+        <div class="video-import-formats" aria-hidden="true">
+          <span>MP4</span>
+          <span>WebM</span>
+          <span>MOV</span>
+        </div>
         <div class="video-file-meta mono" id="videoFileMeta">
           Ningún archivo cargado
         </div>
@@ -452,13 +451,38 @@
           accept=".hatewebcam.json,application/json"
           class="hidden"
         />
-        <div class="btn-row">
+        <div class="video-import-divider" aria-hidden="true"></div>
+        <div class="video-project-resume">
+          <p class="video-project-resume-title">Retomar una edición</p>
+          <p class="help-text">
+            Abrí un proyecto .hatewebcam.json. Después te pediremos el video
+            original.
+          </p>
+        </div>
+        <div class="btn-row video-project-actions">
           <button type="button" class="btn" id="btnSaveProject" disabled>
             <i class="fa-solid fa-floppy-disk"></i> Guardar proyecto
           </button>
           <button type="button" class="btn" id="btnLoadProject">
             <i class="fa-solid fa-file-import"></i> Cargar proyecto
           </button>
+        </div>
+        <div class="video-import-next">
+          <p class="video-import-next-title">Después de importar</p>
+          <ol class="video-import-next-list">
+            <li>
+              <span class="video-import-next-index" aria-hidden="true">01</span>
+              <span>Recortá el clip y elegí el tramo.</span>
+            </li>
+            <li>
+              <span class="video-import-next-index" aria-hidden="true">02</span>
+              <span>Sumá efectos, color y marcadores.</span>
+            </li>
+            <li>
+              <span class="video-import-next-index" aria-hidden="true">03</span>
+              <span>Exportá en WebM sin subir nada.</span>
+            </li>
+          </ol>
         </div>
         <div
           class="status-msg hidden"

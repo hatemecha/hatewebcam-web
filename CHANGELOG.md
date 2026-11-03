@@ -10,7 +10,8 @@ Primera release pública con historial de repositorio consolidado.
 - Exportación WebCodecs: presets rápido, balanceado, alta y chroma para composición en Premiere o DaVinci Resolve; MP4 H.264 experimental con copia de audio cuando el navegador lo permite.
 - Grabación bajo efectos pesados optimizada (workers reutilizados, Face Mesh a resolución reducida).
 - Interfaz ES/EN, perfiles en `localStorage`, runtime vendorizado sin CDN.
-- Sistema visual Graphite Bench (`DESIGN.md`).
+- Sistema visual Graphite Bench (`DESIGN.md`): IBM Plex self-hosted, tokens unificados, chrome quieto sin HUD decorativo en el visor.
+- Controles de espejo y detectores con copy honesto (estado Apagado/Activado, descripciones legibles, tabs Webcam/Video sin índices).
 - Nomenclatura pública unificada en Visual FX (sin restos Subject FX en UI, docs ni aliases de config).
 - Editor partido en módulos bajo `js/app/video-editor/`; tipo de clip `visual-fx` (proyectos viejos con `subject` se migran al cargar).
 - CI único: verify + deploy Pages desde el mismo artefacto; auditoría npm solo en dependencias de producción.

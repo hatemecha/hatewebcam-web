@@ -32,15 +32,18 @@
         </span>
       </label>
     </div>
+    <p class="help-text source-help">
+      Elegí la entrada y el equilibrio entre fluidez y detalle.
+    </p>
     <button
       type="button"
       class="btn mirror-quick-btn"
       id="btnMirrorQuick"
       aria-pressed="false"
-      title="Espejo en vista y captura"
+      title="Espejo horizontal en vista y captura"
     >
-      <i class="fa-solid fa-arrows-left-right" aria-hidden="true"></i>
-      <span>Espejo</span>
+      <span class="mirror-quick-label">Espejo horizontal</span>
+      <span class="mirror-quick-value" id="mirrorQuickValue">Apagado</span>
     </button>
   </div>
 
@@ -141,6 +144,7 @@
               <span>Color</span>
             </label>
           </div>
+          <span class="detector-desc">Sigue un color puntual en la escena.</span>
           <div class="quick-detector-extra hidden" id="colorPickSection">
             <div class="quick-action-copy"><strong>Color a seguir</strong></div>
             <button type="button" class="btn primary" id="btnColorPick">
@@ -185,6 +189,7 @@
               <span>Caras</span>
             </label>
           </div>
+          <span class="detector-desc">Detecta rostros y permite recuadro o blur.</span>
           <div class="quick-detector-extra hidden" id="faceQuickControls">
             <div class="face-visual-toggles">
               <label class="checkbox-group">
@@ -243,6 +248,7 @@
               <span>Pestañeos</span>
             </label>
           </div>
+          <span class="detector-desc">Reacciona cuando se cierran los ojos.</span>
         </div>
       </div>
     </div>
@@ -258,7 +264,10 @@
       >
         <span class="toggle-btn-leading">
           <i class="fa-solid fa-sliders"></i>
-          <span id="advancedToggleLabel">Ajustes avanzados</span>
+          <span class="toggle-copy">
+            <span id="advancedToggleLabel">Ajustes avanzados</span>
+            <small>Calidad, imagen, perfiles y diagnóstico.</small>
+          </span>
         </span>
         <i class="fa-solid fa-chevron-down toggle-chevron"></i>
       </button>

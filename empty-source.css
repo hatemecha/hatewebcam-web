@@ -27,7 +27,7 @@
   color: var(--text-primary);
   background: var(--surface-3);
   border: 1px solid var(--border-light);
-  border-radius: 4px;
+  border-radius: var(--r-sm);
   text-decoration: none;
 }
 
@@ -41,10 +41,40 @@
   display: none;
 }
 
+/* The stage card owns the import CTA while there is no file, so the
+   inspector opens straight on project resume and next steps. */
+body.video-mode:not(.video-has-source) .video-import-section > .section-title,
+body.video-mode:not(.video-has-source) #videoProjectHelp,
+body.video-mode:not(.video-has-source) #btnChooseVideo,
+body.video-mode:not(.video-has-source) .video-import-formats,
+body.video-mode:not(.video-has-source) #videoFileMeta,
+body.video-mode:not(.video-has-source) .video-import-divider {
+  display: none;
+}
+
 body.video-mode:not(.video-has-source) .preview-area {
   grid-template-rows: minmax(150px, 1fr) auto;
 }
 
 body.video-mode:not(.video-has-source) .preview-wrapper {
-  width: min(100% - 24px, calc((100dvh - var(--header-h) - 18px) * 16 / 9));
+  width: min(100% - 24px, calc((100dvh - var(--header-h) - 92px) * 16 / 9));
+  max-width: calc(100% - 32px);
+}
+
+@media (max-width: 900px) {
+  body.video-mode:not(.video-has-source) .preview-wrapper {
+    width: calc(100% - 24px);
+    max-width: none;
+    aspect-ratio: auto;
+    min-height: clamp(330px, 44dvh, 390px);
+  }
+
+  body.video-mode:not(.video-has-source) .preview-placeholder-view {
+    padding: 30px 22px 26px;
+  }
+
+  body.video-mode:not(.video-has-source) .video-import-formats,
+  body.video-mode:not(.video-has-source) #videoProjectHelp {
+    display: none;
+  }
 }

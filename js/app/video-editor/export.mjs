@@ -85,7 +85,7 @@ export function applyVideoEditorExportMixin(proto) {
     if (this.videoProjectHelp) {
       this.videoProjectHelp.textContent = loaded
         ? 'Reemplazá el video o exportá cuando termines.'
-        : 'Importá un archivo para empezar.';
+        : 'Importá un archivo local. MP4, WebM o MOV si el navegador lo soporta.';
     }
     this.timelineEffectPalette
       ?.querySelectorAll('.timeline-palette-chip')
@@ -605,8 +605,11 @@ export function applyVideoEditorExportMixin(proto) {
       'success',
     );
     this.videoExportProgress.value = 1;
+    this.videoExportTitle.dataset.state = 'success';
     this.videoExportTitle.innerHTML =
       '<i class="fa-solid fa-circle-check"></i> Exportación terminada';
+    if (this.videoExportHelp)
+      this.videoExportHelp.textContent = 'El archivo se descargó a tu equipo.';
     const audioNote = blob?.exportInfo?.audioCopied
       ? ` · audio ${blob.exportInfo.audioCodec}`
       : blob?.exportInfo?.audioReason && blob.exportInfo.mode === 'full'
@@ -700,8 +703,12 @@ export function applyVideoEditorExportMixin(proto) {
       this.videoExportRecoveredSource = false;
       this.videoExportSession.start(0);
       this.videoExportProgress.value = 0;
+      this.videoExportTitle.dataset.state = 'running';
       this.videoExportTitle.innerHTML =
         '<i class="fa-solid fa-file-export"></i> Exportando video';
+      if (this.videoExportHelp)
+        this.videoExportHelp.textContent =
+          'No cierres esta pestaña mientras se procesa el archivo.';
       this.videoExportSummary.textContent = 'Preparando exportación…';
       if (this.videoExportDebug)
         this.videoExportDebug.textContent = 'stage:preparando · frame:0/?';
@@ -983,8 +990,11 @@ export function applyVideoEditorExportMixin(proto) {
         'Exportación cancelada.',
         'warning',
       );
+    this.videoExportTitle.dataset.state = 'muted';
     this.videoExportTitle.innerHTML =
       '<i class="fa-solid fa-ban"></i> Exportación cancelada';
+    if (this.videoExportHelp)
+      this.videoExportHelp.textContent = 'Podés cerrar esta ventana.';
     this.videoExportSummary.textContent = 'No se descargó ningún archivo.';
     this.btnCancelVideoExport.classList.add('hidden');
     this.btnCloseVideoExportModal.classList.remove('hidden');
@@ -1012,8 +1022,12 @@ export function applyVideoEditorExportMixin(proto) {
       'La exportación falló. Revisá espacio libre y permisos.';
     this.showStatus(this.videoEditorStatus, message, 'error');
     void this.cancelVideoExport(false).then(() => {
+      this.videoExportTitle.dataset.state = 'error';
       this.videoExportTitle.innerHTML =
         '<i class="fa-solid fa-triangle-exclamation"></i> Error de exportación';
+      if (this.videoExportHelp)
+        this.videoExportHelp.textContent =
+          'Revisá el detalle y volvé a intentarlo.';
       const detail = err?.message || err?.name || 'error_desconocido';
       this.videoExportSummary.textContent = `${message} · ${detail}`;
       if (this.videoExportDebug && this.formatExportDebugInfo) {

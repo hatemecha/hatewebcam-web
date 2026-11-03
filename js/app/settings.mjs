@@ -1160,6 +1160,10 @@ export function applyStorageMixin(proto) {
 
   proto.syncMirrorControls = function () {
     if (this.chkMirror) this.chkMirror.checked = !!this.flipH;
+    const onLabel = translate('Activado');
+    const offLabel = translate('Apagado');
+    const stateLabel = this.flipH ? onLabel : offLabel;
+    if (this.mirrorQuickValue) this.mirrorQuickValue.textContent = stateLabel;
     for (const button of [this.btnMirrorQuick, this.btnMobileMirror]) {
       if (!button) continue;
       button.setAttribute('aria-pressed', String(!!this.flipH));

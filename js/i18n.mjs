@@ -7,6 +7,33 @@ const TRANSLATABLE_ATTRIBUTES = ['aria-label', 'title', 'placeholder'];
 const ENGLISH_REPLACEMENTS = Object.entries({
   Dispositivo: 'Device',
   'Saltar al visor': 'Skip to viewer',
+  'Importá un archivo local para recortarlo, sumar efectos y exportarlo.':
+    'Import a local file to trim it, add effects and export it.',
+  'Importá un archivo local. MP4, WebM o MOV si el navegador lo soporta.':
+    'Import a local file. MP4, WebM or MOV when the browser supports it.',
+  'Elegí la entrada y el equilibrio entre fluidez y detalle.':
+    'Choose the input and the balance between smoothness and detail.',
+  'Calidad, imagen, perfiles y diagnóstico.':
+    'Quality, image, presets and diagnostics.',
+  'La imagen se procesa en este navegador.':
+    'The image is processed in this browser.',
+  'Exportación estable en WebM sin audio.':
+    'Stable export in WebM without audio.',
+  'Tu archivo no sale de este equipo.':
+    'Your file never leaves this device.',
+  'Detecta rostros y permite recuadro o blur.':
+    'Detects faces and supports a box or blur.',
+  'Sigue un color puntual en la escena.': 'Tracks a specific color in the scene.',
+  'Reacciona cuando se cierran los ojos.': 'Reacts when eyes close.',
+  'Encendé la cámara para empezar.': 'Turn on the camera to start.',
+  'Empezá con un video': 'Start with a video',
+  'Archivo de video': 'Video file',
+  'Después de importar': 'After importing',
+  'Recortá el clip y elegí el tramo.': 'Trim the clip and choose the range.',
+  'Sumá efectos, color y marcadores.': 'Add effects, color and markers.',
+  'Exportá en WebM sin subir nada.':
+    'Export to WebM without uploading anything.',
+  Visor: 'Viewer',
   'Reducí duración o usá Rápido/Balanceado antes de exportar.':
     'Reduce the duration or use Fast/Balanced before exporting.',
   'Recomendación: usar Balanceado o 720p/30.':
@@ -108,6 +135,11 @@ const ENGLISH_REPLACEMENTS = Object.entries({
   'Exportación cancelada.': 'Export canceled.',
   'Exportación cancelada': 'Export canceled',
   'Preparando exportación…': 'Preparing export…',
+  'El archivo se descargó a tu equipo.':
+    'The file was downloaded to your device.',
+  'Podés cerrar esta ventana.': 'You can close this window.',
+  'Revisá el detalle y volvé a intentarlo.':
+    'Check the details and try again.',
   'Importá un video para habilitar la exportación.':
     'Import a video to enable export.',
   'Importá un video para analizar su audio.':
@@ -332,7 +364,11 @@ const ENGLISH_REPLACEMENTS = Object.entries({
   'Controles de captura': 'Capture controls',
   'Estado de detectores': 'Detector status',
   'Espejo en vista y captura': 'Mirror preview and capture',
+  'Espejo horizontal en vista y captura': 'Horizontal mirror for preview and capture',
+  'Espejo horizontal': 'Horizontal mirror',
   'Espejo (invertir horizontalmente)': 'Mirror (flip horizontally)',
+  Apagado: 'Off',
+  Activado: 'On',
   'Invertir verticalmente': 'Flip vertically',
   'Sin rotación': 'No rotation',
   '90° (girar derecha)': '90° (rotate right)',

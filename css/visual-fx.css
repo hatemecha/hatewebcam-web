@@ -24,12 +24,12 @@
 }
 
 .vfx-inspector-title {
-  font-family: var(--mono);
-  font-size: 9px;
+  font-family: var(--sans);
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 1.8px;
-  text-transform: uppercase;
-  color: var(--gray-dim);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-primary);
 }
 
 .vfx-status-row {
@@ -46,7 +46,7 @@
   gap: 6px;
   min-width: 0;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 10.5px;
   color: var(--gray-light);
 }
 
@@ -96,10 +96,10 @@
   border: 1px solid var(--border-light);
   border-radius: var(--r-sm);
   background: var(--bg-card);
-  color: var(--text);
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0;
   cursor: pointer;
   transition:
     border-color 0.12s ease,
@@ -123,9 +123,9 @@
 
 .vfx-preset-hint {
   margin: -4px 0 0;
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--gray-light);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
 }
 
 .vfx-controls {
@@ -147,12 +147,13 @@
 }
 
 .vfx-field-label {
-  font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 1.2px;
-  text-transform: uppercase;
-  color: var(--gray-dim);
-  margin-bottom: 4px;
+  font-family: var(--sans);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
 }
 
 .vfx-segmented {
@@ -166,10 +167,10 @@
   border: 1px solid var(--border-light);
   border-radius: var(--r-sm);
   background: var(--bg-card);
-  color: var(--gray-light);
-  font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 0.3px;
+  color: var(--text-secondary);
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0;
   cursor: pointer;
 }
 
@@ -206,9 +207,9 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-family: var(--mono);
-  font-size: 10px;
-  color: var(--gray-light);
+  font-family: var(--sans);
+  font-size: 11.5px;
+  color: var(--text-secondary);
   cursor: pointer;
 }
 
@@ -219,9 +220,9 @@
 .vfx-advanced-toggle {
   border: 0;
   background: transparent;
-  color: var(--gray-light);
-  font-family: var(--mono);
-  font-size: 10px;
+  color: var(--text-secondary);
+  font-family: var(--sans);
+  font-size: 11.5px;
   cursor: pointer;
 }
 
@@ -243,8 +244,8 @@
 
 .vfx-advanced-note,
 .vfx-playhead-note {
-  font-size: 11px;
-  color: var(--gray-light);
+  font-size: 11.5px;
+  color: var(--text-muted);
 }
 
 .vfx-playhead-note {
@@ -293,10 +294,10 @@
 }
 
 .visual-fx-lab-title {
-  font-size: 9px;
-  letter-spacing: 1.2px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--gray-dim);
+  color: var(--text-muted);
   margin-bottom: 4px;
 }
 

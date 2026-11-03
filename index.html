@@ -14,6 +14,7 @@
     <title>hatewebcam</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css" />
+    <link rel="stylesheet" href="fonts.css" />
     <link rel="stylesheet" href="index.css" />
     <link rel="stylesheet" href="css/visual-fx.css" />
     <link rel="stylesheet" href="empty-source.css" />
@@ -23,7 +24,9 @@
     <a class="skip-link" href="#previewWrapper">Saltar al visor</a>
     <!-- Header -->
     <header class="header-bar">
-      <div class="logo">HATEWEBCAM</div>
+      <div class="brand-block">
+        <div class="logo">HATEWEBCAM</div>
+      </div>
       <div class="mode-switch" role="tablist" aria-label="Modo de trabajo">
         <button
           type="button"
@@ -120,7 +123,7 @@
                 class="camera-state-message"
                 id="previewPlaceholderCameraMessage"
               >
-                Encendé la cámara para ver la imagen.
+                Encendé la cámara para empezar.
               </p>
               <p class="camera-state-hint hidden" id="cameraStateHint"></p>
               <button
@@ -131,20 +134,29 @@
                 <i class="fa-solid fa-play" aria-hidden="true"></i>
                 <span>Encender cámara</span>
               </button>
+              <p class="empty-state-footer">
+                <i class="fa-solid fa-lock" aria-hidden="true"></i>
+                La imagen se procesa en este navegador.
+              </p>
             </div>
             <div
               class="preview-placeholder-view preview-placeholder-video hidden"
               id="previewPlaceholderVideo"
             >
               <div class="preview-import-card">
-                <i
-                  class="fa-solid fa-clapperboard fa-2x"
-                  aria-hidden="true"
-                ></i>
-                <p class="preview-import-title">Importá un video para editar</p>
+                <div class="preview-import-icon" aria-hidden="true">
+                  <i class="fa-solid fa-clapperboard"></i>
+                </div>
+                <p class="preview-import-title">Empezá con un video</p>
                 <p class="preview-import-hint">
-                  MP4 o WebM. La exportación estable usa WebM sin audio.
+                  Importá un archivo local para recortarlo, sumar efectos y
+                  exportarlo.
                 </p>
+                <div class="preview-import-formats" aria-hidden="true">
+                  <span>MP4</span>
+                  <span>WebM</span>
+                  <span>MOV</span>
+                </div>
                 <button
                   type="button"
                   class="btn primary preview-import-btn"
@@ -152,6 +164,9 @@
                 >
                   Importar video
                 </button>
+                <p class="preview-import-note">
+                  Tu archivo no sale de este equipo.
+                </p>
               </div>
             </div>
             <div
@@ -210,6 +225,7 @@
                   <i class="fa-solid fa-xmark"></i>
                 </button>
               </div>
+              <span class="mobile-fx-group-title">Aspecto</span>
               <div class="mobile-preset-row">
                 <button
                   type="button"
@@ -253,6 +269,7 @@
                   </select>
                 </div>
               </label>
+              <span class="mobile-fx-group-title">Detectores</span>
               <div class="mobile-fx-grid">
                 <button
                   type="button"

@@ -82,6 +82,9 @@ export function applyEventsMixin(proto) {
   };
 
   proto.bindEvents = function () {
+    document.addEventListener('hatewebcam:localechange', () => {
+      this.syncMirrorControls();
+    });
     this.btnWebcamMode.addEventListener('click', () =>
       this.setSourceMode('camera'),
     );

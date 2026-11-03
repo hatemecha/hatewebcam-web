@@ -140,6 +140,14 @@ export class EditAssistController {
     if (el.bpmInput) el.bpmInput.value = this.effectiveBpm || '';
     if (el.offsetInput) el.offsetInput.value = String(this.offsetMs);
     if (el.densitySelect) el.densitySelect.value = String(this.markerStep);
+    [
+      [el.beatButton, 1],
+      [el.every2Button, 2],
+      [el.every4Button, 4],
+      [el.every8Button, 8],
+    ].forEach(([button, step]) => {
+      button?.classList.toggle('is-active', step === this.markerStep);
+    });
   }
 
   async analyze() {
