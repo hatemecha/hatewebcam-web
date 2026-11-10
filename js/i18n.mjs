@@ -19,11 +19,11 @@ const ENGLISH_REPLACEMENTS = Object.entries({
     'The image is processed in this browser.',
   'Exportación estable en WebM sin audio.':
     'Stable export in WebM without audio.',
-  'Tu archivo no sale de este equipo.':
-    'Your file never leaves this device.',
+  'Tu archivo no sale de este equipo.': 'Your file never leaves this device.',
   'Detecta rostros y permite recuadro o blur.':
     'Detects faces and supports a box or blur.',
-  'Sigue un color puntual en la escena.': 'Tracks a specific color in the scene.',
+  'Sigue un color puntual en la escena.':
+    'Tracks a specific color in the scene.',
   'Reacciona cuando se cierran los ojos.': 'Reacts when eyes close.',
   'Encendé la cámara para empezar.': 'Turn on the camera to start.',
   'Empezá con un video': 'Start with a video',
@@ -138,8 +138,7 @@ const ENGLISH_REPLACEMENTS = Object.entries({
   'El archivo se descargó a tu equipo.':
     'The file was downloaded to your device.',
   'Podés cerrar esta ventana.': 'You can close this window.',
-  'Revisá el detalle y volvé a intentarlo.':
-    'Check the details and try again.',
+  'Revisá el detalle y volvé a intentarlo.': 'Check the details and try again.',
   'Importá un video para habilitar la exportación.':
     'Import a video to enable export.',
   'Importá un video para analizar su audio.':
@@ -364,7 +363,8 @@ const ENGLISH_REPLACEMENTS = Object.entries({
   'Controles de captura': 'Capture controls',
   'Estado de detectores': 'Detector status',
   'Espejo en vista y captura': 'Mirror preview and capture',
-  'Espejo horizontal en vista y captura': 'Horizontal mirror for preview and capture',
+  'Espejo horizontal en vista y captura':
+    'Horizontal mirror for preview and capture',
   'Espejo horizontal': 'Horizontal mirror',
   'Espejo (invertir horizontalmente)': 'Mirror (flip horizontally)',
   Apagado: 'Off',
