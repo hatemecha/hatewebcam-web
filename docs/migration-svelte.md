@@ -267,5 +267,10 @@ Estados: Pendiente, En curso, Completada y verificada, Bloqueada.
 
 ## Próximo corte
 
-- Reemplazar el `MutationObserver` de i18n por mensajes reactivos en los componentes Svelte.
+- Reemplazar el `MutationObserver` de `js/i18n.mjs` (`translate`, `setLocale`,
+  `initializeI18n`) por un catálogo tipado y un store de locale. Los componentes
+  Svelte deben llamar una función de traducción; el texto dinámico del controlador
+  no puede seguir dependiendo de reemplazos sobre el DOM. Conservar
+  `hatewebcam_locale`, `<html lang>` y las frases de `ENGLISH_REPLACEMENTS`.
 - Migrar la interfaz del editor sin reescribir `VideoTimeline`.
+  `templates/video-editor.html` sigue siendo la plantilla activa.
