@@ -96,6 +96,7 @@ export function classifyCameraError(error: unknown): CameraUiState {
   if (
     name === 'OverconstrainedError' ||
     name === 'ConstraintNotSatisfiedError' ||
+    typeof navigator === 'undefined' ||
     !navigator.mediaDevices?.getUserMedia
   )
     return 'unsupported';
