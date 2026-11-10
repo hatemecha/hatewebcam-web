@@ -74,6 +74,11 @@ import {
   estimateTempoFromSamples,
   extractMediaAudioSamples,
 } from '../js/audio-tempo-analyzer.mjs';
+import {
+  getShellState,
+  subscribeShellState,
+  updateShellState,
+} from '../src/lib/shell/shell-bridge.mjs';
 
 function mockGlobal(name, value) {
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, name);
@@ -3017,5 +3022,25 @@ checkObservedExportProgressAndTimelineTicks();
   assert.equal(look.shadows, 0.35);
   assert.ok(look.sharpen > 0, 'sharpness >= 8 must enable GPU sharpen');
 }
+
+function checkShellStateBridge() {
+  const seen = [];
+  const unsubscribe = subscribeShellState((state) => {
+    seen.push({ ...state });
+  });
+  updateShellState({ mode: 'video', exportEnabled: true, locale: 'en' });
+  assert.deepEqual(getShellState(), {
+    mode: 'video',
+    exportEnabled: true,
+    locale: 'en',
+  });
+  assert.equal(seen.length, 2, 'subscribers receive initial and updated state');
+  unsubscribe();
+  updateShellState({ mode: 'camera' });
+  assert.equal(seen.length, 2, 'unsubscribed listeners stop receiving updates');
+  updateShellState({ mode: 'camera', exportEnabled: false, locale: 'es' });
+}
+
+checkShellStateBridge();
 
 console.log('Unit check passed.');

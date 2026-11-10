@@ -195,8 +195,29 @@ defaults existentes sin agregar una migración nueva.
   performance.
 - Criterio de salida: suite completa verde y sin regresiones visuales relevantes.
 
-## Primer corte implementado
+## Estado de implementación
 
-El primer corte migra el header a Svelte 5 y agrega la infraestructura de tipos. El
-resto del motor y del DOM permanece intacto. Cada etapa posterior debe poder revertirse
-sin tocar el motor multimedia.
+### Etapa 0: completada
+
+- Svelte 5, `@sveltejs/vite-plugin-svelte`, TypeScript y `svelte-check` integrados en
+  Vite 8.
+- `src/**` en TypeScript estricto; `npm run typecheck` agregado a CI.
+- ESLint y Prettier cubren `.svelte` y `.ts`.
+- `npm test`, lint, typecheck, build y Playwright pasan.
+
+### Etapa 1: completada
+
+- Header migrado a `src/lib/shell/AppHeader.svelte`.
+- `src/lib/shell/shell-bridge.mjs` mantiene el estado compartido sin imports de Svelte,
+  para que los tests Node sigan cargando los módulos legacy.
+- `AppController` publica modo y disponibilidad de exportación al bridge; ya no muta
+  clases/ARIA del header.
+- El selector de idioma lo controla Svelte y sigue persistiendo en `hatewebcam_locale`.
+- Se agregó una prueba de regresión para modo, visibilidad y disponibilidad del export
+  del header.
+
+### Próximo corte
+
+- Migrar la barra de estado del preview (resolución, FPS y chips) sin tocar el loop de
+  render.
+- Extraer la sesión de captura y el ciclo de cámara a servicios tipados.

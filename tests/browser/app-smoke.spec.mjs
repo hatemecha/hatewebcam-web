@@ -59,6 +59,33 @@ test('video empty state stays usable on a narrow screen', async ({ page }) => {
   expect(layout.inspectorTop).toBeGreaterThanOrEqual(layout.previewBottom);
 });
 
+test('header export follows source mode and video availability', async ({
+  page,
+}) => {
+  await page.goto('/');
+
+  await expect(page.locator('#btnWebcamMode')).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(page.locator('#btnHeaderExportVideo')).toBeHidden();
+
+  await page.getByRole('tab', { name: /video/i }).click();
+  await expect(page.locator('#btnVideoMode')).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(page.locator('#btnHeaderExportVideo')).toBeVisible();
+  await expect(page.locator('#btnHeaderExportVideo')).toBeDisabled();
+
+  await page.locator('#videoFileInput').setInputFiles(SUBJECT_VIDEO_FIXTURE);
+  await expect(page.locator('#videoTimelineShell')).toBeVisible();
+  await expect(page.locator('#btnHeaderExportVideo')).toBeEnabled();
+
+  await page.getByRole('tab', { name: /webcam/i }).click();
+  await expect(page.locator('#btnHeaderExportVideo')).toBeHidden();
+});
+
 test('specific-color detection exposes an editable target color', async ({
   page,
 }) => {

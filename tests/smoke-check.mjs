@@ -24,6 +24,7 @@ const htmlTemplateFiles = [
   'templates/webcam-controls.html',
   'templates/export-modal.html',
   'templates/capture-modal.html',
+  'src/lib/shell/AppHeader.svelte',
 ];
 
 const controllerConstantPattern =

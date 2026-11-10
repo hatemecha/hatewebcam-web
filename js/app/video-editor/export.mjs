@@ -4,6 +4,7 @@ import {
   formatObservedExportProgress,
   getEditorChromaColor,
 } from '../../video-export.mjs';
+import { updateShellState } from '../../../src/lib/shell/shell-bridge.mjs';
 
 const VIDEO_END_EPSILON = 0.001;
 const VIDEO_EXPORT_PLAYBACK_RATE = 4;
@@ -65,8 +66,9 @@ export function applyVideoEditorExportMixin(proto) {
       this.videoSeek.disabled = !loaded || this.isVideoExporting;
     if (this.btnExportVideo)
       this.btnExportVideo.disabled = !canExport || this.isVideoExporting;
-    if (this.btnHeaderExportVideo)
-      this.btnHeaderExportVideo.disabled = !canExport || this.isVideoExporting;
+    updateShellState({
+      exportEnabled: canExport && !this.isVideoExporting,
+    });
     if (this.btnSaveProject)
       this.btnSaveProject.disabled = !loaded || this.isVideoExporting;
     if (this.btnLoadProject)

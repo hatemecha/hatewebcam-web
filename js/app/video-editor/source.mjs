@@ -1,4 +1,5 @@
 import { VideoTimeline } from '../../editor/video-timeline.mjs';
+import { updateShellState } from '../../../src/lib/shell/shell-bridge.mjs';
 
 /** @param {import('../controller.mjs').AppController} proto */
 export function applyVideoEditorSourceMixin(proto) {
@@ -34,10 +35,7 @@ export function applyVideoEditorSourceMixin(proto) {
       this.setEditorTool('select');
       this.setInspectorTab('project');
       this.applyTimelineZoom();
-      this.btnWebcamMode.classList.remove('is-active');
-      this.btnVideoMode.classList.add('is-active');
-      this.btnWebcamMode.setAttribute('aria-selected', 'false');
-      this.btnVideoMode.setAttribute('aria-selected', 'true');
+      updateShellState({ mode: 'video' });
       this.videoPlaceholderLoading = false;
       this.clearPreviewCanvas();
       void this.resetVideoTimelineDetectors();
@@ -57,10 +55,7 @@ export function applyVideoEditorSourceMixin(proto) {
     document
       .querySelectorAll('.webcam-only')
       .forEach((el) => el.classList.remove('hidden'));
-    this.btnVideoMode.classList.remove('is-active');
-    this.btnWebcamMode.classList.add('is-active');
-    this.btnVideoMode.setAttribute('aria-selected', 'false');
-    this.btnWebcamMode.setAttribute('aria-selected', 'true');
+    updateShellState({ mode: 'camera' });
     this.setCameraPlaceholderMessage('Iniciando cámara automáticamente...');
     this.updatePreviewPlaceholder();
     void this.restoreWebcamSessionState();

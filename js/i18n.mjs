@@ -849,12 +849,6 @@ export function initializeI18n() {
   translateTree(document);
   updateLanguageSelector();
 
-  document
-    .querySelector('#languageSelect')
-    ?.addEventListener('change', (event) => {
-      setLocale(event.currentTarget.value);
-    });
-
   observer?.disconnect();
   observer = new MutationObserver((mutations) => {
     for (const mutation of mutations) {

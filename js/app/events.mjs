@@ -191,10 +191,6 @@ export function applyEventsMixin(proto) {
     this.btnExportVideo.addEventListener('click', () => {
       void this.startVideoExport();
     });
-    if (this.btnHeaderExportVideo)
-      this.btnHeaderExportVideo.addEventListener('click', () => {
-        void this.startVideoExport();
-      });
     this.btnCancelVideoExport.addEventListener('click', () => {
       void this.cancelVideoExport();
     });

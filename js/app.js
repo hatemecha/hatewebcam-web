@@ -3,14 +3,35 @@
  */
 import { loadAppTemplates } from './app/template-loader.mjs';
 import { AppController } from './app/controller.mjs';
-import { initializeI18n, translate } from './i18n.mjs';
+import { getLocale, initializeI18n, setLocale, translate } from './i18n.mjs';
+import { mountAppHeader } from '../src/lib/shell/mount.ts';
+import { updateShellState } from '../src/lib/shell/shell-bridge.mjs';
 
 const i18n = initializeI18n();
+const controller = new AppController();
+let controllerReady = false;
 
 try {
   await loadAppTemplates();
+  mountAppHeader(
+    document.querySelector('#appHeaderMount'),
+    {
+      setSourceMode: (mode) => {
+        if (controllerReady) controller.setSourceMode(mode);
+      },
+      startVideoExport: () => {
+        if (controllerReady) void controller.startVideoExport();
+      },
+      setLocale: (locale) => {
+        setLocale(locale);
+        updateShellState({ locale });
+      },
+    },
+    { mode: 'camera', exportEnabled: false, locale: getLocale() },
+  );
   i18n.translateDocument();
-  await new AppController().start();
+  await controller.start();
+  controllerReady = true;
 } catch (err) {
   console.error(err);
   document.body.innerHTML = `
