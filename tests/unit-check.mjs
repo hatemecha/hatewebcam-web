@@ -26,6 +26,18 @@ import {
   classifyCameraError,
   getCameraStatePresentation,
 } from '../js/app/camera-state.ts';
+import {
+  formatBytes,
+  formatDuration,
+  formatDurationDetailed,
+  formatVideoBitrate,
+  formatVideoFps,
+  getRecommendedVideoBitrate,
+  normalizeVideoFps,
+  pickSupportedMimeType,
+  snapVideoSourceFps,
+  timestamp,
+} from '../js/app/media-format.ts';
 import { VideoTimeline } from '../js/editor/video-timeline.mjs';
 import { EditorHistory } from '../js/editor/editor-history.ts';
 import { BlobTracking } from '../js/effects/blob-tracking.mjs';
@@ -3032,6 +3044,38 @@ checkObservedExportProgressAndTimelineTicks();
   assert.ok(look.sharpen > 0, 'sharpness >= 8 must enable GPU sharpen');
 }
 
+function checkMediaFormatting() {
+  assert.equal(normalizeVideoFps('29.970'), 29.97);
+  assert.equal(normalizeVideoFps(0), null);
+  assert.equal(snapVideoSourceFps(29.97, [23.976, 24, 25, 29.97, 30]), 29.97);
+  assert.equal(formatVideoFps(29.97), '29.97');
+  assert.equal(formatVideoFps(30), '30');
+  assert.equal(formatVideoBitrate(12_000_000), '12.0 Mbps');
+  assert.equal(formatBytes(0), '0 B');
+  assert.equal(formatBytes(1536), '1.50 KB');
+  assert.equal(formatDurationDetailed(65), '01:05');
+  assert.equal(formatDurationDetailed(3665), '01:01:05');
+  assert.equal(formatDuration(65), '01:05');
+  assert.equal(
+    pickSupportedMimeType(['video/mp4', 'video/webm'], (type) =>
+      type.includes('webm'),
+    ),
+    'video/webm',
+  );
+  assert.equal(
+    getRecommendedVideoBitrate({
+      width: 1920,
+      height: 1080,
+      fps: 30,
+      qualityEnhancer: false,
+      sourceAverageBitrate: 0,
+    }),
+    11_197_440,
+  );
+  const date = new Date(2026, 10, 10, 9, 8, 7);
+  assert.equal(timestamp(date), '20261110-090807');
+}
+
 function checkCameraStatePresentation() {
   assert.equal(classifyCameraError({ name: 'NotAllowedError' }), 'denied');
   assert.equal(classifyCameraError({ name: 'NotFoundError' }), 'missing');
@@ -3101,6 +3145,7 @@ function checkPreviewBridge() {
   assert.equal(seen.length, 2, 'unsubscribed listeners stop receiving updates');
 }
 
+checkMediaFormatting();
 checkCameraStatePresentation();
 checkShellStateBridge();
 checkPreviewBridge();

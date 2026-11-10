@@ -230,10 +230,13 @@ defaults existentes sin agregar una migración nueva.
 ### Etapa 6: parcial
 
 - `js/preview-metrics.ts`, `js/editor/timeline-clip-types.ts`,
-  `js/app/settings-store.ts`, `js/editor/editor-history.ts` y
-  `js/app/camera-state.ts` están en TypeScript estricto y cubiertos por tests.
+  `js/app/settings-store.ts`, `js/editor/editor-history.ts`,
+  `js/app/camera-state.ts` y `js/app/media-format.ts` están en TypeScript estricto y
+  cubiertos por tests.
 - `camera-state.ts` extrae la presentación y clasificación de errores de cámara del
   mixin; `camera.mjs` conserva solo el ciclo de vida y la interacción con el DOM.
+- `media-format.ts` extrae formato de duración/bytes/FPS/bitrate, selección de MIME y
+  estimación de bitrate de grabación; `capture.mjs` conserva la sesión de captura.
 - `npm test` usa `tsx` para que CI con Node 20 pueda ejecutar tests que importan
   módulos `.ts`; el build y Playwright siguen usando Vite.
 - Los módulos legacy que todavía importan estos archivos usan la extensión `.ts`

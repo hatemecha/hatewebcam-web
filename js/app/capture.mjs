@@ -1,3 +1,16 @@
+import {
+  formatBytes,
+  formatDuration,
+  formatDurationDetailed,
+  formatVideoBitrate,
+  formatVideoFps,
+  getRecommendedVideoBitrate,
+  normalizeVideoFps,
+  pickSupportedMimeType,
+  snapVideoSourceFps,
+  timestamp,
+} from './media-format.ts';
+
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyCaptureMixin(proto) {
   proto.isCapturePreviewOpen = function () {
@@ -440,36 +453,19 @@ export function applyCaptureMixin(proto) {
   };
 
   proto.normalizeVideoFps = function (value) {
-    const fps = Number(value);
-    if (!Number.isFinite(fps) || fps <= 0) return null;
-    return this.clamp(Math.round(fps * 1000) / 1000, 1, 240);
+    return normalizeVideoFps(value);
   };
 
   proto.snapVideoSourceFps = function (value) {
-    const fps = this.normalizeVideoFps(value);
-    if (!fps) return null;
-    let best = fps;
-    let bestDiff = Infinity;
-    for (const candidate of this.COMMON_VIDEO_FPS) {
-      const diff = Math.abs(fps - candidate);
-      if (diff < bestDiff && diff <= 0.08) {
-        bestDiff = diff;
-        best = candidate;
-      }
-    }
-    return best;
+    return snapVideoSourceFps(value, this.COMMON_VIDEO_FPS);
   };
 
   proto.formatVideoFps = function (value) {
-    const fps = this.normalizeVideoFps(value);
-    if (!fps) return '-';
-    return Number.isInteger(fps)
-      ? String(fps)
-      : fps.toFixed(3).replace(/\.?0+$/, '');
+    return formatVideoFps(value);
   };
 
   proto.formatVideoBitrate = function (value) {
-    return `${(Math.max(0, Number(value) || 0) / 1_000_000).toFixed(1)} Mbps`;
+    return formatVideoBitrate(value);
   };
 
   proto.getVideoExportFps = function () {
@@ -566,21 +562,14 @@ export function applyCaptureMixin(proto) {
   };
 
   proto.getRecommendedVideoBitrate = function (width, height, fps) {
-    const safeWidth = Math.max(1, width);
-    const safeHeight = Math.max(1, height);
-    const safeFps = this.clamp(
-      this.normalizeVideoFps(fps) || this.DEFAULT_CAMERA_FPS,
-      1,
-      240,
-    );
-    const bitsPerPixelFrame = this.imageSettings.qualityEnhancer ? 0.22 : 0.18;
-    const estimate = Math.round(
-      safeWidth * safeHeight * safeFps * bitsPerPixelFrame,
-    );
-    return Math.max(
-      this.videoSourceAverageBitrate,
-      this.clamp(estimate, 8000000, 80000000),
-    );
+    return getRecommendedVideoBitrate({
+      width,
+      height,
+      fps,
+      qualityEnhancer: !!this.imageSettings.qualityEnhancer,
+      sourceAverageBitrate: this.videoSourceAverageBitrate,
+      defaultFps: this.DEFAULT_CAMERA_FPS,
+    });
   };
 
   proto.drawEnhancedFrameToContext = function (
@@ -1303,33 +1292,20 @@ export function applyCaptureMixin(proto) {
   };
 
   proto.formatBytes = function (bytes) {
-    if (!bytes || bytes <= 0) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB'];
-    const exp = Math.min(
-      Math.floor(Math.log(bytes) / Math.log(1024)),
-      units.length - 1,
-    );
-    const value = bytes / 1024 ** exp;
-    const digits = exp === 0 ? 0 : value >= 100 ? 0 : value >= 10 ? 1 : 2;
-    return `${value.toFixed(digits)} ${units[exp]}`;
+    return formatBytes(bytes);
   };
 
   proto.formatDurationDetailed = function (seconds) {
-    const safe = Math.max(0, Math.round(seconds || 0));
-    const h = Math.floor(safe / 3600);
-    const m = Math.floor((safe % 3600) / 60);
-    const s = safe % 60;
-    if (h > 0) {
-      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-    }
-    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    return formatDurationDetailed(seconds);
   };
 
   proto.pickSupportedMimeType = function (list) {
-    for (const t of list) {
-      if (MediaRecorder.isTypeSupported(t)) return t;
-    }
-    return '';
+    return pickSupportedMimeType(
+      list,
+      (type) =>
+        typeof MediaRecorder !== 'undefined' &&
+        MediaRecorder.isTypeSupported(type),
+    );
   };
 
   proto.getRecordingProfile = function () {
@@ -1402,15 +1378,11 @@ export function applyCaptureMixin(proto) {
   };
 
   proto.timestamp = function () {
-    const d = new Date();
-    const p = (n) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+    return timestamp();
   };
 
   proto.formatDuration = function (seconds) {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    return formatDuration(seconds);
   };
 
   proto.showStatus = function (el, msg, type) {
