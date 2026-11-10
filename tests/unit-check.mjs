@@ -22,6 +22,10 @@ import {
   shouldAppendFinalFrame,
 } from '../js/video-export.mjs';
 import { CameraManager } from '../js/core/camera-manager.mjs';
+import {
+  classifyCameraError,
+  getCameraStatePresentation,
+} from '../js/app/camera-state.ts';
 import { VideoTimeline } from '../js/editor/video-timeline.mjs';
 import { EditorHistory } from '../js/editor/editor-history.ts';
 import { BlobTracking } from '../js/effects/blob-tracking.mjs';
@@ -3028,6 +3032,25 @@ checkObservedExportProgressAndTimelineTicks();
   assert.ok(look.sharpen > 0, 'sharpness >= 8 must enable GPU sharpen');
 }
 
+function checkCameraStatePresentation() {
+  assert.equal(classifyCameraError({ name: 'NotAllowedError' }), 'denied');
+  assert.equal(classifyCameraError({ name: 'NotFoundError' }), 'missing');
+  assert.equal(classifyCameraError({ name: 'NotReadableError' }), 'busy');
+  assert.equal(
+    classifyCameraError({ name: 'OverconstrainedError' }),
+    'unsupported',
+  );
+
+  const denied = getCameraStatePresentation('denied');
+  assert.equal(denied.title, 'Permiso de cámara denegado');
+  assert.equal(denied.action, 'Reintentar');
+  assert.equal(denied.state, 'denied');
+
+  const fallback = getCameraStatePresentation('not-a-state');
+  assert.equal(fallback.state, 'unknown');
+  assert.equal(fallback.title, 'No se pudo iniciar la cámara');
+}
+
 function checkShellStateBridge() {
   const seen = [];
   const unsubscribe = subscribeShellState((state) => {
@@ -3078,6 +3101,7 @@ function checkPreviewBridge() {
   assert.equal(seen.length, 2, 'unsubscribed listeners stop receiving updates');
 }
 
+checkCameraStatePresentation();
 checkShellStateBridge();
 checkPreviewBridge();
 

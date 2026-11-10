@@ -1,78 +1,12 @@
+import {
+  classifyCameraError,
+  getCameraStatePresentation,
+} from './camera-state.ts';
+
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyCameraMixin(proto) {
-  proto.getCameraStatePresentation = function (state, error = null) {
-    const states = {
-      off: {
-        title: 'Cámara apagada',
-        message: 'Encendé la cámara para empezar.',
-        action: 'Encender cámara',
-        icon: 'fa-video-slash',
-      },
-      requesting: {
-        title: 'Permiso de cámara',
-        message: 'Aceptá el permiso del sitio para continuar.',
-        icon: 'fa-shield-halved',
-      },
-      starting: {
-        title: 'Iniciando cámara',
-        message: 'Estamos preparando la imagen.',
-        icon: 'fa-spinner fa-spin',
-      },
-      running: {
-        title: 'Cámara funcionando',
-        message: 'La cámara está lista.',
-        icon: 'fa-video',
-      },
-      denied: {
-        title: 'Permiso de cámara denegado',
-        message: 'Habilitá la cámara para este sitio y volvé a intentarlo.',
-        hint: 'Revisá el ícono de permisos junto a la dirección del sitio.',
-        action: 'Reintentar',
-        icon: 'fa-shield-halved',
-      },
-      missing: {
-        title: 'No se encontró una cámara',
-        message: 'Conectá una cámara o revisá que esté habilitada.',
-        action: 'Reintentar',
-        icon: 'fa-video-slash',
-      },
-      busy: {
-        title: 'La cámara está ocupada',
-        message: 'Cerrá la aplicación que la está usando y reintentá.',
-        action: 'Reintentar',
-        icon: 'fa-triangle-exclamation',
-      },
-      unsupported: {
-        title: 'Configuración no soportada',
-        message: 'Probá otra cámara o el modo Balanceado.',
-        action: 'Reintentar',
-        icon: 'fa-triangle-exclamation',
-      },
-      unknown: {
-        title: 'No se pudo iniciar la cámara',
-        message: 'Revisá los permisos y volvé a intentarlo.',
-        action: 'Reintentar',
-        icon: 'fa-video-slash',
-      },
-    };
-    return { ...(states[state] || states.unknown), state, error };
-  };
-
-  proto.classifyCameraError = function (error) {
-    const name = error?.name || '';
-    if (name === 'NotAllowedError' || name === 'SecurityError') return 'denied';
-    if (name === 'NotFoundError' || name === 'DevicesNotFoundError')
-      return 'missing';
-    if (name === 'NotReadableError' || name === 'TrackStartError')
-      return 'busy';
-    if (
-      name === 'OverconstrainedError' ||
-      name === 'ConstraintNotSatisfiedError' ||
-      !navigator.mediaDevices?.getUserMedia
-    )
-      return 'unsupported';
-    return 'unknown';
-  };
+  proto.getCameraStatePresentation = getCameraStatePresentation;
+  proto.classifyCameraError = classifyCameraError;
 
   proto.setCameraState = function (
     state,
