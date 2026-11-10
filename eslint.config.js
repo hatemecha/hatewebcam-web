@@ -1,5 +1,7 @@
 import js from '@eslint/js';
+import svelte from 'eslint-plugin-svelte';
 import globals from 'globals';
+import tseslint from 'typescript-eslint';
 
 const browserGlobals = {
   ...globals.browser,
@@ -39,6 +41,33 @@ export default [
     ],
   },
   js.configs.recommended,
+  ...svelte.configs['flat/recommended'].map((config) =>
+    config.name === 'svelte:recommended:rules'
+      ? { ...config, files: ['**/*.svelte'] }
+      : config,
+  ),
+  ...tseslint.configs.recommended.map((config) => ({
+    ...config,
+    files: config.files ?? ['**/*.ts', '**/*.mts'],
+  })),
+  {
+    files: ['**/*.svelte'],
+    languageOptions: {
+      globals: browserGlobals,
+      parserOptions: {
+        parser: tseslint.parser,
+      },
+    },
+    rules: {
+      'no-undef': 'off',
+    },
+  },
+  {
+    files: ['src/**/*.{ts,svelte}'],
+    rules: {
+      'no-console': ['error', { allow: ['warn', 'error'] }],
+    },
+  },
   {
     files: ['js/**/*.{js,mjs}'],
     languageOptions: {
