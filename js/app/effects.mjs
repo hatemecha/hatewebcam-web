@@ -2,6 +2,8 @@ import { BlobTracking } from '../effects/blob-tracking.mjs';
 import { FaceDetection } from '../effects/face-detection.mjs';
 import { BlinkDetection } from '../effects/blink-detection.mjs';
 
+import { updateDetectorChip as updateDetectorChipState } from '../../src/lib/preview/preview-bridge.mjs';
+
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyEffectsMixin(proto) {
   proto.syncBlinkLandmarkSource = function () {
@@ -217,6 +219,11 @@ export function applyEffectsMixin(proto) {
 
   proto.updateDetectorChip = function (element, text, state) {
     if (!element) return;
+    const name = element.dataset.detector;
+    if (name === 'blob' || name === 'face' || name === 'blink') {
+      updateDetectorChipState(name, { text, state });
+      return;
+    }
     const key = `${state}:${text}`;
     if (element.dataset.summaryKey === key) return;
     element.dataset.summaryKey = key;

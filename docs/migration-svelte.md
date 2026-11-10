@@ -216,8 +216,18 @@ defaults existentes sin agregar una migración nueva.
 - Se agregó una prueba de regresión para modo, visibilidad y disponibilidad del export
   del header.
 
+### Etapa 2: completada (chips)
+
+- Los chips de detectores se renderizan con `src/lib/preview/DetectorChips.svelte`.
+- `preview-bridge.mjs` publica el resumen throttleado que ya producía
+  `updateEffectsInfo`; no se agregó reactividad al loop de render.
+- `#resolutionInfo` y `#fpsInfo` siguen en el DOM legacy porque los tests visuales
+  controlan esos nodos de forma determinista. Se migrarán junto con un helper de test
+  equivalente.
+- Se agregó cobertura unitaria para el bridge y se mantuvieron las capturas de
+  detectores.
+
 ### Próximo corte
 
-- Migrar la barra de estado del preview (resolución, FPS y chips) sin tocar el loop de
-  render.
+- Migrar resolución/FPS con un mecanismo de test determinista.
 - Extraer la sesión de captura y el ciclo de cámara a servicios tipados.

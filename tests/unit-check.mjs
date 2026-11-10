@@ -79,6 +79,11 @@ import {
   subscribeShellState,
   updateShellState,
 } from '../src/lib/shell/shell-bridge.mjs';
+import {
+  getDetectorChips,
+  subscribeDetectorChips,
+  updateDetectorChip,
+} from '../src/lib/preview/preview-bridge.mjs';
 
 function mockGlobal(name, value) {
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, name);
@@ -3041,6 +3046,39 @@ function checkShellStateBridge() {
   updateShellState({ mode: 'camera', exportEnabled: false, locale: 'es' });
 }
 
+function checkPreviewBridge() {
+  const seen = [];
+  const unsubscribe = subscribeDetectorChips((chips) => {
+    seen.push(chips.blob);
+  });
+  assert.equal(seen.length, 1, 'subscribers receive initial detector state');
+  assert.equal(
+    updateDetectorChip('blob', {
+      text: 'Color · buscando',
+      state: 'searching',
+    }),
+    true,
+  );
+  assert.equal(seen.length, 2);
+  assert.equal(
+    updateDetectorChip('blob', {
+      text: 'Color · buscando',
+      state: 'searching',
+    }),
+    false,
+    'identical detector state must not notify',
+  );
+  assert.equal(seen.length, 2);
+  assert.deepEqual(getDetectorChips().blob, {
+    text: 'Color · buscando',
+    state: 'searching',
+  });
+  unsubscribe();
+  updateDetectorChip('blob', { text: 'Color', state: 'off' });
+  assert.equal(seen.length, 2, 'unsubscribed listeners stop receiving updates');
+}
+
 checkShellStateBridge();
+checkPreviewBridge();
 
 console.log('Unit check passed.');

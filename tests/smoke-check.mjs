@@ -25,6 +25,7 @@ const htmlTemplateFiles = [
   'templates/export-modal.html',
   'templates/capture-modal.html',
   'src/lib/shell/AppHeader.svelte',
+  'src/lib/preview/DetectorChips.svelte',
 ];
 
 const controllerConstantPattern =
