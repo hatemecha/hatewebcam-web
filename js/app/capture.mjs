@@ -1,4 +1,12 @@
 import {
+  PhotoCountdown,
+  RecordingSession,
+} from '../../src/lib/capture/media-sessions.ts';
+import {
+  patchCaptureChromeState,
+  patchCapturePreviewState,
+} from '../../src/lib/capture/session-state.ts';
+import {
   formatBytes,
   formatDuration,
   formatDurationDetailed,
@@ -14,20 +22,95 @@ import {
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyCaptureMixin(proto) {
   proto.isCapturePreviewOpen = function () {
-    return (
-      !!this.capturePreviewModal &&
-      !this.capturePreviewModal.classList.contains('hidden')
-    );
+    return !!this.capturePreviewOpen;
+  };
+
+  proto.publishCaptureChrome = function () {
+    const seconds =
+      this.isRecording && this.recordingStartTs
+        ? Math.max(0, Math.floor((Date.now() - this.recordingStartTs) / 1000))
+        : 0;
+    const format =
+      (this.currentRecordingExt || 'webm').toUpperCase() === 'WEBM'
+        ? 'WebM'
+        : 'MP4';
+    patchCaptureChromeState({
+      cameraRunning: !!this.isRunning,
+      recording: !!this.isRecording,
+      countdownActive: !!this.isPhotoCountdownActive,
+      countdownRemaining: this.photoCountdownRemaining || 0,
+      countdownTotal: this.photoCountdownTotal || 0,
+      previewOpen: !!this.capturePreviewOpen,
+      mobileFxOpen: !!this.mobileFxOpen,
+      recordingTime: this.isRecording ? this.formatDuration(seconds) : '00:00',
+      recordingFormat: this.isRecording ? format : 'WebM',
+      flashToken: this.captureFlashToken || 0,
+      blobEnabled: !!this.chkBlobTracking?.checked,
+      faceEnabled: !!this.chkFaceDetection?.checked,
+      lockCaptureSettings: !!(
+        this.isRecording ||
+        this.capturePreviewOpen ||
+        this.isPhotoCountdownActive
+      ),
+      lockDetectors: !!this.capturePreviewOpen,
+    });
+  };
+
+  proto.buildCapturePreviewRows = function (meta, kind) {
+    const rows = [
+      ['Tipo', kind === 'video' ? 'Video' : 'Foto'],
+      ['Resolución', `${meta.width || 0} × ${meta.height || 0}`],
+      ['Formato', meta.format || (kind === 'video' ? 'WEBM/MP4' : 'JPEG')],
+      ['Tamaño', this.formatBytes(meta.size || 0)],
+    ];
+    if (meta.durationSec != null)
+      rows.push(['Duración', this.formatDurationDetailed(meta.durationSec)]);
+    if (meta.jpegQuality != null)
+      rows.push(['Calidad JPEG', `${meta.jpegQuality}%`]);
+    if (meta.fps != null) rows.push(['FPS', `${meta.fps}`]);
+    if (meta.bitrate != null)
+      rows.push(['Bitrate', `${(meta.bitrate / 1000000).toFixed(1)} Mbps`]);
+    rows.push([
+      'Mejorador',
+      meta.enhanced ? `Activo (${meta.enhancerStrength || 0}%)` : 'Desactivado',
+    ]);
+    return rows.map(([key, value]) => ({ key, value }));
+  };
+
+  proto.publishCapturePreview = function () {
+    const capture = this.pendingCapture;
+    if (!this.capturePreviewOpen || !capture) {
+      patchCapturePreviewState({
+        open: false,
+        kind: 'none',
+        title: 'Captura lista',
+        filename: '-',
+        downloadLabel: 'Descargar',
+        mediaUrl: '',
+        rows: [],
+        enhancerEnabled: false,
+        enhancerStrength: this.imageSettings?.qualityEnhancerStrength ?? 35,
+      });
+      return;
+    }
+    const kind = capture.kind === 'video' ? 'video' : 'photo';
+    patchCapturePreviewState({
+      open: true,
+      kind,
+      title: kind === 'video' ? 'Video listo' : 'Foto lista',
+      filename: capture.filename || '-',
+      downloadLabel: kind === 'video' ? 'Descargar video' : 'Descargar foto',
+      mediaUrl: capture.objectUrl || '',
+      rows: this.buildCapturePreviewRows(capture.meta || {}, kind),
+      enhancerEnabled: !!capture.previewEnhancerEnabled,
+      enhancerStrength: this.toFiniteInt(
+        capture.previewEnhancerStrength,
+        this.imageSettings?.qualityEnhancerStrength ?? 35,
+      ),
+    });
   };
 
   proto.onGlobalKeyDown = function (e) {
-    if (e.key === 'Escape' && this.isCapturePreviewOpen()) {
-      this.closeCapturePreview(true);
-      return;
-    }
-    if (e.key === 'Escape' && this.isMobileFxPanelVisible()) {
-      this.setMobileFxPanelVisible(false);
-    }
     if (
       this.sourceMode === 'video' &&
       !e.metaKey &&
@@ -45,40 +128,14 @@ export function applyCaptureMixin(proto) {
   };
 
   proto.updatePreviewPhotoEnhancerControls = function () {
-    if (
-      !this.previewPhotoEnhancerStrengthGroup ||
-      !this.sldPreviewPhotoEnhancerStrength
-    )
-      return;
-    const enabled =
-      this.isPendingPhotoCapture() &&
-      !!this.pendingCapture.previewEnhancerEnabled;
-    this.previewPhotoEnhancerStrengthGroup.classList.toggle('hidden', !enabled);
-    this.sldPreviewPhotoEnhancerStrength.disabled = !enabled;
+    this.publishCapturePreview();
   };
 
   proto.syncPreviewPhotoTools = function () {
-    const isPhoto = this.isPendingPhotoCapture();
-    if (this.capturePreviewPhotoTools) {
-      this.capturePreviewPhotoTools.classList.toggle('hidden', !isPhoto);
-    }
-
-    if (!isPhoto) {
-      if (this.chkPreviewPhotoEnhancer)
-        this.chkPreviewPhotoEnhancer.checked = false;
-      if (this.sldPreviewPhotoEnhancerStrength) {
-        this.sldPreviewPhotoEnhancerStrength.value = String(
-          this.imageSettings.qualityEnhancerStrength,
-        );
-      }
-      if (this.valPreviewPhotoEnhancerStrength) {
-        this.valPreviewPhotoEnhancerStrength.textContent = `${this.imageSettings.qualityEnhancerStrength}%`;
-      }
-      this.updatePreviewPhotoEnhancerControls();
+    if (!this.isPendingPhotoCapture()) {
+      this.publishCapturePreview();
       return;
     }
-
-    const enabled = !!this.pendingCapture.previewEnhancerEnabled;
     const parsedStrength = parseInt(
       this.pendingCapture.previewEnhancerStrength,
       10,
@@ -90,16 +147,8 @@ export function applyCaptureMixin(proto) {
       0,
       100,
     );
-    this.pendingCapture.previewEnhancerEnabled = enabled;
     this.pendingCapture.previewEnhancerStrength = strength;
-
-    if (this.chkPreviewPhotoEnhancer)
-      this.chkPreviewPhotoEnhancer.checked = enabled;
-    if (this.sldPreviewPhotoEnhancerStrength)
-      this.sldPreviewPhotoEnhancerStrength.value = String(strength);
-    if (this.valPreviewPhotoEnhancerStrength)
-      this.valPreviewPhotoEnhancerStrength.textContent = `${strength}%`;
-    this.updatePreviewPhotoEnhancerControls();
+    this.publishCapturePreview();
   };
 
   proto.rebuildPendingPhotoPreview = async function () {
@@ -145,10 +194,7 @@ export function applyCaptureMixin(proto) {
         enhancerStrength: enabled ? strength : 0,
       };
 
-      if (this.capturePreviewImage) {
-        this.capturePreviewImage.src = nextObjectUrl;
-      }
-      this.renderCapturePreviewInfo(this.pendingCapture.meta || {}, 'photo');
+      this.publishCapturePreview();
     } catch (err) {
       console.error('Error rebuilding photo preview:', err);
       this.showStatus(
@@ -159,24 +205,22 @@ export function applyCaptureMixin(proto) {
     }
   };
 
-  proto.onPreviewPhotoEnhancerToggle = function (e) {
+  proto.onPreviewPhotoEnhancerToggle = function (enabled) {
     if (!this.isPendingPhotoCapture()) return;
     if (this.previewPhotoEnhancerDebounceId) {
       clearTimeout(this.previewPhotoEnhancerDebounceId);
       this.previewPhotoEnhancerDebounceId = null;
     }
-    this.pendingCapture.previewEnhancerEnabled = !!e.target.checked;
-    this.updatePreviewPhotoEnhancerControls();
+    this.pendingCapture.previewEnhancerEnabled = !!enabled;
+    this.publishCapturePreview();
     this.rebuildPendingPhotoPreview();
   };
 
-  proto.onPreviewPhotoEnhancerStrengthInput = function (e) {
+  proto.onPreviewPhotoEnhancerStrengthInput = function (value) {
     if (!this.isPendingPhotoCapture()) return;
-    const strength = this.clamp(parseInt(e.target.value, 10) || 0, 0, 100);
+    const strength = this.clamp(parseInt(value, 10) || 0, 0, 100);
     this.pendingCapture.previewEnhancerStrength = strength;
-    if (this.valPreviewPhotoEnhancerStrength) {
-      this.valPreviewPhotoEnhancerStrength.textContent = `${strength}%`;
-    }
+    this.publishCapturePreview();
     if (this.pendingCapture.previewEnhancerEnabled) {
       if (this.previewPhotoEnhancerDebounceId) {
         clearTimeout(this.previewPhotoEnhancerDebounceId);
@@ -188,36 +232,19 @@ export function applyCaptureMixin(proto) {
     }
   };
 
-  proto.updateCaptureCountdownUI = function () {
-    if (!this.captureCountdown) return;
-    this.captureCountdown.classList.toggle(
-      'hidden',
-      !this.isPhotoCountdownActive,
-    );
-    this.captureCountdown.classList.toggle(
-      'is-final',
-      this.isPhotoCountdownActive && this.photoCountdownRemaining <= 1,
-    );
-    if (this.captureCountdownValue) {
-      this.captureCountdownValue.textContent = String(
-        Math.max(1, this.photoCountdownRemaining),
-      );
+  proto.ensurePhotoCountdown = function () {
+    if (!this.photoCountdownSession) {
+      this.photoCountdownSession = new PhotoCountdown();
     }
-    const total = Math.max(1, this.photoCountdownTotal || 1);
-    const progress = this.isPhotoCountdownActive
-      ? ((total - this.photoCountdownRemaining) / total) * 360
-      : 0;
-    this.captureCountdown.style.setProperty(
-      '--countdown-progress',
-      `${progress}deg`,
-    );
+    return this.photoCountdownSession;
+  };
+
+  proto.updateCaptureCountdownUI = function () {
+    this.publishCaptureChrome();
   };
 
   proto.cancelPhotoCountdown = function (showMessage = true) {
-    if (this.photoCountdownTimer) {
-      clearInterval(this.photoCountdownTimer);
-      this.photoCountdownTimer = null;
-    }
+    this.ensurePhotoCountdown().cancel();
     const wasActive = this.isPhotoCountdownActive;
     this.isPhotoCountdownActive = false;
     this.photoCountdownRemaining = 0;
@@ -265,28 +292,30 @@ export function applyCaptureMixin(proto) {
     this.isPhotoCountdownActive = true;
     this.photoCountdownRemaining = seconds;
     this.photoCountdownTotal = seconds;
-    this.updateCaptureCountdownUI();
-    this.updateCaptureButtons();
-    this.showStatus(this.captureStatus, `Foto en ${seconds} segundos`, 'info');
-
-    this.photoCountdownTimer = setInterval(() => {
-      this.photoCountdownRemaining -= 1;
-      if (this.photoCountdownRemaining <= 0) {
-        clearInterval(this.photoCountdownTimer);
-        this.photoCountdownTimer = null;
+    this.ensurePhotoCountdown().start(
+      seconds,
+      (remaining) => {
+        this.photoCountdownRemaining = remaining;
+        this.photoCountdownTotal = seconds;
+        this.isPhotoCountdownActive = true;
+        this.updateCaptureCountdownUI();
+        this.showStatus(
+          this.captureStatus,
+          `Foto en ${remaining} segundos`,
+          'info',
+        );
+      },
+      () => {
         this.isPhotoCountdownActive = false;
+        this.photoCountdownRemaining = 0;
         this.updateCaptureCountdownUI();
         this.updateCaptureButtons();
         void this.takePhoto();
-        return;
-      }
-      this.updateCaptureCountdownUI();
-      this.showStatus(
-        this.captureStatus,
-        `Foto en ${this.photoCountdownRemaining} segundos`,
-        'info',
-      );
-    }, 1000);
+      },
+    );
+    this.updateCaptureCountdownUI();
+    this.updateCaptureButtons();
+    this.showStatus(this.captureStatus, `Foto en ${seconds} segundos`, 'info');
   };
 
   proto.requestPhotoCapture = function () {
@@ -312,7 +341,6 @@ export function applyCaptureMixin(proto) {
     const previewOpen = this.isCapturePreviewOpen();
     const lockCaptureSettings =
       this.isRecording || previewOpen || this.isPhotoCountdownActive;
-    const lockDetectorControls = previewOpen;
 
     if (this.btnTakePhoto) {
       this.btnTakePhoto.disabled =
@@ -357,67 +385,8 @@ export function applyCaptureMixin(proto) {
       }
     }
 
-    if (this.btnMobileTakePhoto) {
-      this.btnMobileTakePhoto.disabled =
-        (!this.isRunning || this.isRecording || previewOpen) &&
-        !this.isPhotoCountdownActive;
-      this.btnMobileTakePhoto.classList.toggle(
-        'is-countdown',
-        this.isPhotoCountdownActive,
-      );
-      this.btnMobileTakePhoto.innerHTML = this.isPhotoCountdownActive
-        ? '<i class="fa-solid fa-xmark"></i>'
-        : '<i class="fa-solid fa-camera"></i>';
-      this.btnMobileTakePhoto.setAttribute(
-        'aria-label',
-        this.isPhotoCountdownActive
-          ? 'Cancelar temporizador de foto'
-          : 'Sacar foto',
-      );
-    }
-    if (this.selMobileCaptureTimer)
-      this.selMobileCaptureTimer.disabled = lockCaptureSettings;
-    if (this.btnMobileEffectsDock) {
-      this.btnMobileEffectsDock.disabled = previewOpen;
-    }
-    if (this.btnMobileRecord) {
-      this.btnMobileRecord.disabled =
-        (!this.isRunning && !this.isRecording) ||
-        previewOpen ||
-        this.isPhotoCountdownActive;
-      this.btnMobileRecord.classList.toggle('is-recording', this.isRecording);
-      this.btnMobileRecord.innerHTML = this.isRecording
-        ? '<i class="fa-solid fa-stop"></i>'
-        : '<i class="fa-solid fa-circle-dot"></i>';
-      this.btnMobileRecord.setAttribute(
-        'aria-label',
-        this.isRecording ? 'Detener grabación' : 'Grabar video',
-      );
-    }
-    if (this.btnMobileBlobToggle)
-      this.btnMobileBlobToggle.disabled = lockDetectorControls;
-    if (this.btnMobileFaceToggle)
-      this.btnMobileFaceToggle.disabled = lockDetectorControls;
-    if (this.btnMobileBlinkToggle)
-      this.btnMobileBlinkToggle.disabled = lockDetectorControls;
-    if (this.btnMobileColorPick)
-      this.btnMobileColorPick.disabled =
-        !this.chkBlobTracking.checked ||
-        !this.isRunning ||
-        lockDetectorControls;
-    if (this.inpMobileBlobColor)
-      this.inpMobileBlobColor.disabled =
-        !this.chkBlobTracking.checked || lockDetectorControls;
-    if (this.inpMobileFaceColor)
-      this.inpMobileFaceColor.disabled =
-        !this.chkFaceDetection.checked || lockDetectorControls;
-    if (this.inpMobileFaceLabel)
-      this.inpMobileFaceLabel.disabled =
-        !this.chkFaceDetection.checked || lockDetectorControls;
-
-    if (previewOpen) {
-      this.setMobileFxPanelVisible(false);
-    }
+    if (previewOpen) this.mobileFxOpen = false;
+    this.publishCaptureChrome();
   };
 
   proto.canvasToBlobAsync = function (sourceCanvas, mimeType, quality) {
@@ -796,11 +765,8 @@ export function applyCaptureMixin(proto) {
   };
 
   proto.showCaptureFlash = function () {
-    if (!this.captureFlash) return;
-    this.captureFlash.classList.remove('is-visible');
-    void this.captureFlash.offsetWidth;
-    this.captureFlash.classList.add('is-visible');
-    setTimeout(() => this.captureFlash?.classList.remove('is-visible'), 180);
+    this.captureFlashToken = (this.captureFlashToken || 0) + 1;
+    this.publishCaptureChrome();
   };
 
   proto.armShutterSound = function () {
@@ -845,21 +811,13 @@ export function applyCaptureMixin(proto) {
     }
   };
 
+  proto.ensureRecordingSession = function () {
+    if (!this.recordingSession) this.recordingSession = new RecordingSession();
+    return this.recordingSession;
+  };
+
   proto.updateRecordingHud = function () {
-    if (!this.recordingHud) return;
-    this.recordingHud.classList.toggle('hidden', !this.isRecording);
-    if (!this.isRecording) return;
-    const seconds = Math.max(
-      0,
-      Math.floor((Date.now() - this.recordingStartTs) / 1000),
-    );
-    if (this.recordingHudTime)
-      this.recordingHudTime.textContent = this.formatDuration(seconds);
-    if (this.recordingHudFormat)
-      this.recordingHudFormat.textContent =
-        (this.currentRecordingExt || 'webm').toUpperCase() === 'WEBM'
-          ? 'WebM'
-          : 'MP4';
+    this.publishCaptureChrome();
   };
 
   proto.startRecording = function () {
@@ -908,7 +866,6 @@ export function applyCaptureMixin(proto) {
 
     try {
       this.recordingChunks = [];
-
       this.ensureRecordingCanvas();
       if (
         this.recordingCanvas.width === 0 ||
@@ -930,58 +887,46 @@ export function applyCaptureMixin(proto) {
         this.recordingCanvas.height,
         this.currentRecordingFps,
       );
-
-      this.recordingStream = this.recordingCanvas.captureStream(
-        this.currentRecordingFps,
-      );
-      this.mediaRecorder = new MediaRecorder(this.recordingStream, {
+      const session = this.ensureRecordingSession();
+      session.start({
+        stream: this.recordingCanvas.captureStream(this.currentRecordingFps),
         mimeType: recordingProfile.mimeType,
+        extension: recordingProfile.extension,
         videoBitsPerSecond: this.currentRecordingBitrate,
-      });
-
-      this.mediaRecorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) this.recordingChunks.push(e.data);
-      };
-
-      this.mediaRecorder.onstop = () => {
-        const chunks = this.recordingChunks;
-        this.recordingChunks = [];
-        const recordedWidth = this.recordingCanvas
-          ? this.recordingCanvas.width
-          : this.canvas.width;
-        const recordedHeight = this.recordingCanvas
-          ? this.recordingCanvas.height
-          : this.canvas.height;
-
-        if (this.recordingStream) {
-          this.recordingStream.getTracks().forEach((t) => t.stop());
+        onTick: () => {
+          if (this.isRecording) this.updateRecordingHud();
+        },
+        onStopped: (result) => {
+          this.mediaRecorder = null;
           this.recordingStream = null;
-        }
-
-        const shouldSave = chunks.length > 0;
-        this.mediaRecorder = null;
-        const savedMimeType = this.currentRecordingMimeType;
-        const savedExtension = this.currentRecordingExt;
-        this.currentRecordingMimeType = '';
-        this.currentRecordingExt = 'webm';
-
-        if (shouldSave) {
-          const blob = new Blob(chunks, {
-            type: savedMimeType || 'video/webm',
-          });
-          const filename = `hatewebcam-record-${this.timestamp()}.${savedExtension}`;
+          this.recordingChunks = [];
+          const savedFps = this.currentRecordingFps;
+          const savedBitrate = this.currentRecordingBitrate;
+          this.currentRecordingMimeType = '';
+          this.currentRecordingExt = 'webm';
+          this.currentRecordingBitrate = 6000000;
+          this.currentRecordingFps = 30;
+          const durationSec = this.lastRecordingDurationSec;
+          this.lastRecordingDurationSec = 0;
+          if (!result) return;
+          const recordedWidth = this.recordingCanvas
+            ? this.recordingCanvas.width
+            : this.canvas.width;
+          const recordedHeight = this.recordingCanvas
+            ? this.recordingCanvas.height
+            : this.canvas.height;
           this.openCapturePreview({
             kind: 'video',
-            blob,
-            filename,
+            blob: result.blob,
+            filename: `hatewebcam-record-${this.timestamp()}.${result.extension}`,
             meta: {
               width: recordedWidth,
               height: recordedHeight,
-              size: blob.size,
-              format: savedExtension.toUpperCase(),
-              durationSec: this.lastRecordingDurationSec,
-              fps: this.currentRecordingFps,
-              bitrate: this.currentRecordingBitrate,
+              size: result.blob.size,
+              format: result.extension.toUpperCase(),
+              durationSec,
+              fps: savedFps,
+              bitrate: savedBitrate,
               enhanced: !!this.imageSettings.qualityEnhancer,
               enhancerStrength: this.imageSettings.qualityEnhancerStrength,
             },
@@ -991,13 +936,10 @@ export function applyCaptureMixin(proto) {
             'Video listo en vista previa',
             'info',
           );
-        }
-
-        this.currentRecordingBitrate = 6000000;
-        this.currentRecordingFps = 30;
-        this.lastRecordingDurationSec = 0;
-      };
-
+        },
+      });
+      this.mediaRecorder = session.mediaRecorder;
+      this.recordingStream = session.mediaStream;
       if (recordingProfile.fallbackMessage) {
         this.showStatus(
           this.captureStatus,
@@ -1005,8 +947,6 @@ export function applyCaptureMixin(proto) {
           'info',
         );
       }
-
-      this.mediaRecorder.start(250);
       this.isRecording = true;
       this.recordingStartTs = Date.now();
       this.updateRecordingHud();
@@ -1019,12 +959,6 @@ export function applyCaptureMixin(proto) {
           : `Grabación iniciada en ${effectiveFormat}.`,
         recordingProfile.fallbackMessage ? 'warning' : 'info',
       );
-      if (this.recordingTimer) clearInterval(this.recordingTimer);
-      this.recordingTimer = setInterval(() => {
-        if (!this.isRecording) return;
-        this.updateRecordingHud();
-      }, 1000);
-
       this.updateCaptureButtons();
     } catch (err) {
       console.error('Error starting recording:', err);
@@ -1034,10 +968,8 @@ export function applyCaptureMixin(proto) {
         'error',
       );
       this.isRecording = false;
-      if (this.recordingStream) {
-        this.recordingStream.getTracks().forEach((t) => t.stop());
-        this.recordingStream = null;
-      }
+      this.recordingSession?.dispose();
+      this.recordingStream = null;
       this.mediaRecorder = null;
       this.currentRecordingMimeType = '';
       this.currentRecordingExt = 'webm';
@@ -1051,7 +983,6 @@ export function applyCaptureMixin(proto) {
 
   proto.stopRecording = function (saveFile) {
     if (!this.isRecording && !this.mediaRecorder) return;
-
     this.isRecording = false;
     if (saveFile && this.recordingStartTs > 0) {
       this.lastRecordingDurationSec = Math.max(
@@ -1063,12 +994,6 @@ export function applyCaptureMixin(proto) {
     }
     this.recordingStartTs = 0;
     this.updateRecordingHud();
-
-    if (this.recordingTimer) {
-      clearInterval(this.recordingTimer);
-      this.recordingTimer = null;
-    }
-
     this.updateCaptureButtons();
     this.showStatus(
       this.captureStatus,
@@ -1077,18 +1002,11 @@ export function applyCaptureMixin(proto) {
         : 'Grabación cancelada.',
       'info',
     );
-
-    if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
-      this.mediaRecorder.stop();
-    }
-
+    this.recordingSession?.stop(!!saveFile);
+    this.mediaRecorder = this.recordingSession?.mediaRecorder || null;
+    this.recordingStream = this.recordingSession?.mediaStream || null;
     if (!saveFile) {
       this.recordingChunks = [];
-      if (this.recordingStream) {
-        this.recordingStream.getTracks().forEach((t) => t.stop());
-        this.recordingStream = null;
-      }
-      this.mediaRecorder = null;
       this.currentRecordingMimeType = '';
       this.currentRecordingExt = 'webm';
       this.currentRecordingBitrate = 6000000;
@@ -1098,7 +1016,7 @@ export function applyCaptureMixin(proto) {
   };
 
   proto.openCapturePreview = function (capture) {
-    if (!this.capturePreviewModal || !capture) return;
+    if (!capture?.blob) return;
 
     this.clearPendingCapture(true);
     const objectUrl = URL.createObjectURL(capture.blob);
@@ -1130,91 +1048,15 @@ export function applyCaptureMixin(proto) {
       previewEnhancerStrength: initialPreviewEnhancerStrength,
     };
     this.photoPreviewRenderToken++;
-
-    if (this.capturePreviewTitle) {
-      this.capturePreviewTitle.textContent =
-        capture.kind === 'video' ? 'Video listo' : 'Foto lista';
-    }
-    if (this.capturePreviewFilename) {
-      this.capturePreviewFilename.textContent = capture.filename;
-    }
-    if (this.btnDownloadCapture) {
-      this.btnDownloadCapture.textContent =
-        capture.kind === 'video' ? 'Descargar video' : 'Descargar foto';
-    }
-
-    if (this.capturePreviewImage) {
-      this.capturePreviewImage.classList.toggle(
-        'hidden',
-        capture.kind !== 'photo',
-      );
-      if (capture.kind === 'photo') this.capturePreviewImage.src = objectUrl;
-      else this.capturePreviewImage.removeAttribute('src');
-    }
-
-    if (this.capturePreviewVideo) {
-      this.capturePreviewVideo.classList.toggle(
-        'hidden',
-        capture.kind !== 'video',
-      );
-      if (capture.kind === 'video') {
-        this.capturePreviewVideo.src = objectUrl;
-        this.capturePreviewVideo.currentTime = 0;
-        this.capturePreviewVideo.load();
-      } else {
-        this.capturePreviewVideo.pause();
-        this.capturePreviewVideo.removeAttribute('src');
-        this.capturePreviewVideo.load();
-      }
-    }
-
+    this.capturePreviewOpen = true;
     this.syncPreviewPhotoTools();
-    this.renderCapturePreviewInfo(capture.meta || {}, capture.kind);
-    this.capturePreviewModal.classList.remove('hidden');
-    this.activateModalFocusTrap(
-      this.capturePreviewModal,
-      this.btnDownloadCapture,
-    );
     this.updateCaptureButtons();
   };
 
-  proto.renderCapturePreviewInfo = function (meta, kind) {
-    if (!this.capturePreviewInfo) return;
-    this.capturePreviewInfo.innerHTML = '';
-
-    const rows = [
-      ['Tipo', kind === 'video' ? 'Video' : 'Foto'],
-      ['Resolución', `${meta.width || 0} × ${meta.height || 0}`],
-      ['Formato', meta.format || (kind === 'video' ? 'WEBM/MP4' : 'JPEG')],
-      ['Tamaño', this.formatBytes(meta.size || 0)],
-    ];
-
-    if (meta.durationSec != null)
-      rows.push(['Duración', this.formatDurationDetailed(meta.durationSec)]);
-    if (meta.jpegQuality != null)
-      rows.push(['Calidad JPEG', `${meta.jpegQuality}%`]);
-    if (meta.fps != null) rows.push(['FPS', `${meta.fps}`]);
-    if (meta.bitrate != null)
-      rows.push(['Bitrate', `${(meta.bitrate / 1000000).toFixed(1)} Mbps`]);
-
-    const enhancerLabel = meta.enhanced
-      ? `Activo (${meta.enhancerStrength || 0}%)`
-      : 'Desactivado';
-    rows.push(['Mejorador', enhancerLabel]);
-
-    for (const [key, value] of rows) {
-      const row = document.createElement('div');
-      row.className = 'capture-preview-row';
-      const keyEl = document.createElement('div');
-      keyEl.className = 'capture-preview-key';
-      keyEl.textContent = key;
-      const valueEl = document.createElement('div');
-      valueEl.className = 'capture-preview-value';
-      valueEl.textContent = value;
-      row.appendChild(keyEl);
-      row.appendChild(valueEl);
-      this.capturePreviewInfo.appendChild(row);
-    }
+  proto.renderCapturePreviewInfo = function (meta, _kind) {
+    if (!this.pendingCapture) return;
+    this.pendingCapture.meta = { ...(this.pendingCapture.meta || {}), ...meta };
+    this.publishCapturePreview();
   };
 
   proto.clearPendingCapture = function (silent = false) {
@@ -1231,42 +1073,14 @@ export function applyCaptureMixin(proto) {
     if (this.pendingCapture.objectUrl) {
       URL.revokeObjectURL(this.pendingCapture.objectUrl);
     }
-
-    if (this.capturePreviewImage) {
-      this.capturePreviewImage.removeAttribute('src');
-      this.capturePreviewImage.classList.add('hidden');
-    }
-
-    if (this.capturePreviewVideo) {
-      this.capturePreviewVideo.pause();
-      this.capturePreviewVideo.removeAttribute('src');
-      this.capturePreviewVideo.load();
-      this.capturePreviewVideo.classList.add('hidden');
-    }
-
     this.pendingCapture = null;
-    if (!silent && this.capturePreviewFilename) {
-      this.capturePreviewFilename.textContent = '-';
-    }
-    if (this.capturePreviewInfo) {
-      this.capturePreviewInfo.innerHTML = '';
-    }
-    if (this.btnDownloadCapture) {
-      this.btnDownloadCapture.textContent = 'Descargar';
-    }
-    if (this.capturePreviewTitle) {
-      this.capturePreviewTitle.textContent = 'Captura lista';
-    }
     this.syncPreviewPhotoTools();
+    if (silent) return;
   };
 
   proto.closeCapturePreview = function (showDiscardStatus) {
-    if (
-      !this.capturePreviewModal ||
-      this.capturePreviewModal.classList.contains('hidden')
-    )
-      return;
-    this.capturePreviewModal.classList.add('hidden');
+    if (!this.capturePreviewOpen) return;
+    this.capturePreviewOpen = false;
     this.deactivateModalFocusTrap(this.capturePreviewModal);
     this.clearPendingCapture(false);
     this.updateCaptureButtons();

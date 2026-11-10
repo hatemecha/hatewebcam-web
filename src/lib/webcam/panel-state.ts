@@ -16,6 +16,7 @@ export interface WebcamImageState {
   qualityEnhancer: boolean;
   qualityEnhancerStrength: number;
   shutterSound: boolean;
+  captureTimerSeconds: number;
 }
 
 export interface WebcamPanelState {
@@ -76,6 +77,7 @@ const initialImage: WebcamImageState = {
   qualityEnhancer: false,
   qualityEnhancerStrength: 35,
   shutterSound: true,
+  captureTimerSeconds: 0,
 };
 
 const initialState: WebcamPanelState = {

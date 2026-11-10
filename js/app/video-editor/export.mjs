@@ -4,6 +4,7 @@ import {
   formatObservedExportProgress,
   getEditorChromaColor,
 } from '../../video-export.mjs';
+import { patchExportModalState } from '../../../src/lib/capture/session-state.ts';
 import { updateShellState } from '../../../src/lib/shell/shell-bridge.mjs';
 
 const VIDEO_END_EPSILON = 0.001;
@@ -491,7 +492,7 @@ export function applyVideoEditorExportMixin(proto) {
   };
 
   proto.updateVideoExportProgress = function (done, total, fps, meta = {}) {
-    if (!this.videoExportProgress || !this.videoExportSummary) return;
+    if (!this.videoExportSession || typeof this.clamp !== 'function') return;
     const now = performance.now();
     const force = !!meta.force || done >= total || meta.stage === 'error';
     if (
@@ -504,31 +505,35 @@ export function applyVideoEditorExportMixin(proto) {
     const safeTotal = Math.max(1, Number(total) || 1);
     const safeDone = this.clamp(Number(done) || 0, 0, safeTotal);
     const progress = safeDone / safeTotal;
-    this.videoExportProgress.value = progress;
-    this.videoExportSummary.textContent = formatObservedExportProgress({
-      done: safeDone,
-      total: safeTotal,
-      startedAt: this.videoExportSession.startedAt || now,
-      now,
-      fps,
-      stage: meta.stage,
-    });
-    if (this.videoExportDebug && this.formatExportDebugInfo) {
-      this.videoExportDebug.textContent = this.formatExportDebugInfo({
-        stage: meta.stage || 'encode',
+    this.exportProgressRatio = progress;
+    const debug = this.formatExportDebugInfo
+      ? this.formatExportDebugInfo({
+          stage: meta.stage || 'encode',
+          done: safeDone,
+          total: safeTotal,
+          fps,
+          time:
+            meta.time ??
+            this.videoTimeline.trimStart +
+              Math.max(0, safeDone - 1) / Math.max(1, Number(fps) || 1),
+          width: this.recordingCanvas?.width || 0,
+          height: this.recordingCanvas?.height || 0,
+          queueSize: meta.queueSize || 0,
+          note: meta.note || '',
+        })
+      : undefined;
+    patchExportModalState({
+      progress,
+      summary: formatObservedExportProgress({
         done: safeDone,
         total: safeTotal,
+        startedAt: this.videoExportSession.startedAt || now,
+        now,
         fps,
-        time:
-          meta.time ??
-          this.videoTimeline.trimStart +
-            Math.max(0, safeDone - 1) / Math.max(1, Number(fps) || 1),
-        width: this.recordingCanvas?.width || 0,
-        height: this.recordingCanvas?.height || 0,
-        queueSize: meta.queueSize || 0,
-        note: meta.note || '',
-      });
-    }
+        stage: meta.stage,
+      }),
+      ...(debug ? { debug } : {}),
+    });
   };
 
   proto.runVideoExportViaWebCodecs = async function () {
@@ -606,20 +611,21 @@ export function applyVideoEditorExportMixin(proto) {
       'Exportación terminada y guardada.',
       'success',
     );
-    this.videoExportProgress.value = 1;
-    this.videoExportTitle.dataset.state = 'success';
-    this.videoExportTitle.innerHTML =
-      '<i class="fa-solid fa-circle-check"></i> Exportación terminada';
-    if (this.videoExportHelp)
-      this.videoExportHelp.textContent = 'El archivo se descargó a tu equipo.';
+    this.exportProgressRatio = 1;
     const audioNote = blob?.exportInfo?.audioCopied
       ? ` · audio ${blob.exportInfo.audioCodec}`
       : blob?.exportInfo?.audioReason && blob.exportInfo.mode === 'full'
         ? ` · ${blob.exportInfo.audioReason}`
         : '';
-    this.videoExportSummary.textContent = `${this.videoExportFileName} · ${this.formatBytes(blob.size)}${audioNote} · descarga iniciada`;
-    this.btnCancelVideoExport.classList.add('hidden');
-    this.btnCloseVideoExportModal.classList.remove('hidden');
+    patchExportModalState({
+      open: true,
+      titleState: 'success',
+      progress: 1,
+      help: 'El archivo se descargó a tu equipo.',
+      summary: `${this.videoExportFileName} · ${this.formatBytes(blob.size)}${audioNote} · descarga iniciada`,
+      showCancel: false,
+      showClose: true,
+    });
     this.cleanupVideoExport(true);
   };
 
@@ -704,23 +710,17 @@ export function applyVideoEditorExportMixin(proto) {
       this.resetVisualFxTemporalState?.();
       this.videoExportRecoveredSource = false;
       this.videoExportSession.start(0);
-      this.videoExportProgress.value = 0;
-      this.videoExportTitle.dataset.state = 'running';
-      this.videoExportTitle.innerHTML =
-        '<i class="fa-solid fa-file-export"></i> Exportando video';
-      if (this.videoExportHelp)
-        this.videoExportHelp.textContent =
-          'No cierres esta pestaña mientras se procesa el archivo.';
-      this.videoExportSummary.textContent = 'Preparando exportación…';
-      if (this.videoExportDebug)
-        this.videoExportDebug.textContent = 'stage:preparando · frame:0/?';
-      this.btnCancelVideoExport.classList.remove('hidden');
-      this.btnCloseVideoExportModal.classList.add('hidden');
-      this.videoExportModal.classList.remove('hidden');
-      this.activateModalFocusTrap(
-        this.videoExportModal,
-        this.btnCancelVideoExport,
-      );
+      this.exportProgressRatio = 0;
+      patchExportModalState({
+        open: true,
+        titleState: 'running',
+        progress: 0,
+        summary: 'Preparando exportación…',
+        debug: 'stage:preparando · frame:0/?',
+        help: 'No cierres esta pestaña mientras se procesa el archivo.',
+        showCancel: true,
+        showClose: false,
+      });
       this.updateVideoEditorUI();
       this.cancelRenderLoop();
       if ('wakeLock' in navigator) {
@@ -992,14 +992,14 @@ export function applyVideoEditorExportMixin(proto) {
         'Exportación cancelada.',
         'warning',
       );
-    this.videoExportTitle.dataset.state = 'muted';
-    this.videoExportTitle.innerHTML =
-      '<i class="fa-solid fa-ban"></i> Exportación cancelada';
-    if (this.videoExportHelp)
-      this.videoExportHelp.textContent = 'Podés cerrar esta ventana.';
-    this.videoExportSummary.textContent = 'No se descargó ningún archivo.';
-    this.btnCancelVideoExport.classList.add('hidden');
-    this.btnCloseVideoExportModal.classList.remove('hidden');
+    patchExportModalState({
+      open: true,
+      titleState: 'muted',
+      help: 'Podés cerrar esta ventana.',
+      summary: 'No se descargó ningún archivo.',
+      showCancel: false,
+      showClose: true,
+    });
     this.cleanupVideoExport(true);
   };
 
@@ -1024,29 +1024,28 @@ export function applyVideoEditorExportMixin(proto) {
       'La exportación falló. Revisá espacio libre y permisos.';
     this.showStatus(this.videoEditorStatus, message, 'error');
     void this.cancelVideoExport(false).then(() => {
-      this.videoExportTitle.dataset.state = 'error';
-      this.videoExportTitle.innerHTML =
-        '<i class="fa-solid fa-triangle-exclamation"></i> Error de exportación';
-      if (this.videoExportHelp)
-        this.videoExportHelp.textContent =
-          'Revisá el detalle y volvé a intentarlo.';
       const detail = err?.message || err?.name || 'error_desconocido';
-      this.videoExportSummary.textContent = `${message} · ${detail}`;
-      if (this.videoExportDebug && this.formatExportDebugInfo) {
-        this.videoExportDebug.textContent = this.formatExportDebugInfo({
-          stage: 'error',
-          done: this.videoExportProgress?.value
-            ? Math.round(
-                this.videoExportProgress.value *
-                  (this.videoExportTotalFrames || 0),
-              )
-            : 0,
-          total: this.videoExportTotalFrames || 0,
-          fps: this.getVideoExportFps(),
-          width: this.recordingCanvas?.width || 0,
-          height: this.recordingCanvas?.height || 0,
-        });
-      }
+      const ratio = this.exportProgressRatio || 0;
+      patchExportModalState({
+        open: true,
+        titleState: 'error',
+        help: 'Revisá el detalle y volvé a intentarlo.',
+        summary: `${message} · ${detail}`,
+        showCancel: false,
+        showClose: true,
+        ...(this.formatExportDebugInfo
+          ? {
+              debug: this.formatExportDebugInfo({
+                stage: 'error',
+                done: Math.round(ratio * (this.videoExportTotalFrames || 0)),
+                total: this.videoExportTotalFrames || 0,
+                fps: this.getVideoExportFps(),
+                width: this.recordingCanvas?.width || 0,
+                height: this.recordingCanvas?.height || 0,
+              }),
+            }
+          : {}),
+      });
     });
   };
 
@@ -1068,8 +1067,8 @@ export function applyVideoEditorExportMixin(proto) {
       this.videoExportLastRenderedFrameIndex = -1;
       this.videoExportSeekFallback = false;
       this.videoExportSkippedFrames = 0;
-      this.videoExportProgress.value = 0;
-      this.videoExportModal.classList.add('hidden');
+      this.exportProgressRatio = 0;
+      patchExportModalState({ open: false, progress: 0, titleState: 'idle' });
       this.deactivateModalFocusTrap(this.videoExportModal);
     }
     void this.videoExportSession.releaseWakeLock();
@@ -1081,8 +1080,8 @@ export function applyVideoEditorExportMixin(proto) {
 
   proto.closeVideoExportModal = function () {
     if (this.isVideoExporting) return;
-    this.videoExportModal.classList.add('hidden');
+    this.exportProgressRatio = 0;
+    patchExportModalState({ open: false, progress: 0 });
     this.deactivateModalFocusTrap(this.videoExportModal);
-    this.videoExportProgress.value = 0;
   };
 }

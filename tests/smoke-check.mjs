@@ -24,6 +24,8 @@ const htmlTemplateFiles = [
   'src/lib/webcam/EffectsControls.svelte',
   'src/lib/webcam/CameraSourcePanel.svelte',
   'src/lib/preview/PreviewMetrics.svelte',
+  'src/lib/capture/CaptureStatusChrome.svelte',
+  'src/lib/capture/MobileHud.svelte',
   'src/lib/shell/AppHeader.svelte',
   'src/lib/preview/DetectorChips.svelte',
   'src/lib/modals/ExportModal.svelte',

@@ -108,6 +108,10 @@ import {
   updateCameraSourceState,
 } from '../src/lib/webcam/camera-source-bridge.mjs';
 import { deriveDetectorExtras } from '../src/lib/webcam/panel-state.ts';
+import {
+  PhotoCountdown,
+  RecordingSession,
+} from '../src/lib/capture/media-sessions.ts';
 
 function mockGlobal(name, value) {
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, name);
@@ -3229,5 +3233,88 @@ checkCameraStatePresentation();
 checkShellStateBridge();
 checkPreviewBridge();
 checkCameraSourceSelection();
+checkCaptureSessions();
+
+function checkCaptureSessions() {
+  const countdown = new PhotoCountdown();
+  let ticks = 0;
+  let done = false;
+  countdown.start(
+    2,
+    () => {
+      ticks += 1;
+    },
+    () => {
+      done = true;
+    },
+  );
+  assert.equal(countdown.active, true);
+  countdown.advance();
+  assert.equal(ticks, 1);
+  assert.equal(countdown.remaining, 1);
+  countdown.advance();
+  assert.equal(done, true);
+  assert.equal(countdown.active, false);
+
+  let stopped = null;
+  const chunks = [];
+  const recorder = {
+    state: 'inactive',
+    start() {
+      this.state = 'recording';
+    },
+    stop() {
+      this.state = 'inactive';
+      this.onstop?.();
+    },
+    ondataavailable: null,
+    onstop: null,
+  };
+  const session = new RecordingSession(() => recorder);
+  const stream = { getTracks: () => [{ stop() {} }] };
+  session.start({
+    stream,
+    mimeType: 'video/webm',
+    extension: 'webm',
+    videoBitsPerSecond: 1000,
+    tickMs: 60_000,
+    onTick() {},
+    onStopped(result) {
+      stopped = result;
+    },
+  });
+  recorder.ondataavailable?.({ data: new Blob(['demo']) });
+  chunks.push('kept');
+  session.stop(true);
+  assert.equal(stopped?.extension, 'webm');
+  assert.ok(stopped?.blob.size > 0);
+  assert.equal(chunks.length, 1);
+
+  const discarded = new RecordingSession(() => ({
+    state: 'recording',
+    start() {},
+    stop() {
+      this.state = 'inactive';
+      this.onstop?.();
+    },
+    ondataavailable: null,
+    onstop: null,
+  }));
+  let discardedResult = 'pending';
+  discarded.start({
+    stream,
+    mimeType: 'video/webm',
+    extension: 'webm',
+    videoBitsPerSecond: 1000,
+    tickMs: 60_000,
+    onTick() {},
+    onStopped(result) {
+      discardedResult = result;
+    },
+  });
+  discarded.mediaRecorder.ondataavailable?.({ data: new Blob(['no']) });
+  discarded.stop(false);
+  assert.equal(discardedResult, null);
+}
 
 console.log('Unit check passed.');

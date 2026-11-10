@@ -74,6 +74,7 @@ export function applyStorageMixin(proto) {
           35,
         ),
         shutterSound: image.shutterSound !== false,
+        captureTimerSeconds: readPanelNumber(image.captureTimerSeconds, 0),
       },
       orientation: {
         flipH: !!this.flipH,
@@ -266,11 +267,6 @@ export function applyStorageMixin(proto) {
       btn.classList.toggle('is-active', !!match);
       btn.setAttribute('aria-pressed', String(!!match));
     });
-    this.mobilePresetButtons.forEach((btn) => {
-      const match = activePreset && btn.dataset.mobilePreset === activePreset;
-      btn.classList.toggle('is-active', !!match);
-      btn.setAttribute('aria-pressed', String(!!match));
-    });
   };
 
   proto.getMatchingImagePreset = function () {
@@ -303,9 +299,7 @@ export function applyStorageMixin(proto) {
   };
 
   proto.isMobileFxPanelVisible = function () {
-    return (
-      !!this.mobileFxPanel && !this.mobileFxPanel.classList.contains('hidden')
-    );
+    return !!this.mobileFxOpen;
   };
 
   proto.getEffectiveFlipH = function () {
@@ -313,19 +307,8 @@ export function applyStorageMixin(proto) {
   };
 
   proto.setMobileFxPanelVisible = function (visible) {
-    if (this.mobileFxPanel) {
-      this.mobileFxPanel.classList.toggle('hidden', !visible);
-    }
-    if (this.mobileFxBackdrop) {
-      this.mobileFxBackdrop.classList.toggle('hidden', !visible);
-    }
-    if (this.btnMobileEffectsDock) {
-      this.btnMobileEffectsDock.classList.toggle('is-active', !!visible);
-      this.btnMobileEffectsDock.setAttribute(
-        'aria-expanded',
-        String(!!visible),
-      );
-    }
+    this.mobileFxOpen = !!visible;
+    this.publishCaptureChrome?.();
     if (this.isRunning && this.isMobileViewport()) {
       if (this.videoEl && this.videoEl.paused) {
         void this.videoEl.play().catch(() => {});
@@ -527,59 +510,6 @@ export function applyStorageMixin(proto) {
     }
     if (this.inpFaceQuickLabel) {
       this.inpFaceQuickLabel.disabled = !showFaceBoxVisuals;
-    }
-    if (this.inpMobileBlobColor)
-      this.inpMobileBlobColor.value = this.quickDetectorSettings.blobBoxColor;
-    if (this.inpMobileFaceColor)
-      this.inpMobileFaceColor.value = this.quickDetectorSettings.faceBoxColor;
-    if (this.chkMobileFaceShowBox)
-      this.chkMobileFaceShowBox.checked = faceFlags.showBox;
-    if (this.chkMobileFaceShowBlur)
-      this.chkMobileFaceShowBlur.checked = faceFlags.showBlur;
-    if (
-      this.inpMobileFaceLabel &&
-      document.activeElement !== this.inpMobileFaceLabel
-    ) {
-      this.inpMobileFaceLabel.value = this.quickDetectorSettings.faceLabelText;
-    }
-    if (this.mobileFaceColorChip) {
-      this.mobileFaceColorChip.classList.toggle('hidden', !showFaceBoxVisuals);
-    }
-    if (this.mobileFaceLabelWrap) {
-      this.mobileFaceLabelWrap.classList.toggle('hidden', !showFaceBoxVisuals);
-    }
-    if (this.inpMobileFaceLabel) {
-      this.inpMobileFaceLabel.disabled = !showFaceBoxVisuals;
-    }
-    if (this.btnMobileBlobToggle) {
-      this.btnMobileBlobToggle.classList.toggle(
-        'is-active',
-        !!this.chkBlobTracking.checked,
-      );
-      this.btnMobileBlobToggle.setAttribute(
-        'aria-pressed',
-        String(!!this.chkBlobTracking.checked),
-      );
-    }
-    if (this.btnMobileFaceToggle) {
-      this.btnMobileFaceToggle.classList.toggle(
-        'is-active',
-        !!this.chkFaceDetection.checked,
-      );
-      this.btnMobileFaceToggle.setAttribute(
-        'aria-pressed',
-        String(!!this.chkFaceDetection.checked),
-      );
-    }
-    if (this.btnMobileBlinkToggle) {
-      this.btnMobileBlinkToggle.classList.toggle(
-        'is-active',
-        !!this.chkBlinkDetection.checked,
-      );
-      this.btnMobileBlinkToggle.setAttribute(
-        'aria-pressed',
-        String(!!this.chkBlinkDetection.checked),
-      );
     }
     this.syncAdvancedQuickInputs();
     this.updateColorPaletteSelections?.();
@@ -959,10 +889,6 @@ export function applyStorageMixin(proto) {
       this.captureTimerSelect.value = String(
         this.imageSettings.captureTimerSeconds,
       );
-    if (this.selMobileCaptureTimer)
-      this.selMobileCaptureTimer.value = String(
-        this.imageSettings.captureTimerSeconds,
-      );
     if (this.chkQualityEnhancer)
       this.chkQualityEnhancer.checked = !!this.imageSettings.qualityEnhancer;
     if (this.chkShutterSound)
@@ -1182,23 +1108,23 @@ export function applyStorageMixin(proto) {
       });
     }
 
-    const bindCaptureTimerSelect = (selectEl) => {
-      if (!selectEl) return;
-      selectEl.addEventListener('change', (e) => {
-        this.imageSettings.captureTimerSeconds =
-          this.normalizeCaptureTimerSeconds(e.target.value);
-        this.updateImageControlsUI();
-        this.saveImageSettings();
+    if (this.captureTimerSelect) {
+      this.captureTimerSelect.addEventListener('change', (e) => {
+        this.setCaptureTimerSeconds(e.target.value);
       });
-    };
-    bindCaptureTimerSelect(this.captureTimerSelect);
-    bindCaptureTimerSelect(this.selMobileCaptureTimer);
+    }
+  };
 
-    this.mobilePresetButtons.forEach((btn) => {
-      btn.addEventListener('click', () =>
-        this.applyImagePreset(btn.dataset.mobilePreset),
+  proto.setCaptureTimerSeconds = function (value) {
+    this.imageSettings.captureTimerSeconds =
+      this.normalizeCaptureTimerSeconds(value);
+    if (this.captureTimerSelect) {
+      this.captureTimerSelect.value = String(
+        this.imageSettings.captureTimerSeconds,
       );
-    });
+    }
+    this.publishWebcamPanel();
+    this.saveImageSettings();
   };
 
   proto.bindQuickDetectorEvents = function () {};
@@ -1206,10 +1132,6 @@ export function applyStorageMixin(proto) {
   proto.syncMirrorControls = function () {
     if (this.chkMirror) this.chkMirror.checked = !!this.flipH;
     updateCameraSourceState({ mirrored: !!this.flipH });
-    if (this.btnMobileMirror) {
-      this.btnMobileMirror.setAttribute('aria-pressed', String(!!this.flipH));
-      this.btnMobileMirror.classList.toggle('is-active', !!this.flipH);
-    }
     this.publishWebcamPanel();
   };
 

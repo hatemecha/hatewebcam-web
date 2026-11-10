@@ -25,7 +25,7 @@ Run one browser spec with `npx playwright test tests/browser/app-smoke.spec.mjs`
 
 ## Architecture
 
-- Entry flow: `index.html` -> `js/app.js` -> fetches `templates/video-editor.html`, mounts the Svelte header, preview metrics, camera source, webcam controls and modals -> `new AppController().start()`.
+- Entry flow: `index.html` -> `js/app.js` -> fetches `templates/video-editor.html`, mounts the Svelte header, preview metrics, camera source, webcam controls, mobile HUD and capture/export modals -> `new AppController().start()`.
 - `AppController` is still split into mixins in `js/app/*.mjs`. Mixin methods use `this`; controller constants are instance fields. New presentation state belongs in `src/lib/**` TypeScript modules, not in additional `.mjs` bridges.
 - Svelte owns the header, detector chips, camera source, webcam control panel, resolution/FPS and modal markup. The media engine and the video editor DOM remain in `js/` and `templates/video-editor.html`. Pure `.ts` modules are allowed from legacy `.mjs` because `npm test` runs through `tsx`; do not import Svelte components or runes from legacy `.mjs`.
 - `tests/smoke-check.mjs` enforces these structural rules: no bare `clamp()`/`escapeHtml()` calls, no `$()` outside `js/app/dom.mjs`, no bare controller constants, and no unbound controller methods passed to `addEventListener`/`requestAnimationFrame`/`requestVideoFrameCallback`.

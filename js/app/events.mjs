@@ -191,13 +191,6 @@ export function applyEventsMixin(proto) {
     this.btnExportVideo.addEventListener('click', () => {
       void this.startVideoExport();
     });
-    this.btnCancelVideoExport.addEventListener('click', () => {
-      void this.cancelVideoExport();
-    });
-    this.btnCloseVideoExportModal.addEventListener(
-      'click',
-      this.closeVideoExportModal.bind(this),
-    );
     if (this.btnToolSelect)
       this.btnToolSelect.addEventListener('click', () =>
         this.setEditorTool('select'),
@@ -333,9 +326,6 @@ export function applyEventsMixin(proto) {
     this.btnCameraStateAction?.addEventListener('click', () => {
       void this.toggleCamera(true);
     });
-    this.btnMobileMirror?.addEventListener('click', () =>
-      this.toggleMirrorQuick(),
-    );
     this.chkFlipV.addEventListener('change', this.onTransformChange.bind(this));
     this.rotationSelect.addEventListener(
       'change',
@@ -351,139 +341,6 @@ export function applyEventsMixin(proto) {
       );
     if (this.btnRecord)
       this.btnRecord.addEventListener('click', this.toggleRecording.bind(this));
-    if (this.btnDownloadCapture)
-      this.btnDownloadCapture.addEventListener(
-        'click',
-        this.downloadPendingCapture.bind(this),
-      );
-    if (this.btnDiscardCapture)
-      this.btnDiscardCapture.addEventListener('click', () =>
-        this.closeCapturePreview(true),
-      );
-    if (this.btnCloseCapturePreview)
-      this.btnCloseCapturePreview.addEventListener('click', () =>
-        this.closeCapturePreview(true),
-      );
-    if (this.btnMobileEffectsDock) {
-      this.btnMobileEffectsDock.addEventListener('click', () => {
-        this.setMobileFxPanelVisible(!this.isMobileFxPanelVisible());
-      });
-    }
-    if (this.btnMobileFxClose) {
-      this.btnMobileFxClose.addEventListener('click', () =>
-        this.setMobileFxPanelVisible(false),
-      );
-    }
-    if (this.mobileFxBackdrop) {
-      this.mobileFxBackdrop.addEventListener('click', () =>
-        this.setMobileFxPanelVisible(false),
-      );
-    }
-    if (this.btnMobileTakePhoto) {
-      this.btnMobileTakePhoto.addEventListener('click', () => {
-        this.setMobileFxPanelVisible(false);
-        this.requestPhotoCapture();
-      });
-    }
-    if (this.btnMobileRecord) {
-      this.btnMobileRecord.addEventListener('click', () => {
-        this.setMobileFxPanelVisible(false);
-        this.toggleRecording();
-      });
-    }
-    if (this.btnMobileBlobToggle) {
-      this.btnMobileBlobToggle.addEventListener('click', () => {
-        this.chkBlobTracking.checked = !this.chkBlobTracking.checked;
-        void this.toggleEffect('blob');
-      });
-    }
-    if (this.btnMobileFaceToggle) {
-      this.btnMobileFaceToggle.addEventListener('click', () => {
-        this.chkFaceDetection.checked = !this.chkFaceDetection.checked;
-        void this.toggleEffect('face');
-      });
-    }
-    if (this.btnMobileBlinkToggle) {
-      this.btnMobileBlinkToggle.addEventListener('click', () => {
-        this.chkBlinkDetection.checked = !this.chkBlinkDetection.checked;
-        void this.toggleEffect('blink');
-      });
-    }
-    if (this.btnMobileColorPick) {
-      this.btnMobileColorPick.addEventListener('click', () => {
-        this.enableColorPick();
-        this.setMobileFxPanelVisible(false);
-      });
-    }
-    if (this.inpMobileBlobColor) {
-      this.inpMobileBlobColor.addEventListener('input', (e) => {
-        this.quickDetectorSettings.blobBoxColor = e.target.value;
-        if (this.blobTrackingEffect)
-          this.blobTrackingEffect.boxColor = e.target.value;
-        this.updateQuickDetectorControlsUI();
-        this.scheduleSaveQuickDetectorSettings();
-        this.scheduleSaveActiveEffectSettings();
-      });
-    }
-    if (this.inpMobileFaceColor) {
-      this.inpMobileFaceColor.addEventListener('input', (e) => {
-        this.quickDetectorSettings.faceBoxColor = e.target.value;
-        if (this.faceDetectionEffect)
-          this.faceDetectionEffect.boxColor = e.target.value;
-        this.updateQuickDetectorControlsUI();
-        this.scheduleSaveQuickDetectorSettings();
-        this.scheduleSaveActiveEffectSettings();
-      });
-    }
-    this.bindFaceVisualToggle(
-      this.chkMobileFaceShowBox,
-      this.chkMobileFaceShowBlur,
-      'box',
-    );
-    this.bindFaceVisualToggle(
-      this.chkMobileFaceShowBlur,
-      this.chkMobileFaceShowBox,
-      'blur',
-    );
-    if (this.inpMobileFaceLabel) {
-      this.inpMobileFaceLabel.addEventListener('input', (e) => {
-        const value = String(e.target.value || '').slice(0, 28);
-        this.quickDetectorSettings.faceLabelText = value || 'CARA';
-        if (this.faceDetectionEffect)
-          this.faceDetectionEffect.labelText = value;
-        this.updateQuickDetectorControlsUI();
-        this.scheduleSaveQuickDetectorSettings();
-        this.scheduleSaveActiveEffectSettings();
-      });
-      this.inpMobileFaceLabel.addEventListener('blur', (e) => {
-        const normalized = this.normalizeFaceLabel(e.target.value);
-        this.quickDetectorSettings.faceLabelText = normalized;
-        e.target.value = normalized;
-        if (this.faceDetectionEffect)
-          this.faceDetectionEffect.labelText = normalized;
-        this.saveQuickDetectorSettings();
-        this.saveActiveEffectSettings();
-      });
-    }
-    if (this.chkPreviewPhotoEnhancer) {
-      this.chkPreviewPhotoEnhancer.addEventListener(
-        'change',
-        this.onPreviewPhotoEnhancerToggle.bind(this),
-      );
-    }
-    if (this.sldPreviewPhotoEnhancerStrength) {
-      this.sldPreviewPhotoEnhancerStrength.addEventListener(
-        'input',
-        this.onPreviewPhotoEnhancerStrengthInput.bind(this),
-      );
-    }
-    if (this.capturePreviewModal) {
-      this.capturePreviewModal.addEventListener('click', (e) => {
-        if (e.target === this.capturePreviewModal)
-          this.closeCapturePreview(true);
-      });
-    }
-
     window.addEventListener('keydown', this.onGlobalKeyDown.bind(this));
     document.addEventListener(
       'visibilitychange',

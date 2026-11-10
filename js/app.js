@@ -15,6 +15,10 @@ import { mountCameraSource } from '../src/lib/webcam/mount.ts';
 import { mountEffectsControls } from '../src/lib/webcam/effects-mount.ts';
 import { updateCameraSourceState } from '../src/lib/webcam/camera-source-bridge.mjs';
 import { mountPreviewMetrics } from '../src/lib/preview/metrics-mount.ts';
+import {
+  mountCaptureChrome,
+  mountMobileHud,
+} from '../src/lib/capture/mount.ts';
 
 const i18n = initializeI18n();
 const controller = new AppController();
@@ -149,9 +153,84 @@ try {
       if (controllerReady) controller.openAdjustmentsForContext(context);
     },
   });
+  mountCaptureChrome(document.querySelector('#captureStatusMount'));
+  mountMobileHud(document.querySelector('#mobileHudMount'), {
+    toggleEffects: () => {
+      if (!controllerReady) return;
+      controller.setMobileFxPanelVisible(!controller.isMobileFxPanelVisible());
+    },
+    closeEffects: () => {
+      if (controllerReady) controller.setMobileFxPanelVisible(false);
+    },
+    toggleMirror: () => {
+      if (controllerReady) controller.toggleMirrorQuick();
+    },
+    takePhoto: () => {
+      if (!controllerReady) return;
+      controller.setMobileFxPanelVisible(false);
+      controller.requestPhotoCapture();
+    },
+    toggleRecording: () => {
+      if (!controllerReady) return;
+      controller.setMobileFxPanelVisible(false);
+      controller.toggleRecording();
+    },
+    toggleDetector: (type, checked) => {
+      const input = controller.getTimelineDetectorCheckbox(type);
+      if (input) input.checked = checked;
+      if (controllerReady) controller.handleVideoDetectorToggle(type);
+    },
+    pickColor: () => {
+      if (!controllerReady) return;
+      controller.enableColorPick();
+      controller.setMobileFxPanelVisible(false);
+    },
+    setBlobColor: (color) => {
+      if (controllerReady) controller.setQuickBlobColor(color);
+    },
+    setFaceColor: (color) => {
+      if (controllerReady) controller.setQuickFaceColor(color);
+    },
+    setFaceVisual: (kind, checked) => {
+      if (controllerReady) controller.setFaceVisualChecked(kind, checked);
+    },
+    setFaceLabel: (value) => {
+      if (controllerReady) controller.setQuickFaceLabel(value);
+    },
+    commitFaceLabel: (value) => {
+      if (controllerReady) controller.commitQuickFaceLabel(value);
+    },
+    applyPreset: (name) => {
+      if (controllerReady) controller.applyImagePreset(name);
+    },
+    setCaptureTimer: (seconds) => {
+      if (controllerReady) controller.setCaptureTimerSeconds(seconds);
+    },
+  });
   mountDetectorChips(document.querySelector('#effectsInfo'));
-  mountCaptureModal(document.querySelector('#captureModalTemplateSlot'));
-  mountExportModal(document.querySelector('#exportModalTemplateSlot'));
+  mountCaptureModal(document.querySelector('#captureModalTemplateSlot'), {
+    download: () => {
+      if (controllerReady) controller.downloadPendingCapture();
+    },
+    discard: () => {
+      if (controllerReady) controller.closeCapturePreview(true);
+    },
+    setEnhancer: (enabled) => {
+      if (controllerReady) controller.onPreviewPhotoEnhancerToggle(enabled);
+    },
+    setEnhancerStrength: (strength) => {
+      if (controllerReady)
+        controller.onPreviewPhotoEnhancerStrengthInput(strength);
+    },
+  });
+  mountExportModal(document.querySelector('#exportModalTemplateSlot'), {
+    cancel: () => {
+      if (controllerReady) void controller.cancelVideoExport();
+    },
+    close: () => {
+      if (controllerReady) controller.closeVideoExportModal();
+    },
+  });
   i18n.translateDocument();
   await controller.start();
   controllerReady = true;
