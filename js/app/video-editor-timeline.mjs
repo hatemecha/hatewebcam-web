@@ -1,5 +1,5 @@
 import { VISUAL_SYSTEM_LABELS } from '../visual-fx/config.mjs';
-import { isVisualFxClipType } from '../editor/timeline-clip-types.mjs';
+import { isVisualFxClipType } from '../editor/timeline-clip-types.ts';
 
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyVideoEditorTimelineMixin(proto) {

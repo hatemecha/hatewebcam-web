@@ -31,7 +31,7 @@ import {
 } from './constants.mjs';
 import { CameraManager } from '../core/camera-manager.mjs';
 import { VideoTimeline } from '../editor/video-timeline.mjs';
-import { EditorHistory } from '../editor/editor-history.mjs';
+import { EditorHistory } from '../editor/editor-history.ts';
 import { EffectManager } from '../effects/effect-manager.mjs';
 import { setupDom } from './dom.mjs';
 import { applyStorageMixin } from './settings.mjs';
@@ -47,7 +47,7 @@ import { applyUIHelpersMixin } from './ui-helpers.mjs';
 import { applyProfilesMixin } from './profiles.mjs';
 import { applyCaptureMixin } from './capture.mjs';
 import { applyModalfocusmanagementMixin } from './modal-focus.mjs';
-import { SettingsStore } from './settings-store.mjs';
+import { SettingsStore } from './settings-store.ts';
 import { TimelineView } from './timeline-view.mjs';
 import { EditAssistController } from './edit-assist-controller.mjs';
 import { RenderEngine } from './render-engine.mjs';

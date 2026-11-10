@@ -14,5 +14,5 @@
     "checkJs": false,
     "types": ["svelte", "vite/client"]
   },
-  "include": ["src/**/*.ts", "src/**/*.svelte"]
+  "include": ["src/**/*.ts", "src/**/*.svelte", "js/**/*.ts"]
 }

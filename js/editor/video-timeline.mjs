@@ -2,7 +2,7 @@
 import {
   normalizeTimelineClipType,
   VISUAL_FX_CLIP_TYPE,
-} from './timeline-clip-types.mjs';
+} from './timeline-clip-types.ts';
 
 export class VideoTimeline {
   static TYPES = ['look', VISUAL_FX_CLIP_TYPE, 'blob', 'face', 'blink'];

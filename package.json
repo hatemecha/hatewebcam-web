@@ -21,7 +21,7 @@
     "dev": "vite",
     "build": "vite build && node scripts/copy-templates.mjs",
     "preview": "vite preview",
-    "test": "node tests/smoke-check.mjs && node tests/unit-check.mjs && node tests/visual-fx-check.mjs",
+    "test": "tsx tests/smoke-check.mjs && tsx tests/unit-check.mjs && tsx tests/visual-fx-check.mjs",
     "test:browser": "playwright test",
     "typecheck": "svelte-check --tsconfig ./tsconfig.json",
     "lint": "eslint .",
@@ -39,6 +39,7 @@
     "prettier-plugin-svelte": "^4.1.1",
     "svelte": "^5.57.3",
     "svelte-check": "^4.7.8",
+    "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.72.2",
     "vite": "^8.1.0"

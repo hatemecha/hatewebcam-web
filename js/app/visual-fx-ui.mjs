@@ -6,7 +6,7 @@ import {
   MACRO_LABELS,
   normalizeVisualConfig,
 } from '../visual-fx/config.mjs';
-import { isVisualFxClipType } from '../editor/timeline-clip-types.mjs';
+import { isVisualFxClipType } from '../editor/timeline-clip-types.ts';
 
 // Compact instrument panel: a system picker, "Aplicar a", four curated
 // macros, and a Tuning drawer that only ever shows the handful of extra

@@ -3,7 +3,7 @@ import {
   PREVIEW_MIN_WIDTH,
   PREVIEW_MIN_HEIGHT,
   normalizePreviewQuality,
-} from '../preview-metrics.mjs';
+} from '../preview-metrics.ts';
 import { COMMON_VIDEO_FPS } from '../video-export.mjs';
 
 export {

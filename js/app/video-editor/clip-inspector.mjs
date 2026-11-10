@@ -1,5 +1,5 @@
 import { createDefaultVisualConfig } from '../../visual-fx/config.mjs';
-import { isVisualFxClipType } from '../../editor/timeline-clip-types.mjs';
+import { isVisualFxClipType } from '../../editor/timeline-clip-types.ts';
 
 const VIDEO_EFFECT_AUTOMATION_MODES = new Set([
   'fixed',

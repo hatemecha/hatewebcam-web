@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {
   getProcessingFrameDimensions,
   getPreviewFrameDimensions,
-} from '../js/preview-metrics.mjs';
+} from '../js/preview-metrics.ts';
 import {
   calculateExportBitrate,
   calculateFrameDurationUs,
@@ -23,7 +23,7 @@ import {
 } from '../js/video-export.mjs';
 import { CameraManager } from '../js/core/camera-manager.mjs';
 import { VideoTimeline } from '../js/editor/video-timeline.mjs';
-import { EditorHistory } from '../js/editor/editor-history.mjs';
+import { EditorHistory } from '../js/editor/editor-history.ts';
 import { BlobTracking } from '../js/effects/blob-tracking.mjs';
 import { BlinkDetection } from '../js/effects/blink-detection.mjs';
 import { FaceDetection } from '../js/effects/face-detection.mjs';
@@ -36,7 +36,7 @@ import {
   normalizePerformanceMode,
 } from '../js/app/constants.mjs';
 import { EditAssistController } from '../js/app/edit-assist-controller.mjs';
-import { SettingsStore } from '../js/app/settings-store.mjs';
+import { SettingsStore } from '../js/app/settings-store.ts';
 import { applyEffectsMixin } from '../js/app/effects.mjs';
 import { applyCameraMixin } from '../js/app/camera.mjs';
 import { applyRenderLoopMixin } from '../js/app/render.mjs';

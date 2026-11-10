@@ -227,7 +227,20 @@ defaults existentes sin agregar una migración nueva.
 - Se agregó cobertura unitaria para el bridge y se mantuvieron las capturas de
   detectores.
 
+### Etapa 6: parcial
+
+- `js/preview-metrics.ts`, `js/editor/timeline-clip-types.ts`,
+  `js/app/settings-store.ts` y `js/editor/editor-history.ts` están en TypeScript
+  estricto y cubiertos por los tests existentes.
+- `npm test` usa `tsx` para que CI con Node 20 pueda ejecutar tests que importan
+  módulos `.ts`; el build y Playwright siguen usando Vite.
+- Los módulos legacy que todavía importan estos archivos usan la extensión `.ts`
+  explícita. No se agregó un loader al runtime de producción.
+- `svelte-check` incluye `src/**` y `js/**/*.ts`.
+
 ### Próximo corte
 
 - Migrar resolución/FPS con un mecanismo de test determinista.
 - Extraer la sesión de captura y el ciclo de cámara a servicios tipados.
+- Convertir `video-timeline` y los helpers puros de exportación cuando sus tipos de
+  configuración estén modelados.
