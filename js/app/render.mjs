@@ -1,3 +1,4 @@
+import { updatePreviewMetrics } from '../../src/lib/preview/metrics-state.ts';
 import { WebGLFilterRenderer } from './webgl-filter-renderer.mjs';
 import { metricsFromApp } from '../subject/subject-frame-map.mjs';
 import { perfDev } from './perf-dev.mjs';
@@ -136,12 +137,14 @@ export function applyRenderLoopMixin(proto) {
       this.canvas.height = height;
     }
     if (forceLabel || resized || this.previewScale !== scale) {
-      this.resolutionInfo.textContent = this.buildResolutionLabel(
-        sourceWidth,
-        sourceHeight,
-        width,
-        height,
-      );
+      updatePreviewMetrics({
+        resolution: this.buildResolutionLabel(
+          sourceWidth,
+          sourceHeight,
+          width,
+          height,
+        ),
+      });
     }
     this.previewScale = scale;
     return { width, height, scale };
@@ -237,7 +240,7 @@ export function applyRenderLoopMixin(proto) {
         this.frameCount++;
         const now = performance.now();
         if (now - this.lastFpsTime >= 1000) {
-          this.fpsInfo.textContent = `${this.frameCount} FPS`;
+          updatePreviewMetrics({ fps: `${this.frameCount} FPS` });
           perfDev.gauge('previewFps', this.frameCount);
           this.handlePreviewFpsSample?.(this.frameCount);
           this.frameCount = 0;

@@ -36,6 +36,7 @@ export function applyVideoEditorSourceMixin(proto) {
       this.setInspectorTab('project');
       this.applyTimelineZoom();
       updateShellState({ mode: 'video' });
+      this.publishWebcamPanel?.();
       this.videoPlaceholderLoading = false;
       this.clearPreviewCanvas();
       void this.resetVideoTimelineDetectors();
@@ -56,6 +57,7 @@ export function applyVideoEditorSourceMixin(proto) {
       .querySelectorAll('.webcam-only')
       .forEach((el) => el.classList.remove('hidden'));
     updateShellState({ mode: 'camera' });
+    this.publishWebcamPanel?.();
     this.setCameraPlaceholderMessage('Iniciando cámara automáticamente...');
     this.updatePreviewPlaceholder();
     void this.restoreWebcamSessionState();

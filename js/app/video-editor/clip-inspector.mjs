@@ -99,6 +99,9 @@ export function applyVideoEditorClipInspectorMixin(proto) {
         this._adjustClipStatusKey = 'empty';
         this.adjustClipStatus.classList.add('hidden');
         this.adjustClipStatus.classList.remove('is-live');
+        this.adjustClipStatusText = '';
+        this.adjustClipVisible = false;
+        this.publishWebcamPanel?.();
       }
       return;
     }
@@ -109,11 +112,14 @@ export function applyVideoEditorClipInspectorMixin(proto) {
     const key = `${item.id}:${item.startTime}:${item.endTime}:${active}`;
     if (this._adjustClipStatusKey === key) return;
     this._adjustClipStatusKey = key;
-    this.adjustClipStatus.textContent = active
+    this.adjustClipStatusText = active
       ? `Tramo ${this.formatDurationDetailed(item.startTime)} - ${this.formatDurationDetailed(item.endTime)} · Vista previa activa`
       : `Tramo ${this.formatDurationDetailed(item.startTime)} - ${this.formatDurationDetailed(item.endTime)} · Mové el cursor al clip para previsualizar`;
+    this.adjustClipVisible = true;
+    this.adjustClipStatus.textContent = this.adjustClipStatusText;
     this.adjustClipStatus.classList.toggle('is-live', active);
     this.adjustClipStatus.classList.remove('hidden');
+    this.publishWebcamPanel?.();
   };
 
   proto.updateAdjustmentsPanelState = function () {

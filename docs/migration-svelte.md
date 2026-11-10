@@ -256,16 +256,16 @@ defaults existentes sin agregar una migración nueva.
 
 Estados: Pendiente, En curso, Completada y verificada, Bloqueada.
 
-| Tarea                                                                                                   | Estado                  | Notas                                                                                                         |
-| ------------------------------------------------------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Integrar `origin/main` sin reescribir historia                                                          | Completada y verificada | Merge no destructivo. Artifact `site-dist` y seek estable del test de Visual FX.                              |
-| CI `verify` en `refactor/**` sin `deploy` fuera de `main`                                               | Completada y verificada | `deploy` sigue condicionado a `push` de `main`.                                                               |
-| Controles de cámara (encendido, dispositivo, rendimiento, espejo rápido)                                | Completada y verificada | `CameraSourcePanel` es la fuente visual. Node tests y Playwright 54/54. El ciclo de cámara sigue en el mixin. |
-| Resto de controles de webcam, HUD, modales con estado, editor, i18n tipado, eliminación del controlador | Pendiente               | No hay bloqueo externo.                                                                                       |
+| Tarea                                                                            | Estado                  | Notas                                                                                                         |
+| -------------------------------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Integrar `origin/main` sin reescribir historia                                   | Completada y verificada | Merge no destructivo. Artifact `site-dist` y seek estable del test de Visual FX.                              |
+| CI `verify` en `refactor/**` sin `deploy` fuera de `main`                        | Completada y verificada | `deploy` sigue condicionado a `push` de `main`.                                                               |
+| Controles de cámara (encendido, dispositivo, rendimiento, espejo rápido)         | Completada y verificada | `CameraSourcePanel` es la fuente visual. Node tests y Playwright 54/54. El ciclo de cámara sigue en el mixin. |
+| Panel de webcam, resolución y FPS                                                | Completada y verificada | `EffectsControls` reemplaza la plantilla de controles. La config avanzada de detectores sigue en el mixin.    |
+| HUD móvil, modales con estado, editor, i18n tipado y eliminación del controlador | Pendiente               | No hay bloqueo externo.                                                                                       |
 
 ## Próximo corte
 
-- Migrar el resto de `templates/webcam-controls.html` por secciones, con el mismo
-  patrón de estado de presentación y adaptador.
-- Migrar resolución/FPS con un mecanismo de test determinista.
-- Extraer la sesión de captura y el ciclo de cámara a servicios tipados.
+- Migrar el HUD móvil para que use el mismo estado que el panel de escritorio.
+- Convertir los modales en componentes con estado, foco y progreso.
+- Extraer la sesión de captura a TypeScript.

@@ -5,8 +5,88 @@ import {
   resolveCameraDeviceSelection,
   updateCameraSourceState,
 } from '../../src/lib/webcam/camera-source-bridge.mjs';
+import {
+  deriveDetectorExtras,
+  replaceWebcamPanelState,
+} from '../../src/lib/webcam/panel-state.ts';
+
+function readPanelNumber(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyStorageMixin(proto) {
+  proto.publishWebcamPanel = function () {
+    const image = this.imageSettings || {};
+    const quick = this.quickDetectorSettings || {};
+    const faceFlags = this.normalizeFaceVisualFlags
+      ? this.normalizeFaceVisualFlags(quick)
+      : { showBox: true, showBlur: false };
+    const selectedEffect =
+      this.sourceMode === 'video'
+        ? this.getSelectedVideoEffectItem?.()?.type || null
+        : null;
+    const extras = deriveDetectorExtras({
+      sourceMode: this.sourceMode === 'video' ? 'video' : 'camera',
+      blobOn: !!this.chkBlobTracking?.checked,
+      faceOn: !!this.chkFaceDetection?.checked,
+      selectedEffect,
+      faceShowBox: !!faceFlags.showBox,
+    });
+    replaceWebcamPanelState({
+      sourceMode: this.sourceMode === 'video' ? 'video' : 'camera',
+      contextual:
+        !!this.effectsControlsSlot?.classList.contains('is-contextual'),
+      adjustContext: this.adjustmentsContext || 'look',
+      adjustHelp: this.adjustContextHelp?.textContent || '',
+      adjustClipStatus: this.adjustClipStatusText || '',
+      adjustClipVisible: !!this.adjustClipVisible,
+      advancedOpen: !!this.advancedOptionsOpen,
+      activePreset: this.mobileActivePreset || null,
+      detectors: {
+        blob: !!this.chkBlobTracking?.checked,
+        face: !!this.chkFaceDetection?.checked,
+        blink: !!this.chkBlinkDetection?.checked,
+        faceBusy: !!this.chkFaceDetection?.disabled,
+        blinkBusy: !!this.chkBlinkDetection?.disabled,
+      },
+      ...extras,
+      blobColor: quick.blobBoxColor || '#ff2222',
+      faceColor: quick.faceBoxColor || '#ff2222',
+      faceShowBox: !!faceFlags.showBox,
+      faceShowBlur: !!faceFlags.showBlur,
+      faceLabel: quick.faceLabelText || 'CARA',
+      image: {
+        blackAndWhite: !!image.blackAndWhite,
+        exposure: readPanelNumber(image.exposure, 0),
+        shadows: readPanelNumber(image.shadows, 0),
+        highlights: readPanelNumber(image.highlights, 0),
+        contrast: readPanelNumber(image.contrast, 100),
+        saturation: readPanelNumber(image.saturation, 100),
+        temperature: readPanelNumber(image.temperature, 0),
+        detail: readPanelNumber(image.detail, 0),
+        sharpness: readPanelNumber(image.sharpness, 0),
+        jpegQuality: readPanelNumber(image.jpegQuality, 92),
+        videoFormat: image.videoFormat || 'auto',
+        qualityEnhancer: !!image.qualityEnhancer,
+        qualityEnhancerStrength: readPanelNumber(
+          image.qualityEnhancerStrength,
+          35,
+        ),
+        shutterSound: image.shutterSound !== false,
+      },
+      orientation: {
+        flipH: !!this.flipH,
+        flipV: !!this.flipV,
+        rotation: Number(this.rotation) || 0,
+      },
+      profiles: Object.keys(this.loadProfiles?.() || {}),
+      selectedProfile: this.selectedProfile || '',
+      previewQualityLabel:
+        this.getCurrentPreviewQualityPreset?.().label || 'Balanceada',
+    });
+  };
+
   proto.loadJsonStorage = function (key, fallbackValue) {
     return this.settingsStore.loadJson(key, fallbackValue);
   };
@@ -506,6 +586,7 @@ export function applyStorageMixin(proto) {
     this.updateCaptureButtons();
     this.updateVideoEffectInspector();
     this.updateVideoEditorUI();
+    this.publishWebcamPanel();
   };
 
   proto.applyQuickDetectorSettingsToEffects = function () {
@@ -897,6 +978,7 @@ export function applyStorageMixin(proto) {
     this.updateBWDependentControls();
     this.mobileActivePreset = this.getMatchingImagePreset();
     this.updateMobilePresetButtons(this.mobileActivePreset);
+    this.publishWebcamPanel();
   };
 
   proto.updateBWDependentControls = function () {
@@ -926,52 +1008,115 @@ export function applyStorageMixin(proto) {
     }
   };
 
-  proto.bindImageControlEvents = function () {
-    const bindIntSlider = (sliderEl, valueEl, key, suffix = '') => {
-      if (!sliderEl || !valueEl) return;
-      sliderEl.addEventListener('input', (e) => {
-        const value = parseInt(e.target.value, 10);
-        this.imageSettings[key] = value;
-        valueEl.textContent = `${value}${suffix}`;
-        this.mobileActivePreset = null;
-        this.updateMobilePresetButtons(this.mobileActivePreset);
-        this.scheduleSaveImageSettings();
-      });
+  proto.setPanelImageNumber = function (key, value) {
+    this.imageSettings[key] = value;
+    this.mobileActivePreset = null;
+    this.updateMobilePresetButtons(this.mobileActivePreset);
+    this.updateBWDependentControls();
+    this.scheduleSaveImageSettings();
+    this.publishWebcamPanel();
+  };
+
+  proto.setPanelBlackAndWhite = function (checked) {
+    this.imageSettings.blackAndWhite = !!checked;
+    this.updateBWDependentControls();
+    this.mobileActivePreset = null;
+    this.updateMobilePresetButtons(this.mobileActivePreset);
+    this.scheduleSaveImageSettings();
+    this.publishWebcamPanel();
+  };
+
+  proto.setPanelVideoFormat = function (format) {
+    this.imageSettings.videoFormat = format;
+    this.saveImageSettings();
+    this.publishWebcamPanel();
+  };
+
+  proto.setPanelQualityEnhancer = function (checked) {
+    this.imageSettings.qualityEnhancer = !!checked;
+    this.updateQualityEnhancerControls();
+    this.saveImageSettings();
+    this.publishWebcamPanel();
+  };
+
+  proto.setPanelShutterSound = function (checked) {
+    this.imageSettings.shutterSound = !!checked;
+    this.saveImageSettings();
+    this.publishWebcamPanel();
+  };
+
+  proto.resetImageAdjustments = function () {
+    this.imageSettings = {
+      ...this.DEFAULT_IMAGE_SETTINGS,
+      jpegQuality: this.imageSettings.jpegQuality,
+      videoFormat: this.imageSettings.videoFormat,
+      editorExportPreset: this.imageSettings.editorExportPreset,
+      editorExportFormat: this.imageSettings.editorExportFormat,
+      editorExportMode: this.imageSettings.editorExportMode,
+      editorCopyAudio: this.imageSettings.editorCopyAudio,
+      experimentalExportFeatures: this.imageSettings.experimentalExportFeatures,
+      effectsExportChroma: this.imageSettings.effectsExportChroma,
+      previewQuality: this.imageSettings.previewQuality,
+      performanceMode: this.imageSettings.performanceMode,
+      qualityEnhancer: this.imageSettings.qualityEnhancer,
+      qualityEnhancerStrength: this.imageSettings.qualityEnhancerStrength,
     };
+    this.mobileActivePreset = null;
+    this.updateMobilePresetButtons(this.mobileActivePreset);
+    this.updateImageControlsUI();
+    this.scheduleSaveImageSettings();
+  };
 
-    if (this.chkBlackWhite) {
-      this.chkBlackWhite.addEventListener('change', (e) => {
-        this.imageSettings.blackAndWhite = e.target.checked;
-        this.updateBWDependentControls();
-        this.mobileActivePreset = null;
-        this.updateMobilePresetButtons(this.mobileActivePreset);
-        this.scheduleSaveImageSettings();
-      });
+  proto.setQuickBlobColor = function (color) {
+    this.quickDetectorSettings.blobBoxColor = color;
+    if (this.blobTrackingEffect) this.blobTrackingEffect.boxColor = color;
+    this.updateQuickDetectorControlsUI();
+    this.scheduleSaveQuickDetectorSettings();
+    this.scheduleSaveActiveEffectSettings();
+  };
+
+  proto.setQuickFaceColor = function (color) {
+    this.quickDetectorSettings.faceBoxColor = color;
+    if (this.faceDetectionEffect) this.faceDetectionEffect.boxColor = color;
+    this.updateQuickDetectorControlsUI();
+    this.scheduleSaveQuickDetectorSettings();
+    this.scheduleSaveActiveEffectSettings();
+  };
+
+  proto.setQuickFaceLabel = function (value) {
+    const next = String(value || '').slice(0, 28);
+    this.quickDetectorSettings.faceLabelText = next || 'CARA';
+    if (this.faceDetectionEffect) this.faceDetectionEffect.labelText = next;
+    this.scheduleSaveQuickDetectorSettings();
+    this.scheduleSaveActiveEffectSettings();
+    this.syncAdvancedQuickInputs?.();
+    this.publishWebcamPanel();
+  };
+
+  proto.commitQuickFaceLabel = function (value) {
+    const normalized = this.normalizeFaceLabel(value);
+    this.quickDetectorSettings.faceLabelText = normalized;
+    if (this.faceDetectionEffect)
+      this.faceDetectionEffect.labelText = normalized;
+    this.saveQuickDetectorSettings();
+    this.saveActiveEffectSettings();
+    this.syncAdvancedQuickInputs?.();
+    this.publishWebcamPanel();
+  };
+
+  proto.setFaceVisualChecked = function (kind, checked) {
+    let showBox =
+      kind === 'box' ? checked : !!this.quickDetectorSettings.faceShowBox;
+    let showBlur =
+      kind === 'blur' ? checked : !!this.quickDetectorSettings.faceShowBlur;
+    if (!showBox && !showBlur) {
+      if (kind === 'box') showBox = true;
+      else showBlur = true;
     }
+    this.applyFaceVisualFlags(showBox, showBlur);
+  };
 
-    bindIntSlider(this.sldExposure, this.valExposure, 'exposure');
-    bindIntSlider(this.sldShadows, this.valShadows, 'shadows');
-    bindIntSlider(this.sldHighlights, this.valHighlights, 'highlights');
-    bindIntSlider(this.sldContrast, this.valContrast, 'contrast', '%');
-    bindIntSlider(this.sldSaturation, this.valSaturation, 'saturation', '%');
-    bindIntSlider(this.sldTemperature, this.valTemperature, 'temperature');
-    bindIntSlider(this.sldDetail, this.valDetail, 'detail');
-    bindIntSlider(this.sldSharpness, this.valSharpness, 'sharpness');
-    bindIntSlider(this.sldJpegQuality, this.valJpegQuality, 'jpegQuality', '%');
-    bindIntSlider(
-      this.sldQualityEnhancerStrength,
-      this.valQualityEnhancerStrength,
-      'qualityEnhancerStrength',
-      '%',
-    );
-
-    if (this.videoFormatSelect) {
-      this.videoFormatSelect.addEventListener('change', (e) => {
-        this.imageSettings.videoFormat = e.target.value;
-        this.saveImageSettings();
-      });
-    }
-
+  proto.bindImageControlEvents = function () {
     if (this.videoExportModeSelect) {
       this.videoExportModeSelect.addEventListener('change', (e) => {
         this.imageSettings.editorExportMode = [
@@ -1049,51 +1194,6 @@ export function applyStorageMixin(proto) {
     bindCaptureTimerSelect(this.captureTimerSelect);
     bindCaptureTimerSelect(this.selMobileCaptureTimer);
 
-    if (this.chkQualityEnhancer) {
-      this.chkQualityEnhancer.addEventListener('change', (e) => {
-        this.imageSettings.qualityEnhancer = e.target.checked;
-        this.updateQualityEnhancerControls();
-        this.saveImageSettings();
-      });
-    }
-
-    if (this.chkShutterSound) {
-      this.chkShutterSound.addEventListener('change', (e) => {
-        this.imageSettings.shutterSound = !!e.target.checked;
-        this.saveImageSettings();
-      });
-    }
-
-    if (this.btnResetImageAdjustments) {
-      this.btnResetImageAdjustments.addEventListener('click', () => {
-        this.imageSettings = {
-          ...this.DEFAULT_IMAGE_SETTINGS,
-          jpegQuality: this.imageSettings.jpegQuality,
-          videoFormat: this.imageSettings.videoFormat,
-          editorExportPreset: this.imageSettings.editorExportPreset,
-          editorExportFormat: this.imageSettings.editorExportFormat,
-          editorExportMode: this.imageSettings.editorExportMode,
-          editorCopyAudio: this.imageSettings.editorCopyAudio,
-          experimentalExportFeatures:
-            this.imageSettings.experimentalExportFeatures,
-          effectsExportChroma: this.imageSettings.effectsExportChroma,
-          previewQuality: this.imageSettings.previewQuality,
-          performanceMode: this.imageSettings.performanceMode,
-          qualityEnhancer: this.imageSettings.qualityEnhancer,
-          qualityEnhancerStrength: this.imageSettings.qualityEnhancerStrength,
-        };
-        this.mobileActivePreset = null;
-        this.updateMobilePresetButtons(this.mobileActivePreset);
-        this.updateImageControlsUI();
-        this.scheduleSaveImageSettings();
-      });
-    }
-
-    this.presetButtons.forEach((btn) => {
-      btn.addEventListener('click', () =>
-        this.applyImagePreset(btn.dataset.preset),
-      );
-    });
     this.mobilePresetButtons.forEach((btn) => {
       btn.addEventListener('click', () =>
         this.applyImagePreset(btn.dataset.mobilePreset),
@@ -1101,66 +1201,16 @@ export function applyStorageMixin(proto) {
     });
   };
 
-  proto.bindQuickDetectorEvents = function () {
-    if (this.inpBlobQuickColor) {
-      this.inpBlobQuickColor.addEventListener('input', (e) => {
-        this.quickDetectorSettings.blobBoxColor = e.target.value;
-        if (this.blobTrackingEffect)
-          this.blobTrackingEffect.boxColor = e.target.value;
-        this.updateQuickDetectorControlsUI();
-        this.scheduleSaveQuickDetectorSettings();
-        this.scheduleSaveActiveEffectSettings();
-      });
-    }
-
-    this.bindFaceVisualToggle(this.chkFaceShowBox, this.chkFaceShowBlur, 'box');
-    this.bindFaceVisualToggle(
-      this.chkFaceShowBlur,
-      this.chkFaceShowBox,
-      'blur',
-    );
-
-    if (this.inpFaceQuickColor) {
-      this.inpFaceQuickColor.addEventListener('input', (e) => {
-        this.quickDetectorSettings.faceBoxColor = e.target.value;
-        if (this.faceDetectionEffect)
-          this.faceDetectionEffect.boxColor = e.target.value;
-        this.updateQuickDetectorControlsUI();
-        this.scheduleSaveQuickDetectorSettings();
-        this.scheduleSaveActiveEffectSettings();
-      });
-    }
-
-    if (this.inpFaceQuickLabel) {
-      this.inpFaceQuickLabel.addEventListener('input', (e) => {
-        const value = String(e.target.value || '').slice(0, 28);
-        this.quickDetectorSettings.faceLabelText = value || 'CARA';
-        if (this.faceDetectionEffect)
-          this.faceDetectionEffect.labelText = value;
-        this.scheduleSaveQuickDetectorSettings();
-        this.scheduleSaveActiveEffectSettings();
-        this.syncAdvancedQuickInputs();
-      });
-
-      this.inpFaceQuickLabel.addEventListener('blur', (e) => {
-        const normalized = this.normalizeFaceLabel(e.target.value);
-        this.quickDetectorSettings.faceLabelText = normalized;
-        e.target.value = normalized;
-        if (this.faceDetectionEffect)
-          this.faceDetectionEffect.labelText = normalized;
-        this.saveQuickDetectorSettings();
-        this.saveActiveEffectSettings();
-        this.syncAdvancedQuickInputs();
-      });
-    }
-  };
+  proto.bindQuickDetectorEvents = function () {};
 
   proto.syncMirrorControls = function () {
     if (this.chkMirror) this.chkMirror.checked = !!this.flipH;
     updateCameraSourceState({ mirrored: !!this.flipH });
-    if (!this.btnMobileMirror) return;
-    this.btnMobileMirror.setAttribute('aria-pressed', String(!!this.flipH));
-    this.btnMobileMirror.classList.toggle('is-active', !!this.flipH);
+    if (this.btnMobileMirror) {
+      this.btnMobileMirror.setAttribute('aria-pressed', String(!!this.flipH));
+      this.btnMobileMirror.classList.toggle('is-active', !!this.flipH);
+    }
+    this.publishWebcamPanel();
   };
 
   proto.toggleMirrorQuick = function () {
@@ -1357,26 +1407,25 @@ export function applyStorageMixin(proto) {
   };
 
   proto.setAdvancedOptionsVisible = function (visible) {
-    if (!this.advancedOptions || !this.btnToggleAdvancedOptions) return;
-
-    this.advancedOptions.classList.toggle('hidden', !visible);
-    this.btnToggleAdvancedOptions.classList.toggle('is-open', visible);
-    this.btnToggleAdvancedOptions.setAttribute(
-      'aria-expanded',
-      String(visible),
-    );
-
+    this.advancedOptionsOpen = !!visible;
+    if (this.advancedOptions && this.btnToggleAdvancedOptions) {
+      this.advancedOptions.classList.toggle('hidden', !visible);
+      this.btnToggleAdvancedOptions.classList.toggle('is-open', visible);
+      this.btnToggleAdvancedOptions.setAttribute(
+        'aria-expanded',
+        String(visible),
+      );
+    }
     if (this.advancedToggleLabel) {
       this.advancedToggleLabel.textContent = visible
         ? 'Ocultar ajustes avanzados'
         : 'Ajustes avanzados';
     }
+    this.publishWebcamPanel();
   };
 
   proto.toggleAdvancedOptions = function () {
-    if (!this.advancedOptions) return;
-
-    const nextVisible = this.advancedOptions.classList.contains('hidden');
+    const nextVisible = !this.advancedOptionsOpen;
     this.setAdvancedOptionsVisible(nextVisible);
 
     const cfg = this.loadConfig();

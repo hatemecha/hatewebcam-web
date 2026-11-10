@@ -12,7 +12,9 @@ import {
   mountExportModal,
 } from '../src/lib/modals/mount.ts';
 import { mountCameraSource } from '../src/lib/webcam/mount.ts';
+import { mountEffectsControls } from '../src/lib/webcam/effects-mount.ts';
 import { updateCameraSourceState } from '../src/lib/webcam/camera-source-bridge.mjs';
+import { mountPreviewMetrics } from '../src/lib/preview/metrics-mount.ts';
 
 const i18n = initializeI18n();
 const controller = new AppController();
@@ -54,6 +56,97 @@ try {
     },
     toggleMirror: () => {
       if (controllerReady) controller.toggleMirrorQuick();
+    },
+  });
+  mountPreviewMetrics(document.querySelector('#previewMetricsMount'));
+  mountEffectsControls(document.querySelector('#effectsControlsSlot'), {
+    toggleDetector: (type, checked) => {
+      const input = controller.getTimelineDetectorCheckbox(type);
+      if (input) input.checked = checked;
+      if (controllerReady) controller.handleVideoDetectorToggle(type);
+    },
+    setBlobColor: (color) => {
+      if (controllerReady) controller.setQuickBlobColor(color);
+    },
+    setFaceColor: (color) => {
+      if (controllerReady) controller.setQuickFaceColor(color);
+    },
+    setFaceLabel: (value) => {
+      if (controllerReady) controller.setQuickFaceLabel(value);
+    },
+    commitFaceLabel: (value) => {
+      if (controllerReady) controller.commitQuickFaceLabel(value);
+    },
+    setFaceVisual: (kind, checked) => {
+      if (controllerReady) controller.setFaceVisualChecked(kind, checked);
+    },
+    pickColor: () => {
+      if (controllerReady) controller.enableColorPick();
+    },
+    toggleAdvanced: () => {
+      if (controllerReady) controller.toggleAdvancedOptions();
+    },
+    setImageNumber: (key, value) => {
+      if (controllerReady) controller.setPanelImageNumber(key, value);
+    },
+    setBlackAndWhite: (checked) => {
+      if (controllerReady) controller.setPanelBlackAndWhite(checked);
+    },
+    setVideoFormat: (format) => {
+      if (controllerReady) controller.setPanelVideoFormat(format);
+    },
+    setQualityEnhancer: (checked) => {
+      if (controllerReady) controller.setPanelQualityEnhancer(checked);
+    },
+    setShutterSound: (checked) => {
+      if (controllerReady) controller.setPanelShutterSound(checked);
+    },
+    setFlipH: (checked) => {
+      if (!controllerReady) return;
+      controller.flipH = checked;
+      if (controller.chkMirror) controller.chkMirror.checked = checked;
+      controller.onTransformChange();
+    },
+    setFlipV: (checked) => {
+      if (!controllerReady) return;
+      controller.flipV = checked;
+      if (controller.chkFlipV) controller.chkFlipV.checked = checked;
+      controller.onTransformChange();
+    },
+    setRotation: (value) => {
+      if (!controllerReady) return;
+      controller.rotation = value;
+      if (controller.rotationSelect) {
+        controller.rotationSelect.value = String(value);
+      }
+      controller.onTransformChange();
+    },
+    applyPreset: (name) => {
+      if (controllerReady) controller.applyImagePreset(name);
+    },
+    resetImage: () => {
+      if (controllerReady) controller.resetImageAdjustments();
+    },
+    saveProfile: () => {
+      if (controllerReady) controller.saveCurrentProfile();
+    },
+    deleteProfile: () => {
+      if (controllerReady) controller.deleteProfile();
+    },
+    deleteAllProfiles: () => {
+      if (controllerReady) controller.deleteAllProfiles();
+    },
+    selectProfile: (name) => {
+      if (!controllerReady) return;
+      controller.selectedProfile = name;
+      if (controller.profileSelect) controller.profileSelect.value = name;
+      void controller.loadProfile();
+    },
+    resetWebcam: () => {
+      if (controllerReady) void controller.resetWebcamConfiguration();
+    },
+    openAdjustContext: (context) => {
+      if (controllerReady) controller.openAdjustmentsForContext(context);
     },
   });
   mountDetectorChips(document.querySelector('#effectsInfo'));

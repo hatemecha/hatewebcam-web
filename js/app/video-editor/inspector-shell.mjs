@@ -29,6 +29,7 @@ export function applyVideoEditorInspectorShellMixin(proto) {
       this.inspectorAdjustmentsHost.appendChild(this.effectsControlsSlot);
     }
     this.effectsControlsSlot.classList.add('is-contextual');
+    this.publishWebcamPanel?.();
     this.setAdvancedOptionsVisible(true);
     this.updateAdjustmentsPanelState();
   };
@@ -36,6 +37,7 @@ export function applyVideoEditorInspectorShellMixin(proto) {
   proto.unmountVideoEffectsControls = function () {
     if (!this.effectsControlsSlot || !this.controlPanel) return;
     this.effectsControlsSlot.classList.remove('is-contextual');
+    this.publishWebcamPanel?.();
     delete this.effectsControlsSlot.dataset.adjustContext;
     this.adjustContextNav?.classList.add('hidden');
     this.effectsControlsSlot
@@ -103,6 +105,7 @@ export function applyVideoEditorInspectorShellMixin(proto) {
       this.adjustContextHelp.textContent = help;
     }
     this.updateAdjustmentsClipStatus();
+    this.publishWebcamPanel?.();
     if (options.syncEffectType && this.videoEffectType) {
       this.videoEffectType.value = options.effectType || context;
       this.updateEffectTrackHighlight();

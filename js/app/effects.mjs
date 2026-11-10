@@ -71,6 +71,7 @@ export function applyEffectsMixin(proto) {
             'info',
           );
         this.chkFaceDetection.disabled = true;
+        this.publishWebcamPanel?.();
         try {
           await this.ensureFaceMeshLoaded();
         } catch (err) {
@@ -84,6 +85,7 @@ export function applyEffectsMixin(proto) {
           this.chkFaceDetection.checked = false;
         } finally {
           this.chkFaceDetection.disabled = false;
+          this.publishWebcamPanel?.();
         }
 
         if (
@@ -128,6 +130,7 @@ export function applyEffectsMixin(proto) {
             'info',
           );
         this.chkBlinkDetection.disabled = true;
+        this.publishWebcamPanel?.();
         try {
           await this.ensureFaceMeshLoaded();
         } catch (err) {
@@ -141,6 +144,7 @@ export function applyEffectsMixin(proto) {
           this.chkBlinkDetection.checked = false;
         } finally {
           this.chkBlinkDetection.disabled = false;
+          this.publishWebcamPanel?.();
         }
 
         if (

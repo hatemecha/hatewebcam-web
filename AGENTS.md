@@ -2,7 +2,7 @@
 
 ## Project
 
-`hatewebcam-web` is a local-first browser webcam/video editor. Vanilla ES modules + Vite; no framework, TypeScript, backend, or runtime CDN. UI copy and most docs are Spanish (es-AR); tests assert Spanish text. All media processing stays in the browser.
+`hatewebcam-web` is a local-first browser webcam/video editor. Vite 8 serves Svelte 5 islands and TypeScript modules; there is no backend or runtime CDN. UI copy and most docs are Spanish (es-AR); tests assert Spanish text. All media processing stays in the browser.
 
 ## Commands
 
@@ -25,11 +25,11 @@ Run one browser spec with `npx playwright test tests/browser/app-smoke.spec.mjs`
 
 ## Architecture
 
-- Entry flow: `index.html` -> `js/app.js` -> fetches the editor/controls templates, mounts the Svelte header, detector chips and modals -> `new AppController().start()`.
-- `AppController` is split into mixins in `js/app/*.mjs`, applied at the bottom of `js/app/controller.mjs`. Mixin methods use `this`; controller constants are instance fields.
-- The UI migration is incremental: Svelte 5 islands live in `src/`, while the media engine and most editor DOM remain in `js/` and `templates/`. `src/lib/shell/shell-bridge.mjs` and `src/lib/preview/preview-bridge.mjs` are dependency-free state bridges so legacy `.mjs` modules stay loadable by tests. Pure `.ts` modules are allowed from legacy `.mjs` because `npm test` runs through `tsx`; do not import Svelte components or runes from legacy `.mjs`.
+- Entry flow: `index.html` -> `js/app.js` -> fetches `templates/video-editor.html`, mounts the Svelte header, preview metrics, camera source, webcam controls and modals -> `new AppController().start()`.
+- `AppController` is still split into mixins in `js/app/*.mjs`. Mixin methods use `this`; controller constants are instance fields. New presentation state belongs in `src/lib/**` TypeScript modules, not in additional `.mjs` bridges.
+- Svelte owns the header, detector chips, camera source, webcam control panel, resolution/FPS and modal markup. The media engine and the video editor DOM remain in `js/` and `templates/video-editor.html`. Pure `.ts` modules are allowed from legacy `.mjs` because `npm test` runs through `tsx`; do not import Svelte components or runes from legacy `.mjs`.
 - `tests/smoke-check.mjs` enforces these structural rules: no bare `clamp()`/`escapeHtml()` calls, no `$()` outside `js/app/dom.mjs`, no bare controller constants, and no unbound controller methods passed to `addEventListener`/`requestAnimationFrame`/`requestVideoFrameCallback`.
-- `templates/*.html` are fetched at runtime and injected into slots in `index.html`. Edit the template files, not just `index.html`; new templates/slots must be wired in `js/app/template-loader.mjs` and usually in the smoke check.
+- `templates/video-editor.html` is fetched at runtime and injected into its slot. The webcam control panel is Svelte and is not a fetched template. New fetched templates must be wired in `js/app/template-loader.mjs` and usually in the smoke check.
 - `templates/`, `vendor/`, and `css/` are copied to `dist/` by `scripts/copy-templates.mjs`, not by Vite. Add any new static top-level directory there.
 - Runtime dependencies must be vendored under `vendor/`. CSP blocks external origins, and the smoke check rejects CDN references (`cdn.jsdelivr.net`, `esm.sh`, `cdnjs.cloudflare.com`) plus the old `webm-muxer` dependency.
 - `vite.config.mjs` uses `base: './'` so the same build works locally and under the GitHub Pages subpath. Keep asset URLs relative.

@@ -1,3 +1,4 @@
+import { updatePreviewMetrics } from '../../src/lib/preview/metrics-state.ts';
 import {
   getCameraSourceState,
   updateCameraSourceState,
@@ -249,8 +250,7 @@ export function applyCameraMixin(proto) {
       updateCameraSourceState({ running: false });
       this.setCameraState('off');
       this.updatePreviewPlaceholder();
-      this.resolutionInfo.textContent = '-';
-      this.fpsInfo.textContent = '-';
+      updatePreviewMetrics({ resolution: '-', fps: '-' });
       this.updateCaptureButtons();
       return;
     }

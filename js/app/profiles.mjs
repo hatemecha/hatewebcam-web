@@ -3,14 +3,7 @@ import { translate } from '../i18n.mjs';
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyProfilesMixin(proto) {
   proto.updateProfilesList = function () {
-    const profiles = this.loadProfiles();
-    this.profileSelect.innerHTML = '<option value="">-</option>';
-    for (const name of Object.keys(profiles)) {
-      const opt = document.createElement('option');
-      opt.value = name;
-      opt.textContent = name;
-      this.profileSelect.appendChild(opt);
-    }
+    this.publishWebcamPanel?.();
   };
 
   proto.saveCurrentProfile = function () {
@@ -42,14 +35,14 @@ export function applyProfilesMixin(proto) {
       writable: true,
     });
     this.saveProfiles(profiles);
+    this.selectedProfile = name;
     this.updateProfilesList();
-    this.profileSelect.value = name;
     this.showStatus(this.profileStatus, `"${name}" guardado`, 'success');
     setTimeout(() => this.hideStatus(this.profileStatus), 2500);
   };
 
   proto.loadProfile = async function () {
-    const name = this.profileSelect.value;
+    const name = this.selectedProfile || this.profileSelect?.value;
     if (!name) return;
     const profiles = this.loadProfiles();
     const config = profiles[name];
@@ -157,12 +150,13 @@ export function applyProfilesMixin(proto) {
   };
 
   proto.deleteProfile = function () {
-    const name = this.profileSelect.value;
+    const name = this.selectedProfile || this.profileSelect?.value;
     if (!name) return;
     if (!confirm(translate(`¿Eliminar "${name}"?`))) return;
     const profiles = this.loadProfiles();
     delete profiles[name];
     this.saveProfiles(profiles);
+    this.selectedProfile = '';
     this.updateProfilesList();
     this.showStatus(this.profileStatus, `"${name}" eliminado`, 'warning');
     setTimeout(() => this.hideStatus(this.profileStatus), 2500);

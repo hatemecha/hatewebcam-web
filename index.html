@@ -371,9 +371,7 @@
             </div>
           </div>
           <div class="preview-status-bar">
-            <div class="preview-diagnostics">
-              <span id="resolutionInfo">-</span><span id="fpsInfo">-</span>
-            </div>
+            <div class="preview-diagnostics" id="previewMetricsMount"></div>
             <div
               class="detector-chips"
               id="effectsInfo"
@@ -385,7 +383,10 @@
       </main>
 
       <!-- Controls -->
-      <div id="webcamControlsTemplateSlot"></div>
+      <aside class="control-panel" id="controlPanel">
+        <div id="cameraSourceMount" style="display: contents"></div>
+        <div id="effectsControlsSlot"></div>
+      </aside>
     </div>
 
     <div id="exportModalTemplateSlot"></div>

@@ -90,7 +90,7 @@ test.describe('adversarial browser state', () => {
   test('shows the boot error when a template is incomplete', async ({
     page,
   }) => {
-    await page.route('**/templates/webcam-controls.html', (route) =>
+    await page.route('**/templates/video-editor.html', (route) =>
       route.fulfill({ status: 200, contentType: 'text/html', body: '' }),
     );
 

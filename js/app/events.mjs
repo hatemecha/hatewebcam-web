@@ -333,10 +333,6 @@ export function applyEventsMixin(proto) {
     this.btnCameraStateAction?.addEventListener('click', () => {
       void this.toggleCamera(true);
     });
-    this.chkMirror.addEventListener(
-      'change',
-      this.onTransformChange.bind(this),
-    );
     this.btnMobileMirror?.addEventListener('click', () =>
       this.toggleMirrorQuick(),
     );
@@ -346,25 +342,6 @@ export function applyEventsMixin(proto) {
       this.onTransformChange.bind(this),
     );
 
-    this.chkBlobTracking.addEventListener('change', () => {
-      this.handleVideoDetectorToggle('blob');
-    });
-    this.chkFaceDetection.addEventListener('change', () => {
-      this.handleVideoDetectorToggle('face');
-    });
-    this.chkBlinkDetection.addEventListener('change', () => {
-      this.handleVideoDetectorToggle('blink');
-    });
-
-    this.btnColorPick.addEventListener(
-      'click',
-      this.enableColorPick.bind(this),
-    );
-    if (this.btnToggleAdvancedOptions)
-      this.btnToggleAdvancedOptions.addEventListener(
-        'click',
-        this.toggleAdvancedOptions.bind(this),
-      );
     this.canvas.addEventListener('click', this.onCanvasClick.bind(this));
 
     if (this.btnTakePhoto)
@@ -507,22 +484,6 @@ export function applyEventsMixin(proto) {
       });
     }
 
-    this.btnSaveProfile.addEventListener(
-      'click',
-      this.saveCurrentProfile.bind(this),
-    );
-    this.btnDeleteProfile.addEventListener(
-      'click',
-      this.deleteProfile.bind(this),
-    );
-    this.btnDeleteAllProfiles?.addEventListener(
-      'click',
-      this.deleteAllProfiles.bind(this),
-    );
-    this.btnResetWebcamConfig?.addEventListener('click', () => {
-      void this.resetWebcamConfiguration();
-    });
-    this.profileSelect.addEventListener('change', this.loadProfile.bind(this));
     window.addEventListener('keydown', this.onGlobalKeyDown.bind(this));
     document.addEventListener(
       'visibilitychange',

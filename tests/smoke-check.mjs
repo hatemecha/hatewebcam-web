@@ -21,12 +21,13 @@ function listJavascriptFiles(dir = 'js') {
 const javascriptFiles = listJavascriptFiles();
 const htmlTemplateFiles = [
   'templates/video-editor.html',
-  'templates/webcam-controls.html',
+  'src/lib/webcam/EffectsControls.svelte',
+  'src/lib/webcam/CameraSourcePanel.svelte',
+  'src/lib/preview/PreviewMetrics.svelte',
   'src/lib/shell/AppHeader.svelte',
   'src/lib/preview/DetectorChips.svelte',
   'src/lib/modals/ExportModal.svelte',
   'src/lib/modals/CaptureModal.svelte',
-  'src/lib/webcam/CameraSourcePanel.svelte',
 ];
 
 const controllerConstantPattern =
@@ -165,7 +166,7 @@ for (const file of ['index.html', ...htmlTemplateFiles, ...javascriptFiles]) {
 }
 for (const fragment of [
   'id="videoEditorTemplateSlot"',
-  'id="webcamControlsTemplateSlot"',
+  'id="controlPanel"',
   'id="exportModalTemplateSlot"',
   'id="captureModalTemplateSlot"',
 ]) {

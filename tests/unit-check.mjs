@@ -107,6 +107,7 @@ import {
   subscribeCameraSourceState,
   updateCameraSourceState,
 } from '../src/lib/webcam/camera-source-bridge.mjs';
+import { deriveDetectorExtras } from '../src/lib/webcam/panel-state.ts';
 
 function mockGlobal(name, value) {
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, name);
@@ -3197,6 +3198,30 @@ function checkCameraSourceSelection() {
   assert.deepEqual(seen, ['normal', 'quality']);
   unsubscribe();
   resetCameraSourceState();
+  assert.deepEqual(
+    deriveDetectorExtras({
+      sourceMode: 'camera',
+      blobOn: true,
+      faceOn: false,
+      selectedEffect: 'face',
+      faceShowBox: true,
+    }),
+    {
+      showBlobExtras: true,
+      showFaceExtras: false,
+      showFaceBoxVisuals: true,
+    },
+  );
+  assert.equal(
+    deriveDetectorExtras({
+      sourceMode: 'video',
+      blobOn: false,
+      faceOn: false,
+      selectedEffect: 'blob',
+      faceShowBox: false,
+    }).showBlobExtras,
+    true,
+  );
 }
 
 checkMediaFormatting();
