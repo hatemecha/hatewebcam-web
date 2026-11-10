@@ -1,4 +1,4 @@
-import { VideoTimeline } from '../../editor/video-timeline.mjs';
+import { VideoTimeline } from '../../editor/video-timeline.ts';
 
 /** @param {import('../controller.mjs').AppController} proto */
 export function applyVideoEditorProjectMixin(proto) {

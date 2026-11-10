@@ -30,7 +30,7 @@ import {
   normalizePerformanceMode,
 } from './constants.mjs';
 import { CameraManager } from '../core/camera-manager.mjs';
-import { VideoTimeline } from '../editor/video-timeline.mjs';
+import { VideoTimeline } from '../editor/video-timeline.ts';
 import { EditorHistory } from '../editor/editor-history.ts';
 import { EffectManager } from '../effects/effect-manager.mjs';
 import { setupDom } from './dom.mjs';

@@ -4,10 +4,66 @@ import {
   VISUAL_FX_CLIP_TYPE,
 } from './timeline-clip-types.ts';
 
+export interface TimelineItem {
+  id: string;
+  type: string;
+  startTime: number;
+  endTime: number;
+  config: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface TimelineMarker {
+  id: string;
+  time: number;
+  kind: string;
+  source: string;
+  strength: number;
+  label: string;
+  [key: string]: unknown;
+}
+
+export interface TimelineJson {
+  trim: { start: number; end: number };
+  items: TimelineItem[];
+  markers: TimelineMarker[];
+}
+
+export interface TimelineSourceData {
+  trim?: { start?: unknown; end?: unknown };
+  trimStart?: unknown;
+  trimEnd?: unknown;
+  items?: Array<Partial<TimelineItem>>;
+  markers?: Array<Partial<TimelineMarker>>;
+}
+
+export interface MarkerToggle {
+  action: 'added' | 'removed';
+  marker: TimelineMarker;
+}
+
+function cloneConfig(config: unknown): Record<string, unknown> {
+  return typeof structuredClone === 'function'
+    ? (structuredClone(config) as Record<string, unknown>)
+    : (JSON.parse(JSON.stringify(config || {})) as Record<string, unknown>);
+}
+
+function createId(): string {
+  return typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random()}`;
+}
+
 export class VideoTimeline {
   static TYPES = ['look', VISUAL_FX_CLIP_TYPE, 'blob', 'face', 'blink'];
   static MARKER_KINDS = ['manual', 'beat', 'bar', 'section'];
   static MARKER_SOURCES = ['user', 'edit-assist'];
+
+  duration: number;
+  trimStart: number;
+  trimEnd: number;
+  items: TimelineItem[];
+  markers: TimelineMarker[];
 
   constructor(duration = 0) {
     this.duration = Math.max(0, Number(duration) || 0);
@@ -17,7 +73,7 @@ export class VideoTimeline {
     this.markers = [];
   }
 
-  setDuration(duration) {
+  setDuration(duration: unknown): void {
     this.duration = Math.max(0, Number(duration) || 0);
     this.trimStart = Math.min(this.trimStart, this.duration);
     this.trimEnd = this.duration;
@@ -25,7 +81,7 @@ export class VideoTimeline {
     this.markers = [];
   }
 
-  setTrim(startTime, endTime) {
+  setTrim(startTime: unknown, endTime: unknown): void {
     const start = this.#time(startTime);
     const end = this.#time(endTime);
     if (end <= start) throw new Error('El final debe ser posterior al inicio.');
@@ -38,27 +94,26 @@ export class VideoTimeline {
     this.trimEnd = end;
   }
 
-  add(type, startTime, endTime, config = {}) {
+  add(
+    type: string,
+    startTime: unknown,
+    endTime: unknown,
+    config: Record<string, unknown> = {},
+  ): TimelineItem {
     return this.upsert({
-      id:
-        typeof crypto !== 'undefined' && crypto.randomUUID
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random()}`,
+      id: createId(),
       type: normalizeTimelineClipType(type),
-      startTime,
-      endTime,
-      config:
-        typeof structuredClone === 'function'
-          ? structuredClone(config)
-          : JSON.parse(JSON.stringify(config)),
+      startTime: this.#time(startTime),
+      endTime: this.#time(endTime),
+      config: cloneConfig(config),
     });
   }
 
-  upsert(candidate) {
+  upsert(candidate: TimelineItem): TimelineItem {
     const type = normalizeTimelineClipType(candidate.type);
     if (!VideoTimeline.TYPES.includes(type))
       throw new Error('Tipo de efecto inválido.');
-    const item = {
+    const item: TimelineItem = {
       ...candidate,
       type,
       startTime: this.#time(candidate.startTime),
@@ -87,11 +142,15 @@ export class VideoTimeline {
     return item;
   }
 
-  remove(id) {
+  remove(id: string): void {
     this.items = this.items.filter((item) => item.id !== id);
   }
 
-  split(id, time, minSpan = 0.05) {
+  split(
+    id: string,
+    time: unknown,
+    minSpan = 0.05,
+  ): [TimelineItem, TimelineItem] {
     const index = this.items.findIndex((item) => item.id === id);
     if (index === -1) throw new Error('Clip no encontrado.');
     const item = this.items[index];
@@ -100,21 +159,14 @@ export class VideoTimeline {
     if (splitTime <= item.startTime + min || splitTime >= item.endTime - min) {
       throw new Error('Elegí un punto dentro del clip.');
     }
-    const cloneConfig = (config) =>
-      typeof structuredClone === 'function'
-        ? structuredClone(config || {})
-        : JSON.parse(JSON.stringify(config || {}));
-    const left = {
+    const left: TimelineItem = {
       ...item,
       endTime: splitTime,
       config: cloneConfig(item.config),
     };
-    const right = {
+    const right: TimelineItem = {
       ...item,
-      id:
-        typeof crypto !== 'undefined' && crypto.randomUUID
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random()}`,
+      id: createId(),
       startTime: splitTime,
       config: cloneConfig(item.config),
     };
@@ -124,7 +176,10 @@ export class VideoTimeline {
     return [left, right];
   }
 
-  addMarker(marker = {}, threshold = 0.01) {
+  addMarker(
+    marker: Partial<TimelineMarker> = {},
+    threshold = 0.01,
+  ): TimelineMarker {
     const saved = this.#marker(marker);
     const maxDelta = Math.max(0, Number(threshold) || 0);
     const existing = this.markers.find(
@@ -140,11 +195,14 @@ export class VideoTimeline {
     return saved;
   }
 
-  addMarkers(markers = [], threshold = 0.01) {
+  addMarkers(
+    markers: Array<Partial<TimelineMarker>> = [],
+    threshold = 0.01,
+  ): TimelineMarker[] {
     return markers.map((marker) => this.addMarker(marker, threshold));
   }
 
-  clearMarkersBySource(source) {
+  clearMarkersBySource(source: string): void {
     const markerSource = VideoTimeline.MARKER_SOURCES.includes(source)
       ? source
       : 'user';
@@ -153,7 +211,7 @@ export class VideoTimeline {
     );
   }
 
-  getMarkersBySource(source) {
+  getMarkersBySource(source: string): TimelineMarker[] {
     const markerSource = VideoTimeline.MARKER_SOURCES.includes(source)
       ? source
       : 'user';
@@ -162,7 +220,7 @@ export class VideoTimeline {
     );
   }
 
-  toggleMarker(time, threshold = 0.08) {
+  toggleMarker(time: unknown, threshold = 0.08): MarkerToggle {
     const markerTime = this.#time(time);
     const maxDelta = Math.max(0, Number(threshold) || 0);
     const existingIndex = this.markers.findIndex(
@@ -179,11 +237,11 @@ export class VideoTimeline {
     return { action: 'added', marker };
   }
 
-  removeMarker(id) {
+  removeMarker(id: string): void {
     this.markers = this.markers.filter((marker) => marker.id !== id);
   }
 
-  getSnapPoints() {
+  getSnapPoints(): number[] {
     return [
       this.trimStart,
       this.trimEnd,
@@ -192,11 +250,7 @@ export class VideoTimeline {
     ];
   }
 
-  toJSON() {
-    const clone = (value) =>
-      typeof structuredClone === 'function'
-        ? structuredClone(value)
-        : JSON.parse(JSON.stringify(value));
+  toJSON(): TimelineJson {
     return {
       trim: {
         start: this.trimStart,
@@ -204,13 +258,13 @@ export class VideoTimeline {
       },
       items: this.items.map((item) => ({
         ...item,
-        config: clone(item.config || {}),
+        config: cloneConfig(item.config || {}),
       })),
       markers: this.markers.map((marker) => ({ ...marker })),
     };
   }
 
-  static fromJSON(data = {}, duration = 0) {
+  static fromJSON(data: TimelineSourceData = {}, duration = 0): VideoTimeline {
     const timeline = new VideoTimeline(duration);
     const trim = data.trim || {};
     const trimStart = Number(trim.start ?? data.trimStart ?? 0);
@@ -222,24 +276,20 @@ export class VideoTimeline {
     ) {
       timeline.setTrim(trimStart, trimEnd);
     }
-    const clone = (value) =>
-      typeof structuredClone === 'function'
-        ? structuredClone(value || {})
-        : JSON.parse(JSON.stringify(value || {}));
     (data.items || []).forEach((item) => {
       timeline.upsert({
-        id: item.id,
-        type: normalizeTimelineClipType(item.type),
-        startTime: item.startTime,
-        endTime: item.endTime,
-        config: clone(item.config),
+        id: item.id || createId(),
+        type: normalizeTimelineClipType(item.type || ''),
+        startTime: Number(item.startTime),
+        endTime: Number(item.endTime),
+        config: cloneConfig(item.config),
       });
     });
     timeline.addMarkers(data.markers || []);
     return timeline;
   }
 
-  activeAt(time) {
+  activeAt(time: unknown): TimelineItem[] {
     const currentTime = this.#time(time);
     return VideoTimeline.TYPES.map((type) =>
       this.items.find(
@@ -248,10 +298,10 @@ export class VideoTimeline {
           currentTime >= item.startTime &&
           currentTime < item.endTime,
       ),
-    ).filter(Boolean);
+    ).filter((item): item is TimelineItem => Boolean(item));
   }
 
-  #time(value) {
+  #time(value: unknown): number {
     const number = Number(value);
     return Math.min(
       this.duration,
@@ -259,20 +309,16 @@ export class VideoTimeline {
     );
   }
 
-  #marker(marker) {
-    const kind = VideoTimeline.MARKER_KINDS.includes(marker.kind)
-      ? marker.kind
+  #marker(marker: Partial<TimelineMarker>): TimelineMarker {
+    const kind = VideoTimeline.MARKER_KINDS.includes(marker.kind || '')
+      ? (marker.kind as string)
       : 'manual';
-    const source = VideoTimeline.MARKER_SOURCES.includes(marker.source)
-      ? marker.source
+    const source = VideoTimeline.MARKER_SOURCES.includes(marker.source || '')
+      ? (marker.source as string)
       : 'user';
     const strength = Number(marker.strength);
     return {
-      id:
-        marker.id ||
-        (typeof crypto !== 'undefined' && crypto.randomUUID
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random()}`),
+      id: marker.id || createId(),
       time: this.#time(marker.time),
       kind,
       source,

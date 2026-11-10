@@ -38,7 +38,7 @@ import {
   snapVideoSourceFps,
   timestamp,
 } from '../js/app/media-format.ts';
-import { VideoTimeline } from '../js/editor/video-timeline.mjs';
+import { VideoTimeline } from '../js/editor/video-timeline.ts';
 import { EditorHistory } from '../js/editor/editor-history.ts';
 import { BlobTracking } from '../js/effects/blob-tracking.mjs';
 import { BlinkDetection } from '../js/effects/blink-detection.mjs';

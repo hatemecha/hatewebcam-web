@@ -8,7 +8,7 @@ import {
 } from '../js/visual-fx/config.mjs';
 import { VisualFxEffect, maskStaleBudgetSec } from '../js/visual-fx/effect.mjs';
 import { applyVisualFxIntegrationMixin } from '../js/app/visual-fx-integration.mjs';
-import { VideoTimeline } from '../js/editor/video-timeline.mjs';
+import { VideoTimeline } from '../js/editor/video-timeline.ts';
 
 for (const system of VISUAL_SYSTEM_IDS) {
   const c = normalizeVisualConfig({ system });

@@ -231,8 +231,8 @@ defaults existentes sin agregar una migración nueva.
 
 - `js/preview-metrics.ts`, `js/editor/timeline-clip-types.ts`,
   `js/app/settings-store.ts`, `js/editor/editor-history.ts`,
-  `js/app/camera-state.ts` y `js/app/media-format.ts` están en TypeScript estricto y
-  cubiertos por tests.
+  `js/editor/video-timeline.ts`, `js/app/camera-state.ts` y
+  `js/app/media-format.ts` están en TypeScript estricto y cubiertos por tests.
 - `camera-state.ts` extrae la presentación y clasificación de errores de cámara del
   mixin; `camera.mjs` conserva solo el ciclo de vida y la interacción con el DOM.
 - `media-format.ts` extrae formato de duración/bytes/FPS/bitrate, selección de MIME y

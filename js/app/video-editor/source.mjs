@@ -1,4 +1,4 @@
-import { VideoTimeline } from '../../editor/video-timeline.mjs';
+import { VideoTimeline } from '../../editor/video-timeline.ts';
 import { updateShellState } from '../../../src/lib/shell/shell-bridge.mjs';
 
 /** @param {import('../controller.mjs').AppController} proto */
