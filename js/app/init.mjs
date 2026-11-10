@@ -1,3 +1,5 @@
+import { updateCameraSourceState } from '../../src/lib/webcam/camera-source-bridge.mjs';
+
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyInitMixin(proto) {
   proto.init = async function () {
@@ -64,11 +66,12 @@ export function applyInitMixin(proto) {
     this.updateMobilePresetButtons(this.mobileActivePreset);
     this.preferredDeviceId =
       typeof cfg.deviceId === 'string' && cfg.deviceId ? cfg.deviceId : null;
-    if (this.cameraSelect) {
-      this.cameraSelect.innerHTML =
-        '<option value="">Cargando cámaras...</option>';
-      this.cameraSelect.disabled = true;
-    }
+    updateCameraSourceState({
+      devices: [],
+      devicesStatus: 'loading',
+      selectDisabled: true,
+      deviceId: '',
+    });
 
     this.updateProfilesList();
     this.bindEvents();

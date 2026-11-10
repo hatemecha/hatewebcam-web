@@ -1,4 +1,8 @@
 import {
+  getCameraSourceState,
+  updateCameraSourceState,
+} from '../../src/lib/webcam/camera-source-bridge.mjs';
+import {
   classifyCameraError,
   getCameraStatePresentation,
 } from './camera-state.ts';
@@ -242,9 +246,7 @@ export function applyCameraMixin(proto) {
       this.cameraManager.stop();
       this.isRunning = false;
       this.cancelRenderLoop();
-      this.btnToggleCamera.innerHTML =
-        '<i class="fa-solid fa-play"></i> Encender cámara';
-      this.btnToggleCamera.classList.remove('active');
+      updateCameraSourceState({ running: false });
       this.setCameraState('off');
       this.updatePreviewPlaceholder();
       this.resolutionInfo.textContent = '-';
@@ -255,7 +257,7 @@ export function applyCameraMixin(proto) {
 
     if (!this.isRunning) {
       const requestedDeviceId =
-        this.cameraSelect.value || this.preferredDeviceId || null;
+        getCameraSourceState().deviceId || this.preferredDeviceId || null;
       this.setCameraState('requesting');
       const ok = await this.cameraManager.start(
         this.videoEl,
@@ -269,9 +271,7 @@ export function applyCameraMixin(proto) {
         this.isRunning = true;
         this.setCameraState('running');
         this.updatePreviewPlaceholder();
-        this.btnToggleCamera.innerHTML =
-          '<span class="camera-live-label"><span class="camera-live-dot" aria-hidden="true"></span>Cámara activa</span><span class="camera-off-action">Apagar</span>';
-        this.btnToggleCamera.classList.add('active');
+        updateCameraSourceState({ running: true });
 
         this.videoEl.addEventListener(
           'loadedmetadata',
@@ -297,8 +297,9 @@ export function applyCameraMixin(proto) {
           settings.deviceId || requestedDeviceId || this.preferredDeviceId;
         cfg.deviceId = this.preferredDeviceId || '';
         this.saveConfig(cfg);
-        if (this.cameraSelect && this.preferredDeviceId)
-          this.cameraSelect.value = this.preferredDeviceId;
+        if (this.preferredDeviceId) {
+          updateCameraSourceState({ deviceId: this.preferredDeviceId });
+        }
         void this.refreshCameraDevices(this.preferredDeviceId);
       } else {
         const errorState = this.classifyCameraError(
@@ -319,22 +320,20 @@ export function applyCameraMixin(proto) {
   };
 
   proto.onCameraChange = async function () {
-    this.preferredDeviceId = this.cameraSelect.value || null;
+    const selectedId = getCameraSourceState().deviceId || null;
+    this.preferredDeviceId = selectedId;
     const cfg = this.loadConfig();
     cfg.deviceId = this.preferredDeviceId || '';
     this.saveConfig(cfg);
     if (!this.isRunning) return;
 
-    this.cameraSelect.disabled = true;
+    updateCameraSourceState({ selectDisabled: true });
     try {
       this.setCameraState('starting');
-      const ok = await this.cameraManager.switchCamera(
-        this.cameraSelect.value,
-        {
-          ...this.getCameraStartOptions(),
-          onPermissionGranted: () => this.setCameraState('starting'),
-        },
-      );
+      const ok = await this.cameraManager.switchCamera(selectedId, {
+        ...this.getCameraStartOptions(),
+        onPermissionGranted: () => this.setCameraState('starting'),
+      });
       if (!ok)
         throw this.cameraManager.lastError || new Error('camera_switch_failed');
       this.setCameraState('running');
@@ -351,7 +350,7 @@ export function applyCameraMixin(proto) {
       );
       setTimeout(() => this.hideStatus(this.captureStatus), 2200);
     } finally {
-      this.cameraSelect.disabled = false;
+      updateCameraSourceState({ selectDisabled: false });
     }
   };
 

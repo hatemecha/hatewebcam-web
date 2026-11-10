@@ -1,51 +1,5 @@
 <aside class="control-panel" id="controlPanel">
-  <div class="panel-section webcam-only source-section" id="sourcePanel">
-    <div class="section-title">Cámara</div>
-    <button
-      type="button"
-      class="btn primary camera-toggle"
-      id="btnToggleCamera"
-    >
-      <i class="fa-solid fa-play"></i> Encender cámara
-    </button>
-    <div class="source-grid">
-      <label class="control-field">
-        <span>Dispositivo</span>
-        <span class="select-wrapper">
-          <select id="cameraSelect" title="Elegir dispositivo de cámara">
-            <option value="">Cargando...</option>
-          </select>
-        </span>
-      </label>
-      <label class="control-field">
-        <span>Rendimiento</span>
-        <span class="select-wrapper">
-          <select
-            id="performanceModeSelect"
-            title="Calidad y fluidez de la vista previa"
-          >
-            <option value="auto">Automático</option>
-            <option value="performance">Más fluido</option>
-            <option value="normal" selected>Balanceado</option>
-            <option value="quality">Más detalle</option>
-          </select>
-        </span>
-      </label>
-    </div>
-    <p class="help-text source-help">
-      Elegí la entrada y el equilibrio entre fluidez y detalle.
-    </p>
-    <button
-      type="button"
-      class="btn mirror-quick-btn"
-      id="btnMirrorQuick"
-      aria-pressed="false"
-      title="Espejo horizontal en vista y captura"
-    >
-      <span class="mirror-quick-label">Espejo horizontal</span>
-      <span class="mirror-quick-value" id="mirrorQuickValue">Apagado</span>
-    </button>
-  </div>
+  <div id="cameraSourceMount" style="display: contents"></div>
 
   <div id="effectsControlsSlot">
     <div

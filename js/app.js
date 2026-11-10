@@ -11,6 +11,8 @@ import {
   mountCaptureModal,
   mountExportModal,
 } from '../src/lib/modals/mount.ts';
+import { mountCameraSource } from '../src/lib/webcam/mount.ts';
+import { updateCameraSourceState } from '../src/lib/webcam/camera-source-bridge.mjs';
 
 const i18n = initializeI18n();
 const controller = new AppController();
@@ -34,6 +36,26 @@ try {
     },
     { mode: 'camera', exportEnabled: false, locale: getLocale() },
   );
+  mountCameraSource(document.querySelector('#cameraSourceMount'), {
+    toggleCamera: () => {
+      if (controllerReady) void controller.toggleCamera();
+    },
+    selectCamera: (deviceId) => {
+      updateCameraSourceState({ deviceId });
+      if (controllerReady) void controller.onCameraChange();
+    },
+    setPerformanceMode: (mode) => {
+      if (controllerReady) {
+        void controller.applyPerformanceMode(mode, {
+          restartCamera: true,
+          notify: true,
+        });
+      }
+    },
+    toggleMirror: () => {
+      if (controllerReady) controller.toggleMirrorQuick();
+    },
+  });
   mountDetectorChips(document.querySelector('#effectsInfo'));
   mountCaptureModal(document.querySelector('#captureModalTemplateSlot'));
   mountExportModal(document.querySelector('#exportModalTemplateSlot'));

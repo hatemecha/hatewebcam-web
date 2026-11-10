@@ -1,5 +1,10 @@
 import { normalizePreviewQuality } from './constants.mjs';
 import { translate } from '../i18n.mjs';
+import {
+  getCameraSourceState,
+  resolveCameraDeviceSelection,
+  updateCameraSourceState,
+} from '../../src/lib/webcam/camera-source-bridge.mjs';
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyStorageMixin(proto) {
   proto.loadJsonStorage = function (key, fallbackValue) {
@@ -864,10 +869,11 @@ export function applyStorageMixin(proto) {
       this.previewQualityDiagnostic.textContent =
         this.getCurrentPreviewQualityPreset().label;
     }
-    if (this.performanceModeSelect)
-      this.performanceModeSelect.value = this.normalizePerformanceMode(
+    updateCameraSourceState({
+      performanceMode: this.normalizePerformanceMode(
         this.imageSettings.performanceMode,
-      );
+      ),
+    });
     if (this.captureTimerSelect)
       this.captureTimerSelect.value = String(
         this.imageSettings.captureTimerSeconds,
@@ -1031,15 +1037,6 @@ export function applyStorageMixin(proto) {
       });
     }
 
-    if (this.performanceModeSelect) {
-      this.performanceModeSelect.addEventListener('change', (e) => {
-        void this.applyPerformanceMode(e.target.value, {
-          restartCamera: true,
-          notify: true,
-        });
-      });
-    }
-
     const bindCaptureTimerSelect = (selectEl) => {
       if (!selectEl) return;
       selectEl.addEventListener('change', (e) => {
@@ -1160,15 +1157,10 @@ export function applyStorageMixin(proto) {
 
   proto.syncMirrorControls = function () {
     if (this.chkMirror) this.chkMirror.checked = !!this.flipH;
-    const onLabel = translate('Activado');
-    const offLabel = translate('Apagado');
-    const stateLabel = this.flipH ? onLabel : offLabel;
-    if (this.mirrorQuickValue) this.mirrorQuickValue.textContent = stateLabel;
-    for (const button of [this.btnMirrorQuick, this.btnMobileMirror]) {
-      if (!button) continue;
-      button.setAttribute('aria-pressed', String(!!this.flipH));
-      button.classList.toggle('is-active', !!this.flipH);
-    }
+    updateCameraSourceState({ mirrored: !!this.flipH });
+    if (!this.btnMobileMirror) return;
+    this.btnMobileMirror.setAttribute('aria-pressed', String(!!this.flipH));
+    this.btnMobileMirror.classList.toggle('is-active', !!this.flipH);
   };
 
   proto.toggleMirrorQuick = function () {
@@ -1393,32 +1385,16 @@ export function applyStorageMixin(proto) {
   };
 
   proto.renderCameraSelectOptions = function (devices, preferredId = null) {
-    if (!this.cameraSelect) return;
-
-    const targetSelection =
-      preferredId || this.cameraSelect.value || this.preferredDeviceId || '';
-    this.cameraSelect.innerHTML = '';
-
-    if (!devices || devices.length === 0) {
-      this.cameraSelect.innerHTML =
-        '<option value="">No se encontraron cámaras</option>';
-      this.cameraSelect.disabled = true;
-      return;
-    }
-
-    devices.forEach((d, i) => {
-      const opt = document.createElement('option');
-      opt.value = d.deviceId;
-      opt.textContent = d.label || `Cámara ${i + 1}`;
-      this.cameraSelect.appendChild(opt);
-    });
-
-    if (targetSelection) this.cameraSelect.value = targetSelection;
-    if (!this.cameraSelect.value && devices[0])
-      this.cameraSelect.value = devices[0].deviceId;
+    const current = getCameraSourceState();
+    updateCameraSourceState(
+      resolveCameraDeviceSelection(
+        devices,
+        preferredId,
+        current.deviceId || this.preferredDeviceId || '',
+      ),
+    );
     this.preferredDeviceId =
-      this.cameraSelect.value || targetSelection || this.preferredDeviceId;
-    this.cameraSelect.disabled = false;
+      getCameraSourceState().deviceId || this.preferredDeviceId;
   };
 
   proto.refreshCameraDevices = async function (preferredId = null) {

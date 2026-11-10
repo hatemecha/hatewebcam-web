@@ -100,6 +100,13 @@ import {
   subscribeDetectorChips,
   updateDetectorChip,
 } from '../src/lib/preview/preview-bridge.mjs';
+import {
+  getCameraSourceState,
+  resetCameraSourceState,
+  resolveCameraDeviceSelection,
+  subscribeCameraSourceState,
+  updateCameraSourceState,
+} from '../src/lib/webcam/camera-source-bridge.mjs';
 
 function mockGlobal(name, value) {
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, name);
@@ -3145,9 +3152,57 @@ function checkPreviewBridge() {
   assert.equal(seen.length, 2, 'unsubscribed listeners stop receiving updates');
 }
 
+function checkCameraSourceSelection() {
+  assert.deepEqual(resolveCameraDeviceSelection([], 'cam-a', 'cam-b'), {
+    devices: [],
+    devicesStatus: 'empty',
+    selectDisabled: true,
+    deviceId: '',
+  });
+  assert.deepEqual(
+    resolveCameraDeviceSelection(
+      [
+        { deviceId: 'cam-a', label: '' },
+        { deviceId: 'cam-b', label: 'Cámara B' },
+      ],
+      'missing',
+      '',
+    ),
+    {
+      devices: [
+        { id: 'cam-a', label: 'Cámara 1' },
+        { id: 'cam-b', label: 'Cámara B' },
+      ],
+      devicesStatus: 'ready',
+      selectDisabled: false,
+      deviceId: 'cam-a',
+    },
+  );
+  assert.equal(
+    resolveCameraDeviceSelection(
+      [{ deviceId: 'cam-b', label: 'Cámara B' }],
+      'cam-b',
+      'cam-a',
+    ).deviceId,
+    'cam-b',
+  );
+
+  resetCameraSourceState();
+  const seen = [];
+  const unsubscribe = subscribeCameraSourceState((state) => {
+    seen.push(state.performanceMode);
+  });
+  updateCameraSourceState({ performanceMode: 'quality' });
+  assert.equal(getCameraSourceState().performanceMode, 'quality');
+  assert.deepEqual(seen, ['normal', 'quality']);
+  unsubscribe();
+  resetCameraSourceState();
+}
+
 checkMediaFormatting();
 checkCameraStatePresentation();
 checkShellStateBridge();
 checkPreviewBridge();
+checkCameraSourceSelection();
 
 console.log('Unit check passed.');

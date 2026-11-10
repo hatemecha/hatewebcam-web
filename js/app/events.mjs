@@ -330,21 +330,12 @@ export function applyEventsMixin(proto) {
       void this.syncVideoTimelineEffects();
       this.refreshPausedVideoPreview();
     });
-    this.btnToggleCamera.addEventListener('click', () => {
-      void this.toggleCamera();
-    });
     this.btnCameraStateAction?.addEventListener('click', () => {
       void this.toggleCamera(true);
-    });
-    this.cameraSelect.addEventListener('change', () => {
-      void this.onCameraChange();
     });
     this.chkMirror.addEventListener(
       'change',
       this.onTransformChange.bind(this),
-    );
-    this.btnMirrorQuick?.addEventListener('click', () =>
-      this.toggleMirrorQuick(),
     );
     this.btnMobileMirror?.addEventListener('click', () =>
       this.toggleMirrorQuick(),

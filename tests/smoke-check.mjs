@@ -26,6 +26,7 @@ const htmlTemplateFiles = [
   'src/lib/preview/DetectorChips.svelte',
   'src/lib/modals/ExportModal.svelte',
   'src/lib/modals/CaptureModal.svelte',
+  'src/lib/webcam/CameraSourcePanel.svelte',
 ];
 
 const controllerConstantPattern =
