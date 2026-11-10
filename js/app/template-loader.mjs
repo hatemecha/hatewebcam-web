@@ -1,8 +1,6 @@
 const APP_TEMPLATES = [
   ['#videoEditorTemplateSlot', 'templates/video-editor.html'],
   ['#webcamControlsTemplateSlot', 'templates/webcam-controls.html'],
-  ['#exportModalTemplateSlot', 'templates/export-modal.html'],
-  ['#captureModalTemplateSlot', 'templates/capture-modal.html'],
 ];
 
 export async function loadAppTemplates() {

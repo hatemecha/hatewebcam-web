@@ -22,10 +22,10 @@ const javascriptFiles = listJavascriptFiles();
 const htmlTemplateFiles = [
   'templates/video-editor.html',
   'templates/webcam-controls.html',
-  'templates/export-modal.html',
-  'templates/capture-modal.html',
   'src/lib/shell/AppHeader.svelte',
   'src/lib/preview/DetectorChips.svelte',
+  'src/lib/modals/ExportModal.svelte',
+  'src/lib/modals/CaptureModal.svelte',
 ];
 
 const controllerConstantPattern =

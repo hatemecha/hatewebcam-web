@@ -7,6 +7,10 @@ import { getLocale, initializeI18n, setLocale, translate } from './i18n.mjs';
 import { mountAppHeader } from '../src/lib/shell/mount.ts';
 import { updateShellState } from '../src/lib/shell/shell-bridge.mjs';
 import { mountDetectorChips } from '../src/lib/preview/mount.ts';
+import {
+  mountCaptureModal,
+  mountExportModal,
+} from '../src/lib/modals/mount.ts';
 
 const i18n = initializeI18n();
 const controller = new AppController();
@@ -31,6 +35,8 @@ try {
     { mode: 'camera', exportEnabled: false, locale: getLocale() },
   );
   mountDetectorChips(document.querySelector('#effectsInfo'));
+  mountCaptureModal(document.querySelector('#captureModalTemplateSlot'));
+  mountExportModal(document.querySelector('#exportModalTemplateSlot'));
   i18n.translateDocument();
   await controller.start();
   controllerReady = true;

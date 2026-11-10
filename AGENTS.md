@@ -25,7 +25,7 @@ Run one browser spec with `npx playwright test tests/browser/app-smoke.spec.mjs`
 
 ## Architecture
 
-- Entry flow: `index.html` -> `js/app.js` -> fetches four templates -> `new AppController().start()`.
+- Entry flow: `index.html` -> `js/app.js` -> fetches the editor/controls templates, mounts the Svelte header, detector chips and modals -> `new AppController().start()`.
 - `AppController` is split into mixins in `js/app/*.mjs`, applied at the bottom of `js/app/controller.mjs`. Mixin methods use `this`; controller constants are instance fields.
 - The UI migration is incremental: Svelte 5 islands live in `src/`, while the media engine and most editor DOM remain in `js/` and `templates/`. `src/lib/shell/shell-bridge.mjs` and `src/lib/preview/preview-bridge.mjs` are dependency-free state bridges so legacy `.mjs` modules stay loadable by tests. Pure `.ts` modules are allowed from legacy `.mjs` because `npm test` runs through `tsx`; do not import Svelte components or runes from legacy `.mjs`.
 - `tests/smoke-check.mjs` enforces these structural rules: no bare `clamp()`/`escapeHtml()` calls, no `$()` outside `js/app/dom.mjs`, no bare controller constants, and no unbound controller methods passed to `addEventListener`/`requestAnimationFrame`/`requestVideoFrameCallback`.

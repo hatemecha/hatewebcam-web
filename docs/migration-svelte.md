@@ -240,6 +240,15 @@ defaults existentes sin agregar una migración nueva.
   explícita. No se agregó un loader al runtime de producción.
 - `svelte-check` incluye `src/**` y `js/**/*.ts`.
 
+### Etapa 4: parcial (modales)
+
+- `templates/export-modal.html` y `templates/capture-modal.html` se reemplazaron por
+  `src/lib/modals/ExportModal.svelte` y `CaptureModal.svelte`.
+- Los modales son markup Svelte estático: el controlador conserva la lógica de
+  captura, exportación, progreso y focus trap. No se duplicó estado.
+- `template-loader` ya solo descarga los dos templates grandes del editor/webcam.
+- Se mantuvieron IDs, ARIA, clases y capturas visuales.
+
 ### Próximo corte
 
 - Migrar resolución/FPS con un mecanismo de test determinista.
