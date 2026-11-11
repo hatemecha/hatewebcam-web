@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { m } from '../i18n/text.svelte.ts';
   import type { Locale } from './shell-bridge.mjs';
   import { shellState } from './shell-store';
   import type { ShellAdapter } from './types';
@@ -14,7 +15,7 @@
 <div class="brand-block">
   <div class="logo">HATEWEBCAM</div>
 </div>
-<div class="mode-switch" role="tablist" aria-label="Modo de trabajo">
+<div class="mode-switch" role="tablist" aria-label={m('Modo de trabajo')}>
   <button
     type="button"
     class="mode-tab"
@@ -47,18 +48,19 @@
       type="button"
       class="btn primary header-export-btn"
       id="btnHeaderExportVideo"
-      aria-label="Exportar video"
+      aria-label={m('Exportar video')}
       disabled={!$shellState.exportEnabled}
       onclick={() => adapter.startVideoExport()}
     >
-      <i class="fa-solid fa-download"></i> Exportar
+      <i class="fa-solid fa-download"></i>
+      {m('Exportar')}
     </button>
   </div>
   <label class="language-control" for="languageSelect">
-    <span class="visually-hidden">Idioma</span>
+    <span class="visually-hidden">{m('Idioma')}</span>
     <select
       id="languageSelect"
-      aria-label="Idioma"
+      aria-label={m('Idioma')}
       value={$shellState.locale}
       onchange={handleLocaleChange}
     >
@@ -66,13 +68,13 @@
       <option value="en">EN</option>
     </select>
   </label>
-  <nav class="header-links" aria-label="Enlaces del proyecto">
+  <nav class="header-links" aria-label={m('Enlaces del proyecto')}>
     <a
       href="https://github.com/hatemecha/hatewebcam-web"
       target="_blank"
       rel="noopener noreferrer"
-      title="Repositorio en GitHub"
-      aria-label="Repositorio en GitHub"
+      title={m('Repositorio en GitHub')}
+      aria-label={m('Repositorio en GitHub')}
     >
       <svg
         class="github-mark"

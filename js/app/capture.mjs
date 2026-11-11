@@ -2,6 +2,7 @@ import {
   PhotoCountdown,
   RecordingSession,
 } from '../../src/lib/capture/media-sessions.ts';
+import { translateCurrent } from '../../src/lib/i18n/translate.ts';
 import {
   patchCaptureChromeState,
   patchCapturePreviewState,
@@ -72,7 +73,11 @@ export function applyCaptureMixin(proto) {
       rows.push(['Bitrate', `${(meta.bitrate / 1000000).toFixed(1)} Mbps`]);
     rows.push([
       'Mejorador',
-      meta.enhanced ? `Activo (${meta.enhancerStrength || 0}%)` : 'Desactivado',
+      meta.enhanced
+        ? translateCurrent('Activo ({strength}%)', {
+            strength: meta.enhancerStrength || 0,
+          })
+        : 'Desactivado',
     ]);
     return rows.map(([key, value]) => ({ key, value }));
   };
@@ -301,7 +306,9 @@ export function applyCaptureMixin(proto) {
         this.updateCaptureCountdownUI();
         this.showStatus(
           this.captureStatus,
-          `Foto en ${remaining} segundos`,
+          translateCurrent('Foto en {seconds} segundos', {
+            seconds: remaining,
+          }),
           'info',
         );
       },
@@ -315,7 +322,11 @@ export function applyCaptureMixin(proto) {
     );
     this.updateCaptureCountdownUI();
     this.updateCaptureButtons();
-    this.showStatus(this.captureStatus, `Foto en ${seconds} segundos`, 'info');
+    this.showStatus(
+      this.captureStatus,
+      translateCurrent('Foto en {seconds} segundos', { seconds }),
+      'info',
+    );
   };
 
   proto.requestPhotoCapture = function () {
@@ -347,13 +358,15 @@ export function applyCaptureMixin(proto) {
         (!this.isRunning || this.isRecording || previewOpen) &&
         !this.isPhotoCountdownActive;
       this.btnTakePhoto.innerHTML = this.isPhotoCountdownActive
-        ? '<span class="photo-shutter-core is-cancel" aria-hidden="true"><i class="fa-solid fa-xmark"></i></span><span class="capture-action-label">Cancelar</span>'
-        : '<span class="photo-shutter-core" aria-hidden="true"></span><span class="capture-action-label">Foto</span>';
+        ? `<span class="photo-shutter-core is-cancel" aria-hidden="true"><i class="fa-solid fa-xmark"></i></span><span class="capture-action-label">${translateCurrent('Cancelar')}</span>`
+        : `<span class="photo-shutter-core" aria-hidden="true"></span><span class="capture-action-label">${translateCurrent('Foto')}</span>`;
       this.btnTakePhoto.setAttribute(
         'aria-label',
-        this.isPhotoCountdownActive
-          ? 'Cancelar temporizador de foto'
-          : 'Sacar foto',
+        translateCurrent(
+          this.isPhotoCountdownActive
+            ? 'Cancelar temporizador de foto'
+            : 'Sacar foto',
+        ),
       );
     }
     if (this.btnRecord)
@@ -376,12 +389,10 @@ export function applyCaptureMixin(proto) {
     if (this.btnRecord) {
       if (this.isRecording) {
         this.btnRecord.classList.add('recording');
-        this.btnRecord.innerHTML =
-          '<span class="record-trigger-core" aria-hidden="true"></span><span class="capture-action-label">Detener</span>';
+        this.btnRecord.innerHTML = `<span class="record-trigger-core" aria-hidden="true"></span><span class="capture-action-label">${translateCurrent('Detener')}</span>`;
       } else {
         this.btnRecord.classList.remove('recording');
-        this.btnRecord.innerHTML =
-          '<span class="record-trigger-core" aria-hidden="true"></span><span class="capture-action-label">Grabar</span>';
+        this.btnRecord.innerHTML = `<span class="record-trigger-core" aria-hidden="true"></span><span class="capture-action-label">${translateCurrent('Grabar')}</span>`;
       }
     }
 
@@ -955,8 +966,13 @@ export function applyCaptureMixin(proto) {
       this.showStatus(
         this.captureStatus,
         recordingProfile.fallbackMessage
-          ? `${recordingProfile.fallbackMessage} Grabación iniciada en ${effectiveFormat}.`
-          : `Grabación iniciada en ${effectiveFormat}.`,
+          ? translateCurrent('{notice} Grabación iniciada en {format}.', {
+              notice: translateCurrent(recordingProfile.fallbackMessage),
+              format: effectiveFormat,
+            })
+          : translateCurrent('Grabación iniciada en {format}.', {
+              format: effectiveFormat,
+            }),
         recordingProfile.fallbackMessage ? 'warning' : 'info',
       );
       this.updateCaptureButtons();
@@ -1201,7 +1217,7 @@ export function applyCaptureMixin(proto) {
 
   proto.showStatus = function (el, msg, type) {
     if (!el) return;
-    el.textContent = msg;
+    el.textContent = translateCurrent(msg);
     el.classList.remove('hidden', 'success', 'warning', 'info', 'error');
     el.classList.add('status-msg', type);
   };

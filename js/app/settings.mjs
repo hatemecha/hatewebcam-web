@@ -83,8 +83,9 @@ export function applyStorageMixin(proto) {
       },
       profiles: Object.keys(this.loadProfiles?.() || {}),
       selectedProfile: this.selectedProfile || '',
-      previewQualityLabel:
+      previewQualityLabel: translate(
         this.getCurrentPreviewQualityPreset?.().label || 'Balanceada',
+      ),
     });
   };
 
@@ -1337,11 +1338,6 @@ export function applyStorageMixin(proto) {
         'aria-expanded',
         String(visible),
       );
-    }
-    if (this.advancedToggleLabel) {
-      this.advancedToggleLabel.textContent = visible
-        ? 'Ocultar ajustes avanzados'
-        : 'Ajustes avanzados';
     }
     this.publishWebcamPanel();
   };

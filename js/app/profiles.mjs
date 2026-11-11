@@ -37,7 +37,11 @@ export function applyProfilesMixin(proto) {
     this.saveProfiles(profiles);
     this.selectedProfile = name;
     this.updateProfilesList();
-    this.showStatus(this.profileStatus, `"${name}" guardado`, 'success');
+    this.showStatus(
+      this.profileStatus,
+      translate('"{name}" guardado', undefined, { name }),
+      'success',
+    );
     setTimeout(() => this.hideStatus(this.profileStatus), 2500);
   };
 
@@ -145,20 +149,28 @@ export function applyProfilesMixin(proto) {
     this.updateQuickDetectorControlsUI();
     this.saveQuickDetectorSettings();
     this.renderEffectConfig();
-    this.showStatus(this.profileStatus, `"${name}" cargado`, 'success');
+    this.showStatus(
+      this.profileStatus,
+      translate('"{name}" cargado', undefined, { name }),
+      'success',
+    );
     setTimeout(() => this.hideStatus(this.profileStatus), 2500);
   };
 
   proto.deleteProfile = function () {
     const name = this.selectedProfile || this.profileSelect?.value;
     if (!name) return;
-    if (!confirm(translate(`¿Eliminar "${name}"?`))) return;
+    if (!confirm(translate('¿Eliminar "{name}"?', undefined, { name }))) return;
     const profiles = this.loadProfiles();
     delete profiles[name];
     this.saveProfiles(profiles);
     this.selectedProfile = '';
     this.updateProfilesList();
-    this.showStatus(this.profileStatus, `"${name}" eliminado`, 'warning');
+    this.showStatus(
+      this.profileStatus,
+      translate('"{name}" eliminado', undefined, { name }),
+      'warning',
+    );
     setTimeout(() => this.hideStatus(this.profileStatus), 2500);
   };
 

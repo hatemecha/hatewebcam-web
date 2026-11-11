@@ -1,3 +1,5 @@
+import { applyMessages } from '../../src/lib/i18n/apply-messages.ts';
+
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyEffectConfigUIMixin(proto) {
   proto.renderEffectConfig = function () {
@@ -15,6 +17,13 @@ export function applyEffectConfigUIMixin(proto) {
       this.effectConfigBlink.innerHTML = '';
       if (this.blinkDetectionEffect)
         this.effectConfigBlink.appendChild(this.buildBlinkConfig());
+    }
+    for (const node of [
+      this.effectConfigBlob,
+      this.effectConfigFace,
+      this.effectConfigBlink,
+    ]) {
+      if (node) applyMessages(node, { includeOwned: true });
     }
   };
 

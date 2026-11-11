@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { m } from '../i18n/text.svelte.ts';
+  import { isMessageKey } from '../i18n/translate';
   import { exportModal } from '../capture/session-store';
   import type { ExportModalAdapter } from '../capture/types';
   import { trapModalFocus } from './focus-trap';
@@ -30,20 +32,24 @@
   const title = $derived.by(() => {
     switch (modal.titleState) {
       case 'success':
-        return 'Exportación terminada';
+        return m('Exportación terminada');
       case 'muted':
-        return 'Exportación cancelada';
+        return m('Exportación cancelada');
       case 'error':
-        return 'Error de exportación';
+        return m('Error de exportación');
       case 'running':
       case 'idle':
-        return 'Exportando video';
+        return m('Exportando video');
       default: {
         const unreachable: never = modal.titleState;
         return unreachable;
       }
     }
   });
+
+  function message(value: string) {
+    return isMessageKey(value) ? m(value) : value;
+  }
 </script>
 
 <div
@@ -74,14 +80,14 @@
       {title}
     </div>
     <div class="video-export-summary mono" id="videoExportSummary">
-      {modal.summary}
+      {message(modal.summary)}
     </div>
     <progress id="videoExportProgress" max="1" value={modal.progress}
     ></progress>
     <div class="video-export-debug mono" id="videoExportDebug">
       {modal.debug}
     </div>
-    <div class="help-text" id="videoExportHelp">{modal.help}</div>
+    <div class="help-text" id="videoExportHelp">{message(modal.help)}</div>
     <button
       type="button"
       class="btn danger"
@@ -90,7 +96,7 @@
       bind:this={cancelButton}
       onclick={() => adapter.cancel()}
     >
-      Cancelar
+      {m('Cancelar')}
     </button>
     <button
       type="button"
@@ -100,7 +106,7 @@
       bind:this={closeButton}
       onclick={() => adapter.close()}
     >
-      Listo
+      {m('Listo')}
     </button>
   </div>
 </div>

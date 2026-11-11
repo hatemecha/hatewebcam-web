@@ -1,3 +1,4 @@
+import { translateCurrent } from '../../src/lib/i18n/translate.ts';
 import { updatePreviewMetrics } from '../../src/lib/preview/metrics-state.ts';
 import {
   getCameraSourceState,
@@ -24,10 +25,13 @@ export function applyCameraMixin(proto) {
     this.cameraUiStateKey = stateKey;
     this.cameraUiState = state;
     this.placeholderCamera?.setAttribute('data-state', state);
-    if (this.cameraStateTitle) this.cameraStateTitle.textContent = view.title;
-    this.setCameraPlaceholderMessage(view.message);
+    if (this.cameraStateTitle)
+      this.cameraStateTitle.textContent = translateCurrent(view.title);
+    this.setCameraPlaceholderMessage(translateCurrent(view.message));
     if (this.cameraStateHint) {
-      this.cameraStateHint.textContent = view.hint || '';
+      this.cameraStateHint.textContent = view.hint
+        ? translateCurrent(view.hint)
+        : '';
       this.cameraStateHint.classList.toggle('hidden', !view.hint);
     }
     if (this.cameraStateIcon) {
@@ -36,7 +40,8 @@ export function applyCameraMixin(proto) {
     if (this.btnCameraStateAction) {
       this.btnCameraStateAction.classList.toggle('hidden', !view.action);
       const label = this.btnCameraStateAction.querySelector('span');
-      if (label) label.textContent = view.action || '';
+      if (label)
+        label.textContent = view.action ? translateCurrent(view.action) : '';
       if (focus && changed && view.action) this.btnCameraStateAction.focus();
     }
     if (
@@ -51,19 +56,19 @@ export function applyCameraMixin(proto) {
 
   proto.setCameraPlaceholderMessage = function (message) {
     if (this.placeholderCameraMessage) {
-      this.placeholderCameraMessage.textContent = message;
+      this.placeholderCameraMessage.textContent = translateCurrent(message);
       return;
     }
     if (!this.placeholder) return;
     const msg = this.placeholder.querySelector(
       '#previewPlaceholderCameraMessage, .preview-placeholder-camera div',
     );
-    if (msg) msg.textContent = message;
+    if (msg) msg.textContent = translateCurrent(message);
   };
 
   proto.setVideoPlaceholderLoadingMessage = function (message) {
     if (this.placeholderLoadingMessage) {
-      this.placeholderLoadingMessage.textContent = message;
+      this.placeholderLoadingMessage.textContent = translateCurrent(message);
     }
   };
 

@@ -105,9 +105,10 @@ defaults existentes sin agregar una migración nueva.
    `$state` por frame.
 2. **Los tests dependen de IDs, clases y textos.** Durante la transición, los
    componentes Svelte deben conservar los mismos `id`, clases, `aria-*` y estructura.
-3. **i18n es un observador del DOM.** `js/i18n.mjs` traduce nodos y atributos con un
-   `MutationObserver`. Los componentes nuevos deben seguir usando español como fuente
-   y no romper el orden de `ENGLISH_REPLACEMENTS`.
+3. **i18n es un catálogo exacto.** Las claves son el texto español en
+   `src/lib/i18n/catalog.ts`. Svelte llama `m()`. El editor legacy y `index.html`
+   se traducen con `applyMessages`, que no observa nodos de Svelte
+   (`data-i18n-owner`). El texto dinámico usa claves con `{placeholders}`.
 4. **CSP y vendor local.** No se agregan CDNs, fuentes remotas ni telemetría. Los
    assets de MediaPipe/Mediabunny siguen en `vendor/`.
 5. **Build de Pages.** `base: './'` y `scripts/copy-templates.mjs` deben seguir
@@ -249,28 +250,26 @@ defaults existentes sin agregar una migración nueva.
   `src/lib/modals/ExportModal.svelte` y `CaptureModal.svelte`.
 - Los modales son markup Svelte estático: el controlador conserva la lógica de
   captura, exportación, progreso y focus trap. No se duplicó estado.
-- `template-loader` ya solo descarga los dos templates grandes del editor/webcam.
+- `template-loader` solo descarga `templates/video-editor.html`.
 - Se mantuvieron IDs, ARIA, clases y capturas visuales.
 
 ### Lista de tareas
 
 Estados: Pendiente, En curso, Completada y verificada, Bloqueada.
 
-| Tarea                                                                    | Estado                  | Notas                                                                                                         |
-| ------------------------------------------------------------------------ | ----------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Integrar `origin/main` sin reescribir historia                           | Completada y verificada | Merge no destructivo. Artifact `site-dist` y seek estable del test de Visual FX.                              |
-| CI `verify` en `refactor/**` sin `deploy` fuera de `main`                | Completada y verificada | `deploy` sigue condicionado a `push` de `main`.                                                               |
-| Controles de cámara (encendido, dispositivo, rendimiento, espejo rápido) | Completada y verificada | `CameraSourcePanel` es la fuente visual. Node tests y Playwright 54/54. El ciclo de cámara sigue en el mixin. |
-| Panel de webcam, resolución y FPS                                        | Completada y verificada | `EffectsControls` reemplaza la plantilla de controles. La config avanzada de detectores sigue en el mixin.    |
-| HUD móvil y modales de captura/exportación                               | Completada y verificada | El HUD y los modales leen el mismo estado. `RecordingSession` y `PhotoCountdown` poseen el ciclo multimedia.  |
-| Editor, i18n tipado y eliminación del controlador                        | Pendiente               | No hay bloqueo externo.                                                                                       |
+| Tarea                                                                    | Estado                  | Notas                                                                                                                |
+| ------------------------------------------------------------------------ | ----------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Integrar `origin/main` sin reescribir historia                           | Completada y verificada | Merge no destructivo. Artifact `site-dist` y seek estable del test de Visual FX.                                     |
+| CI `verify` en `refactor/**` sin `deploy` fuera de `main`                | Completada y verificada | `deploy` sigue condicionado a `push` de `main`.                                                                      |
+| Controles de cámara (encendido, dispositivo, rendimiento, espejo rápido) | Completada y verificada | `CameraSourcePanel` es la fuente visual. Node tests y Playwright 54/54. El ciclo de cámara sigue en el mixin.        |
+| Panel de webcam, resolución y FPS                                        | Completada y verificada | `EffectsControls` reemplaza la plantilla de controles. La config avanzada de detectores sigue en el mixin.           |
+| HUD móvil y modales de captura/exportación                               | Completada y verificada | El HUD y los modales leen el mismo estado. `RecordingSession` y `PhotoCountdown` poseen el ciclo multimedia.         |
+| i18n tipado y reactivo                                                   | Completada y verificada | Catálogo `es`/`en` en `src/lib/i18n/catalog.ts`. Sin `MutationObserver`. El editor HTML todavía usa `applyMessages`. |
+| Editor y eliminación del controlador                                     | Pendiente               | `templates/video-editor.html` sigue activo. `AppController` sigue en mixins.                                         |
 
 ## Próximo corte
 
-- Reemplazar el `MutationObserver` de `js/i18n.mjs` (`translate`, `setLocale`,
-  `initializeI18n`) por un catálogo tipado y un store de locale. Los componentes
-  Svelte deben llamar una función de traducción; el texto dinámico del controlador
-  no puede seguir dependiendo de reemplazos sobre el DOM. Conservar
-  `hatewebcam_locale`, `<html lang>` y las frases de `ENGLISH_REPLACEMENTS`.
-- Migrar la interfaz del editor sin reescribir `VideoTimeline`.
-  `templates/video-editor.html` sigue siendo la plantilla activa.
+- Migrar la interfaz del editor a componentes Svelte sin reescribir `VideoTimeline`
+  ni meter el playhead en el render reactivo. Cuando el markup legacy desaparezca,
+  retirar `applyMessages` y `templates/video-editor.html`.
+- Separar los mixins de `AppController` en servicios con contratos tipados.

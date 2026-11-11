@@ -4,6 +4,8 @@
 import { loadAppTemplates } from './app/template-loader.mjs';
 import { AppController } from './app/controller.mjs';
 import { getLocale, initializeI18n, setLocale, translate } from './i18n.mjs';
+import { applyMessages } from '../src/lib/i18n/apply-messages.ts';
+import { subscribeLocale } from '../src/lib/i18n/locale-state.ts';
 import { mountAppHeader } from '../src/lib/shell/mount.ts';
 import { updateShellState } from '../src/lib/shell/shell-bridge.mjs';
 import { mountDetectorChips } from '../src/lib/preview/mount.ts';
@@ -20,7 +22,7 @@ import {
   mountMobileHud,
 } from '../src/lib/capture/mount.ts';
 
-const i18n = initializeI18n();
+initializeI18n();
 const controller = new AppController();
 let controllerReady = false;
 
@@ -231,9 +233,26 @@ try {
       if (controllerReady) controller.closeVideoExportModal();
     },
   });
-  i18n.translateDocument();
   await controller.start();
   controllerReady = true;
+  applyMessages(document.body);
+  const refreshLocalizedUi = () => {
+    applyMessages(document.body, { refresh: true });
+    controller.renderEffectConfig?.();
+    if (controller.cameraUiState) {
+      controller.setCameraState(controller.cameraUiState);
+    }
+    controller.updateEffectsInfo?.(true);
+    controller.publishWebcamPanel?.();
+    controller.updateCaptureButtons?.();
+    controller.publishCapturePreview?.();
+    controller.publishCaptureChrome?.();
+    updateShellState({ locale: getLocale() });
+  };
+  subscribeLocale(() => {
+    refreshLocalizedUi();
+    requestAnimationFrame(refreshLocalizedUi);
+  });
 } catch (err) {
   console.error(err);
   document.body.innerHTML = `
@@ -242,5 +261,4 @@ try {
       <p>${translate('Revisá que estés sirviendo el proyecto desde localhost/https y que existan los templates.')}</p>
     </main>
   `;
-  i18n.translateDocument();
 }

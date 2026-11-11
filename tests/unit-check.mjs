@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   getProcessingFrameDimensions,
   getPreviewFrameDimensions,
@@ -108,6 +109,9 @@ import {
   updateCameraSourceState,
 } from '../src/lib/webcam/camera-source-bridge.mjs';
 import { deriveDetectorExtras } from '../src/lib/webcam/panel-state.ts';
+import { englishMessages } from '../src/lib/i18n/catalog.ts';
+import { setLocale } from '../src/lib/i18n/locale-state.ts';
+import { translate } from '../src/lib/i18n/translate.ts';
 import {
   PhotoCountdown,
   RecordingSession,
@@ -3234,6 +3238,7 @@ checkShellStateBridge();
 checkPreviewBridge();
 checkCameraSourceSelection();
 checkCaptureSessions();
+checkMessages();
 
 function checkCaptureSessions() {
   const countdown = new PhotoCountdown();
@@ -3315,6 +3320,62 @@ function checkCaptureSessions() {
   discarded.mediaRecorder.ondataavailable?.({ data: new Blob(['no']) });
   discarded.stop(false);
   assert.equal(discardedResult, null);
+}
+
+function visibleCopy(html) {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .split(/<[^>]+>/)
+    .map((line) => line.trim().replace(/\s+/g, ' '))
+    .filter((line) => /[áéíóúñÁÉÍÓÚÑ¿¡]/.test(line));
+}
+
+function visibleAttributes(html) {
+  return [...html.matchAll(/\b(?:aria-label|title|placeholder)="([^"]+)"/g)]
+    .map((match) => match[1])
+    .filter((line) => /[áéíóúñÁÉÍÓÚÑ¿¡]/.test(line));
+}
+
+function checkMessages() {
+  setLocale('en', { persist: false });
+  assert.equal(translate('en', 'Idioma'), 'Language');
+  assert.equal(
+    translate('en', 'Foto en {seconds} segundos', { seconds: 5 }),
+    'Photo in 5 seconds',
+  );
+  assert.equal(
+    translate(
+      'en',
+      'Exportando {percent}% · salida {fps} FPS · midiendo velocidad real',
+      {
+        percent: 10,
+        fps: '30',
+      },
+    ),
+    'Exporting 10% · output 30 FPS · measuring real speed',
+  );
+  setLocale('es', { persist: false });
+  assert.equal(translate('es', 'Idioma'), 'Idioma');
+  assert.equal(englishMessages.Idioma, 'Language');
+  const missing = [];
+  for (const file of ['index.html', 'templates/video-editor.html']) {
+    const html = readFileSync(file, 'utf8');
+    for (const line of [...visibleCopy(html), ...visibleAttributes(html)]) {
+      if (!Object.prototype.hasOwnProperty.call(englishMessages, line)) {
+        missing.push(`${file}: ${line}`);
+      }
+    }
+  }
+  const effectConfig = readFileSync('js/app/effect-config.mjs', 'utf8');
+  for (const match of effectConfig.matchAll(
+    /'([^'\n]*[áéíóúñÁÉÍÓÚÑ¿¡][^'\n]*)'/g,
+  )) {
+    if (!Object.prototype.hasOwnProperty.call(englishMessages, match[1])) {
+      missing.push(`js/app/effect-config.mjs: ${match[1]}`);
+    }
+  }
+  assert.deepEqual(missing, []);
 }
 
 console.log('Unit check passed.');

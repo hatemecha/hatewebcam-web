@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { m } from '../i18n/text.svelte.ts';
   import { onMount } from 'svelte';
   import { captureChrome } from './session-store';
 
@@ -44,7 +45,7 @@
       {Math.max(1, chrome.countdownRemaining)}
     </div>
   </div>
-  <div class="capture-countdown-label">Foto en</div>
+  <div class="capture-countdown-label">{m('Foto en')}</div>
 </div>
 <div
   class="capture-flash"

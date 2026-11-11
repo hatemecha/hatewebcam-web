@@ -283,3 +283,30 @@ test('language follows the browser and a discreet persisted override', async ({
   await expect(spanishPage.locator('html')).toHaveAttribute('lang', 'es');
   await spanishContext.close();
 });
+
+test('language can change while the camera is running', async ({ browser }) => {
+  const context = await browser.newContext({ locale: 'es-AR' });
+  const page = await context.newPage();
+  await page.goto('/');
+  await expect(page.locator('#previewPlaceholder')).toHaveClass(/hidden/);
+  await expect(page.locator('#btnMirrorQuick')).toHaveAttribute(
+    'title',
+    'Espejo horizontal en vista y captura',
+  );
+  await page.locator('#languageSelect').selectOption('en');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await expect(page.locator('#btnMirrorQuick')).toHaveAttribute(
+    'title',
+    'Horizontal mirror for preview and capture',
+  );
+  await expect(page.locator('#btnToggleCamera')).toContainText('Turn off');
+  await page.locator('#btnRecord').click();
+  await expect(page.locator('#captureStatus')).toContainText(
+    /Recording started/i,
+  );
+  await page.locator('#btnRecord').click();
+  await expect(page.locator('#captureStatus')).toContainText(
+    /Recording stopped|Video ready/i,
+  );
+  await context.close();
+});

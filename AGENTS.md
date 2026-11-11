@@ -44,7 +44,7 @@ Run one browser spec with `npx playwright test tests/browser/app-smoke.spec.mjs`
 - Node tests are hand-rolled `node:assert` scripts. Add unit coverage as a function and invoke it at the bottom of `tests/unit-check.mjs`; browser modules imported there often need browser globals mocked via `mockGlobal`.
 - Playwright uses a fake camera device. Visual snapshots live in `tests/browser/*-snapshots/`; default `maxDiffPixelRatio` is `0.07`. Do not delete snapshots to make a test pass.
 - `tests/browser/performance-budget.spec.mjs` enforces initial page weight/time budgets (total < 1.5 MB, scripts < 500 KB, largest resource < 700 KB). Avoid heavy runtime assets.
-- Spanish is the i18n source language. Add English mappings to `ENGLISH_REPLACEMENTS` in `js/i18n.mjs`; matching is substring-based and longer phrases must come first.
+- Spanish is the i18n source language. Message keys are the Spanish strings in `src/lib/i18n/catalog.ts`; English values are exact lookups. Svelte calls `m()`. Legacy DOM still uses `applyMessages` for `index.html` and `templates/video-editor.html`. Dynamic sentences use `{placeholders}`. Persist `hatewebcam_locale`.
 - `js/` lint forbids `console.log` (`no-console` allows only `warn`/`error`). There is no typecheck step.
 - Manual performance/benchmark scripts (`tests/manual/`, `scripts/recording-benchmark.mjs`) are not part of CI; see `PERF.md`.
 - CI deploys `main` to GitHub Pages only after all checks pass.

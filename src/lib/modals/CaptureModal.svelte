@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { m } from '../i18n/text.svelte.ts';
   import { onMount } from 'svelte';
+  import { isMessageKey } from '../i18n/translate';
   import { capturePreview } from '../capture/session-store';
   import type { CaptureModalAdapter } from '../capture/types';
   import { trapModalFocus } from './focus-trap';
@@ -45,6 +47,10 @@
     }
   });
 
+  function message(value: string) {
+    return isMessageKey(value) ? m(value) : value;
+  }
+
   function onKeyDown(event: KeyboardEvent) {
     if (event.key === 'Escape') adapter.discard();
   }
@@ -68,12 +74,14 @@
 >
   <div class="capture-preview-card">
     <div class="capture-preview-header">
-      <div class="section-title" id="capturePreviewTitle">{preview.title}</div>
+      <div class="section-title" id="capturePreviewTitle">
+        {message(preview.title)}
+      </div>
       <button
         class="btn btn-icon"
         id="btnCloseCapturePreview"
         type="button"
-        aria-label="Cerrar vista previa"
+        aria-label={m('Cerrar vista previa')}
         onclick={() => adapter.discard()}
       >
         <i class="fa-solid fa-xmark"></i>
@@ -83,7 +91,7 @@
       <img
         id="capturePreviewImage"
         class:hidden={preview.kind !== 'photo'}
-        alt="Vista previa de foto capturada"
+        alt={m('Vista previa de foto capturada')}
         src={preview.kind === 'photo' ? preview.mediaUrl : undefined}
       />
       <video
@@ -102,8 +110,8 @@
       <div class="capture-preview-info" id="capturePreviewInfo">
         {#each preview.rows as row (row.key)}
           <div class="capture-preview-row">
-            <div class="capture-preview-key">{row.key}</div>
-            <div class="capture-preview-value">{row.value}</div>
+            <div class="capture-preview-key">{message(row.key)}</div>
+            <div class="capture-preview-value">{message(row.value)}</div>
           </div>
         {/each}
       </div>
@@ -112,7 +120,7 @@
         class:hidden={preview.kind !== 'photo'}
         id="capturePreviewPhotoTools"
       >
-        <div class="capture-preview-tools-title">Mejora de foto</div>
+        <div class="capture-preview-tools-title">{m('Mejora de foto')}</div>
         <label class="checkbox-group">
           <input
             type="checkbox"
@@ -123,7 +131,7 @@
                 (event.currentTarget as HTMLInputElement).checked,
               )}
           />
-          <span>Mejorar antes de descargar</span>
+          <span>{m('Mejorar antes de descargar')}</span>
         </label>
         <div
           class="slider-group"
@@ -131,7 +139,7 @@
           id="previewPhotoEnhancerStrengthGroup"
         >
           <div class="slider-label">
-            <span>Intensidad</span>
+            <span>{m('Intensidad')}</span>
             <span class="value" id="valPreviewPhotoEnhancerStrength"
               >{preview.enhancerStrength}%</span
             >
@@ -159,7 +167,7 @@
           bind:this={downloadButton}
           onclick={() => adapter.download()}
         >
-          {preview.downloadLabel}
+          {message(preview.downloadLabel)}
         </button>
         <button
           class="btn"
@@ -167,7 +175,7 @@
           type="button"
           onclick={() => adapter.discard()}
         >
-          Descartar
+          {m('Descartar')}
         </button>
       </div>
     </div>

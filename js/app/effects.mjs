@@ -2,6 +2,7 @@ import { BlobTracking } from '../effects/blob-tracking.mjs';
 import { FaceDetection } from '../effects/face-detection.mjs';
 import { BlinkDetection } from '../effects/blink-detection.mjs';
 
+import { translateCurrent } from '../../src/lib/i18n/translate.ts';
 import { updateDetectorChip as updateDetectorChipState } from '../../src/lib/preview/preview-bridge.mjs';
 
 /** @param {import('./controller.mjs').AppController} proto */
@@ -225,7 +226,7 @@ export function applyEffectsMixin(proto) {
     if (!element) return;
     const name = element.dataset.detector;
     if (name === 'blob' || name === 'face' || name === 'blink') {
-      updateDetectorChipState(name, { text, state });
+      updateDetectorChipState(name, { text: translateCurrent(text), state });
       return;
     }
     const key = `${state}:${text}`;
@@ -261,7 +262,10 @@ export function applyEffectsMixin(proto) {
         : face.status === 'error'
           ? 'Caras · error'
           : face.count > 0
-            ? `${face.count} ${face.count === 1 ? 'cara' : 'caras'}`
+            ? translateCurrent(
+                face.count === 1 ? '{count} cara' : '{count} caras',
+                { count: face.count },
+              )
             : 'Caras · buscando',
       !face ? 'off' : face.status,
     );

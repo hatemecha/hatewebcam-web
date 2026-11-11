@@ -1,3 +1,5 @@
+import { translateCurrent } from '../src/lib/i18n/translate.ts';
+
 const MEDIABUNNY_URL = '../vendor/mediabunny/mediabunny.min.mjs?v=1.49.0-local';
 export const COMMON_VIDEO_FPS = [
   23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60, 120,
@@ -235,9 +237,19 @@ export function formatObservedExportProgress({
   const observedFps =
     elapsedSec >= 1.2 && safeDone >= 2 ? safeDone / elapsedSec : 0;
   if (!observedFps || safeDone < safeTotal * 0.03) {
-    return `Exportando ${percent}% · salida ${formatProgressFps(fps)} FPS · midiendo velocidad real`;
+    return translateCurrent(
+      'Exportando {percent}% · salida {fps} FPS · midiendo velocidad real',
+      { percent, fps: formatProgressFps(fps) },
+    );
   }
-  return `Exportando ${percent}% · ${formatObservedFps(observedFps)} fps reales · ${formatObservedDuration(elapsedSec)} transcurridos`;
+  return translateCurrent(
+    'Exportando {percent}% · {fps} fps reales · {elapsed} transcurridos',
+    {
+      percent,
+      fps: formatObservedFps(observedFps),
+      elapsed: formatObservedDuration(elapsedSec),
+    },
+  );
 }
 
 async function testVideoCodecSupport(VideoEncoderImpl, config) {

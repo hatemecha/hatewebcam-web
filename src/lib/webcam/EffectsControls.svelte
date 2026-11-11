@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { m } from '../i18n/text.svelte.ts';
+  import { isMessageKey } from '../i18n/translate.ts';
   import { PALETTE_COLORS } from './panel-state';
   import { webcamPanel } from './panel-store';
   import type { WebcamControlsAdapter } from './types';
@@ -6,6 +8,10 @@
   let { adapter }: { adapter: WebcamControlsAdapter } = $props();
 
   const panel = $derived($webcamPanel);
+
+  function text(value: string): string {
+    return isMessageKey(value) ? m(value) : value;
+  }
   const videoMode = $derived(panel.sourceMode === 'video');
   const presets = [
     { id: 'natural', label: 'Natural' },
@@ -32,7 +38,7 @@
 </script>
 
 {#snippet palette(color: string, label: string, choose: PaletteAction)}
-  <div class="color-palette" aria-label={label}>
+  <div class="color-palette" aria-label={text(label)}>
     {#each PALETTE_COLORS as swatch (swatch)}
       <button
         type="button"
@@ -42,7 +48,7 @@
         ]}
         data-color={swatch}
         style:--swatch-color={swatch}
-        aria-label={`Usar color ${swatch}`}
+        aria-label={m('Usar color {color}', { color: swatch })}
         aria-pressed={color.toLowerCase() === swatch}
         onclick={() => choose(swatch)}
       ></button>
@@ -61,7 +67,7 @@
         const host = event.currentTarget.parentElement;
         const input = host?.parentElement?.querySelector('input[type="color"]');
         if (input instanceof HTMLInputElement) input.click();
-      }}>Personalizado</button
+      }}>{m('Personalizado')}</button
     >
   </div>
 {/snippet}
@@ -79,7 +85,9 @@
 )}
   <div class="slider-group">
     <div class="slider-label">
-      <span>{label}</span><span class="value" id={valueId}>{display}</span>
+      <span>{text(label)}</span><span class="value" id={valueId}
+        >{text(display)}</span
+      >
     </div>
     <input
       type="range"
@@ -102,9 +110,13 @@
     { hidden: !videoMode },
   ]}
   id="adjustContextNav"
-  aria-label="Ajustes por pista"
+  aria-label={m('Ajustes por pista')}
 >
-  <div class="adjust-context-tabs" role="tablist" aria-label="Tipo de ajustes">
+  <div
+    class="adjust-context-tabs"
+    role="tablist"
+    aria-label={m('Tipo de ajustes')}
+  >
     {#each contexts as context (context.id)}
       <button
         type="button"
@@ -117,7 +129,7 @@
         aria-selected={panel.adjustContext === context.id}
         onclick={() => adapter.openAdjustContext(context.id)}
       >
-        {context.label}
+        {m(context.label)}
       </button>
     {/each}
   </div>
@@ -145,7 +157,8 @@
   data-adjust-context="look"
 >
   <div class="section-title">
-    <i class="fa-solid fa-circle-half-stroke"></i> Aspecto
+    <i class="fa-solid fa-circle-half-stroke"></i>
+    {m('Aspecto')}
   </div>
   <div
     class={[
@@ -155,8 +168,9 @@
       { hidden: !videoMode },
     ]}
   >
-    Presets y filtros del clip LOOK seleccionado. Previsualizá moviendo el
-    cursor dentro de su tramo.
+    {m(
+      'Presets y filtros del clip LOOK seleccionado. Previsualizá moviendo el cursor dentro de su tramo.',
+    )}
   </div>
   <div class="preset-grid">
     {#each presets as preset (preset.id)}
@@ -171,14 +185,14 @@
         aria-pressed={panel.activePreset === preset.id}
         onclick={() => adapter.applyPreset(preset.id)}
       >
-        {preset.label}
+        {m(preset.label)}
       </button>
     {/each}
   </div>
 </div>
 
 <div class="panel-section detectors-section">
-  <div class="section-title detectors-section-title">Detectores</div>
+  <div class="section-title detectors-section-title">{m('Detectores')}</div>
   <div
     class={[
       'detector-unit',
@@ -195,8 +209,9 @@
         { hidden: !videoMode },
       ]}
     >
-      Configurá el tracking de color del clip. El detector se enciende solo
-      dentro de su tramo en la timeline.
+      {m(
+        'Configurá el tracking de color del clip. El detector se enciende solo dentro de su tramo en la timeline.',
+      )}
     </div>
     <div class="quick-detector">
       <div class="quick-detector-row adjust-detector-toggle">
@@ -211,27 +226,32 @@
           <span>Color</span>
         </label>
       </div>
-      <span class="detector-desc">Sigue un color puntual en la escena.</span>
+      <span class="detector-desc"
+        >{m('Sigue un color puntual en la escena.')}</span
+      >
       <div
         class={['quick-detector-extra', { hidden: !panel.showBlobExtras }]}
         id="colorPickSection"
       >
-        <div class="quick-action-copy"><strong>Color a seguir</strong></div>
+        <div class="quick-action-copy">
+          <strong>{m('Color a seguir')}</strong>
+        </div>
         <button
           type="button"
           class="btn primary"
           id="btnColorPick"
           onclick={() => adapter.pickColor()}
         >
-          <i class="fa-solid fa-eyedropper"></i> Elegir color en el video
+          <i class="fa-solid fa-eyedropper"></i>
+          {m('Elegir color en el video')}
         </button>
-        <div class="quick-chip-label">Color del recuadro</div>
+        <div class="quick-chip-label">{m('Color del recuadro')}</div>
         <input
           class="visually-hidden"
           type="color"
           id="inpBlobQuickColor"
           value={panel.blobColor}
-          aria-label="Color visual del recuadro"
+          aria-label={m('Color visual del recuadro')}
           oninput={(event) =>
             adapter.setBlobColor(
               (event.currentTarget as HTMLInputElement).value,
@@ -268,8 +288,9 @@
         { hidden: !videoMode },
       ]}
     >
-      Personalizá recuadro, blur y etiqueta del clip CARAS. La detección se
-      activa sola cuando el cursor entra en su tramo.
+      {m(
+        'Personalizá recuadro, blur y etiqueta del clip CARAS. La detección se activa sola cuando el cursor entra en su tramo.',
+      )}
     </div>
     <div class="quick-detector">
       <div class="quick-detector-row adjust-detector-toggle">
@@ -282,11 +303,11 @@
             onchange={(event) =>
               adapter.toggleDetector('face', checkedValue(event))}
           />
-          <span>Caras</span>
+          <span>{m('Caras')}</span>
         </label>
       </div>
       <span class="detector-desc"
-        >Detecta rostros y permite recuadro o blur.</span
+        >{m('Detecta rostros y permite recuadro o blur.')}</span
       >
       <div
         class={['quick-detector-extra', { hidden: !panel.showFaceExtras }]}
@@ -301,7 +322,7 @@
               onchange={(event) =>
                 adapter.setFaceVisual('box', checkedValue(event))}
             />
-            <span>Recuadro</span>
+            <span>{m('Recuadro')}</span>
           </label>
           <label class="checkbox-group">
             <input
@@ -311,26 +332,26 @@
               onchange={(event) =>
                 adapter.setFaceVisual('blur', checkedValue(event))}
             />
-            <span>Desenfoque / pixelado</span>
+            <span>{m('Desenfoque / pixelado')}</span>
           </label>
         </div>
         <div
           class={['face-color-row', { hidden: !panel.showFaceBoxVisuals }]}
           id="faceQuickColorChip"
         >
-          <span class="quick-chip-label">Color del recuadro</span>
+          <span class="quick-chip-label">{m('Color del recuadro')}</span>
           {@render palette(
             panel.faceColor,
             'Paleta para el recuadro de caras',
             (color) => adapter.setFaceColor(color),
           )}
           <label class="visually-hidden">
-            <span class="quick-chip-label">Recuadro</span>
+            <span class="quick-chip-label">{m('Recuadro')}</span>
             <input
               type="color"
               id="inpFaceQuickColor"
               value={panel.faceColor}
-              aria-label="Color del recuadro de caras"
+              aria-label={m('Color del recuadro de caras')}
               oninput={(event) =>
                 adapter.setFaceColor(
                   (event.currentTarget as HTMLInputElement).value,
@@ -342,13 +363,13 @@
           class={['quick-text-field', { hidden: !panel.showFaceBoxVisuals }]}
           id="faceQuickLabelWrap"
         >
-          <span class="quick-chip-label">Etiqueta</span>
+          <span class="quick-chip-label">{m('Etiqueta')}</span>
           <input
             type="text"
             id="inpFaceQuickLabel"
             class="text-input compact-text-input"
             maxlength="28"
-            placeholder="Texto del recuadro"
+            placeholder={m('Texto del recuadro')}
             value={panel.faceLabel}
             disabled={!panel.showFaceBoxVisuals}
             oninput={(event) =>
@@ -381,8 +402,9 @@
         { hidden: !videoMode },
       ]}
     >
-      Ajustá el detector del clip OJOS. Se activa solo dentro de su tramo en la
-      timeline.
+      {m(
+        'Ajustá el detector del clip OJOS. Se activa solo dentro de su tramo en la timeline.',
+      )}
     </div>
     <div class="quick-detector">
       <div class="quick-detector-row adjust-detector-toggle">
@@ -395,10 +417,12 @@
             onchange={(event) =>
               adapter.toggleDetector('blink', checkedValue(event))}
           />
-          <span>Pestañeos</span>
+          <span>{m('Pestañeos')}</span>
         </label>
       </div>
-      <span class="detector-desc">Reacciona cuando se cierran los ojos.</span>
+      <span class="detector-desc"
+        >{m('Reacciona cuando se cierran los ojos.')}</span
+      >
     </div>
   </div>
 </div>
@@ -417,10 +441,10 @@
       <span class="toggle-copy">
         <span id="advancedToggleLabel">
           {panel.advancedOpen
-            ? 'Ocultar ajustes avanzados'
-            : 'Ajustes avanzados'}
+            ? m('Ocultar ajustes avanzados')
+            : m('Ajustes avanzados')}
         </span>
-        <small>Calidad, imagen, perfiles y diagnóstico.</small>
+        <small>{m('Calidad, imagen, perfiles y diagnóstico.')}</small>
       </span>
     </span>
     <i class="fa-solid fa-chevron-down toggle-chevron"></i>
@@ -433,14 +457,16 @@
 >
   <div class={['panel-section', 'adjust-webcam-only', { hidden: videoMode }]}>
     <div class="section-title">
-      <i class="fa-solid fa-film"></i> Calidad de salida
+      <i class="fa-solid fa-film"></i>
+      {m('Calidad de salida')}
     </div>
     <div class="help-text photo-only">
-      Las fotos se descargan en JPEG. La grabación de cámara intenta MP4 y, si
-      no está disponible, usa WebM.
+      {m(
+        'Las fotos se descargan en JPEG. La grabación de cámara intenta MP4 y, si no está disponible, usa WebM.',
+      )}
     </div>
     <div class={['help-text', 'video-only', { hidden: !videoMode }]}>
-      La exportación del editor se configura en Proyecto → Exportación.
+      {m('La exportación del editor se configura en Proyecto → Exportación.')}
     </div>
     {@render slider(
       'sldJpegQuality',
@@ -452,7 +478,9 @@
       `${panel.image.jpegQuality}%`,
       'jpegQuality',
     )}
-    <div class="slider-label photo-only"><span>Formato de grabación</span></div>
+    <div class="slider-label photo-only">
+      <span>{m('Formato de grabación')}</span>
+    </div>
     <div class="select-wrapper photo-only">
       <select
         id="videoFormatSelect"
@@ -462,8 +490,8 @@
             (event.currentTarget as HTMLSelectElement).value,
           )}
       >
-        <option value="auto">Automático (MP4 preferido)</option>
-        <option value="mp4">MP4 (si el navegador lo soporta)</option>
+        <option value="auto">{m('Automático (MP4 preferido)')}</option>
+        <option value="mp4">{m('MP4 (si el navegador lo soporta)')}</option>
         <option value="webm">WebM</option>
       </select>
     </div>
@@ -475,7 +503,7 @@
         checked={panel.image.qualityEnhancer}
         onchange={(event) => adapter.setQualityEnhancer(checkedValue(event))}
       />
-      <span>Mejorador de calidad opcional</span>
+      <span>{m('Mejorador de calidad opcional')}</span>
     </label>
     <label class="checkbox-group photo-only">
       <input
@@ -484,7 +512,7 @@
         checked={panel.image.shutterSound}
         onchange={(event) => adapter.setShutterSound(checkedValue(event))}
       />
-      <span>Sonido de obturador</span>
+      <span>{m('Sonido de obturador')}</span>
     </label>
     <div
       class={['slider-group', { hidden: !panel.image.qualityEnhancer }]}
@@ -503,7 +531,7 @@
       )}
     </div>
     <div class="help-text section-note photo-only">
-      Aplica limpieza y nitidez extra al archivo final.
+      {m('Aplica limpieza y nitidez extra al archivo final.')}
     </div>
     <div
       class={[
@@ -513,7 +541,7 @@
         { hidden: !videoMode },
       ]}
     >
-      Aplica limpieza y nitidez extra al video exportado.
+      {m('Aplica limpieza y nitidez extra al video exportado.')}
     </div>
   </div>
 
@@ -525,12 +553,15 @@
     ]}
     data-adjust-context="look"
   >
-    <div class="section-title"><i class="fa-solid fa-image"></i> Imagen</div>
+    <div class="section-title">
+      <i class="fa-solid fa-image"></i>
+      {m('Imagen')}
+    </div>
     <div class={['help-text', 'webcam-only', { hidden: videoMode }]}>
-      Ajustá orientación y encuadre de la cámara.
+      {m('Ajustá orientación y encuadre de la cámara.')}
     </div>
     <div class={['help-text', 'video-only', { hidden: !videoMode }]}>
-      Ajustá orientación y encuadre del video.
+      {m('Ajustá orientación y encuadre del video.')}
     </div>
     <label class="checkbox-group">
       <input
@@ -539,7 +570,7 @@
         checked={panel.orientation.flipH}
         onchange={(event) => adapter.setFlipH(checkedValue(event))}
       />
-      <span>Espejo (invertir horizontalmente)</span>
+      <span>{m('Espejo (invertir horizontalmente)')}</span>
     </label>
     <label class="checkbox-group">
       <input
@@ -548,10 +579,10 @@
         checked={panel.orientation.flipV}
         onchange={(event) => adapter.setFlipV(checkedValue(event))}
       />
-      <span>Invertir verticalmente</span>
+      <span>{m('Invertir verticalmente')}</span>
     </label>
     <div class="spacer-6"></div>
-    <div class="slider-label"><span>Rotación</span></div>
+    <div class="slider-label"><span>{m('Rotación')}</span></div>
     <div class="select-wrapper">
       <select
         id="rotationSelect"
@@ -561,10 +592,10 @@
             Number((event.currentTarget as HTMLSelectElement).value),
           )}
       >
-        <option value="0">Sin rotación</option>
-        <option value="90">90° (girar derecha)</option>
-        <option value="180">180° (invertir)</option>
-        <option value="270">270° (girar izquierda)</option>
+        <option value="0">{m('Sin rotación')}</option>
+        <option value="90">{m('90° (girar derecha)')}</option>
+        <option value="180">{m('180° (invertir)')}</option>
+        <option value="270">{m('270° (girar izquierda)')}</option>
       </select>
     </div>
   </div>
@@ -578,13 +609,16 @@
     data-adjust-context="look"
   >
     <div class="section-title accent">
-      <i class="fa-solid fa-screwdriver-wrench"></i> Ajuste fino
+      <i class="fa-solid fa-screwdriver-wrench"></i>
+      {m('Ajuste fino')}
     </div>
     <div class={['help-text', 'webcam-only', { hidden: videoMode }]}>
-      Personalizá el look en tiempo real. También aplica a foto y grabación.
+      {m(
+        'Personalizá el look en tiempo real. También aplica a foto y grabación.',
+      )}
     </div>
     <div class={['help-text', 'video-only', { hidden: !videoMode }]}>
-      Personalizá el look que se aplica a la preview y a la exportación.
+      {m('Personalizá el look que se aplica a la preview y a la exportación.')}
     </div>
     <label class="checkbox-group monochrome-toggle">
       <input
@@ -593,7 +627,7 @@
         checked={panel.image.blackAndWhite}
         onchange={(event) => adapter.setBlackAndWhite(checkedValue(event))}
       />
-      <span>Monocromo</span>
+      <span>{m('Monocromo')}</span>
     </label>
     {@render slider(
       'sldExposure',
@@ -683,7 +717,8 @@
       id="btnResetImageAdjustments"
       onclick={() => adapter.resetImage()}
     >
-      <i class="fa-solid fa-rotate-left"></i> Restablecer ajustes de imagen
+      <i class="fa-solid fa-rotate-left"></i>
+      {m('Restablecer ajustes de imagen')}
     </button>
   </div>
 
@@ -714,11 +749,13 @@
 
   <div class={['panel-section', 'adjust-webcam-only', { hidden: videoMode }]}>
     <div class="section-title">
-      <i class="fa-solid fa-bookmark"></i> Ajustes guardados
+      <i class="fa-solid fa-bookmark"></i>
+      {m('Ajustes guardados')}
     </div>
     <div class="help-text">
-      Guardá detectores, transforms y ajustes de imagen para reutilizarlos
-      rápido.
+      {m(
+        'Guardá detectores, transforms y ajustes de imagen para reutilizarlos rápido.',
+      )}
     </div>
     <div class="profile-row">
       <div class="select-wrapper flex-1">
@@ -740,7 +777,7 @@
         type="button"
         class="btn btn-icon"
         id="btnSaveProfile"
-        title="Guardar configuración actual"
+        title={m('Guardar configuración actual')}
         onclick={() => adapter.saveProfile()}
       >
         <i class="fa-solid fa-floppy-disk"></i>
@@ -749,7 +786,7 @@
         type="button"
         class="btn btn-icon danger"
         id="btnDeleteProfile"
-        title="Eliminar"
+        title={m('Eliminar')}
         onclick={() => adapter.deleteProfile()}
       >
         <i class="fa-solid fa-trash-can"></i>
@@ -767,8 +804,8 @@
       id="btnDeleteAllProfiles"
       onclick={() => adapter.deleteAllProfiles()}
     >
-      <i class="fa-solid fa-trash-can" aria-hidden="true"></i> Eliminar todos los
-      perfiles guardados
+      <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+      {m('Eliminar todos los perfiles guardados')}
     </button>
   </div>
 
@@ -781,10 +818,11 @@
     ]}
   >
     <div class="section-title">
-      <i class="fa-solid fa-gauge-high"></i> Diagnóstico
+      <i class="fa-solid fa-gauge-high"></i>
+      {m('Diagnóstico')}
     </div>
     <div class="diagnostic-row">
-      <span>Calidad efectiva de preview</span>
+      <span>{m('Calidad efectiva de preview')}</span>
       <strong id="previewQualityDiagnostic">{panel.previewQualityLabel}</strong>
     </div>
     <button
@@ -793,8 +831,8 @@
       id="btnResetWebcamConfig"
       onclick={() => adapter.resetWebcam()}
     >
-      <i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Restablecer configuración
-      de webcam
+      <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+      {m('Restablecer configuración de webcam')}
     </button>
   </div>
 </div>
