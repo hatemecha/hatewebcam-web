@@ -45,7 +45,7 @@ import { applyProfilesMixin } from './profiles.mjs';
 import { applyCaptureMixin } from './capture.mjs';
 import { applyModalfocusmanagementMixin } from './modal-focus.mjs';
 import { SettingsStore } from './settings-store.ts';
-import { RenderEngine } from './render-engine.mjs';
+import { RenderEngine } from './render-engine.ts';
 
 export class AppController {
   constructor() {

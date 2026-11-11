@@ -45,15 +45,15 @@ import { EditorHistory } from '../js/editor/editor-history.ts';
 import { BlobTracking } from '../js/effects/blob-tracking.mjs';
 import { BlinkDetection } from '../js/effects/blink-detection.mjs';
 import { FaceDetection } from '../js/effects/face-detection.mjs';
-import { RENDER_PROFILES } from '../js/app/render-engine.mjs';
-import { calculateTimelineTickInterval } from '../js/app/timeline-view.mjs';
+import { RENDER_PROFILES } from '../js/app/render-engine.ts';
+import { calculateTimelineTickInterval } from '../js/app/timeline-view.ts';
 import {
   DEFAULT_IMAGE_SETTINGS,
   PERFORMANCE_MODE_PRESETS,
   TIMELINE_TRACK_COUNT,
   normalizePerformanceMode,
 } from '../js/app/constants.mjs';
-import { EditAssistController } from '../js/app/edit-assist-controller.mjs';
+import { EditAssistController } from '../js/app/edit-assist-controller.ts';
 import { SettingsStore } from '../js/app/settings-store.ts';
 import { applyEffectsMixin } from '../js/app/effects.mjs';
 import { applyCameraMixin } from '../js/app/camera.mjs';

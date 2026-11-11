@@ -2,28 +2,46 @@ const TICK_STEPS = Object.freeze([
   0.25, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600,
 ]);
 
+export interface TimelineViewOptions {
+  formatTime?: (seconds: number) => string;
+  documentRef?: Document;
+}
+
+export interface RenderRulerOptions {
+  ruler: HTMLElement | null;
+  duration: number;
+  width: number;
+}
+
 export function calculateTimelineTickInterval(
-  duration,
-  width,
+  duration: number,
+  width: number,
   minLabelPx = 72,
-) {
+): number {
   const safeDuration = Math.max(0.001, Number(duration) || 0.001);
   const safeWidth = Math.max(1, Number(width) || 1);
   const labelWidth = Math.max(24, Number(minLabelPx) || 72);
   const maxTicks = Math.max(2, Math.floor(safeWidth / labelWidth));
   const rawInterval = safeDuration / maxTicks;
-  return TICK_STEPS.find((step) => step >= rawInterval) || TICK_STEPS.at(-1);
+  return TICK_STEPS.find((step) => step >= rawInterval) ?? 600;
 }
 
 export class TimelineView {
-  constructor({ formatTime, documentRef = globalThis.document } = {}) {
+  formatTime: (seconds: number) => string;
+  document: Document;
+  dragGhost: HTMLElement | null;
+
+  constructor({
+    formatTime,
+    documentRef = globalThis.document,
+  }: TimelineViewOptions = {}) {
     this.formatTime =
-      formatTime || ((seconds) => `${Number(seconds || 0).toFixed(2)}s`);
+      formatTime ?? ((seconds) => `${Number(seconds || 0).toFixed(2)}s`);
     this.document = documentRef;
     this.dragGhost = null;
   }
 
-  formatRulerLabel(seconds, interval) {
+  formatRulerLabel(seconds: number, interval: number): string {
     if (interval >= 1) return this.formatTime(seconds);
     // Sub-second ticks need decimals or the ruler repeats the same mm:ss label.
     const decimals = interval >= 0.5 ? 1 : 2;
@@ -35,8 +53,8 @@ export class TimelineView {
       .padStart(decimals + 3, '0')}`;
   }
 
-  renderRuler({ ruler, duration, width }) {
-    if (!ruler || !this.document) return;
+  renderRuler({ ruler, duration, width }: RenderRulerOptions): void {
+    if (!ruler) return;
     const safeDuration = Math.max(0.001, Number(duration) || 0.001);
     const safeWidth = Math.max(1, Number(width) || 1);
     const interval = calculateTimelineTickInterval(safeDuration, safeWidth);
@@ -58,8 +76,10 @@ export class TimelineView {
     }
   }
 
-  ensureDragGhost(parent = this.document?.body) {
-    if (!this.dragGhost && this.document) {
+  ensureDragGhost(
+    parent: HTMLElement | null = this.document.body,
+  ): HTMLElement {
+    if (!this.dragGhost) {
       this.dragGhost = this.document.createElement('div');
       this.dragGhost.className = 'timeline-drag-ghost';
       parent?.appendChild(this.dragGhost);
@@ -67,7 +87,7 @@ export class TimelineView {
     return this.dragGhost;
   }
 
-  removeDragGhost() {
+  removeDragGhost(): void {
     this.dragGhost?.remove();
     this.dragGhost = null;
   }

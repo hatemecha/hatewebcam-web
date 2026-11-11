@@ -23,7 +23,7 @@
     "preview": "vite preview",
     "test": "tsx tests/smoke-check.mjs && tsx tests/unit-check.mjs && tsx tests/visual-fx-check.mjs",
     "test:browser": "playwright test",
-    "typecheck": "svelte-check --tsconfig ./tsconfig.json",
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json && tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

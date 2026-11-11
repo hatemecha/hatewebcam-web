@@ -3,20 +3,94 @@ import { translateCurrent } from '../../src/lib/i18n/translate.ts';
 
 const DEFAULT_STEP = 4;
 
+export interface TempoBeat {
+  time: number;
+  strength: number;
+}
+
+export interface TempoAnalysis {
+  bpm: number;
+  confidence: number;
+  beats: TempoBeat[];
+}
+
+export interface EditAssistMarker {
+  time: number;
+  kind: 'beat' | 'bar';
+  source: 'edit-assist';
+  strength: number;
+  label: 'Compás' | 'Beat';
+}
+
+export interface EditAssistTimeline {
+  trimStart: number;
+  trimEnd: number;
+  addMarkers?(markers: EditAssistMarker[]): void;
+  clearMarkersBySource?(source: string): void;
+  getMarkersBySource?(source: string): { time: number }[];
+}
+
+export interface EditAssistElements {
+  analyzeButton?: HTMLButtonElement | null;
+  beatButton?: HTMLButtonElement | null;
+  every2Button?: HTMLButtonElement | null;
+  every4Button?: HTMLButtonElement | null;
+  every8Button?: HTMLButtonElement | null;
+  halfButton?: HTMLButtonElement | null;
+  doubleButton?: HTMLButtonElement | null;
+  offsetDownButton?: HTMLButtonElement | null;
+  offsetUpButton?: HTMLButtonElement | null;
+  regenerateButton?: HTMLButtonElement | null;
+  clearButton?: HTMLButtonElement | null;
+  bpmInput?: HTMLInputElement | null;
+  offsetInput?: HTMLInputElement | null;
+  densitySelect?: HTMLSelectElement | null;
+  result?: HTMLElement | null;
+  status?: HTMLElement | null;
+}
+
+export interface EditAssistOptions {
+  getSourceFile?: () => File | null;
+  getTimeline?: () => EditAssistTimeline | null;
+  isExporting?: () => boolean;
+  getElements?: () => EditAssistElements;
+  pushHistory?: () => void;
+  renderTimeline?: () => void;
+  showStatus?: (element: HTMLElement, message: string, type: string) => void;
+  updateTimelineHint?: () => void;
+}
+
+export type TempoAnalyzer = (file: File) => Promise<TempoAnalysis>;
+
+export interface EditAssistMetadata {
+  bpm?: number;
+  detectedBpm?: number;
+  confidence?: number;
+  offset?: number;
+  markerStep?: number;
+  generatedAt?: number;
+}
+
 export class EditAssistController {
-  constructor(options, analyzer = analyzeAudioTempo) {
+  options: EditAssistOptions;
+  analyzer: TempoAnalyzer;
+  result: TempoAnalysis | null = null;
+  isAnalyzing = false;
+  isBound = false;
+  manualBpm = 0;
+  offsetMs = 0;
+  markerStep = DEFAULT_STEP;
+  generatedAt = 0;
+
+  constructor(
+    options: EditAssistOptions,
+    analyzer: TempoAnalyzer = analyzeAudioTempo as TempoAnalyzer,
+  ) {
     this.options = options;
     this.analyzer = analyzer;
-    this.result = null;
-    this.isAnalyzing = false;
-    this.isBound = false;
-    this.manualBpm = 0;
-    this.offsetMs = 0;
-    this.markerStep = DEFAULT_STEP;
-    this.generatedAt = 0;
   }
 
-  bind() {
+  bind(): void {
     if (this.isBound) return;
     this.isBound = true;
     const el = this.getElements();
@@ -35,24 +109,24 @@ export class EditAssistController {
       this.applyMarkers(this.markerStep),
     );
     el.bpmInput?.addEventListener('change', () => {
-      this.manualBpm = this.normalizeBpm(el.bpmInput.value);
+      this.manualBpm = this.normalizeBpm(el.bpmInput?.value);
       this.syncControls();
       this.updateUI();
     });
     el.offsetInput?.addEventListener('change', () => {
-      this.offsetMs = this.normalizeOffset(el.offsetInput.value);
+      this.offsetMs = this.normalizeOffset(el.offsetInput?.value);
       this.syncControls();
       this.updateUI();
     });
     el.densitySelect?.addEventListener('change', () => {
-      this.markerStep = this.normalizeStep(el.densitySelect.value);
+      this.markerStep = this.normalizeStep(el.densitySelect?.value);
       this.syncControls();
       this.updateUI();
     });
     this.updateUI();
   }
 
-  reset() {
+  reset(): void {
     this.result = null;
     this.isAnalyzing = false;
     this.manualBpm = 0;
@@ -62,27 +136,27 @@ export class EditAssistController {
     this.updateUI();
   }
 
-  getElements() {
-    return this.options.getElements?.() || {};
+  getElements(): EditAssistElements {
+    return this.options.getElements?.() ?? {};
   }
 
-  get sourceFile() {
-    return this.options.getSourceFile?.() || null;
+  get sourceFile(): File | null {
+    return this.options.getSourceFile?.() ?? null;
   }
 
-  get timeline() {
-    return this.options.getTimeline?.() || null;
+  get timeline(): EditAssistTimeline | null {
+    return this.options.getTimeline?.() ?? null;
   }
 
-  get isExporting() {
+  get isExporting(): boolean {
     return !!this.options.isExporting?.();
   }
 
-  get effectiveBpm() {
+  get effectiveBpm(): number {
     return this.manualBpm || this.result?.bpm || 0;
   }
 
-  updateUI() {
+  updateUI(): void {
     const el = this.getElements();
     const loaded = !!this.sourceFile;
     const hasBeats = !!this.result?.beats?.length && !!this.effectiveBpm;
@@ -115,7 +189,7 @@ export class EditAssistController {
     });
     if (el.clearButton) {
       const count =
-        this.timeline?.getMarkersBySource?.('edit-assist').length || 0;
+        this.timeline?.getMarkersBySource?.('edit-assist').length ?? 0;
       el.clearButton.disabled =
         !loaded || !count || this.isAnalyzing || this.isExporting;
     }
@@ -142,22 +216,24 @@ export class EditAssistController {
     }
   }
 
-  syncControls() {
+  syncControls(): void {
     const el = this.getElements();
-    if (el.bpmInput) el.bpmInput.value = this.effectiveBpm || '';
+    if (el.bpmInput) el.bpmInput.value = String(this.effectiveBpm || '');
     if (el.offsetInput) el.offsetInput.value = String(this.offsetMs);
     if (el.densitySelect) el.densitySelect.value = String(this.markerStep);
-    [
-      [el.beatButton, 1],
-      [el.every2Button, 2],
-      [el.every4Button, 4],
-      [el.every8Button, 8],
-    ].forEach(([button, step]) => {
+    (
+      [
+        [el.beatButton, 1],
+        [el.every2Button, 2],
+        [el.every4Button, 4],
+        [el.every8Button, 8],
+      ] as const
+    ).forEach(([button, step]) => {
       button?.classList.toggle('is-active', step === this.markerStep);
     });
   }
 
-  async analyze() {
+  async analyze(): Promise<void> {
     if (!this.sourceFile || this.isAnalyzing) return;
     this.isAnalyzing = true;
     this.updateUI();
@@ -181,27 +257,27 @@ export class EditAssistController {
     }
   }
 
-  scaleBpm(factor) {
+  scaleBpm(factor: number): void {
     const bpm = this.normalizeBpm(this.effectiveBpm * factor);
     if (!bpm) return;
     this.manualBpm = bpm;
     this.updateUI();
   }
 
-  shiftOffset(deltaMs) {
+  shiftOffset(deltaMs: number): void {
     this.offsetMs = this.normalizeOffset(this.offsetMs + deltaMs);
     this.updateUI();
   }
 
-  buildBeatGrid() {
+  buildBeatGrid(): TempoBeat[] {
     const timeline = this.timeline;
     const bpm = this.effectiveBpm;
     const firstBeat = this.result?.beats?.[0]?.time;
     if (!timeline || !bpm || !Number.isFinite(firstBeat)) return [];
     const period = 60 / bpm;
-    let time = firstBeat + this.offsetMs / 1000;
+    let time = (firstBeat ?? 0) + this.offsetMs / 1000;
     while (time - period >= timeline.trimStart) time -= period;
-    const beats = [];
+    const beats: TempoBeat[] = [];
     for (; time <= timeline.trimEnd + 0.001; time += period) {
       if (time >= timeline.trimStart - 0.001) {
         beats.push({
@@ -213,12 +289,12 @@ export class EditAssistController {
     return beats;
   }
 
-  applyMarkers(step = this.markerStep) {
+  applyMarkers(step: number = this.markerStep): void {
     const timeline = this.timeline;
     if (!this.result?.beats?.length || !timeline?.addMarkers) return;
     this.markerStep = this.normalizeStep(step);
-    const kind = this.markerStep >= 4 ? 'bar' : 'beat';
-    const markers = this.buildBeatGrid()
+    const kind: 'beat' | 'bar' = this.markerStep >= 4 ? 'bar' : 'beat';
+    const markers: EditAssistMarker[] = this.buildBeatGrid()
       .filter((_, index) => index % this.markerStep === 0)
       .map((beat) => ({
         time: beat.time,
@@ -229,7 +305,7 @@ export class EditAssistController {
       }));
     if (!markers.length) return;
     this.options.pushHistory?.();
-    timeline.clearMarkersBySource('edit-assist');
+    timeline.clearMarkersBySource?.('edit-assist');
     timeline.addMarkers(markers);
     this.generatedAt = Date.now();
     this.options.renderTimeline?.();
@@ -238,11 +314,11 @@ export class EditAssistController {
     this.show(`${markers.length} marcadores Edit Assist creados.`, 'success');
   }
 
-  clearMarkers() {
+  clearMarkers(): void {
     const timeline = this.timeline;
     if (
       !timeline?.clearMarkersBySource ||
-      !timeline.getMarkersBySource('edit-assist').length
+      !timeline.getMarkersBySource?.('edit-assist').length
     )
       return;
     this.options.pushHistory?.();
@@ -253,7 +329,14 @@ export class EditAssistController {
     this.show('Marcadores Edit Assist eliminados.', 'success');
   }
 
-  toJSON() {
+  toJSON(): {
+    bpm: number;
+    detectedBpm: number;
+    confidence: number;
+    offset: number;
+    markerStep: number;
+    generatedAt: number;
+  } | null {
     if (!this.result) return null;
     return {
       bpm: this.effectiveBpm,
@@ -265,7 +348,7 @@ export class EditAssistController {
     };
   }
 
-  loadMetadata(metadata) {
+  loadMetadata(metadata: EditAssistMetadata | null): void {
     if (!metadata) return;
     this.result = {
       bpm: Number(metadata.detectedBpm || metadata.bpm) || 0,
@@ -279,42 +362,46 @@ export class EditAssistController {
     this.updateUI();
   }
 
-  show(message, type) {
+  show(message: string, type: string): void {
     const el = this.getElements();
     if (el.status) this.options.showStatus?.(el.status, message, type);
   }
 
-  normalizeBpm(value) {
+  normalizeBpm(value: unknown): number {
     const bpm = Number(value);
     if (!Number.isFinite(bpm) || bpm <= 0) return 0;
     return Math.round(Math.min(320, Math.max(20, bpm)) * 10) / 10;
   }
 
-  normalizeOffset(value) {
+  normalizeOffset(value: unknown): number {
     const offset = Number(value);
     if (!Number.isFinite(offset)) return 0;
     return Math.round(Math.min(5000, Math.max(-5000, offset)));
   }
 
-  normalizeStep(value) {
+  normalizeStep(value: unknown): number {
     const step = Number(value);
     return [1, 2, 4, 8].includes(step) ? step : DEFAULT_STEP;
   }
 
-  formatConfidence(value) {
+  formatConfidence(value: number): string {
     if (value >= 0.7) return 'alta';
     if (value >= 0.4) return 'media';
     return 'baja';
   }
 
-  formatError(err) {
-    if (err?.message === 'audio_context_unavailable')
+  formatError(err: unknown): string {
+    const message =
+      err && typeof err === 'object' && 'message' in err
+        ? String((err as { message?: unknown }).message)
+        : '';
+    if (message === 'audio_context_unavailable')
       return 'Este navegador no permite analizar audio.';
-    if (err?.message === 'audio_track_missing')
+    if (message === 'audio_track_missing')
       return 'Este video no tiene una pista de audio detectable.';
-    if (err?.message === 'audio_track_undecodable')
+    if (message === 'audio_track_undecodable')
       return 'El navegador no puede decodificar la pista de audio de este video.';
-    if (err?.message === 'audio_decode_failed')
+    if (message === 'audio_decode_failed')
       return 'No pude leer el audio de este video.';
     return 'No se pudo analizar el audio.';
   }

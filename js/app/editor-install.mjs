@@ -8,9 +8,9 @@
  */
 import { VideoTimeline } from '../editor/video-timeline.ts';
 import { EditorHistory } from '../editor/editor-history.ts';
-import { TimelineView } from './timeline-view.mjs';
-import { EditAssistController } from './edit-assist-controller.mjs';
-import { VideoExportSession } from './video-export-session.mjs';
+import { TimelineView } from './timeline-view.ts';
+import { EditAssistController } from './edit-assist-controller.ts';
+import { VideoExportSession } from './video-export-session.ts';
 import { applyLocalvideoeditorMixin } from './video-editor.mjs';
 import { applyVisualFxIntegrationMixin } from './visual-fx-integration.mjs';
 import { applyVisualFxUIMixin } from './visual-fx-ui.mjs';
