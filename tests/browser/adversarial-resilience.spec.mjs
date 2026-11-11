@@ -87,12 +87,16 @@ test.describe('adversarial browser state', () => {
     expect(externalRequests).toEqual([]);
   });
 
-  test('shows the boot error when a template is incomplete', async ({
+  test('shows the boot error when the document contract is incomplete', async ({
     page,
   }) => {
-    await page.route('**/templates/video-editor.html', (route) =>
-      route.fulfill({ status: 200, contentType: 'text/html', body: '' }),
-    );
+    await page.addInitScript(() => {
+      const querySelector = Document.prototype.querySelector;
+      Document.prototype.querySelector = function (selector) {
+        if (selector === '#btnToggleCamera') return null;
+        return querySelector.call(this, selector);
+      };
+    });
 
     await page.goto('/');
 

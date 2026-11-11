@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   getProcessingFrameDimensions,
   getPreviewFrameDimensions,
@@ -3322,6 +3323,50 @@ function checkCaptureSessions() {
   assert.equal(discardedResult, null);
 }
 
+function listSvelteFiles(dir) {
+  return readdirSync(resolve(dir))
+    .flatMap((entry) => {
+      const relative = `${dir}/${entry}`;
+      return statSync(resolve(relative)).isDirectory()
+        ? listSvelteFiles(relative)
+        : relative.endsWith('.svelte')
+          ? [relative]
+          : [];
+    })
+    .sort();
+}
+
+function stripSvelteExpressions(source) {
+  let out = '';
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index];
+    if (char !== '{') {
+      out += char;
+      continue;
+    }
+    let depth = 1;
+    let quote = '';
+    index += 1;
+    for (; index < source.length && depth > 0; index += 1) {
+      const next = source[index];
+      if (quote) {
+        if (next === '\\') index += 1;
+        else if (next === quote) quote = '';
+        continue;
+      }
+      if (next === "'" || next === '"' || next === '`') {
+        quote = next;
+      } else if (next === '{') {
+        depth += 1;
+      } else if (next === '}') {
+        depth -= 1;
+      }
+    }
+    index -= 1;
+  }
+  return out;
+}
+
 function visibleCopy(html) {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, '')
@@ -3359,9 +3404,28 @@ function checkMessages() {
   assert.equal(translate('es', 'Idioma'), 'Idioma');
   assert.equal(englishMessages.Idioma, 'Language');
   const missing = [];
-  for (const file of ['index.html', 'templates/video-editor.html']) {
+  const componentFiles = listSvelteFiles('src/lib').map((file) => file);
+  for (const file of ['index.html']) {
     const html = readFileSync(file, 'utf8');
     for (const line of [...visibleCopy(html), ...visibleAttributes(html)]) {
+      if (!Object.prototype.hasOwnProperty.call(englishMessages, line)) {
+        missing.push(`${file}: ${line}`);
+      }
+    }
+  }
+  for (const file of componentFiles) {
+    const source = readFileSync(file, 'utf8');
+    // Every UI string in a Svelte component must go through the typed
+    // catalog. Read keys from m('...') and reject any loose accent copy.
+    const keys = [...source.matchAll(/\bm\(\s*'((?:[^'\\]|\\.)*)'/g)].map(
+      (match) => match[1].replace(/\\'/g, "'"),
+    );
+    const withoutExpressions = stripSvelteExpressions(source);
+    const loose = [
+      ...visibleCopy(withoutExpressions),
+      ...visibleAttributes(withoutExpressions),
+    ];
+    for (const line of [...keys, ...loose]) {
       if (!Object.prototype.hasOwnProperty.call(englishMessages, line)) {
         missing.push(`${file}: ${line}`);
       }

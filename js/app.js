@@ -1,7 +1,6 @@
 /**
  * HateWebcam Web — application entry point.
  */
-import { loadAppTemplates } from './app/template-loader.mjs';
 import { AppController } from './app/controller.mjs';
 import { getLocale, initializeI18n, setLocale, translate } from './i18n.mjs';
 import { applyMessages } from '../src/lib/i18n/apply-messages.ts';
@@ -21,6 +20,7 @@ import {
   mountCaptureChrome,
   mountMobileHud,
 } from '../src/lib/capture/mount.ts';
+import { mountVideoEditor } from '../src/lib/editor/mount.ts';
 
 initializeI18n();
 const controller = new AppController();
@@ -45,7 +45,7 @@ function markControllerReady() {
 }
 
 try {
-  await loadAppTemplates();
+  mountVideoEditor(document.querySelector('#videoEditorTemplateSlot'));
   mountAppHeader(
     document.querySelector('#appHeaderMount'),
     {

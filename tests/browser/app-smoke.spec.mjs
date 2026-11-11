@@ -103,8 +103,16 @@ test('specific-color detection exposes an editable target color', async ({
   );
 });
 
-test('template boot failure shows a visible error', async ({ page }) => {
-  await page.route('**/templates/video-editor.html', (route) => route.abort());
+test('boot failure shows a visible error', async ({ page }) => {
+  // Simulate a broken document contract: the controller cannot start without
+  // its base preview elements and must render the recoverable boot error.
+  await page.addInitScript(() => {
+    const querySelector = Document.prototype.querySelector;
+    Document.prototype.querySelector = function (selector) {
+      if (selector === '#previewCanvas') return null;
+      return querySelector.call(this, selector);
+    };
+  });
 
   await page.goto('/');
 

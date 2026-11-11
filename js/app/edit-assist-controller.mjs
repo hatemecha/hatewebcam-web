@@ -1,4 +1,5 @@
 import { analyzeAudioTempo } from '../audio-tempo-analyzer.mjs';
+import { translateCurrent } from '../../src/lib/i18n/translate.ts';
 
 const DEFAULT_STEP = 4;
 
@@ -89,8 +90,8 @@ export class EditAssistController {
       el.analyzeButton.disabled =
         !loaded || this.isAnalyzing || this.isExporting;
       el.analyzeButton.innerHTML = this.isAnalyzing
-        ? '<i class="fa-solid fa-spinner fa-spin"></i> Analizando...'
-        : '<i class="fa-solid fa-wave-square"></i> Analizar audio';
+        ? `<i class="fa-solid fa-spinner fa-spin"></i> ${translateCurrent('Analizando...')}`
+        : `<i class="fa-solid fa-wave-square"></i> ${translateCurrent('Analizar audio')}`;
     }
     [
       el.beatButton,
@@ -121,17 +122,23 @@ export class EditAssistController {
     this.syncControls();
     if (!el.result) return;
     if (!loaded) {
-      el.result.textContent = 'Importá un video para analizar su audio.';
+      el.result.textContent = translateCurrent(
+        'Importá un video para analizar su audio.',
+      );
     } else if (this.isAnalyzing) {
-      el.result.textContent = 'Analizando pulsos aproximados...';
+      el.result.textContent = translateCurrent(
+        'Analizando pulsos aproximados...',
+      );
     } else if (this.result?.bpm) {
-      el.result.textContent = `Tempo estimado: ${this.result.bpm} BPM · usado ${this.effectiveBpm} BPM · offset ${this.offsetMs} ms · confianza ${this.formatConfidence(this.result.confidence)}`;
+      el.result.textContent = `${translateCurrent('Tempo estimado:')} ${this.result.bpm} BPM ${translateCurrent(' · usado ')}${this.effectiveBpm} BPM · offset ${this.offsetMs} ms ${translateCurrent(' · confianza ')}${translateCurrent(this.formatConfidence(this.result.confidence))}`;
     } else if (this.result) {
-      el.result.textContent = 'No encontré pulsos claros en el audio.';
+      el.result.textContent = translateCurrent(
+        'No encontré pulsos claros en el audio.',
+      );
     } else {
       // The help text above already explains what the analysis does; repeating
       // it here filled the status line with the same sentence twice.
-      el.result.textContent = 'Sin analizar';
+      el.result.textContent = translateCurrent('Sin analizar');
     }
   }
 

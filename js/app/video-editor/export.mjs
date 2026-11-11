@@ -6,6 +6,7 @@ import {
 } from '../../video-export.mjs';
 import { patchExportModalState } from '../../../src/lib/capture/session-state.ts';
 import { updateShellState } from '../../../src/lib/shell/shell-bridge.mjs';
+import { translateCurrent } from '../../../src/lib/i18n/translate.ts';
 
 const VIDEO_END_EPSILON = 0.001;
 const VIDEO_EXPORT_PLAYBACK_RATE = 4;
@@ -42,8 +43,11 @@ export function applyVideoEditorExportMixin(proto) {
   };
 
   proto.formatVideoExportPreflight = function (preflight) {
-    if (!preflight) return 'Importá un video para habilitar la exportación.';
-    return `Preflight: ${preflight.width}×${preflight.height} · ${this.formatVideoFps(preflight.fps)} FPS · ${this.formatDurationDetailed(preflight.duration)} · ${preflight.totalFrames} frames · ${this.formatVideoBitrate(preflight.bitrate)} · memoria ${preflight.risk.label}`;
+    if (!preflight)
+      return translateCurrent(
+        'Importá un video para habilitar la exportación.',
+      );
+    return `${translateCurrent('Preflight')}: ${preflight.width}×${preflight.height} · ${this.formatVideoFps(preflight.fps)} FPS · ${this.formatDurationDetailed(preflight.duration)} · ${preflight.totalFrames} ${translateCurrent('frames')} · ${this.formatVideoBitrate(preflight.bitrate)} · ${translateCurrent('memoria')} ${translateCurrent(preflight.risk.label)}`;
   };
 
   proto.updateVideoEditorUI = function () {
@@ -81,14 +85,18 @@ export function applyVideoEditorExportMixin(proto) {
     if (this.btnCutAtMarkers)
       this.btnCutAtMarkers.disabled = !loaded || this.isVideoExporting;
     if (this.btnChooseVideo) {
-      this.btnChooseVideo.innerHTML = loaded
-        ? '<i class="fa-solid fa-folder-open"></i> Cambiar video'
-        : '<i class="fa-solid fa-folder-open"></i> Importar video';
+      const label = translateCurrent(
+        loaded ? 'Cambiar video' : 'Importar video',
+      );
+      this.btnChooseVideo.innerHTML = `<i class="fa-solid fa-folder-open"></i> ${label}`;
+      this.btnChooseVideo.setAttribute('aria-label', label);
     }
     if (this.videoProjectHelp) {
-      this.videoProjectHelp.textContent = loaded
-        ? 'Reemplazá el video o exportá cuando termines.'
-        : 'Importá un archivo local. MP4, WebM o MOV si el navegador lo soporta.';
+      this.videoProjectHelp.textContent = translateCurrent(
+        loaded
+          ? 'Reemplazá el video o exportá cuando termines.'
+          : 'Importá un archivo local. MP4, WebM o MOV si el navegador lo soporta.',
+      );
     }
     this.timelineEffectPalette
       ?.querySelectorAll('.timeline-palette-chip')
@@ -103,10 +111,13 @@ export function applyVideoEditorExportMixin(proto) {
     this.editAssist?.updateUI();
     if (!loaded) {
       if (this.videoFileMeta)
-        this.videoFileMeta.textContent = 'Ningún archivo cargado';
+        this.videoFileMeta.textContent = translateCurrent(
+          'Ningún archivo cargado',
+        );
       if (this.videoExportDetails)
-        this.videoExportDetails.textContent =
-          'Importá un video para habilitar la exportación.';
+        this.videoExportDetails.textContent = translateCurrent(
+          'Importá un video para habilitar la exportación.',
+        );
       if (this.videoExportDiagnostics)
         this.videoExportDiagnostics.textContent = '';
       if (this.sourceMode === 'video') {
@@ -171,9 +182,11 @@ export function applyVideoEditorExportMixin(proto) {
       );
     }
     if (this.editorStableExportDetails) {
-      this.editorStableExportDetails.textContent = effectsOnly
-        ? 'Estable: WebM · solo efectos chroma'
-        : 'Estable: WebM · sin audio';
+      this.editorStableExportDetails.textContent = translateCurrent(
+        effectsOnly
+          ? 'Estable: WebM · solo efectos chroma'
+          : 'Estable: WebM · sin audio',
+      );
     }
     if (this.editorExportFormatSelect) {
       this.editorExportFormatSelect.value =

@@ -20,7 +20,6 @@ function listJavascriptFiles(dir = 'js') {
 
 const javascriptFiles = listJavascriptFiles();
 const htmlTemplateFiles = [
-  'templates/video-editor.html',
   'src/lib/webcam/EffectsControls.svelte',
   'src/lib/webcam/CameraSourcePanel.svelte',
   'src/lib/preview/PreviewMetrics.svelte',
@@ -30,6 +29,16 @@ const htmlTemplateFiles = [
   'src/lib/preview/DetectorChips.svelte',
   'src/lib/modals/ExportModal.svelte',
   'src/lib/modals/CaptureModal.svelte',
+  'src/lib/editor/VideoEditor.svelte',
+  'src/lib/editor/EditorToolbar.svelte',
+  'src/lib/editor/EffectPalette.svelte',
+  'src/lib/editor/Timeline.svelte',
+  'src/lib/editor/Inspector.svelte',
+  'src/lib/editor/ProjectPanel.svelte',
+  'src/lib/editor/EditAssistPanel.svelte',
+  'src/lib/editor/ExportPanel.svelte',
+  'src/lib/editor/ClipInspector.svelte',
+  'src/lib/editor/AdjustPanel.svelte',
 ];
 
 const controllerConstantPattern =
