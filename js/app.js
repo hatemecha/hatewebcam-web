@@ -282,6 +282,16 @@ try {
       controller.setCameraState(controller.cameraUiState);
     }
     controller.updateEffectsInfo?.(true);
+    controller.updateVideoEditorUI?.();
+    controller.updateEditorExportControls?.();
+    controller.editAssist?.updateUI();
+    controller._adjustClipStatusKey = '';
+    controller.updateAdjustmentsContext?.();
+    controller.updateAdjustmentsClipStatus?.();
+    controller.updateTimelineHint?.();
+    if (controller.videoEditorStatus) {
+      controller.hideStatus?.(controller.videoEditorStatus);
+    }
     controller.publishWebcamPanel?.();
     controller.updateCaptureButtons?.();
     controller.publishCapturePreview?.();

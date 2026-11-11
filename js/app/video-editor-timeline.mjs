@@ -1,5 +1,6 @@
 import { VISUAL_SYSTEM_LABELS } from '../visual-fx/config.mjs';
 import { isVisualFxClipType } from '../editor/timeline-clip-types.ts';
+import { translateCurrent } from '../../src/lib/i18n/translate.ts';
 
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyVideoEditorTimelineMixin(proto) {
@@ -149,7 +150,7 @@ export function applyVideoEditorTimelineMixin(proto) {
     if (endTime <= startTime) {
       this.showStatus(
         this.videoEditorStatus,
-        'No hay espacio libre en esa pista.',
+        translateCurrent('No hay espacio libre en esa pista.'),
         'error',
       );
       return null;
@@ -177,7 +178,7 @@ export function applyVideoEditorTimelineMixin(proto) {
       void this.syncVideoTimelineEffects(true);
       this.showStatus(
         this.videoEditorStatus,
-        `${this.TIMELINE_EFFECT_META[type].label} agregado.`,
+        `${translateCurrent(this.TIMELINE_EFFECT_META[type].label)} ${translateCurrent('agregado.')}`,
         'success',
       );
       setTimeout(() => this.hideStatus(this.videoEditorStatus), 1200);

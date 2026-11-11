@@ -1,5 +1,6 @@
 import { createDefaultVisualConfig } from '../../visual-fx/config.mjs';
 import { isVisualFxClipType } from '../../editor/timeline-clip-types.ts';
+import { translateCurrent } from '../../../src/lib/i18n/translate.ts';
 
 const VIDEO_EFFECT_AUTOMATION_MODES = new Set([
   'fixed',
@@ -113,8 +114,8 @@ export function applyVideoEditorClipInspectorMixin(proto) {
     if (this._adjustClipStatusKey === key) return;
     this._adjustClipStatusKey = key;
     this.adjustClipStatusText = active
-      ? `Tramo ${this.formatDurationDetailed(item.startTime)} - ${this.formatDurationDetailed(item.endTime)} · Vista previa activa`
-      : `Tramo ${this.formatDurationDetailed(item.startTime)} - ${this.formatDurationDetailed(item.endTime)} · Mové el cursor al clip para previsualizar`;
+      ? `${translateCurrent('Tramo')} ${this.formatDurationDetailed(item.startTime)} - ${this.formatDurationDetailed(item.endTime)} · ${translateCurrent('Vista previa activa')}`
+      : `${translateCurrent('Tramo')} ${this.formatDurationDetailed(item.startTime)} - ${this.formatDurationDetailed(item.endTime)} · ${translateCurrent('Mové el cursor al clip para previsualizar')}`;
     this.adjustClipVisible = true;
     this.adjustClipStatus.textContent = this.adjustClipStatusText;
     this.adjustClipStatus.classList.toggle('is-live', active);
@@ -589,7 +590,7 @@ export function applyVideoEditorClipInspectorMixin(proto) {
     }
     if (item && this.videoEffectDurationLabel) {
       const duration = Math.max(0, item.endTime - item.startTime);
-      this.videoEffectDurationLabel.textContent = `Duración: ${duration.toFixed(2)} s`;
+      this.videoEffectDurationLabel.textContent = `${translateCurrent('Duración')}: ${duration.toFixed(2)} s`;
     }
     if (this.videoEffectAutomationSelect) {
       this.videoEffectAutomationSelect.disabled = !editing;

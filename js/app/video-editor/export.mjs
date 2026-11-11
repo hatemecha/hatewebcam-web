@@ -48,7 +48,7 @@ export function applyVideoEditorExportMixin(proto) {
       return translateCurrent(
         'Importá un video para habilitar la exportación.',
       );
-    return `${translateCurrent('Preflight')}: ${preflight.width}×${preflight.height} · ${this.formatVideoFps(preflight.fps)} FPS · ${this.formatDurationDetailed(preflight.duration)} · ${preflight.totalFrames} ${translateCurrent('frames')} · ${this.formatVideoBitrate(preflight.bitrate)} · ${translateCurrent('memoria')} ${translateCurrent(preflight.risk.label)}`;
+    return `${translateCurrent('Preflight')}: ${preflight.width}×${preflight.height} · ${this.formatVideoFps(preflight.fps)} FPS · ${this.formatDurationDetailed(preflight.duration)} · ${preflight.totalFrames} ${translateCurrent('frames')} · ${this.formatVideoBitrate(preflight.bitrate)} · ${translateCurrent(`memoria ${preflight.risk.label}`)}`;
   };
 
   proto.updateVideoEditorUI = function () {
@@ -105,12 +105,14 @@ export function applyVideoEditorExportMixin(proto) {
       return;
     }
     this.updatePreviewPlaceholder();
+    this.updateVideoFileMeta?.();
     if (this.videoExportDetails) {
       const preflight = this.buildVideoExportPreflight();
-      const modeLabel =
+      const modeLabel = translateCurrent(
         preflight?.mode === 'effects-chroma'
           ? 'solo efectos chroma'
-          : 'video + efectos';
+          : 'video + efectos',
+      );
       const formatLabel =
         preflight?.mode === 'effects-chroma'
           ? 'WebM'
@@ -119,15 +121,16 @@ export function applyVideoEditorExportMixin(proto) {
               this.imageSettings.editorExportFormat ||
               'auto'
             ).toUpperCase();
-      const audioLabel =
+      const audioLabel = translateCurrent(
         preflight?.mode === 'effects-chroma'
           ? 'sin audio'
           : preflight?.copyAudio
             ? 'audio si compatible'
-            : 'sin audio';
+            : 'sin audio',
+      );
       const exportLabel = canExport
         ? `${formatLabel} · ${modeLabel} · ${audioLabel}`
-        : 'WebCodecs no disponible';
+        : translateCurrent('WebCodecs no disponible');
       this.videoExportDetails.textContent = `${this.formatVideoExportPreflight(preflight)} · ${exportLabel}`;
     }
     void this.refreshVideoExportDiagnostics();
@@ -251,30 +254,35 @@ export function applyVideoEditorExportMixin(proto) {
 
   proto.formatVideoExportDiagnosis = function (diagnosis, bitrate) {
     if (!diagnosis.webCodecs)
-      return 'Diagnóstico: WebCodecs no disponible. Usá Chrome o Edge actualizado.';
+      return translateCurrent(
+        'Diagnóstico: WebCodecs no disponible. Usá Chrome o Edge actualizado.',
+      );
     if (!diagnosis.videoFrame)
-      return 'Diagnóstico: VideoFrame no disponible. Usá Chrome o Edge actualizado.';
+      return translateCurrent(
+        'Diagnóstico: VideoFrame no disponible. Usá Chrome o Edge actualizado.',
+      );
     const requested =
       diagnosis.requestedFormat === 'auto'
         ? 'Auto'
         : String(diagnosis.requestedFormat || '').toUpperCase();
     if (!diagnosis.supported)
-      return `Diagnóstico: ${requested} no soportado (${diagnosis.reason || 'sin codec'}).`;
+      return `${translateCurrent('Diagnóstico')}: ${requested} ${translateCurrent('no soportado')} (${diagnosis.reason ? translateCurrent(diagnosis.reason) : translateCurrent('sin codec')}).`;
     const format = String(diagnosis.format || 'webm').toUpperCase();
-    const mode =
+    const mode = translateCurrent(
       diagnosis.mode === 'effects-chroma'
         ? 'solo efectos chroma'
-        : 'video + efectos';
+        : 'video + efectos',
+    );
     const audio =
       diagnosis.mode === 'effects-chroma'
-        ? 'sin audio'
+        ? translateCurrent('sin audio')
         : diagnosis.audioCopySupported
-          ? `audio copiado (${diagnosis.audioCodec})`
+          ? `${translateCurrent('audio copiado')} (${diagnosis.audioCodec})`
           : diagnosis.audioCopyRequested &&
               diagnosis.audioReason === 'audio_codec_unknown'
-            ? 'audio se intentará si es compatible'
-            : `sin audio${diagnosis.audioReason ? ` (${diagnosis.audioReason})` : ''}`;
-    return `Diagnóstico: ${format} · ${diagnosis.codec} · ${this.formatVideoBitrate(bitrate)} · ${mode} · ${audio}`;
+            ? translateCurrent('audio se intentará si es compatible')
+            : `${translateCurrent('sin audio')}${diagnosis.audioReason ? ` (${diagnosis.audioReason})` : ''}`;
+    return `${translateCurrent('Diagnóstico')}: ${format} · ${diagnosis.codec} · ${this.formatVideoBitrate(bitrate)} · ${mode} · ${audio}`;
   };
 
   proto.refreshVideoExportDiagnostics = async function () {
@@ -293,7 +301,7 @@ export function applyVideoEditorExportMixin(proto) {
     this.videoExportDiagnostics.textContent = `${this.formatVideoExportDiagnosis(
       diagnosis,
       preflight.bitrate,
-    )} · ${preflight.risk.recommendation}`;
+    )} · ${translateCurrent(preflight.risk.recommendation)}`;
     return diagnosis;
   };
 

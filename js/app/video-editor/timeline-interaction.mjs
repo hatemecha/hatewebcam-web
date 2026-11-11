@@ -1,3 +1,5 @@
+import { translateCurrent } from '../../../src/lib/i18n/translate.ts';
+
 /** @param {import('../controller.mjs').AppController} proto */
 export function applyVideoEditorTimelineInteractionMixin(proto) {
   proto.beginTimelineSelection = function (event) {
@@ -223,7 +225,7 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
         this.videoEffectRangeLabel.textContent = `${this.formatDurationDetailed(startTime)} - ${this.formatDurationDetailed(endTime)}`;
       }
       if (this.videoEffectDurationLabel) {
-        this.videoEffectDurationLabel.textContent = `Duración: ${Math.max(0, endTime - startTime).toFixed(2)} s`;
+        this.videoEffectDurationLabel.textContent = `${translateCurrent('Duración')}: ${Math.max(0, endTime - startTime).toFixed(2)} s`;
       }
     };
     const end = () => {

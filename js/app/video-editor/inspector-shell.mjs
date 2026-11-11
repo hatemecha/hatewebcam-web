@@ -1,4 +1,5 @@
 import { updateEditorUiState } from '../../../src/lib/editor/editor-state.ts';
+import { translateCurrent } from '../../../src/lib/i18n/translate.ts';
 
 /** @param {import('../controller.mjs').AppController} proto */
 export function applyVideoEditorInspectorShellMixin(proto) {
@@ -104,7 +105,7 @@ export function applyVideoEditorInspectorShellMixin(proto) {
       const help =
         this.ADJUST_CONTEXT_VIDEO_HELP?.[context] ||
         this.ADJUST_CONTEXT_HELP[context];
-      this.adjustContextHelp.textContent = help;
+      this.adjustContextHelp.textContent = translateCurrent(help);
     }
     this.updateAdjustmentsClipStatus();
     this.publishWebcamPanel?.();
@@ -196,6 +197,8 @@ export function applyVideoEditorInspectorShellMixin(proto) {
       cut: 'La línea roja marca el corte. Click sobre un clip de efecto.',
       trim: 'Arrastrá los bordes rojos en VIDEO.',
     };
-    this.timelineHintText.textContent = hints[this.editorTool] || hints.select;
+    this.timelineHintText.textContent = translateCurrent(
+      hints[this.editorTool] || hints.select,
+    );
   };
 }

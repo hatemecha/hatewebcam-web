@@ -588,6 +588,15 @@ export const englishMessages = {
   'No hay un codec compatible para el formato elegido.':
     'No compatible codec for the chosen format.',
   'Listo para exportar.': 'Ready to export.',
+  'agregado.': 'added.',
+  'Proyecto guardado.': 'Project saved.',
+  'Proyecto cargado.': 'Project loaded.',
+  'No se pudo guardar el proyecto.': 'The project could not be saved.',
+  'Marcador agregado.': 'Marker added.',
+  'Marcador eliminado.': 'Marker removed.',
+  'audio copiado': 'audio copied',
+  'audio si compatible': 'audio when compatible',
+  'WebCodecs no disponible': 'WebCodecs unavailable',
   'Proyecto restaurado con el video reimportado':
     'Project restored with the imported video',
   'No se pudo cargar el proyecto.': 'The project could not be loaded.',

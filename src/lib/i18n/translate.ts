@@ -3,8 +3,18 @@ import { getLocale, type Locale } from './locale-state';
 
 export type MessageValues = Record<string, string | number>;
 
+// Source files and catalog keys can differ in Unicode normalization (NFC vs
+// NFD) depending on the editor or tool that wrote them. Normalize both sides
+// so accented Spanish keys always resolve.
+const normalizedMessages = new Map(
+  Object.entries(englishMessages).map(([key, value]) => [
+    key.normalize('NFC'),
+    value,
+  ]),
+);
+
 export function isMessageKey(value: string): value is MessageKey {
-  return Object.prototype.hasOwnProperty.call(englishMessages, value);
+  return normalizedMessages.has(value.normalize('NFC'));
 }
 
 function fill(template: string, values?: MessageValues): string {
@@ -22,7 +32,9 @@ export function translate(
   values?: MessageValues,
 ): string {
   const template =
-    locale === 'en' && isMessageKey(key) ? englishMessages[key] : key;
+    locale === 'en'
+      ? (normalizedMessages.get(key.normalize('NFC')) ?? key)
+      : key;
   return fill(template, values);
 }
 

@@ -1,5 +1,6 @@
 import { TIMELINE_TRACK_COUNT } from '../constants.mjs';
 import { updateEditorUiState } from '../../../src/lib/editor/editor-state.ts';
+import { translateCurrent } from '../../../src/lib/i18n/translate.ts';
 
 /** @param {import('../controller.mjs').AppController} proto */
 export function applyVideoEditorTimelineChromeMixin(proto) {
@@ -161,7 +162,11 @@ export function applyVideoEditorTimelineChromeMixin(proto) {
     this.renderVideoTimeline();
     this.showStatus(
       this.videoEditorStatus,
-      result.action === 'added' ? 'Marcador agregado.' : 'Marcador eliminado.',
+      translateCurrent(
+        result.action === 'added'
+          ? 'Marcador agregado.'
+          : 'Marcador eliminado.',
+      ),
       'success',
     );
     setTimeout(() => this.hideStatus(this.videoEditorStatus), 900);

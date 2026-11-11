@@ -1,4 +1,5 @@
 import { VideoTimeline } from '../../editor/video-timeline.ts';
+import { translateCurrent } from '../../../src/lib/i18n/translate.ts';
 
 /** @param {import('../controller.mjs').AppController} proto */
 export function applyVideoEditorProjectMixin(proto) {
@@ -49,7 +50,7 @@ export function applyVideoEditorProjectMixin(proto) {
     if (!project) {
       this.showStatus(
         this.videoEditorStatus,
-        'Importá un video antes de guardar el proyecto.',
+        translateCurrent('Importá un video antes de guardar el proyecto.'),
         'warning',
       );
       return;
@@ -60,7 +61,11 @@ export function applyVideoEditorProjectMixin(proto) {
     const basename =
       this.videoSourceFile.name.replace(/\.[^.]+$/, '') || 'hatewebcam';
     this.downloadBlob(blob, `${basename}.hatewebcam.json`);
-    this.showStatus(this.videoEditorStatus, 'Proyecto guardado.', 'success');
+    this.showStatus(
+      this.videoEditorStatus,
+      translateCurrent('Proyecto guardado.'),
+      'success',
+    );
   };
 
   proto.loadEditorProjectFile = async function (file) {
@@ -74,21 +79,29 @@ export function applyVideoEditorProjectMixin(proto) {
       ) {
         this.applyEditorProject(project);
         this.pendingEditorProject = null;
-        this.showStatus(this.videoEditorStatus, 'Proyecto cargado.', 'success');
+        this.showStatus(
+          this.videoEditorStatus,
+          translateCurrent('Proyecto cargado.'),
+          'success',
+        );
         return;
       }
       this.pendingEditorProject = project;
       this.showStatus(
         this.videoEditorStatus,
-        'Proyecto cargado. Reimportá el video original para restaurarlo.',
+        translateCurrent(
+          'Proyecto cargado. Reimportá el video original para restaurarlo.',
+        ),
         'warning',
       );
     } catch (err) {
       this.showStatus(
         this.videoEditorStatus,
-        err?.message === 'invalid_project'
-          ? 'El archivo de proyecto no es válido.'
-          : 'No se pudo cargar el proyecto.',
+        translateCurrent(
+          err?.message === 'invalid_project'
+            ? 'El archivo de proyecto no es válido.'
+            : 'No se pudo cargar el proyecto.',
+        ),
         'error',
       );
     }

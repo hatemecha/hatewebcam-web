@@ -1,6 +1,7 @@
 import { VideoTimeline } from '../../editor/video-timeline.ts';
 import { updateShellState } from '../../../src/lib/shell/shell-bridge.mjs';
 import { updateEditorUiState } from '../../../src/lib/editor/editor-state.ts';
+import { translateCurrent } from '../../../src/lib/i18n/translate.ts';
 
 /** @param {import('../controller.mjs').AppController} proto */
 export function applyVideoEditorSourceMixin(proto) {
@@ -130,12 +131,18 @@ export function applyVideoEditorSourceMixin(proto) {
     }
   };
 
+  proto.updateVideoFileMeta = function () {
+    if (!this.videoFileMeta || !this.videoSourceFile) return;
+    const file = this.videoSourceFile;
+    this.videoFileMeta.textContent = `${file.name} · ${this.formatBytes(file.size)} · ${this.videoEl.videoWidth}×${this.videoEl.videoHeight} · ${this.formatDurationDetailed(this.videoEl.duration)} · ${this.formatVideoFps(this.videoSourceFps)} FPS · ${this.formatVideoBitrate(this.videoSourceAverageBitrate)} ${translateCurrent('estimado')}`;
+  };
+
   proto.loadVideoFile = async function (file) {
     if (!file || !(file instanceof File)) return;
     if (!file.type.startsWith('video/')) {
       this.showStatus(
         this.videoEditorStatus,
-        'Elegí un archivo de video válido.',
+        translateCurrent('Elegí un archivo de video válido.'),
         'error',
       );
       return;
@@ -213,7 +220,7 @@ export function applyVideoEditorSourceMixin(proto) {
             'El video no coincide con el proyecto cargado. Elegí el archivo original.';
         }
       }
-      this.videoFileMeta.textContent = `${file.name} · ${this.formatBytes(file.size)} · ${this.videoEl.videoWidth}×${this.videoEl.videoHeight} · ${this.formatDurationDetailed(this.videoEl.duration)} · ${this.formatVideoFps(this.videoSourceFps)} FPS · ${this.formatVideoBitrate(this.videoSourceAverageBitrate)} estimado`;
+      this.updateVideoFileMeta();
       this.frameCount = 0;
       this.lastFpsTime = performance.now();
       this.syncPreviewCanvasMetrics(
@@ -228,7 +235,7 @@ export function applyVideoEditorSourceMixin(proto) {
       this.applyTimelineZoom();
       this.showStatus(
         this.videoEditorStatus,
-        projectMessage || 'Video listo.',
+        translateCurrent(projectMessage || 'Video listo.'),
         projectMessage && this.pendingEditorProject ? 'warning' : 'success',
       );
       setTimeout(() => this.hideStatus(this.videoEditorStatus), 1800);
@@ -237,8 +244,10 @@ export function applyVideoEditorSourceMixin(proto) {
       this.disposeVideoSource();
       const message =
         err?.message === 'video_metadata_invalid'
-          ? 'El video no contiene resolución o duración válidas.'
-          : 'El navegador no puede decodificar este archivo.';
+          ? translateCurrent(
+              'El video no contiene resolución o duración válidas.',
+            )
+          : translateCurrent('El navegador no puede decodificar este archivo.');
       this.showStatus(this.videoEditorStatus, message, 'error');
       this.updateVideoEditorUI();
     }
