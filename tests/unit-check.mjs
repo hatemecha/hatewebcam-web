@@ -54,6 +54,11 @@ import {
   normalizePerformanceMode,
 } from '../js/app/constants.mjs';
 import { EditAssistController } from '../js/app/edit-assist-controller.ts';
+import {
+  getEditorUiState,
+  subscribeEditorUiState,
+  updateEditorUiState,
+} from '../src/lib/editor/editor-state.ts';
 import { SettingsStore } from '../js/app/settings-store.ts';
 import { applyEffectsMixin } from '../js/app/effects.mjs';
 import { applyCameraMixin } from '../js/app/camera.mjs';
@@ -3239,6 +3244,7 @@ checkShellStateBridge();
 checkPreviewBridge();
 checkCameraSourceSelection();
 checkCaptureSessions();
+checkEditorUiState();
 checkMessages();
 
 function checkCaptureSessions() {
@@ -3382,6 +3388,32 @@ function visibleAttributes(html) {
     .filter((line) => /[áéíóúñÁÉÍÓÚÑ¿¡]/.test(line));
 }
 
+function checkEditorUiState() {
+  updateEditorUiState({
+    mode: 'camera',
+    hasSource: false,
+    exporting: false,
+    canExport: false,
+    canUndo: false,
+    canRedo: false,
+    inspectorTab: 'project',
+  });
+  let notifications = 0;
+  const unsubscribe = subscribeEditorUiState(() => {
+    notifications += 1;
+  });
+  assert.equal(notifications, 1);
+  updateEditorUiState({ mode: 'camera' });
+  assert.equal(notifications, 1);
+  updateEditorUiState({ mode: 'video', hasSource: true });
+  assert.equal(notifications, 2);
+  assert.equal(getEditorUiState().mode, 'video');
+  assert.equal(getEditorUiState().hasSource, true);
+  unsubscribe();
+  updateEditorUiState({ mode: 'camera', hasSource: false });
+  assert.equal(notifications, 2);
+}
+
 function checkMessages() {
   setLocale('en', { persist: false });
   assert.equal(translate('en', 'Idioma'), 'Language');
@@ -3400,6 +3432,11 @@ function checkMessages() {
     ),
     'Exporting 10% · output 30 FPS · measuring real speed',
   );
+  const decomposed = 'Diagnóstico'.normalize('NFD');
+  const composed = 'Diagnóstico'.normalize('NFC');
+  setLocale('en', { persist: false });
+  assert.equal(translate('en', decomposed), translate('en', composed));
+  assert.equal(translate('en', composed), 'Diagnostics');
   setLocale('es', { persist: false });
   assert.equal(translate('es', 'Idioma'), 'Idioma');
   assert.equal(englishMessages.Idioma, 'Language');
