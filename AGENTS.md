@@ -25,12 +25,12 @@ Run one browser spec with `npx playwright test tests/browser/app-smoke.spec.mjs`
 
 ## Architecture
 
-- Entry flow: `index.html` -> `js/app.js` -> fetches `templates/video-editor.html`, mounts the Svelte header, preview metrics, camera source, webcam controls, mobile HUD and capture/export modals -> `new AppController().start()`.
+- Entry flow: `index.html` -> `js/app.js` -> mounts the Svelte shell (skip link, header, preview placeholder, capture bar, metrics, camera source, webcam controls, mobile HUD, editor shell, modals) -> `new AppController().start()`.
 - `AppController` is still split into mixins in `js/app/*.mjs`. Mixin methods use `this`; controller constants are instance fields. New presentation state belongs in `src/lib/**` TypeScript modules, not in additional `.mjs` bridges.
-- Svelte owns the header, detector chips, camera source, webcam control panel, resolution/FPS and modal markup. The media engine and the video editor DOM remain in `js/` and `templates/video-editor.html`. Pure `.ts` modules are allowed from legacy `.mjs` because `npm test` runs through `tsx`; do not import Svelte components or runes from legacy `.mjs`.
+- Svelte owns the header, detector chips, preview placeholder, capture bar, camera source, webcam control panel, resolution/FPS, editor shell and modal markup. The media engine still lives in `js/`. Pure `.ts` modules are allowed from legacy `.mjs` because `npm test` runs through `tsx`; do not import Svelte components or runes from legacy `.mjs` (plain stores/bridges are fine).
+- The video editor engine (timeline model, Edit Assist, export session, Visual FX) is a lazy chunk loaded by `js/app/editor-install.mjs` on the first switch to Video mode. Keep editor imports out of the bootstrap graph.
 - `tests/smoke-check.mjs` enforces these structural rules: no bare `clamp()`/`escapeHtml()` calls, no `$()` outside `js/app/dom.mjs`, no bare controller constants, and no unbound controller methods passed to `addEventListener`/`requestAnimationFrame`/`requestVideoFrameCallback`.
-- `templates/video-editor.html` is fetched at runtime and injected into its slot. The webcam control panel is Svelte and is not a fetched template. New fetched templates must be wired in `js/app/template-loader.mjs` and usually in the smoke check.
-- `templates/`, `vendor/`, and `css/` are copied to `dist/` by `scripts/copy-templates.mjs`, not by Vite. Add any new static top-level directory there.
+- There are no fetched HTML templates. `vendor/` and `css/` are copied to `dist/` by `scripts/copy-templates.mjs`, not by Vite. Add any new static top-level directory there.
 - Runtime dependencies must be vendored under `vendor/`. CSP blocks external origins, and the smoke check rejects CDN references (`cdn.jsdelivr.net`, `esm.sh`, `cdnjs.cloudflare.com`) plus the old `webm-muxer` dependency.
 - `vite.config.mjs` uses `base: './'` so the same build works locally and under the GitHub Pages subpath. Keep asset URLs relative.
 - Persisted state uses `localStorage` keys `hatewebcam_config` and `hatewebcam_profiles`. Settings migrations are one-shot flags in `js/app/init.mjs` (e.g. `forceMirrorDefaultV4`); add a new flag instead of silently changing existing defaults.
@@ -44,8 +44,8 @@ Run one browser spec with `npx playwright test tests/browser/app-smoke.spec.mjs`
 - Node tests are hand-rolled `node:assert` scripts. Add unit coverage as a function and invoke it at the bottom of `tests/unit-check.mjs`; browser modules imported there often need browser globals mocked via `mockGlobal`.
 - Playwright uses a fake camera device. Visual snapshots live in `tests/browser/*-snapshots/`; default `maxDiffPixelRatio` is `0.07`. Do not delete snapshots to make a test pass.
 - `tests/browser/performance-budget.spec.mjs` enforces initial page weight/time budgets (total < 1.5 MB, scripts < 500 KB, largest resource < 700 KB). Avoid heavy runtime assets.
-- Spanish is the i18n source language. Message keys are the Spanish strings in `src/lib/i18n/catalog.ts`; English values are exact lookups. Svelte calls `m()`. Legacy DOM still uses `applyMessages` for `index.html` and `templates/video-editor.html`. Dynamic sentences use `{placeholders}`. Persist `hatewebcam_locale`.
-- `js/` lint forbids `console.log` (`no-console` allows only `warn`/`error`). There is no typecheck step.
+- Spanish is the i18n source language. Message keys are the Spanish strings in `src/lib/i18n/catalog.ts`; English values are exact lookups. Svelte calls `m()`; imperative DOM code calls `translateCurrent()`. There is no DOM-walking translator. Dynamic sentences use `{placeholders}`. Persist `hatewebcam_locale`.
+- `js/` lint forbids `console.log` (`no-console` allows only `warn`/`error`). `npm run typecheck` runs `svelte-check` plus `tsc --noEmit` over `src/**` and `js/**/*.ts`.
 - Manual performance/benchmark scripts (`tests/manual/`, `scripts/recording-benchmark.mjs`) are not part of CI; see `PERF.md`.
 - CI deploys `main` to GitHub Pages only after all checks pass.
 

@@ -26,25 +26,30 @@ No se actualizan salvo que el cambio visual sea intencional.
 index.html
   -> js/app.js
      -> initializeI18n()
-     -> loadAppTemplates()  (fetch de templates/*.html)
+     -> monta skip link, header, placeholder, barra de captura, editor,
+        métricas, cámara, panel de webcam, HUD y modales (Svelte 5)
      -> new AppController().start()
         -> setupDom(this)
+        -> bindEvents() / bindCameraShellEvents()
         -> init()
-           -> bindEvents()
            -> restoreActiveDetectors()
            -> toggleCamera(true)
+     -> primer cambio a Video:
+        -> import('./app/editor-install.mjs')  (chunk diferido)
+        -> aplica timeline, Edit Assist, export y Visual FX
 ```
 
-`index.html` conserva el shell, el visor, el HUD móvil y cuatro slots de template.
-`templates/video-editor.html` y `templates/webcam-controls.html` concentran la mayor
-parte del DOM interactivo. `templates/export-modal.html` y `templates/capture-modal.html`
-son modales independientes.
+`index.html` conserva el contenedor de la app y el visor; todo el texto estático se
+renderiza desde Svelte. Ya no hay plantillas HTML descargadas en runtime.
+`templates/` fue eliminado y `scripts/copy-templates.mjs` solo copia `vendor/` y `css/`.
 
 ## AppController y mixins
 
 `AppController` es un objeto central con estado y métodos aportados por mixins. Los
-mixins se aplican en `js/app/controller.mjs` y comparten `this`, no reciben una
-interfaz explícita.
+mixins webcam se aplican en `js/app/controller.mjs` y comparten `this`, no reciben una
+interfaz explícita. Los mixins del editor se aplican en `js/app/editor-install.mjs`
+cuando se solicita Video por primera vez; no forman parte del bundle inicial.
+Esta sigue siendo la deuda arquitectónica principal de la migración.
 
 | Módulo                        | Responsabilidad principal                                               |
 | ----------------------------- | ----------------------------------------------------------------------- |
@@ -106,13 +111,14 @@ defaults existentes sin agregar una migración nueva.
 2. **Los tests dependen de IDs, clases y textos.** Durante la transición, los
    componentes Svelte deben conservar los mismos `id`, clases, `aria-*` y estructura.
 3. **i18n es un catálogo exacto.** Las claves son el texto español en
-   `src/lib/i18n/catalog.ts`. Svelte llama `m()`. El editor legacy y `index.html`
-   se traducen con `applyMessages`, que no observa nodos de Svelte
-   (`data-i18n-owner`). El texto dinámico usa claves con `{placeholders}`.
+   `src/lib/i18n/catalog.ts`. Svelte llama `m()`; el DOM imperativo llama
+   `translateCurrent()`. No hay traductor que recorra el DOM. Las claves se comparan
+   con normalización NFC para tolerar diferencias de escritura. El texto dinámico
+   usa claves con `{placeholders}`.
 4. **CSP y vendor local.** No se agregan CDNs, fuentes remotas ni telemetría. Los
    assets de MediaPipe/Mediabunny siguen en `vendor/`.
 5. **Build de Pages.** `base: './'` y `scripts/copy-templates.mjs` deben seguir
-   funcionando. `templates/`, `vendor/` y `css/` se copian a `dist/`.
+   funcionando. `vendor/` y `css/` se copian a `dist/`; ya no hay `templates/`.
 6. **Node 20 en CI.** Los tests Node actuales importan `.mjs`. El TypeScript nuevo se
    verifica con `svelte-check`/`tsc`; no se hace depender `npm test` de un loader TS.
 7. **Workers.** `subject-worker.mjs` y `blob-tracking-worker.mjs` son module workers;
@@ -228,48 +234,88 @@ defaults existentes sin agregar una migración nueva.
 - Se agregó cobertura unitaria para el bridge y se mantuvieron las capturas de
   detectores.
 
+### Etapa 3: completada
+
+- `src/lib/webcam/EffectsControls.svelte` y `CameraSourcePanel.svelte` reemplazaron
+  la plantilla de controles y el bloque de cámara.
+- La configuración avanzada de detectores se genera con el catálogo tipado; ya no
+  usa `applyMessages`.
+
+### Etapa 4: completada (HUD y modales)
+
+- HUD móvil, modal de captura y modal de exportación son Svelte.
+- `RecordingSession` y `PhotoCountdown` poseen el ciclo multimedia; el controlador
+  coordina y conserva el focus trap.
+- Se mantuvieron IDs, ARIA, clases y capturas visuales.
+
+### Etapa 5: completada (editor)
+
+- `templates/video-editor.html` se reemplazó por `src/lib/editor/*.svelte`:
+  `VideoEditor`, `EditorToolbar`, `EffectPalette`, `Timeline`, `Inspector`,
+  `ProjectPanel`, `EditAssistPanel`, `ExportPanel`, `ClipInspector` y `AdjustPanel`.
+- El motor sigue siendo dueño del render imperativo del playhead, los clips, el
+  ruler y los marcadores; Svelte es dueño del shell, los textos, la visibilidad, los
+  tabs y los estados `disabled`.
+- `src/lib/editor/editor-state.ts` publica estado de presentación tipado
+  (modo, fuente, exportación, undo/redo, tab activo) sin reactividad por frame.
+- `js/app/editor-install.mjs` carga el motor del editor con `import()` en el primer
+  cambio a Video. `js/app.js` ya no importa timeline, export ni Visual FX.
+
 ### Etapa 6: parcial
 
-- `js/preview-metrics.ts`, `js/editor/timeline-clip-types.ts`,
-  `js/app/settings-store.ts`, `js/editor/editor-history.ts`,
-  `js/editor/video-timeline.ts`, `js/app/camera-state.ts` y
-  `js/app/media-format.ts` están en TypeScript estricto y cubiertos por tests.
-- `camera-state.ts` extrae la presentación y clasificación de errores de cámara del
-  mixin; `camera.mjs` conserva solo el ciclo de vida y la interacción con el DOM.
-- `media-format.ts` extrae formato de duración/bytes/FPS/bitrate, selección de MIME y
-  estimación de bitrate de grabación; `capture.mjs` conserva la sesión de captura.
-- `npm test` usa `tsx` para que CI con Node 20 pueda ejecutar tests que importan
-  módulos `.ts`; el build y Playwright siguen usando Vite.
-- Los módulos legacy que todavía importan estos archivos usan la extensión `.ts`
-  explícita. No se agregó un loader al runtime de producción.
-- `svelte-check` incluye `src/**` y `js/**/*.ts`.
+- En TypeScript estricto: `src/**`, `js/preview-metrics.ts`,
+  `js/editor/*.ts`, `js/app/settings-store.ts`, `camera-state.ts`,
+  `media-format.ts`, `video-export-session.ts`, `render-engine.ts`,
+  `timeline-view.ts` y `edit-assist-controller.ts`.
+- `npm run typecheck` ejecuta `svelte-check` y `tsc --noEmit`.
+- `npm test` usa `tsx` para tests Node que importan módulos `.ts`.
+- Pendiente: tipar el controlador y los mixins webcam restantes (`.mjs`).
 
-### Etapa 4: parcial (modales)
+### Rendimiento del bundle inicial
 
-- `templates/export-modal.html` y `templates/capture-modal.html` se reemplazaron por
-  `src/lib/modals/ExportModal.svelte` y `CaptureModal.svelte`.
-- Los modales son markup Svelte estático: el controlador conserva la lógica de
-  captura, exportación, progreso y focus trap. No se duplicó estado.
-- `template-loader` solo descarga `templates/video-editor.html`.
-- Se mantuvieron IDs, ARIA, clases y capturas visuales.
+Medición con `npm run build` al cerrar este corte, sin comprimir / gzip:
+
+| Artefacto                            | Antes (`7f63f9e`) | Después    |
+| ------------------------------------ | ----------------- | ---------- |
+| JS inicial principal                 | 403,91 kB         | ~312 kB    |
+| JS inicial total (con shared chunks) | ~403,91 kB        | ~357 kB    |
+| Chunk diferido del editor            | —                 | ~119 kB    |
+| CSS                                  | ~203,67 kB        | ~203,67 kB |
+
+El modo webcam no solicita `editor-install-*.js`; una prueba de regresión lo verifica.
+Los presupuestos de Playwright no se modificaron.
 
 ### Lista de tareas
 
 Estados: Pendiente, En curso, Completada y verificada, Bloqueada.
 
-| Tarea                                                                    | Estado                  | Notas                                                                                                                |
-| ------------------------------------------------------------------------ | ----------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Integrar `origin/main` sin reescribir historia                           | Completada y verificada | Merge no destructivo. Artifact `site-dist` y seek estable del test de Visual FX.                                     |
-| CI `verify` en `refactor/**` sin `deploy` fuera de `main`                | Completada y verificada | `deploy` sigue condicionado a `push` de `main`.                                                                      |
-| Controles de cámara (encendido, dispositivo, rendimiento, espejo rápido) | Completada y verificada | `CameraSourcePanel` es la fuente visual. Node tests y Playwright 54/54. El ciclo de cámara sigue en el mixin.        |
-| Panel de webcam, resolución y FPS                                        | Completada y verificada | `EffectsControls` reemplaza la plantilla de controles. La config avanzada de detectores sigue en el mixin.           |
-| HUD móvil y modales de captura/exportación                               | Completada y verificada | El HUD y los modales leen el mismo estado. `RecordingSession` y `PhotoCountdown` poseen el ciclo multimedia.         |
-| i18n tipado y reactivo                                                   | Completada y verificada | Catálogo `es`/`en` en `src/lib/i18n/catalog.ts`. Sin `MutationObserver`. El editor HTML todavía usa `applyMessages`. |
-| Editor y eliminación del controlador                                     | Pendiente               | `templates/video-editor.html` sigue activo. `AppController` sigue en mixins.                                         |
+| Tarea                                                                    | Estado                  | Notas                                                                                         |
+| ------------------------------------------------------------------------ | ----------------------- | --------------------------------------------------------------------------------------------- |
+| Integrar `origin/main` sin reescribir historia                           | Completada y verificada | Merge no destructivo. Artifact `site-dist` y seek estable del test de Visual FX.              |
+| CI `verify` en `refactor/**` sin `deploy` fuera de `main`                | Completada y verificada | `deploy` sigue condicionado a `push` de `main`.                                               |
+| Controles de cámara (encendido, dispositivo, rendimiento, espejo rápido) | Completada y verificada | `CameraSourcePanel` es la fuente visual. El ciclo de cámara sigue en el mixin.                |
+| Panel de webcam, resolución y FPS                                        | Completada y verificada | `EffectsControls` reemplaza la plantilla de controles.                                        |
+| HUD móvil y modales de captura/exportación                               | Completada y verificada | El HUD y los modales leen el mismo estado.                                                    |
+| i18n tipado y reactivo                                                   | Completada y verificada | Catálogo `es`/`en`. Sin `MutationObserver` ni `applyMessages`.                                |
+| Editor Svelte completo                                                   | Completada y verificada | Sin `templates/video-editor.html`; shell, timeline e inspector Svelte. 61 pruebas Playwright. |
+| Carga diferida del editor                                                | Completada y verificada | `editor-install` se solicita recién al entrar a Video; regresión en `app-smoke.spec.mjs`.     |
+| TypeScript estricto del código propio                                    | Parcial                 | `src/**` y módulos editor/sesión tipados; controlador y mixins webcam siguen en `.mjs`.       |
+| Eliminación de `AppController` y mixins                                  | Pendiente               | Sigue siendo el coordinador de webcam y del motor; el editor ya es un módulo diferido.        |
 
-## Próximo corte
+## Checkpoint para reanudar
 
-- Migrar la interfaz del editor a componentes Svelte sin reescribir `VideoTimeline`
-  ni meter el playhead en el render reactivo. Cuando el markup legacy desaparezca,
-  retirar `applyMessages` y `templates/video-editor.html`.
-- Separar los mixins de `AppController` en servicios con contratos tipados.
+Lo verificable de este corte:
+
+- `npm run format:check`, `lint`, `typecheck`, `test`, `test:browser -- --workers=2`
+  y `build` pasan en local.
+- 61 pruebas Playwright (55 originales + 6 de integración del editor).
+- `npm run preview` se verificó con el build de producción.
+- Persisten `hatewebcam_config`, `hatewebcam_profiles`, `hatewebcam_locale` y
+  `hatewebcam-editor-layout`; no se agregaron migraciones ni flags.
+
+Pendiente para terminar la Definición de Terminado:
+
+1. Extraer las responsabilidades webcam de `AppController` a servicios con
+   contratos explícitos y eliminar `apply*Mixin`.
+2. Tipar el controlador resultante y el código webcam restante.
+3. Repetir la suite completa y confirmar GitHub Actions en el commit final.
