@@ -218,6 +218,16 @@ export class AppController {
         'HateWebcam: faltan elementos base del DOM para iniciar la app.',
       );
     }
+    // Bind DOM events before the first await so a fast user (or a slow CI
+    // worker) cannot lose clicks and file selections while settings load.
+    // Init still publishes the initial UI state after this.
+    this.bindEvents();
+    this.bindTimelinePaletteDrag();
+    this.bindEditorSplitters();
+    this.bindQuickDetectorEvents();
+    this.bindImageControlEvents();
+    this.initializeColorPalettes();
+    this.editAssist?.bind();
     await this.init();
   }
 }

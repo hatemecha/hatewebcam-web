@@ -25,6 +25,24 @@ import {
 initializeI18n();
 const controller = new AppController();
 let controllerReady = false;
+const pendingControllerActions = [];
+
+/**
+ * Run a controller action now, or as soon as startup finishes. Interactions
+ * that land while settings load must not be silently discarded.
+ */
+function whenControllerReady(action) {
+  if (controllerReady) {
+    action();
+    return;
+  }
+  pendingControllerActions.push(action);
+}
+
+function markControllerReady() {
+  controllerReady = true;
+  for (const action of pendingControllerActions.splice(0)) action();
+}
 
 try {
   await loadAppTemplates();
@@ -32,10 +50,10 @@ try {
     document.querySelector('#appHeaderMount'),
     {
       setSourceMode: (mode) => {
-        if (controllerReady) controller.setSourceMode(mode);
+        whenControllerReady(() => controller.setSourceMode(mode));
       },
       startVideoExport: () => {
-        if (controllerReady) void controller.startVideoExport();
+        whenControllerReady(() => void controller.startVideoExport());
       },
       setLocale: (locale) => {
         setLocale(locale);
@@ -46,195 +64,212 @@ try {
   );
   mountCameraSource(document.querySelector('#cameraSourceMount'), {
     toggleCamera: () => {
-      if (controllerReady) void controller.toggleCamera();
+      whenControllerReady(() => void controller.toggleCamera());
     },
     selectCamera: (deviceId) => {
       updateCameraSourceState({ deviceId });
-      if (controllerReady) void controller.onCameraChange();
+      whenControllerReady(() => void controller.onCameraChange());
     },
     setPerformanceMode: (mode) => {
-      if (controllerReady) {
+      whenControllerReady(() => {
         void controller.applyPerformanceMode(mode, {
           restartCamera: true,
           notify: true,
         });
-      }
+      });
     },
     toggleMirror: () => {
-      if (controllerReady) controller.toggleMirrorQuick();
+      whenControllerReady(() => controller.toggleMirrorQuick());
     },
   });
   mountPreviewMetrics(document.querySelector('#previewMetricsMount'));
   mountEffectsControls(document.querySelector('#effectsControlsSlot'), {
     toggleDetector: (type, checked) => {
-      const input = controller.getTimelineDetectorCheckbox(type);
-      if (input) input.checked = checked;
-      if (controllerReady) controller.handleVideoDetectorToggle(type);
+      whenControllerReady(() => {
+        const input = controller.getTimelineDetectorCheckbox(type);
+        if (input) input.checked = checked;
+        controller.handleVideoDetectorToggle(type);
+      });
     },
     setBlobColor: (color) => {
-      if (controllerReady) controller.setQuickBlobColor(color);
+      whenControllerReady(() => controller.setQuickBlobColor(color));
     },
     setFaceColor: (color) => {
-      if (controllerReady) controller.setQuickFaceColor(color);
+      whenControllerReady(() => controller.setQuickFaceColor(color));
     },
     setFaceLabel: (value) => {
-      if (controllerReady) controller.setQuickFaceLabel(value);
+      whenControllerReady(() => controller.setQuickFaceLabel(value));
     },
     commitFaceLabel: (value) => {
-      if (controllerReady) controller.commitQuickFaceLabel(value);
+      whenControllerReady(() => controller.commitQuickFaceLabel(value));
     },
     setFaceVisual: (kind, checked) => {
-      if (controllerReady) controller.setFaceVisualChecked(kind, checked);
+      whenControllerReady(() => controller.setFaceVisualChecked(kind, checked));
     },
     pickColor: () => {
-      if (controllerReady) controller.enableColorPick();
+      whenControllerReady(() => controller.enableColorPick());
     },
     toggleAdvanced: () => {
-      if (controllerReady) controller.toggleAdvancedOptions();
+      whenControllerReady(() => controller.toggleAdvancedOptions());
     },
     setImageNumber: (key, value) => {
-      if (controllerReady) controller.setPanelImageNumber(key, value);
+      whenControllerReady(() => controller.setPanelImageNumber(key, value));
     },
     setBlackAndWhite: (checked) => {
-      if (controllerReady) controller.setPanelBlackAndWhite(checked);
+      whenControllerReady(() => controller.setPanelBlackAndWhite(checked));
     },
     setVideoFormat: (format) => {
-      if (controllerReady) controller.setPanelVideoFormat(format);
+      whenControllerReady(() => controller.setPanelVideoFormat(format));
     },
     setQualityEnhancer: (checked) => {
-      if (controllerReady) controller.setPanelQualityEnhancer(checked);
+      whenControllerReady(() => controller.setPanelQualityEnhancer(checked));
     },
     setShutterSound: (checked) => {
-      if (controllerReady) controller.setPanelShutterSound(checked);
+      whenControllerReady(() => controller.setPanelShutterSound(checked));
     },
     setFlipH: (checked) => {
-      if (!controllerReady) return;
-      controller.flipH = checked;
-      if (controller.chkMirror) controller.chkMirror.checked = checked;
-      controller.onTransformChange();
+      whenControllerReady(() => {
+        controller.flipH = checked;
+        if (controller.chkMirror) controller.chkMirror.checked = checked;
+        controller.onTransformChange();
+      });
     },
     setFlipV: (checked) => {
-      if (!controllerReady) return;
-      controller.flipV = checked;
-      if (controller.chkFlipV) controller.chkFlipV.checked = checked;
-      controller.onTransformChange();
+      whenControllerReady(() => {
+        controller.flipV = checked;
+        if (controller.chkFlipV) controller.chkFlipV.checked = checked;
+        controller.onTransformChange();
+      });
     },
     setRotation: (value) => {
-      if (!controllerReady) return;
-      controller.rotation = value;
-      if (controller.rotationSelect) {
-        controller.rotationSelect.value = String(value);
-      }
-      controller.onTransformChange();
+      whenControllerReady(() => {
+        controller.rotation = value;
+        if (controller.rotationSelect) {
+          controller.rotationSelect.value = String(value);
+        }
+        controller.onTransformChange();
+      });
     },
     applyPreset: (name) => {
-      if (controllerReady) controller.applyImagePreset(name);
+      whenControllerReady(() => controller.applyImagePreset(name));
     },
     resetImage: () => {
-      if (controllerReady) controller.resetImageAdjustments();
+      whenControllerReady(() => controller.resetImageAdjustments());
     },
     saveProfile: () => {
-      if (controllerReady) controller.saveCurrentProfile();
+      whenControllerReady(() => controller.saveCurrentProfile());
     },
     deleteProfile: () => {
-      if (controllerReady) controller.deleteProfile();
+      whenControllerReady(() => controller.deleteProfile());
     },
     deleteAllProfiles: () => {
-      if (controllerReady) controller.deleteAllProfiles();
+      whenControllerReady(() => controller.deleteAllProfiles());
     },
     selectProfile: (name) => {
-      if (!controllerReady) return;
-      controller.selectedProfile = name;
-      if (controller.profileSelect) controller.profileSelect.value = name;
-      void controller.loadProfile();
+      whenControllerReady(() => {
+        controller.selectedProfile = name;
+        if (controller.profileSelect) controller.profileSelect.value = name;
+        void controller.loadProfile();
+      });
     },
     resetWebcam: () => {
-      if (controllerReady) void controller.resetWebcamConfiguration();
+      whenControllerReady(() => void controller.resetWebcamConfiguration());
     },
     openAdjustContext: (context) => {
-      if (controllerReady) controller.openAdjustmentsForContext(context);
+      whenControllerReady(() => controller.openAdjustmentsForContext(context));
     },
   });
   mountCaptureChrome(document.querySelector('#captureStatusMount'));
   mountMobileHud(document.querySelector('#mobileHudMount'), {
     toggleEffects: () => {
-      if (!controllerReady) return;
-      controller.setMobileFxPanelVisible(!controller.isMobileFxPanelVisible());
+      whenControllerReady(() =>
+        controller.setMobileFxPanelVisible(
+          !controller.isMobileFxPanelVisible(),
+        ),
+      );
     },
     closeEffects: () => {
-      if (controllerReady) controller.setMobileFxPanelVisible(false);
+      whenControllerReady(() => controller.setMobileFxPanelVisible(false));
     },
     toggleMirror: () => {
-      if (controllerReady) controller.toggleMirrorQuick();
+      whenControllerReady(() => controller.toggleMirrorQuick());
     },
     takePhoto: () => {
-      if (!controllerReady) return;
-      controller.setMobileFxPanelVisible(false);
-      controller.requestPhotoCapture();
+      whenControllerReady(() => {
+        controller.setMobileFxPanelVisible(false);
+        controller.requestPhotoCapture();
+      });
     },
     toggleRecording: () => {
-      if (!controllerReady) return;
-      controller.setMobileFxPanelVisible(false);
-      controller.toggleRecording();
+      whenControllerReady(() => {
+        controller.setMobileFxPanelVisible(false);
+        controller.toggleRecording();
+      });
     },
     toggleDetector: (type, checked) => {
-      const input = controller.getTimelineDetectorCheckbox(type);
-      if (input) input.checked = checked;
-      if (controllerReady) controller.handleVideoDetectorToggle(type);
+      whenControllerReady(() => {
+        const input = controller.getTimelineDetectorCheckbox(type);
+        if (input) input.checked = checked;
+        controller.handleVideoDetectorToggle(type);
+      });
     },
     pickColor: () => {
-      if (!controllerReady) return;
-      controller.enableColorPick();
-      controller.setMobileFxPanelVisible(false);
+      whenControllerReady(() => {
+        controller.enableColorPick();
+        controller.setMobileFxPanelVisible(false);
+      });
     },
     setBlobColor: (color) => {
-      if (controllerReady) controller.setQuickBlobColor(color);
+      whenControllerReady(() => controller.setQuickBlobColor(color));
     },
     setFaceColor: (color) => {
-      if (controllerReady) controller.setQuickFaceColor(color);
+      whenControllerReady(() => controller.setQuickFaceColor(color));
     },
     setFaceVisual: (kind, checked) => {
-      if (controllerReady) controller.setFaceVisualChecked(kind, checked);
+      whenControllerReady(() => controller.setFaceVisualChecked(kind, checked));
     },
     setFaceLabel: (value) => {
-      if (controllerReady) controller.setQuickFaceLabel(value);
+      whenControllerReady(() => controller.setQuickFaceLabel(value));
     },
     commitFaceLabel: (value) => {
-      if (controllerReady) controller.commitQuickFaceLabel(value);
+      whenControllerReady(() => controller.commitQuickFaceLabel(value));
     },
     applyPreset: (name) => {
-      if (controllerReady) controller.applyImagePreset(name);
+      whenControllerReady(() => controller.applyImagePreset(name));
     },
     setCaptureTimer: (seconds) => {
-      if (controllerReady) controller.setCaptureTimerSeconds(seconds);
+      whenControllerReady(() => controller.setCaptureTimerSeconds(seconds));
     },
   });
   mountDetectorChips(document.querySelector('#effectsInfo'));
   mountCaptureModal(document.querySelector('#captureModalTemplateSlot'), {
     download: () => {
-      if (controllerReady) controller.downloadPendingCapture();
+      whenControllerReady(() => controller.downloadPendingCapture());
     },
     discard: () => {
-      if (controllerReady) controller.closeCapturePreview(true);
+      whenControllerReady(() => controller.closeCapturePreview(true));
     },
     setEnhancer: (enabled) => {
-      if (controllerReady) controller.onPreviewPhotoEnhancerToggle(enabled);
+      whenControllerReady(() =>
+        controller.onPreviewPhotoEnhancerToggle(enabled),
+      );
     },
     setEnhancerStrength: (strength) => {
-      if (controllerReady)
-        controller.onPreviewPhotoEnhancerStrengthInput(strength);
+      whenControllerReady(() =>
+        controller.onPreviewPhotoEnhancerStrengthInput(strength),
+      );
     },
   });
   mountExportModal(document.querySelector('#exportModalTemplateSlot'), {
     cancel: () => {
-      if (controllerReady) void controller.cancelVideoExport();
+      whenControllerReady(() => void controller.cancelVideoExport());
     },
     close: () => {
-      if (controllerReady) controller.closeVideoExportModal();
+      whenControllerReady(() => controller.closeVideoExportModal());
     },
   });
   await controller.start();
-  controllerReady = true;
+  markControllerReady();
   applyMessages(document.body);
   const refreshLocalizedUi = () => {
     applyMessages(document.body, { refresh: true });
