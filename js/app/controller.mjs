@@ -30,12 +30,9 @@ import {
   normalizePerformanceMode,
 } from './constants.mjs';
 import { CameraManager } from '../core/camera-manager.mjs';
-import { VideoTimeline } from '../editor/video-timeline.ts';
-import { EditorHistory } from '../editor/editor-history.ts';
 import { EffectManager } from '../effects/effect-manager.mjs';
 import { setupDom } from './dom.mjs';
 import { applyStorageMixin } from './settings.mjs';
-import { applyLocalvideoeditorMixin } from './video-editor.mjs';
 import { applyInitMixin } from './init.mjs';
 import { applyEventsMixin } from './events.mjs';
 import { applyCameraMixin } from './camera.mjs';
@@ -48,48 +45,12 @@ import { applyProfilesMixin } from './profiles.mjs';
 import { applyCaptureMixin } from './capture.mjs';
 import { applyModalfocusmanagementMixin } from './modal-focus.mjs';
 import { SettingsStore } from './settings-store.ts';
-import { TimelineView } from './timeline-view.mjs';
-import { EditAssistController } from './edit-assist-controller.mjs';
 import { RenderEngine } from './render-engine.mjs';
-import { VideoExportSession } from './video-export-session.mjs';
-import { applyVisualFxIntegrationMixin } from './visual-fx-integration.mjs';
-import { applyVisualFxUIMixin } from './visual-fx-ui.mjs';
-import { applyVisualFxLabMixin } from './visual-fx-lab.mjs';
 
 export class AppController {
   constructor() {
     this.settingsStore = new SettingsStore({
       onError: (err) => this.notifyStorageUnavailable(err),
-    });
-    this.timelineView = new TimelineView({
-      formatTime: (seconds) => this.formatDurationDetailed(seconds),
-    });
-    this.editAssist = new EditAssistController({
-      getSourceFile: () => this.videoSourceFile,
-      getTimeline: () => this.videoTimeline,
-      isExporting: () => this.isVideoExporting,
-      getElements: () => ({
-        analyzeButton: this.btnEditAssistAnalyze,
-        beatButton: this.btnEditAssistBeat,
-        every2Button: this.btnEditAssistEvery2,
-        every4Button: this.btnEditAssistEvery4,
-        every8Button: this.btnEditAssistEvery8,
-        halfButton: this.btnEditAssistHalf,
-        doubleButton: this.btnEditAssistDouble,
-        offsetDownButton: this.btnEditAssistOffsetDown,
-        offsetUpButton: this.btnEditAssistOffsetUp,
-        regenerateButton: this.btnEditAssistRegenerate,
-        clearButton: this.btnEditAssistClear,
-        bpmInput: this.editAssistBpmInput,
-        offsetInput: this.editAssistOffsetInput,
-        densitySelect: this.editAssistDensitySelect,
-        result: this.editAssistResult,
-        status: this.editAssistStatus,
-      }),
-      pushHistory: () => this.pushTimelineHistory(),
-      renderTimeline: () => this.renderVideoTimeline(),
-      showStatus: (el, message, type) => this.showStatus(el, message, type),
-      updateTimelineHint: () => this.updateTimelineHint(),
     });
 
     this.cameraManager = new CameraManager();
@@ -143,8 +104,10 @@ export class AppController {
     this.videoPlaceholderLoading = false;
     this.videoSourceFps = 30;
     this.videoSourceAverageBitrate = 0;
-    this.videoTimeline = new VideoTimeline();
-    this.editorHistory = new EditorHistory();
+    // Editor state is installed on first use by installVideoEditor(). Keep
+    // only the inert defaults the webcam path may read.
+    this.videoTimeline = null;
+    this.editorHistory = null;
     this.editorTool = 'select';
     this.adjustmentsContext = 'look';
     this.timelineZoom = 1;
@@ -159,13 +122,11 @@ export class AppController {
     this.timelineDetectorSyncForce = false;
     this.videoBaseImageSettings = null;
     this.pendingEditorProject = null;
-
-    this.videoExportSession = new VideoExportSession();
+    this.videoExportSession = null;
     this.videoExportDiagnosis = null;
     this.videoExportPreflight = null;
     this.videoExportRecoveredSource = false;
     this.videoExportPlayback = null;
-    this.videoExportSession.attachLegacyAccessors(this);
 
     this.modalFocusState = new WeakMap();
     this.colorPickMode = false;
@@ -203,6 +164,64 @@ export class AppController {
     this.imageSettings = { ...DEFAULT_IMAGE_SETTINGS };
   }
 
+  /**
+   * Load the editor mixins, timeline model and Visual FX engine only when the
+   * user asks for the video editor. The webcam path never imports them.
+   */
+  async installVideoEditor() {
+    if (!this._editorInstallPromise) {
+      this._editorInstallPromise = import('./editor-install.mjs').then(
+        ({ installVideoEditor }) => installVideoEditor(this),
+      );
+    }
+    await this._editorInstallPromise;
+    return this;
+  }
+
+  async setSourceMode(mode) {
+    if (mode === this.sourceMode || this.isVideoExporting) return;
+    if (mode === 'video') await this.installVideoEditor();
+    return this.applySourceMode?.(mode);
+  }
+
+  async importVideoFile(file) {
+    await this.installVideoEditor();
+    return this.loadVideoFile(file);
+  }
+
+  async importEditorProjectFile(file) {
+    await this.installVideoEditor();
+    return this.loadEditorProjectFile(file);
+  }
+
+  // Editor presentation hooks. The editor mixins replace these when the
+  // editor chunk is installed; the webcam render loop can call them safely.
+  /** Detector toggles are shared by the webcam panel and the editor tracks. */
+  getTimelineDetectorCheckbox(type) {
+    if (type === 'blob') return this.chkBlobTracking || null;
+    if (type === 'face') return this.chkFaceDetection || null;
+    return this.chkBlinkDetection || null;
+  }
+
+  handleVideoDetectorToggle(type) {
+    if (this.sourceMode === 'video') {
+      void this.syncVideoTimelineEffects(true);
+      return;
+    }
+    void this.toggleEffect(type);
+  }
+
+  updateVideoTransport() {}
+  updateVideoEditorUI() {}
+  updateVideoEffectInspector() {}
+  updateTimelineHint() {}
+  syncVideoTimelineLookNow() {}
+  syncVideoTimelineDetectors() {}
+  syncVideoTimelineEffects() {}
+  getVideoPlayableEnd(end) {
+    return end;
+  }
+
   async start() {
     setupDom(this);
     if (
@@ -222,18 +241,14 @@ export class AppController {
     // worker) cannot lose clicks and file selections while settings load.
     // Init still publishes the initial UI state after this.
     this.bindEvents();
-    this.bindTimelinePaletteDrag();
-    this.bindEditorSplitters();
     this.bindQuickDetectorEvents();
     this.bindImageControlEvents();
     this.initializeColorPalettes();
-    this.editAssist?.bind();
     await this.init();
   }
 }
 
 applyStorageMixin(AppController.prototype);
-applyLocalvideoeditorMixin(AppController.prototype);
 applyInitMixin(AppController.prototype);
 applyEventsMixin(AppController.prototype);
 applyCameraMixin(AppController.prototype);
@@ -245,6 +260,3 @@ applyUIHelpersMixin(AppController.prototype);
 applyProfilesMixin(AppController.prototype);
 applyCaptureMixin(AppController.prototype);
 applyModalfocusmanagementMixin(AppController.prototype);
-applyVisualFxIntegrationMixin(AppController.prototype);
-applyVisualFxUIMixin(AppController.prototype);
-applyVisualFxLabMixin(AppController.prototype);

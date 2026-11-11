@@ -1,9 +1,8 @@
 import { translateCurrent } from '../src/lib/i18n/translate.ts';
+import { COMMON_VIDEO_FPS } from './app/media-format.ts';
 
 const MEDIABUNNY_URL = '../vendor/mediabunny/mediabunny.min.mjs?v=1.49.0-local';
-export const COMMON_VIDEO_FPS = [
-  23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60, 120,
-];
+export { COMMON_VIDEO_FPS };
 
 const EXPORT_FORMATS = new Set(['auto', 'mp4', 'webm']);
 const EXPORT_MODES = new Set(['full', 'effects-chroma']);

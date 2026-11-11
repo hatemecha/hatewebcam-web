@@ -1,3 +1,7 @@
+export const COMMON_VIDEO_FPS = [
+  23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60, 120,
+] as const;
+
 export function normalizeVideoFps(value: unknown): number | null {
   const fps = Number(value);
   if (!Number.isFinite(fps) || fps <= 0) return null;

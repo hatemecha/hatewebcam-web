@@ -91,6 +91,13 @@ export function applyEventsMixin(proto) {
     this.btnVideoMode.addEventListener('click', () =>
       this.setSourceMode('video'),
     );
+    this.bindCameraShellEvents();
+  };
+
+  // Editor-only listeners are attached when the lazy editor chunk loads.
+  proto.bindVideoEditorEvents = function () {
+    if (this._videoEditorEventsBound) return;
+    this._videoEditorEventsBound = true;
     this.btnChooseVideo.addEventListener('click', () =>
       this.videoFileInput.click(),
     );
@@ -121,12 +128,12 @@ export function applyEventsMixin(proto) {
     }
     this.videoFileInput.addEventListener('change', () => {
       const [file] = this.videoFileInput.files || [];
-      if (file) void this.loadVideoFile(file);
+      if (file) void this.importVideoFile(file);
       this.videoFileInput.value = '';
     });
     this.projectFileInput?.addEventListener('change', () => {
       const [file] = this.projectFileInput.files || [];
-      if (file) void this.loadEditorProjectFile(file);
+      if (file) void this.importEditorProjectFile(file);
       this.projectFileInput.value = '';
     });
     this.btnVideoStart.addEventListener('click', () =>
@@ -323,6 +330,9 @@ export function applyEventsMixin(proto) {
       void this.syncVideoTimelineEffects();
       this.refreshPausedVideoPreview();
     });
+  };
+
+  proto.bindCameraShellEvents = function () {
     this.btnCameraStateAction?.addEventListener('click', () => {
       void this.toggleCamera(true);
     });

@@ -31,6 +31,39 @@ test('video editor shell loads without fatal errors', async ({ page }) => {
   expect(fatalMessages).toEqual([]);
 });
 
+test('webcam boot defers the editor chunk until video mode', async ({
+  page,
+}) => {
+  const editorChunks = [];
+  page.on('request', (request) => {
+    if (/\/assets\/editor-install-/.test(request.url())) {
+      editorChunks.push(request.url());
+    }
+  });
+
+  await page.goto('/');
+  // Observable app readiness: the fake camera is running before any editor
+  // request may be asserted.
+  await expect(page.locator('#previewPlaceholder')).toHaveClass(/hidden/);
+  expect(editorChunks).toEqual([]);
+
+  await page.getByRole('tab', { name: /video/i }).click();
+  await expect(page.locator('#btnPreviewImportVideo')).toBeVisible();
+  expect(editorChunks.length).toBeGreaterThan(0);
+
+  // Switching back and forth keeps a single mounted editor shell.
+  await page.locator('#videoFileInput').setInputFiles(SUBJECT_VIDEO_FIXTURE);
+  await expect(page.locator('#videoTimelineShell')).toBeVisible();
+  const chunkRequests = editorChunks.length;
+  await page.getByRole('tab', { name: /webcam/i }).click();
+  await expect(page.locator('#videoTimelineShell')).toBeHidden();
+  await page.getByRole('tab', { name: /video/i }).click();
+  await expect(page.locator('#btnPreviewImportVideo')).toBeVisible();
+  expect(editorChunks.length).toBe(chunkRequests);
+  await expect(page.locator('#videoFileInput')).toHaveCount(1);
+  await expect(page.locator('#videoTimeline')).toHaveCount(1);
+});
+
 test('video empty state stays usable on a narrow screen', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');

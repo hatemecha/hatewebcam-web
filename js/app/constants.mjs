@@ -4,7 +4,7 @@ import {
   PREVIEW_MIN_HEIGHT,
   normalizePreviewQuality,
 } from '../preview-metrics.ts';
-import { COMMON_VIDEO_FPS } from '../video-export.mjs';
+import { COMMON_VIDEO_FPS } from './media-format.ts';
 
 export {
   PREVIEW_QUALITY_PRESETS,

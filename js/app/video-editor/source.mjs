@@ -3,7 +3,7 @@ import { updateShellState } from '../../../src/lib/shell/shell-bridge.mjs';
 
 /** @param {import('../controller.mjs').AppController} proto */
 export function applyVideoEditorSourceMixin(proto) {
-  proto.setSourceMode = function (mode) {
+  proto.applySourceMode = async function (mode) {
     if (mode === this.sourceMode) return;
     if (this.isVideoExporting) return;
 
