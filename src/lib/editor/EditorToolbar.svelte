@@ -1,5 +1,6 @@
 <script lang="ts">
   import { m } from '../i18n/text.svelte';
+  import { editorState } from './editor-store';
 </script>
 
 <div class="video-editor-toolbar">
@@ -27,7 +28,7 @@
       class="video-tool-btn timeline-marker-cut-btn"
       id="btnCutAtMarkers"
       title={m('Cortar todos los efectos en cada marcador')}
-      disabled
+      disabled={!$editorState.hasSource || $editorState.exporting}
     >
       <i class="fa-solid fa-timeline"></i>
       <span>{m('En marcadores')}</span>
@@ -39,6 +40,7 @@
       class="btn btn-icon"
       id="btnVideoStart"
       aria-label={m('Inicio')}
+      disabled={!$editorState.hasSource || $editorState.exporting}
     >
       <i class="fa-solid fa-backward-step"></i>
     </button>
@@ -47,6 +49,7 @@
       class="btn btn-icon"
       id="btnVideoBack"
       aria-label="-5 s"
+      disabled={!$editorState.hasSource || $editorState.exporting}
     >
       <i class="fa-solid fa-backward"></i>
     </button>
@@ -55,6 +58,7 @@
       class="btn btn-icon"
       id="btnVideoPlay"
       aria-label={m('Play (Espacio)')}
+      disabled={!$editorState.hasSource || $editorState.exporting}
     >
       <i class="fa-solid fa-play"></i>
     </button>
@@ -63,6 +67,7 @@
       class="btn btn-icon"
       id="btnVideoForward"
       aria-label="+5 s"
+      disabled={!$editorState.hasSource || $editorState.exporting}
     >
       <i class="fa-solid fa-forward"></i>
     </button>
@@ -71,6 +76,7 @@
       class="btn btn-icon"
       id="btnVideoEnd"
       aria-label={m('Final')}
+      disabled={!$editorState.hasSource || $editorState.exporting}
     >
       <i class="fa-solid fa-forward-step"></i>
     </button>
@@ -115,7 +121,7 @@
       class="btn btn-icon"
       id="btnEditorUndo"
       aria-label={m('Deshacer')}
-      disabled
+      disabled={!$editorState.canUndo}
     >
       <i class="fa-solid fa-rotate-left"></i>
     </button>
@@ -124,7 +130,7 @@
       class="btn btn-icon"
       id="btnEditorRedo"
       aria-label={m('Rehacer')}
-      disabled
+      disabled={!$editorState.canRedo}
     >
       <i class="fa-solid fa-rotate-right"></i>
     </button>

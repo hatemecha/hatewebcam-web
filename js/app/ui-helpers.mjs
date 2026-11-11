@@ -1,9 +1,11 @@
+import { translateCurrent } from '../../src/lib/i18n/translate.ts';
+
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyUIHelpersMixin(proto) {
   proto.createSection = function (title, html) {
     const div = document.createElement('div');
     div.className = 'panel-section fade-in';
-    div.innerHTML = `<div class="section-title accent">${this.escapeHtml(title)}</div><div class="effect-config">${html}</div>`;
+    div.innerHTML = `<div class="section-title accent">${this.escapeHtml(translateCurrent(title))}</div><div class="effect-config">${html}</div>`;
     return div;
   };
 
@@ -18,7 +20,7 @@ export function applyUIHelpersMixin(proto) {
     return `
       <div class="slider-group">
         <div class="slider-label">
-          <span>${this.escapeHtml(label)}</span>
+          <span>${this.escapeHtml(translateCurrent(label))}</span>
           <span class="value" id="${this.escapeHtml(valId)}">${this.escapeHtml(displayVal)}</span>
         </div>
         <input type="range" id="${this.escapeHtml(id)}" min="${safeMin}" max="${safeMax}" step="${safeStep}" value="${safeValue}">

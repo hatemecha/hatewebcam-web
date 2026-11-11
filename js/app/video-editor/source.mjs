@@ -1,5 +1,6 @@
 import { VideoTimeline } from '../../editor/video-timeline.ts';
 import { updateShellState } from '../../../src/lib/shell/shell-bridge.mjs';
+import { updateEditorUiState } from '../../../src/lib/editor/editor-state.ts';
 
 /** @param {import('../controller.mjs').AppController} proto */
 export function applyVideoEditorSourceMixin(proto) {
@@ -24,12 +25,10 @@ export function applyVideoEditorSourceMixin(proto) {
       }
       this.sourceMode = 'video';
       document.body.classList.add('video-mode');
+      updateEditorUiState({ mode: 'video' });
       document
         .querySelectorAll('.webcam-only')
         .forEach((el) => el.classList.add('hidden'));
-      document
-        .querySelectorAll('.video-only')
-        .forEach((el) => el.classList.remove('hidden'));
       this.mountVideoEffectsControls();
       this.ensureVisualFxLab?.();
       this.setEditorTool('select');
@@ -50,9 +49,7 @@ export function applyVideoEditorSourceMixin(proto) {
     document.body.classList.remove('video-mode');
     delete document.body.dataset.editorTool;
     this.unmountVideoEffectsControls();
-    document
-      .querySelectorAll('.video-only')
-      .forEach((el) => el.classList.add('hidden'));
+    updateEditorUiState({ mode: 'camera' });
     document
       .querySelectorAll('.webcam-only')
       .forEach((el) => el.classList.remove('hidden'));

@@ -3,11 +3,13 @@
  */
 import { AppController } from './app/controller.mjs';
 import { getLocale, initializeI18n, setLocale, translate } from './i18n.mjs';
-import { applyMessages } from '../src/lib/i18n/apply-messages.ts';
 import { subscribeLocale } from '../src/lib/i18n/locale-state.ts';
-import { mountAppHeader } from '../src/lib/shell/mount.ts';
+import { mountAppHeader, mountSkipLink } from '../src/lib/shell/mount.ts';
 import { updateShellState } from '../src/lib/shell/shell-bridge.mjs';
-import { mountDetectorChips } from '../src/lib/preview/mount.ts';
+import {
+  mountDetectorChips,
+  mountPreviewPlaceholder,
+} from '../src/lib/preview/mount.ts';
 import {
   mountCaptureModal,
   mountExportModal,
@@ -17,6 +19,7 @@ import { mountEffectsControls } from '../src/lib/webcam/effects-mount.ts';
 import { updateCameraSourceState } from '../src/lib/webcam/camera-source-bridge.mjs';
 import { mountPreviewMetrics } from '../src/lib/preview/metrics-mount.ts';
 import {
+  mountCaptureBar,
   mountCaptureChrome,
   mountMobileHud,
 } from '../src/lib/capture/mount.ts';
@@ -45,7 +48,10 @@ function markControllerReady() {
 }
 
 try {
+  mountSkipLink(document.querySelector('#skipLinkMount'));
   mountVideoEditor(document.querySelector('#videoEditorTemplateSlot'));
+  mountPreviewPlaceholder(document.querySelector('#previewPlaceholderMount'));
+  mountCaptureBar(document.querySelector('#captureBarMount'));
   mountAppHeader(
     document.querySelector('#appHeaderMount'),
     {
@@ -270,9 +276,7 @@ try {
   });
   await controller.start();
   markControllerReady();
-  applyMessages(document.body);
   const refreshLocalizedUi = () => {
-    applyMessages(document.body, { refresh: true });
     controller.renderEffectConfig?.();
     if (controller.cameraUiState) {
       controller.setCameraState(controller.cameraUiState);

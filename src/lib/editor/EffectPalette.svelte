@@ -1,9 +1,11 @@
 <script lang="ts">
   import { m } from '../i18n/text.svelte';
+  import { editorState } from './editor-store';
 </script>
 
 <div
-  class="timeline-effect-palette video-only hidden"
+  class="timeline-effect-palette video-only"
+  class:hidden={$editorState.mode !== 'video'}
   id="timelineEffectPalette"
   aria-label={m('Efectos para arrastrar a la timeline')}
 >
@@ -14,6 +16,7 @@
       class="timeline-palette-chip"
       data-effect-type="look"
       draggable="true"
+      disabled={!$editorState.hasSource || $editorState.exporting}
     >
       <i class="fa-solid fa-circle-half-stroke"></i>
       {m('Look')}
@@ -23,6 +26,7 @@
       class="timeline-palette-chip"
       data-effect-type="visual-fx"
       draggable="true"
+      disabled={!$editorState.hasSource || $editorState.exporting}
     >
       <i class="fa-solid fa-wand-magic-sparkles"></i>
       {m('Visual FX')}
@@ -32,6 +36,7 @@
       class="timeline-palette-chip"
       data-effect-type="blob"
       draggable="true"
+      disabled={!$editorState.hasSource || $editorState.exporting}
     >
       <i class="fa-solid fa-palette"></i>
       {m('Color')}
@@ -41,6 +46,7 @@
       class="timeline-palette-chip"
       data-effect-type="face"
       draggable="true"
+      disabled={!$editorState.hasSource || $editorState.exporting}
     >
       <i class="fa-solid fa-face-smile"></i>
       {m('Caras')}
@@ -50,6 +56,7 @@
       class="timeline-palette-chip"
       data-effect-type="blink"
       draggable="true"
+      disabled={!$editorState.hasSource || $editorState.exporting}
     >
       <i class="fa-solid fa-eye"></i>
       {m('Ojos')}

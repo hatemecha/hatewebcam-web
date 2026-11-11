@@ -91,6 +91,25 @@ export function applyEventsMixin(proto) {
     this.btnVideoMode.addEventListener('click', () =>
       this.setSourceMode('video'),
     );
+    // File selection must never be lost while the lazy editor chunk loads.
+    this.btnChooseVideo.addEventListener('click', () =>
+      this.videoFileInput.click(),
+    );
+    if (this.btnPreviewImportVideo) {
+      this.btnPreviewImportVideo.addEventListener('click', () =>
+        this.videoFileInput.click(),
+      );
+    }
+    this.videoFileInput.addEventListener('change', () => {
+      const [file] = this.videoFileInput.files || [];
+      if (file) void this.importVideoFile(file);
+      this.videoFileInput.value = '';
+    });
+    this.projectFileInput?.addEventListener('change', () => {
+      const [file] = this.projectFileInput.files || [];
+      if (file) void this.importEditorProjectFile(file);
+      this.projectFileInput.value = '';
+    });
     this.bindCameraShellEvents();
   };
 
@@ -98,30 +117,17 @@ export function applyEventsMixin(proto) {
   proto.bindVideoEditorEvents = function () {
     if (this._videoEditorEventsBound) return;
     this._videoEditorEventsBound = true;
-    this.btnChooseVideo.addEventListener('click', () =>
-      this.videoFileInput.click(),
-    );
     this.btnSaveProject?.addEventListener('click', () =>
       this.saveEditorProject(),
     );
     this.btnLoadProject?.addEventListener('click', () =>
       this.projectFileInput?.click(),
     );
-    if (this.btnPreviewImportVideo) {
-      this.btnPreviewImportVideo.addEventListener('click', () =>
-        this.videoFileInput.click(),
-      );
-    }
     if (this.videoEffectType) {
       this.videoEffectType.addEventListener('change', () => {
         this.updateEffectTrackHighlight();
         this.updateTimelineHint();
-        if (
-          this.sourceMode === 'video' &&
-          document
-            .querySelector('.video-inspector-tab[data-tab="adjust"]')
-            ?.classList.contains('is-active')
-        ) {
+        if (this.sourceMode === 'video' && this.inspectorTab === 'adjust') {
           this.setAdjustmentsContext(this.videoEffectType.value);
         }
       });

@@ -1,4 +1,4 @@
-import { applyMessages } from '../../src/lib/i18n/apply-messages.ts';
+import { translateCurrent } from '../../src/lib/i18n/translate.ts';
 
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyEffectConfigUIMixin(proto) {
@@ -18,13 +18,6 @@ export function applyEffectConfigUIMixin(proto) {
       if (this.blinkDetectionEffect)
         this.effectConfigBlink.appendChild(this.buildBlinkConfig());
     }
-    for (const node of [
-      this.effectConfigBlob,
-      this.effectConfigFace,
-      this.effectConfigBlink,
-    ]) {
-      if (node) applyMessages(node, { includeOwned: true });
-    }
   };
 
   // --- Blob Tracking Config ---
@@ -41,48 +34,48 @@ export function applyEffectConfigUIMixin(proto) {
       'Detector de objetos por color',
       `
       <div class="config-block">
-        <div class="config-block-title">¿Qué detectar?</div>
-        <div class="help-text">Elegí si querés buscar un color específico, zonas de mucha luz o zonas oscuras.</div>
+        <div class="config-block-title">${translateCurrent('¿Qué detectar?')}</div>
+        <div class="help-text">${translateCurrent('Elegí si querés buscar un color específico, zonas de mucha luz o zonas oscuras.')}</div>
         <div class="radio-group">
           <label class="radio-option ${bt.detectionMode === 'manual' ? 'selected' : ''}">
             <input type="radio" name="detMode" value="manual" ${bt.detectionMode === 'manual' ? 'checked' : ''}>
-            <span>Un color específico</span>
+            <span>${translateCurrent('Un color específico')}</span>
           </label>
           <label class="radio-option ${bt.detectionMode === 'lights' ? 'selected' : ''}">
             <input type="radio" name="detMode" value="lights" ${bt.detectionMode === 'lights' ? 'checked' : ''}>
-            <span>Zonas de mucha luz</span>
+            <span>${translateCurrent('Zonas de mucha luz')}</span>
           </label>
           <label class="radio-option ${bt.detectionMode === 'shadows' ? 'selected' : ''}">
             <input type="radio" name="detMode" value="shadows" ${bt.detectionMode === 'shadows' ? 'checked' : ''}>
-            <span>Zonas oscuras / sombras</span>
+            <span>${translateCurrent('Zonas oscuras / sombras')}</span>
           </label>
         </div>
       </div>
 
       <div class="config-block ${bt.detectionMode === 'manual' ? '' : 'hidden'}" id="cfgColorBlock">
-        <div class="config-block-title">Color objetivo</div>
+        <div class="config-block-title">${translateCurrent('Color objetivo')}</div>
         <div class="target-color-control">
           <label class="color-picker-btn target-color-picker">
             <span class="color-swatch" id="targetColorSwatch" style="background:${targetColor}"></span>
             <span class="target-color-copy">
-              <strong>Color a detectar</strong>
+              <strong>${translateCurrent('Color a detectar')}</strong>
               <small id="targetColorValue">${targetColor.toUpperCase()}</small>
             </span>
-            <input type="color" id="inpTargetColor" value="${targetColor}" aria-label="Color a detectar">
+            <input type="color" id="inpTargetColor" value="${targetColor}" aria-label="${translateCurrent('Color a detectar')}">
           </label>
           <button type="button" class="btn target-color-eyedropper" id="btnPickTargetColor">
             <i class="fa-solid fa-eye-dropper" aria-hidden="true"></i>
-            Elegir en el video
+            ${translateCurrent('Elegir en el video')}
           </button>
         </div>
         <div class="status-msg hidden" id="cfgTargetColorStatus" role="status" aria-live="polite"></div>
-        <div class="config-subsection-title">Sensibilidad</div>
-        <div class="help-text">Si la detección es demasiado estricta, subí este valor. Si detecta demasiado, bajalo.</div>
+        <div class="config-subsection-title">${translateCurrent('Sensibilidad')}</div>
+        <div class="help-text">${translateCurrent('Si la detección es demasiado estricta, subí este valor. Si detecta demasiado, bajalo.')}</div>
         ${this.slider('sldTolerance', 'valTolerance', 'Tolerancia', bt._tolerance, 10, 100)}
 
-        <button type="button" class="btn config-advanced-toggle" id="btnAdvancedHsv">Ajustes avanzados (HSV manual)</button>
+        <button type="button" class="btn config-advanced-toggle" id="btnAdvancedHsv">${translateCurrent('Ajustes avanzados (HSV manual)')}</button>
         <div id="hsvAdvanced" class="config-advanced-panel hidden">
-          <div class="help-text">Estos controles permiten ajustar el rango de color manualmente usando el modelo HSV (Tono, Saturación, Brillo).</div>
+          <div class="help-text">${translateCurrent('Estos controles permiten ajustar el rango de color manualmente usando el modelo HSV (Tono, Saturación, Brillo).')}</div>
           ${this.slider('sldHMin', 'valHMin', 'Tono mínimo (H)', bt.hsvMin[0], 0, 180)}
           ${this.slider('sldSMin', 'valSMin', 'Saturación mín. (S)', bt.hsvMin[1], 0, 255)}
           ${this.slider('sldVMin', 'valVMin', 'Brillo mínimo (V)', bt.hsvMin[2], 0, 255)}
@@ -93,34 +86,34 @@ export function applyEffectConfigUIMixin(proto) {
       </div>
 
       <div class="config-block">
-        <div class="config-block-title">Cantidad y tamaño</div>
-        <div class="help-text">Limitá cuántos objetos detectar y qué tan grandes deben ser para ser considerados.</div>
+        <div class="config-block-title">${translateCurrent('Cantidad y tamaño')}</div>
+        <div class="help-text">${translateCurrent('Limitá cuántos objetos detectar y qué tan grandes deben ser para ser considerados.')}</div>
         ${this.slider('sldMaxObj', 'valMaxObj', 'Máximo de objetos', bt.maxObjects, 1, 50)}
         ${this.slider('sldMinArea', 'valMinArea', 'Tamaño mínimo (píxeles)', bt.minArea, 0, 5000, 10)}
       </div>
 
       <div class="config-block">
-        <div class="config-block-title">Limpieza de imagen</div>
-        <div class="help-text">Si aparecen detecciones falsas o ruido, subí este valor para limpiar la imagen.</div>
+        <div class="config-block-title">${translateCurrent('Limpieza de imagen')}</div>
+        <div class="help-text">${translateCurrent('Si aparecen detecciones falsas o ruido, subí este valor para limpiar la imagen.')}</div>
         ${this.slider('sldErode', 'valErode', 'Nivel de limpieza', bt.erodeIterations, 0, 5)}
       </div>
 
       <div class="config-block">
-        <div class="config-block-title">Respuesta</div>
-        <div class="help-text">Bajá la resolución de análisis si notás retraso. Subirla da más precisión, pero consume más CPU.</div>
+        <div class="config-block-title">${translateCurrent('Respuesta')}</div>
+        <div class="help-text">${translateCurrent('Bajá la resolución de análisis si notás retraso. Subirla da más precisión, pero consume más CPU.')}</div>
         ${this.slider('sldBlobProcessScale', 'valBlobProcessScale', 'Resolución de análisis (%)', Math.round((bt.processScale || 0.45) * 100), 25, 100)}
       </div>
 
       <div class="config-block">
-        <div class="config-block-title">Aspecto visual</div>
+        <div class="config-block-title">${translateCurrent('Aspecto visual')}</div>
         <label class="color-picker-btn" style="position:relative">
           <div class="color-swatch" id="boxColorSwatch" style="background:${boxColor}"></div>
-          <span>Color del recuadro</span>
+          <span>${translateCurrent('Color del recuadro')}</span>
           <input type="color" id="inpBoxColor" value="${boxColor}">
         </label>
         <div style="height:6px"></div>
-        <label class="checkbox-group"><input type="checkbox" id="chkShowCoords" ${bt.showCoordinates ? 'checked' : ''}><span>Mostrar posición (X, Y)</span></label>
-        <label class="checkbox-group"><input type="checkbox" id="chkShowCentroid" ${bt.showCentroid ? 'checked' : ''}><span>Mostrar punto central</span></label>
+        <label class="checkbox-group"><input type="checkbox" id="chkShowCoords" ${bt.showCoordinates ? 'checked' : ''}><span>${translateCurrent('Mostrar posición (X, Y)')}</span></label>
+        <label class="checkbox-group"><input type="checkbox" id="chkShowCentroid" ${bt.showCentroid ? 'checked' : ''}><span>${translateCurrent('Mostrar punto central')}</span></label>
         ${this.slider('sldBlobLabelSize', 'valBlobLabelSize', 'Tamaño del texto', bt.labelSize || 12, 8, 32)}
         ${this.slider('sldThickness', 'valThickness', 'Grosor del recuadro', bt.boxThickness, 1, 8)}
       </div>
@@ -239,11 +232,11 @@ export function applyEffectConfigUIMixin(proto) {
       `
       <div class="config-block">
         <div class="config-block-title">Configuración</div>
-        <div class="help-text">Activá recuadro, blur/pixelado o ambos a la vez sobre cada cara detectada.</div>
+        <div class="help-text">${translateCurrent('Activá recuadro, blur/pixelado o ambos a la vez sobre cada cara detectada.')}</div>
         ${this.slider('sldMaxFaces', 'valMaxFaces', 'Máximo de caras a detectar', fd.maxFaces, 1, 5)}
         <div class="face-visual-toggles">
-          <label class="checkbox-group"><input type="checkbox" id="chkAdvFaceShowBox" ${showBoxVisuals ? 'checked' : ''}><span>Recuadro</span></label>
-          <label class="checkbox-group"><input type="checkbox" id="chkAdvFaceShowBlur" ${showPixelVisuals ? 'checked' : ''}><span>Blur / pixelado</span></label>
+          <label class="checkbox-group"><input type="checkbox" id="chkAdvFaceShowBox" ${showBoxVisuals ? 'checked' : ''}><span>${translateCurrent('Recuadro')}</span></label>
+          <label class="checkbox-group"><input type="checkbox" id="chkAdvFaceShowBlur" ${showPixelVisuals ? 'checked' : ''}><span>${translateCurrent('Blur / pixelado')}</span></label>
         </div>
         <div id="facePixelControls" class="${showPixelVisuals ? '' : 'hidden'}">
           ${this.slider('sldFacePixelation', 'valFacePixelation', 'Tamaño del pixelado', fd.pixelationCellSize, 4, 32)}
@@ -251,23 +244,23 @@ export function applyEffectConfigUIMixin(proto) {
         </div>
         <div id="faceBoxControls" class="${showBoxVisuals ? '' : 'hidden'}">
           <div class="slider-group">
-            <div class="slider-label"><span>Texto del recuadro</span></div>
+            <div class="slider-label"><span>${translateCurrent('Texto del recuadro')}</span></div>
             <input type="text" id="inpFaceLabel" class="text-input" maxlength="28" placeholder="Ej: Cliente VIP">
           </div>
           <label class="color-picker-btn" style="position:relative;margin-top:6px">
             <div class="color-swatch" id="faceColorSwatch" style="background:${faceBoxColor}"></div>
-            <span>Color del recuadro</span>
+            <span>${translateCurrent('Color del recuadro')}</span>
             <input type="color" id="inpFaceColor" value="${faceBoxColor}">
           </label>
           <div style="height:6px"></div>
           ${this.slider('sldFaceLabelSize', 'valFaceLabelSize', 'Tamaño del texto', fd.labelSize || 12, 8, 32)}
           ${this.slider('sldFaceThickness', 'valFaceThickness', 'Grosor del recuadro', fd.boxThickness, 1, 8)}
         </div>
-        <label class="checkbox-group"><input type="checkbox" id="chkShowLandmarks" ${fd.showLandmarks ? 'checked' : ''}><span>Mostrar puntos faciales</span></label>
+        <label class="checkbox-group"><input type="checkbox" id="chkShowLandmarks" ${fd.showLandmarks ? 'checked' : ''}><span>${translateCurrent('Mostrar puntos faciales')}</span></label>
       </div>
       <div class="config-block">
-        <div class="config-block-title">Respuesta</div>
-        <div class="help-text">Menos suavizado y menos retención responden más rápido. Si vibra demasiado, subilos un poco.</div>
+        <div class="config-block-title">${translateCurrent('Respuesta')}</div>
+        <div class="help-text">${translateCurrent('Menos suavizado y menos retención responden más rápido. Si vibra demasiado, subilos un poco.')}</div>
         ${this.slider('sldFaceInterval', 'valFaceInterval', 'Intervalo de análisis (ms)', fd.processIntervalMs, 16, 120)}
         ${this.slider('sldFaceSmoothing', 'valFaceSmoothing', 'Suavizado del recuadro (%)', Math.round((fd.boxSmoothing || 0) * 100), 0, 95)}
         ${this.slider('sldFaceHold', 'valFaceHold', 'Retención al perder cara (ms)', fd.detectionHoldMs, 80, 300, 10)}
@@ -417,7 +410,7 @@ export function applyEffectConfigUIMixin(proto) {
       `
       <div class="config-block">
         <div class="config-block-title">Configuración</div>
-        <div class="help-text">Cuando cerrás un ojo, se dibujan líneas entre los objetos detectados. Necesitás tener el detector de objetos activado para ver las conexiones.</div>
+        <div class="help-text">${translateCurrent('Cuando cerrás un ojo, se dibujan líneas entre los objetos detectados. Necesitás tener el detector de objetos activado para ver las conexiones.')}</div>
         ${this.slider('sldEar', 'valEar', 'Sensibilidad (cuanto más alto, más fácil detectar)', bd.eyeArThreshold, 0.1, 0.4, 0.01)}
         ${this.slider('sldBlinkInterval', 'valBlinkInterval', 'Intervalo de análisis (ms)', bd.processIntervalMs, 16, 120)}
         ${this.slider('sldBlinkClosedFrames', 'valBlinkClosedFrames', 'Frames cerrados mínimos', bd.minClosedFrames, 1, 4)}

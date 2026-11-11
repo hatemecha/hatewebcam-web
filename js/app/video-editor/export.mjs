@@ -7,6 +7,7 @@ import {
 import { patchExportModalState } from '../../../src/lib/capture/session-state.ts';
 import { updateShellState } from '../../../src/lib/shell/shell-bridge.mjs';
 import { translateCurrent } from '../../../src/lib/i18n/translate.ts';
+import { updateEditorUiState } from '../../../src/lib/editor/editor-state.ts';
 
 const VIDEO_END_EPSILON = 0.001;
 const VIDEO_EXPORT_PLAYBACK_RATE = 4;
@@ -58,32 +59,14 @@ export function applyVideoEditorExportMixin(proto) {
       loaded &&
       typeof VideoEncoder !== 'undefined' &&
       typeof VideoFrame !== 'undefined';
-    [
-      this.btnVideoStart,
-      this.btnVideoBack,
-      this.btnVideoPlay,
-      this.btnVideoForward,
-      this.btnVideoEnd,
-    ].forEach((button) => {
-      if (button) button.disabled = !loaded || this.isVideoExporting;
+    updateEditorUiState({
+      hasSource: loaded,
+      exporting: !!this.isVideoExporting,
+      canExport,
     });
-    if (this.videoSeek)
-      this.videoSeek.disabled = !loaded || this.isVideoExporting;
-    if (this.btnExportVideo)
-      this.btnExportVideo.disabled = !canExport || this.isVideoExporting;
     updateShellState({
       exportEnabled: canExport && !this.isVideoExporting,
     });
-    if (this.btnSaveProject)
-      this.btnSaveProject.disabled = !loaded || this.isVideoExporting;
-    if (this.btnLoadProject)
-      this.btnLoadProject.disabled = this.isVideoExporting;
-    if (this.videoTrimStart)
-      this.videoTrimStart.disabled = !loaded || this.isVideoExporting;
-    if (this.videoTrimEnd)
-      this.videoTrimEnd.disabled = !loaded || this.isVideoExporting;
-    if (this.btnCutAtMarkers)
-      this.btnCutAtMarkers.disabled = !loaded || this.isVideoExporting;
     if (this.btnChooseVideo) {
       const label = translateCurrent(
         loaded ? 'Cambiar video' : 'Importar video',
@@ -98,11 +81,6 @@ export function applyVideoEditorExportMixin(proto) {
           : 'Importá un archivo local. MP4, WebM o MOV si el navegador lo soporta.',
       );
     }
-    this.timelineEffectPalette
-      ?.querySelectorAll('.timeline-palette-chip')
-      .forEach((chip) => {
-        chip.disabled = !loaded || this.isVideoExporting;
-      });
     this.updateVideoEffectInspector();
     this.updateEditorExportControls();
     this.updateAdjustmentsPanelState();

@@ -40,8 +40,13 @@ export function applyCameraMixin(proto) {
     if (this.btnCameraStateAction) {
       this.btnCameraStateAction.classList.toggle('hidden', !view.action);
       const label = this.btnCameraStateAction.querySelector('span');
-      if (label)
+      if (label) {
         label.textContent = view.action ? translateCurrent(view.action) : '';
+        this.btnCameraStateAction.setAttribute(
+          'aria-label',
+          translateCurrent(view.action || 'Encender cámara'),
+        );
+      }
       if (focus && changed && view.action) this.btnCameraStateAction.focus();
     }
     if (

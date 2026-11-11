@@ -1,5 +1,6 @@
 <script lang="ts">
   import { m } from '../i18n/text.svelte';
+  import { editorState } from './editor-store';
 </script>
 
 <div class="section-title">{m('Exportación')}</div>
@@ -69,7 +70,12 @@
     'Para Premiere o DaVinci Resolve: el preset Chroma exporta solo efectos sobre verde o azul para hacer key sobre tu master. Balanceado o Alta entregan el clip completo en WebM. Activá opciones experimentales para MP4 H.264 y copia de audio cuando el navegador lo permita',
   )}
 </p>
-<button type="button" class="btn primary" id="btnExportVideo" disabled>
+<button
+  type="button"
+  class="btn primary"
+  id="btnExportVideo"
+  disabled={!$editorState.canExport || $editorState.exporting}
+>
   <i class="fa-solid fa-download"></i>
   {m('Exportar video')}
 </button>

@@ -1,14 +1,17 @@
 <script lang="ts">
   import { m } from '../i18n/text.svelte';
+  import { editorState } from './editor-store';
   import EditAssistPanel from './EditAssistPanel.svelte';
   import ExportPanel from './ExportPanel.svelte';
 </script>
 
 <div
-  class="video-inspector-panel is-active"
+  class="video-inspector-panel"
+  class:is-active={$editorState.inspectorTab === 'project'}
   id="inspectorPanelProject"
   role="tabpanel"
   aria-labelledby="tabInspectorProject"
+  hidden={$editorState.inspectorTab !== 'project'}
 >
   <div class="panel-section video-import-section">
     <div class="section-title">{m('Archivo de video')}</div>
@@ -42,11 +45,21 @@
       </p>
     </div>
     <div class="btn-row video-project-actions">
-      <button type="button" class="btn" id="btnSaveProject" disabled>
+      <button
+        type="button"
+        class="btn"
+        id="btnSaveProject"
+        disabled={!$editorState.hasSource || $editorState.exporting}
+      >
         <i class="fa-solid fa-floppy-disk"></i>
         {m('Guardar proyecto')}
       </button>
-      <button type="button" class="btn" id="btnLoadProject">
+      <button
+        type="button"
+        class="btn"
+        id="btnLoadProject"
+        disabled={$editorState.exporting}
+      >
         <i class="fa-solid fa-file-import"></i>
         {m('Cargar proyecto')}
       </button>

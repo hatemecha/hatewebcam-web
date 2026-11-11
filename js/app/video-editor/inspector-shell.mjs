@@ -1,3 +1,5 @@
+import { updateEditorUiState } from '../../../src/lib/editor/editor-state.ts';
+
 /** @param {import('../controller.mjs').AppController} proto */
 export function applyVideoEditorInspectorShellMixin(proto) {
   proto.commitSelectedEffectAutomation = function () {
@@ -159,18 +161,8 @@ export function applyVideoEditorInspectorShellMixin(proto) {
   };
 
   proto.setInspectorTab = function (tabName) {
-    this.inspectorTabs.forEach((tab) => {
-      const active = tab.dataset.tab === tabName;
-      tab.classList.toggle('is-active', active);
-      tab.setAttribute('aria-selected', String(active));
-    });
-    this.inspectorPanels.forEach((panel) => {
-      const active =
-        panel.id ===
-        `inspectorPanel${tabName.charAt(0).toUpperCase()}${tabName.slice(1)}`;
-      panel.classList.toggle('is-active', active);
-      panel.hidden = !active;
-    });
+    this.inspectorTab = tabName;
+    updateEditorUiState({ inspectorTab: tabName });
     if (tabName === 'adjust' && this.sourceMode === 'video') {
       this.updateAdjustmentsPanelState();
     }
@@ -187,12 +179,7 @@ export function applyVideoEditorInspectorShellMixin(proto) {
     this.updateTimelineHint();
     this.updateEffectTrackHighlight();
     if (tool !== 'cut') this.hideTimelineCutGuide();
-    if (
-      this.sourceMode === 'video' &&
-      document
-        .querySelector('.video-inspector-tab[data-tab="adjust"]')
-        ?.classList.contains('is-active')
-    ) {
+    if (this.sourceMode === 'video' && this.inspectorTab === 'adjust') {
       this.updateAdjustmentsPanelState();
     }
   };

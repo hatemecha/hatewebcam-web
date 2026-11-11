@@ -1,4 +1,5 @@
 import { TIMELINE_TRACK_COUNT } from '../constants.mjs';
+import { updateEditorUiState } from '../../../src/lib/editor/editor-state.ts';
 
 /** @param {import('../controller.mjs').AppController} proto */
 export function applyVideoEditorTimelineChromeMixin(proto) {
@@ -46,12 +47,11 @@ export function applyVideoEditorTimelineChromeMixin(proto) {
   };
 
   proto.updateEditorHistoryButtons = function () {
-    if (this.btnEditorUndo)
-      this.btnEditorUndo.disabled =
-        !this.editorHistory?.canUndo || this.isVideoExporting;
-    if (this.btnEditorRedo)
-      this.btnEditorRedo.disabled =
-        !this.editorHistory?.canRedo || this.isVideoExporting;
+    updateEditorUiState({
+      canUndo: !!this.editorHistory?.canUndo && !this.isVideoExporting,
+      canRedo: !!this.editorHistory?.canRedo && !this.isVideoExporting,
+      exporting: !!this.isVideoExporting,
+    });
   };
 
   proto.applyTimelineZoom = function () {

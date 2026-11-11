@@ -1,5 +1,6 @@
 <script lang="ts">
   import { m } from '../i18n/text.svelte';
+  import { editorState } from './editor-store';
 </script>
 
 <div class="timeline-viewport" id="timelineViewport">
@@ -175,5 +176,6 @@
   step="0.01"
   value="0"
   aria-label={m('Posición del video')}
+  disabled={!$editorState.hasSource || $editorState.exporting}
   tabindex="-1"
 />

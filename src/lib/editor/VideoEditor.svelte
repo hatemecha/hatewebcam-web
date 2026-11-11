@@ -1,5 +1,6 @@
 <script lang="ts">
   import { m } from '../i18n/text.svelte';
+  import { editorState } from './editor-store';
   import EditorToolbar from './EditorToolbar.svelte';
   import EffectPalette from './EffectPalette.svelte';
   import Timeline from './Timeline.svelte';
@@ -8,7 +9,8 @@
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
-  class="editor-splitter editor-splitter-horizontal video-only hidden"
+  class="editor-splitter editor-splitter-horizontal video-only"
+  class:hidden={$editorState.mode !== 'video'}
   id="timelineSplitter"
   role="separator"
   aria-label={m('Cambiar altura de la línea de tiempo')}
@@ -19,7 +21,8 @@
   tabindex="0"
 ></div>
 <section
-  class="video-timeline-shell video-only hidden"
+  class="video-timeline-shell video-only"
+  class:hidden={$editorState.mode !== 'video'}
   id="videoTimelineShell"
   aria-label={m('Editor de video')}
 >
@@ -34,7 +37,8 @@
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
-  class="editor-splitter editor-splitter-vertical video-only hidden"
+  class="editor-splitter editor-splitter-vertical video-only"
+  class:hidden={$editorState.mode !== 'video'}
   id="inspectorSplitter"
   role="separator"
   aria-label={m('Cambiar ancho del inspector')}

@@ -21,7 +21,11 @@
   </head>
 
   <body>
-    <a class="skip-link" href="#previewWrapper">Saltar al visor</a>
+    <div
+      id="skipLinkMount"
+      data-i18n-owner="svelte"
+      style="display: contents"
+    ></div>
     <!-- Header -->
     <header
       class="header-bar"
@@ -41,85 +45,11 @@
             muted
           ></video>
           <canvas id="previewCanvas"></canvas>
-          <div class="preview-placeholder" id="previewPlaceholder">
-            <div
-              class="preview-placeholder-view preview-placeholder-camera"
-              id="previewPlaceholderCamera"
-              role="status"
-              aria-live="polite"
-              aria-atomic="true"
-            >
-              <i
-                class="fa-solid fa-video fa-2x"
-                id="cameraStateIcon"
-                aria-hidden="true"
-              ></i>
-              <h2 class="camera-state-title" id="cameraStateTitle">
-                Cámara apagada
-              </h2>
-              <p
-                class="camera-state-message"
-                id="previewPlaceholderCameraMessage"
-              >
-                Encendé la cámara para empezar.
-              </p>
-              <p class="camera-state-hint hidden" id="cameraStateHint"></p>
-              <button
-                type="button"
-                class="btn primary camera-state-action"
-                id="btnCameraStateAction"
-              >
-                <i class="fa-solid fa-play" aria-hidden="true"></i>
-                <span>Encender cámara</span>
-              </button>
-              <p class="empty-state-footer">
-                <i class="fa-solid fa-lock" aria-hidden="true"></i>
-                La imagen se procesa en este navegador.
-              </p>
-            </div>
-            <div
-              class="preview-placeholder-view preview-placeholder-video hidden"
-              id="previewPlaceholderVideo"
-            >
-              <div class="preview-import-card">
-                <div class="preview-import-icon" aria-hidden="true">
-                  <i class="fa-solid fa-clapperboard"></i>
-                </div>
-                <p class="preview-import-title">Empezá con un video</p>
-                <p class="preview-import-hint">
-                  Importá un archivo local para recortarlo, sumar efectos y
-                  exportarlo.
-                </p>
-                <div class="preview-import-formats" aria-hidden="true">
-                  <span>MP4</span>
-                  <span>WebM</span>
-                  <span>MOV</span>
-                </div>
-                <button
-                  type="button"
-                  class="btn primary preview-import-btn"
-                  id="btnPreviewImportVideo"
-                >
-                  Importar video
-                </button>
-                <p class="preview-import-note">
-                  Tu archivo no sale de este equipo.
-                </p>
-              </div>
-            </div>
-            <div
-              class="preview-placeholder-view preview-placeholder-loading hidden"
-              id="previewPlaceholderLoading"
-            >
-              <i
-                class="fa-solid fa-spinner fa-spin fa-2x"
-                aria-hidden="true"
-              ></i>
-              <div id="previewPlaceholderLoadingMessage">
-                Leyendo metadata del video...
-              </div>
-            </div>
-          </div>
+          <div
+            id="previewPlaceholderMount"
+            data-i18n-owner="svelte"
+            style="display: contents"
+          ></div>
           <div
             id="captureStatusMount"
             data-i18n-owner="svelte"
@@ -131,61 +61,11 @@
             style="display: contents"
           ></div>
         </div>
-        <div class="preview-console-footer webcam-only">
-          <div class="desktop-capture-bar" aria-label="Controles de captura">
-            <label class="capture-timer-field" for="captureTimerSelect">
-              <span class="capture-timer-label">Temporizador</span>
-              <span class="select-wrapper capture-timer-select">
-                <select
-                  id="captureTimerSelect"
-                  aria-label="Temporizador de foto"
-                >
-                  <option value="0">0 s</option>
-                  <option value="5">5 s</option>
-                  <option value="10">10 s</option>
-                </select>
-              </span>
-            </label>
-            <div
-              class="capture-bar-status"
-              id="captureStatus"
-              role="status"
-              aria-live="polite"
-            ></div>
-            <div class="capture-actions">
-              <button
-                type="button"
-                class="photo-shutter"
-                id="btnTakePhoto"
-                aria-label="Sacar foto"
-              >
-                <span class="photo-shutter-core" aria-hidden="true"></span>
-                <span class="capture-action-label">Foto</span>
-              </button>
-              <button
-                type="button"
-                class="record-trigger"
-                id="btnRecord"
-                aria-label="Grabar video"
-              >
-                <span class="record-trigger-core" aria-hidden="true"></span>
-                <span class="capture-action-label">Grabar</span>
-              </button>
-            </div>
-          </div>
-          <div class="preview-status-bar">
-            <div
-              class="preview-diagnostics"
-              id="previewMetricsMount"
-              data-i18n-owner="svelte"
-            ></div>
-            <div
-              class="detector-chips"
-              id="effectsInfo"
-              aria-label="Estado de detectores"
-            ></div>
-          </div>
-        </div>
+        <div
+          id="captureBarMount"
+          data-i18n-owner="svelte"
+          style="display: contents"
+        ></div>
         <div
           id="videoEditorTemplateSlot"
           data-i18n-owner="svelte"

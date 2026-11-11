@@ -109,6 +109,7 @@ export class AppController {
     this.videoTimeline = null;
     this.editorHistory = null;
     this.editorTool = 'select';
+    this.inspectorTab = 'project';
     this.adjustmentsContext = 'look';
     this.timelineZoom = 1;
     this.timelineHistorySuspended = false;
