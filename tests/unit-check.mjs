@@ -101,19 +101,19 @@ import {
   getShellState,
   subscribeShellState,
   updateShellState,
-} from '../src/lib/shell/shell-bridge.mjs';
+} from '../src/lib/shell/shell-bridge.ts';
 import {
   getDetectorChips,
   subscribeDetectorChips,
   updateDetectorChip,
-} from '../src/lib/preview/preview-bridge.mjs';
+} from '../src/lib/preview/preview-bridge.ts';
 import {
   getCameraSourceState,
   resetCameraSourceState,
   resolveCameraDeviceSelection,
   subscribeCameraSourceState,
   updateCameraSourceState,
-} from '../src/lib/webcam/camera-source-bridge.mjs';
+} from '../src/lib/webcam/camera-source-bridge.ts';
 import { deriveDetectorExtras } from '../src/lib/webcam/panel-state.ts';
 import { englishMessages } from '../src/lib/i18n/catalog.ts';
 import { setLocale } from '../src/lib/i18n/locale-state.ts';

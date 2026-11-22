@@ -3,7 +3,7 @@ import {
   getCameraSourceState,
   subscribeCameraSourceState,
   type CameraSourceState,
-} from './camera-source-bridge.mjs';
+} from './camera-source-bridge.ts';
 
 export const cameraSourceState = readable<CameraSourceState>(
   getCameraSourceState(),

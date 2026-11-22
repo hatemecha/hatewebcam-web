@@ -3,7 +3,7 @@ import {
   getDetectorChips,
   subscribeDetectorChips,
   type DetectorChips,
-} from './preview-bridge.mjs';
+} from './preview-bridge.ts';
 
 export const detectorChips = readable<DetectorChips>(
   getDetectorChips(),

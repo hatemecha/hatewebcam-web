@@ -3,7 +3,7 @@ import { updatePreviewMetrics } from '../../src/lib/preview/metrics-state.ts';
 import {
   getCameraSourceState,
   updateCameraSourceState,
-} from '../../src/lib/webcam/camera-source-bridge.mjs';
+} from '../../src/lib/webcam/camera-source-bridge.ts';
 import {
   classifyCameraError,
   getCameraStatePresentation,

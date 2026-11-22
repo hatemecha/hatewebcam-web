@@ -2,7 +2,7 @@
   import type { MessageKey } from '../i18n/catalog';
   import { m } from '../i18n/text.svelte.ts';
   import { cameraSourceState } from './camera-source-store';
-  import type { PerformanceMode } from './camera-source-bridge.mjs';
+  import type { PerformanceMode } from './camera-source-bridge.ts';
   import type { CameraSourceAdapter } from './types';
 
   let { adapter }: { adapter: CameraSourceAdapter } = $props();

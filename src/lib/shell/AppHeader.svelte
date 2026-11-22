@@ -1,6 +1,6 @@
 <script lang="ts">
   import { m } from '../i18n/text.svelte.ts';
-  import type { Locale } from './shell-bridge.mjs';
+  import type { Locale } from './shell-bridge.ts';
   import { shellState } from './shell-store';
   import type { ShellAdapter } from './types';
 

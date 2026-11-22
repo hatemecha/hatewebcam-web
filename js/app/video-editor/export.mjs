@@ -5,7 +5,7 @@ import {
   getEditorChromaColor,
 } from '../../video-export.mjs';
 import { patchExportModalState } from '../../../src/lib/capture/session-state.ts';
-import { updateShellState } from '../../../src/lib/shell/shell-bridge.mjs';
+import { updateShellState } from '../../../src/lib/shell/shell-bridge.ts';
 import { translateCurrent } from '../../../src/lib/i18n/translate.ts';
 import { updateEditorUiState } from '../../../src/lib/editor/editor-state.ts';
 

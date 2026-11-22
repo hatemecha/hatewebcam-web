@@ -3,7 +3,7 @@ import { FaceDetection } from '../effects/face-detection.mjs';
 import { BlinkDetection } from '../effects/blink-detection.mjs';
 
 import { translateCurrent } from '../../src/lib/i18n/translate.ts';
-import { updateDetectorChip as updateDetectorChipState } from '../../src/lib/preview/preview-bridge.mjs';
+import { updateDetectorChip as updateDetectorChipState } from '../../src/lib/preview/preview-bridge.ts';
 
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyEffectsMixin(proto) {

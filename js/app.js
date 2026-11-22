@@ -2,10 +2,15 @@
  * HateWebcam Web — application entry point.
  */
 import { AppController } from './app/controller.mjs';
-import { getLocale, initializeI18n, setLocale, translate } from './i18n.mjs';
-import { subscribeLocale } from '../src/lib/i18n/locale-state.ts';
+import {
+  getLocale,
+  initializeI18n,
+  setLocale,
+  subscribeLocale,
+} from '../src/lib/i18n/locale-state.ts';
+import { translateCurrent } from '../src/lib/i18n/translate.ts';
 import { mountAppHeader, mountSkipLink } from '../src/lib/shell/mount.ts';
-import { updateShellState } from '../src/lib/shell/shell-bridge.mjs';
+import { updateShellState } from '../src/lib/shell/shell-bridge.ts';
 import {
   mountDetectorChips,
   mountPreviewPlaceholder,
@@ -16,7 +21,7 @@ import {
 } from '../src/lib/modals/mount.ts';
 import { mountCameraSource } from '../src/lib/webcam/mount.ts';
 import { mountEffectsControls } from '../src/lib/webcam/effects-mount.ts';
-import { updateCameraSourceState } from '../src/lib/webcam/camera-source-bridge.mjs';
+import { updateCameraSourceState } from '../src/lib/webcam/camera-source-bridge.ts';
 import { mountPreviewMetrics } from '../src/lib/preview/metrics-mount.ts';
 import {
   mountCaptureBar,
@@ -306,8 +311,8 @@ try {
   console.error(err);
   document.body.innerHTML = `
     <main class="boot-error" style="max-width: 42rem; margin: 12vh auto; padding: 2rem; font-family: system-ui, sans-serif; line-height: 1.5;">
-      <h1>${translate('No se pudo iniciar HateWebcam')}</h1>
-      <p>${translate('Revisá que estés sirviendo el proyecto desde localhost/https y que existan los templates.')}</p>
+      <h1>${translateCurrent('No se pudo iniciar HateWebcam')}</h1>
+      <p>${translateCurrent('Revisá que estés sirviendo el proyecto desde localhost/https y que existan los templates.')}</p>
     </main>
   `;
 }

@@ -1,4 +1,4 @@
-import { updateCameraSourceState } from '../../src/lib/webcam/camera-source-bridge.mjs';
+import { updateCameraSourceState } from '../../src/lib/webcam/camera-source-bridge.ts';
 
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyInitMixin(proto) {

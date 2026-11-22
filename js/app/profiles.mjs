@@ -1,4 +1,4 @@
-import { translate } from '../i18n.mjs';
+import { translateCurrent } from '../../src/lib/i18n/translate.ts';
 
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyProfilesMixin(proto) {
@@ -7,7 +7,7 @@ export function applyProfilesMixin(proto) {
   };
 
   proto.saveCurrentProfile = function () {
-    const name = prompt(translate('Nombre para este ajuste:'));
+    const name = prompt(translateCurrent('Nombre para este ajuste:'));
     if (!name) return;
     const profiles = this.loadProfiles();
     const config = {};
@@ -39,7 +39,7 @@ export function applyProfilesMixin(proto) {
     this.updateProfilesList();
     this.showStatus(
       this.profileStatus,
-      translate('"{name}" guardado', undefined, { name }),
+      translateCurrent('"{name}" guardado', { name }),
       'success',
     );
     setTimeout(() => this.hideStatus(this.profileStatus), 2500);
@@ -151,7 +151,7 @@ export function applyProfilesMixin(proto) {
     this.renderEffectConfig();
     this.showStatus(
       this.profileStatus,
-      translate('"{name}" cargado', undefined, { name }),
+      translateCurrent('"{name}" cargado', { name }),
       'success',
     );
     setTimeout(() => this.hideStatus(this.profileStatus), 2500);
@@ -160,7 +160,7 @@ export function applyProfilesMixin(proto) {
   proto.deleteProfile = function () {
     const name = this.selectedProfile || this.profileSelect?.value;
     if (!name) return;
-    if (!confirm(translate('¿Eliminar "{name}"?', undefined, { name }))) return;
+    if (!confirm(translateCurrent('¿Eliminar "{name}"?', { name }))) return;
     const profiles = this.loadProfiles();
     delete profiles[name];
     this.saveProfiles(profiles);
@@ -168,7 +168,7 @@ export function applyProfilesMixin(proto) {
     this.updateProfilesList();
     this.showStatus(
       this.profileStatus,
-      translate('"{name}" eliminado', undefined, { name }),
+      translateCurrent('"{name}" eliminado', { name }),
       'warning',
     );
     setTimeout(() => this.hideStatus(this.profileStatus), 2500);
@@ -182,7 +182,7 @@ export function applyProfilesMixin(proto) {
     }
     if (
       !confirm(
-        translate(
+        translateCurrent(
           '¿Eliminar todos los perfiles guardados? Esta acción no restablece la webcam.',
         ),
       )

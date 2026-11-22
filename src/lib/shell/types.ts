@@ -1,4 +1,4 @@
-import type { Locale, SourceMode } from './shell-bridge.mjs';
+import type { Locale, SourceMode } from './shell-bridge.ts';
 
 export interface ShellAdapter {
   setSourceMode(mode: SourceMode): void;

@@ -1,24 +1,29 @@
-/**
- * Dependency-free presentation state for the camera source controls.
- * Node tests can load this module because it does not import Svelte.
- *
- * @typedef {'auto' | 'performance' | 'normal' | 'quality'} PerformanceMode
- * @typedef {'loading' | 'empty' | 'ready'} CameraDevicesStatus
- * @typedef {{ id: string, label: string }} CameraDeviceOption
- * @typedef {{
- *   running: boolean,
- *   deviceId: string,
- *   devices: CameraDeviceOption[],
- *   devicesStatus: CameraDevicesStatus,
- *   selectDisabled: boolean,
- *   performanceMode: PerformanceMode,
- *   mirrored: boolean,
- * }} CameraSourceState
- * @typedef {{ deviceId?: string, label?: string }} CameraDeviceInput
- */
+export type PerformanceMode = 'auto' | 'performance' | 'normal' | 'quality';
 
-/** @type {CameraSourceState} */
-const initialState = {
+type CameraDevicesStatus = 'loading' | 'empty' | 'ready';
+
+interface CameraDeviceOption {
+  id: string;
+  label: string;
+}
+
+export interface CameraSourceState {
+  running: boolean;
+  deviceId: string;
+  devices: CameraDeviceOption[];
+  devicesStatus: CameraDevicesStatus;
+  selectDisabled: boolean;
+  performanceMode: PerformanceMode;
+  mirrored: boolean;
+}
+
+type CameraDeviceInput = Partial<Pick<MediaDeviceInfo, 'deviceId' | 'label'>>;
+type CameraDeviceSelection = Pick<
+  CameraSourceState,
+  'devices' | 'devicesStatus' | 'selectDisabled' | 'deviceId'
+>;
+
+const initialState: CameraSourceState = {
   running: false,
   deviceId: '',
   devices: [],
@@ -28,30 +33,22 @@ const initialState = {
   mirrored: false,
 };
 
-/** @type {CameraSourceState} */
 let state = cloneState(initialState);
 
-/** @type {Set<(state: CameraSourceState) => void>} */
-const listeners = new Set();
+const listeners = new Set<(state: CameraSourceState) => void>();
 
-/** @param {CameraSourceState} value */
-function cloneState(value) {
+function cloneState(value: CameraSourceState): CameraSourceState {
   return {
     ...value,
     devices: value.devices.map((device) => ({ ...device })),
   };
 }
 
-/** @returns {CameraSourceState} */
 export function getCameraSourceState() {
   return cloneState(state);
 }
 
-/**
- * @param {Partial<CameraSourceState>} patch
- * @returns {void}
- */
-export function updateCameraSourceState(patch) {
+export function updateCameraSourceState(patch: Partial<CameraSourceState>) {
   state = {
     ...state,
     ...patch,
@@ -63,11 +60,9 @@ export function updateCameraSourceState(patch) {
   for (const listener of listeners) listener(snapshot);
 }
 
-/**
- * @param {(state: CameraSourceState) => void} listener
- * @returns {() => void}
- */
-export function subscribeCameraSourceState(listener) {
+export function subscribeCameraSourceState(
+  listener: (state: CameraSourceState) => void,
+): () => void {
   listeners.add(listener);
   listener(getCameraSourceState());
   return () => listeners.delete(listener);
@@ -76,13 +71,12 @@ export function subscribeCameraSourceState(listener) {
 /**
  * Choose the device shown in the camera select.
  * An unknown preferred id falls through to the first real device.
- *
- * @param {CameraDeviceInput[] | null | undefined} devices
- * @param {string | null | undefined} preferredId
- * @param {string | null | undefined} currentId
- * @returns {Pick<CameraSourceState, 'devices' | 'devicesStatus' | 'selectDisabled' | 'deviceId'>}
  */
-export function resolveCameraDeviceSelection(devices, preferredId, currentId) {
+export function resolveCameraDeviceSelection(
+  devices?: CameraDeviceInput[] | null,
+  preferredId?: string | null,
+  currentId?: string | null,
+): CameraDeviceSelection {
   const list = Array.isArray(devices) ? devices : [];
   if (list.length === 0) {
     return {
@@ -107,7 +101,6 @@ export function resolveCameraDeviceSelection(devices, preferredId, currentId) {
   };
 }
 
-/** @returns {void} */
 export function resetCameraSourceState() {
   state = cloneState(initialState);
   const snapshot = getCameraSourceState();

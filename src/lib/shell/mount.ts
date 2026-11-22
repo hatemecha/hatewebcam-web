@@ -1,7 +1,7 @@
 import { mount } from 'svelte';
 import AppHeader from './AppHeader.svelte';
 import SkipLink from './SkipLink.svelte';
-import { updateShellState, type ShellState } from './shell-bridge.mjs';
+import { updateShellState, type ShellState } from './shell-bridge.ts';
 import type { ShellAdapter } from './types';
 
 export function mountSkipLink(target: HTMLElement | null) {

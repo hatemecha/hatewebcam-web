@@ -1,10 +1,10 @@
 import { normalizePreviewQuality } from './constants.mjs';
-import { translate } from '../i18n.mjs';
+import { translateCurrent } from '../../src/lib/i18n/translate.ts';
 import {
   getCameraSourceState,
   resolveCameraDeviceSelection,
   updateCameraSourceState,
-} from '../../src/lib/webcam/camera-source-bridge.mjs';
+} from '../../src/lib/webcam/camera-source-bridge.ts';
 import {
   deriveDetectorExtras,
   replaceWebcamPanelState,
@@ -83,7 +83,7 @@ export function applyStorageMixin(proto) {
       },
       profiles: Object.keys(this.loadProfiles?.() || {}),
       selectedProfile: this.selectedProfile || '',
-      previewQualityLabel: translate(
+      previewQualityLabel: translateCurrent(
         this.getCurrentPreviewQualityPreset?.().label || 'Balanceada',
       ),
     });
@@ -1196,7 +1196,7 @@ export function applyStorageMixin(proto) {
   proto.resetWebcamConfiguration = async function () {
     if (
       !confirm(
-        translate(
+        translateCurrent(
           '¿Restablecer toda la configuración de webcam? Los perfiles guardados no se eliminarán.',
         ),
       )

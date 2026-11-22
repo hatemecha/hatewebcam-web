@@ -1,4 +1,4 @@
-import type { PerformanceMode } from './camera-source-bridge.mjs';
+import type { PerformanceMode } from './camera-source-bridge.ts';
 
 export interface CameraSourceAdapter {
   toggleCamera(): void;
