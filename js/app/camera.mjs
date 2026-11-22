@@ -254,6 +254,7 @@ export function applyCameraMixin(proto) {
       if (this.isRecording) this.stopRecording(true);
       this.cancelPhotoCountdown(false);
 
+      this.cameraRequest += 1;
       this.cameraManager.stop();
       this.isRunning = false;
       this.cancelRenderLoop();
@@ -266,6 +267,12 @@ export function applyCameraMixin(proto) {
     }
 
     if (!this.isRunning) {
+      if (
+        this.cameraUiState === 'requesting' ||
+        this.cameraUiState === 'starting'
+      )
+        return;
+      const request = ++this.cameraRequest;
       const requestedDeviceId =
         getCameraSourceState().deviceId || this.preferredDeviceId || null;
       this.setCameraState('requesting');
@@ -277,21 +284,16 @@ export function applyCameraMixin(proto) {
           onPermissionGranted: () => this.setCameraState('starting'),
         },
       );
+      if (request !== this.cameraRequest || this.sourceMode !== 'camera')
+        return;
       if (ok) {
         this.isRunning = true;
         this.setCameraState('running');
         this.updatePreviewPlaceholder();
         updateCameraSourceState({ running: true });
 
-        this.videoEl.addEventListener(
-          'loadedmetadata',
-          () => {
-            const { sourceWidth, sourceHeight } =
-              this.getSourceFrameDimensions();
-            this.syncPreviewCanvasMetrics(sourceWidth, sourceHeight, true);
-          },
-          { once: true },
-        );
+        const { sourceWidth, sourceHeight } = this.getSourceFrameDimensions();
+        this.syncPreviewCanvasMetrics(sourceWidth, sourceHeight, true);
 
         this.frameCount = 0;
         this.lastFpsTime = performance.now();
@@ -337,6 +339,7 @@ export function applyCameraMixin(proto) {
     this.saveConfig(cfg);
     if (!this.isRunning) return;
 
+    const request = ++this.cameraRequest;
     updateCameraSourceState({ selectDisabled: true });
     try {
       this.setCameraState('starting');
@@ -344,6 +347,8 @@ export function applyCameraMixin(proto) {
         ...this.getCameraStartOptions(),
         onPermissionGranted: () => this.setCameraState('starting'),
       });
+      if (request !== this.cameraRequest || this.sourceMode !== 'camera')
+        return;
       if (!ok)
         throw this.cameraManager.lastError || new Error('camera_switch_failed');
       this.setCameraState('running');
@@ -351,6 +356,8 @@ export function applyCameraMixin(proto) {
       this.preferredDeviceId = settings.deviceId || this.preferredDeviceId;
       void this.refreshCameraDevices(this.preferredDeviceId);
     } catch (err) {
+      if (request !== this.cameraRequest || this.sourceMode !== 'camera')
+        return;
       console.error('Error switching camera:', err);
       this.setCameraState(this.classifyCameraError(err), err, { focus: true });
       this.showStatus(
@@ -360,7 +367,9 @@ export function applyCameraMixin(proto) {
       );
       setTimeout(() => this.hideStatus(this.captureStatus), 2200);
     } finally {
-      updateCameraSourceState({ selectDisabled: false });
+      if (request === this.cameraRequest && this.sourceMode === 'camera') {
+        updateCameraSourceState({ selectDisabled: false });
+      }
     }
   };
 

@@ -1,15 +1,18 @@
-/**
- * CameraManager - WebRTC camera capture
- */
+export interface CameraStartOptions {
+  width?: number;
+  height?: number;
+  fps?: number;
+  onPermissionGranted?: () => void;
+}
+
 export class CameraManager {
-  constructor() {
-    this.stream = null;
-    this.videoElement = null;
-    this.devices = [];
-    this.currentDeviceId = null;
-    this.running = false;
-    this.lastError = null;
-  }
+  stream: MediaStream | null = null;
+  private videoElement: HTMLVideoElement | null = null;
+  devices: MediaDeviceInfo[] = [];
+  currentDeviceId: string | null = null;
+  private running = false;
+  lastError: unknown = null;
+  private request = 0;
 
   /**
    * Enumerate available video input devices.
@@ -37,9 +40,14 @@ export class CameraManager {
   /**
    * Start camera stream
    */
-  async start(videoElement, deviceId = null, opts = {}) {
+  async start(
+    videoElement: HTMLVideoElement,
+    deviceId: string | null = null,
+    opts: CameraStartOptions = {},
+  ) {
+    this.stop();
     this.videoElement = videoElement;
-
+    const request = this.request;
     if (!navigator.mediaDevices?.getUserMedia) {
       this.lastError = new Error(
         'getUserMedia no esta disponible en este navegador.',
@@ -50,26 +58,27 @@ export class CameraManager {
     const constraints = this._buildVideoConstraints(deviceId, opts);
 
     try {
-      if (this.stream) {
-        this.stop();
-      }
-
-      await this._startWithConstraints(constraints, deviceId, opts);
-      this.lastError = null;
-      return true;
+      return await this.startWithConstraints(
+        videoElement,
+        constraints,
+        deviceId,
+        opts,
+        request,
+      );
     } catch (e) {
+      if (request !== this.request) return false;
       // Fallback: if selected device fails, retry with default camera.
       if (deviceId) {
         try {
-          if (this.stream) this.stop();
-          await this._startWithConstraints(
+          return await this.startWithConstraints(
+            videoElement,
             this._buildVideoConstraints(null, opts),
             null,
             opts,
+            request,
           );
-          this.lastError = null;
-          return true;
         } catch (fallbackError) {
+          if (request !== this.request) return false;
           if (!this._isExpectedCameraAccessError(fallbackError)) {
             console.warn(
               'Error starting camera (fallback failed):',
@@ -88,8 +97,8 @@ export class CameraManager {
     }
   }
 
-  _isExpectedCameraAccessError(error) {
-    const name = error && error.name ? error.name : '';
+  private _isExpectedCameraAccessError(error: unknown) {
+    const name = (error as { name?: string } | null)?.name || '';
     return [
       'NotAllowedError',
       'SecurityError',
@@ -102,15 +111,18 @@ export class CameraManager {
     ].includes(name);
   }
 
-  _buildVideoConstraints(deviceId = null, opts = {}) {
+  _buildVideoConstraints(
+    deviceId: string | null = null,
+    opts: CameraStartOptions = {},
+  ) {
     const ua =
       typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
     const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
-    const deviceMemory =
-      typeof navigator !== 'undefined' &&
-      typeof navigator.deviceMemory === 'number'
+    const memory =
+      typeof navigator !== 'undefined' && 'deviceMemory' in navigator
         ? navigator.deviceMemory
-        : 0;
+        : undefined;
+    const deviceMemory = typeof memory === 'number' ? memory : 0;
     const hardwareConcurrency =
       typeof navigator !== 'undefined' &&
       typeof navigator.hardwareConcurrency === 'number'
@@ -132,46 +144,50 @@ export class CameraManager {
     const height = opts.height || defaultHeight;
     const fps = opts.fps || defaultFps;
 
-    const constraints = {
-      video: {
-        width: { ideal: width, max: maxWidth },
-        height: { ideal: height, max: maxHeight },
-        frameRate: { ideal: fps },
-      },
-      audio: false,
+    const video: MediaTrackConstraints = {
+      width: { ideal: width, max: maxWidth },
+      height: { ideal: height, max: maxHeight },
+      frameRate: { ideal: fps },
     };
 
     if (deviceId) {
-      constraints.video.deviceId = { exact: deviceId };
+      video.deviceId = { exact: deviceId };
     } else if (isMobile) {
-      constraints.video.facingMode = { ideal: 'user' };
+      video.facingMode = { ideal: 'user' };
     }
 
-    return constraints;
+    return { video, audio: false };
   }
 
-  async _startWithConstraints(constraints, deviceId = null, opts = {}) {
+  private async startWithConstraints(
+    videoElement: HTMLVideoElement,
+    constraints: MediaStreamConstraints,
+    deviceId: string | null,
+    opts: CameraStartOptions,
+    request: number,
+  ): Promise<boolean> {
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
-    if (typeof opts.onPermissionGranted === 'function') {
-      opts.onPermissionGranted();
+    if (request !== this.request) {
+      stream.getTracks().forEach((track) => track.stop());
+      return false;
     }
     this.stream = stream;
-    this.videoElement.srcObject = stream;
 
     try {
-      await this.videoElement.play();
+      opts.onPermissionGranted?.();
+      if (request !== this.request) return false;
+      videoElement.srcObject = stream;
+      await videoElement.play();
+      if (request !== this.request) return false;
 
       const [track] = stream.getVideoTracks();
       const settings = track ? track.getSettings() : {};
       this.currentDeviceId = deviceId || settings.deviceId || null;
       this.running = true;
+      this.lastError = null;
+      return true;
     } catch (error) {
-      stream.getTracks().forEach((track) => track.stop());
-      if (this.stream === stream) this.stream = null;
-      if (this.videoElement?.srcObject === stream)
-        this.videoElement.srcObject = null;
-      this.currentDeviceId = null;
-      this.running = false;
+      if (request === this.request) this.releaseStream();
       throw error;
     }
   }
@@ -180,13 +196,15 @@ export class CameraManager {
    * Stop camera stream
    */
   stop() {
-    if (this.stream) {
-      this.stream.getTracks().forEach((t) => t.stop());
-      this.stream = null;
-    }
-    if (this.videoElement) {
+    this.request += 1;
+    this.releaseStream();
+  }
+
+  private releaseStream() {
+    this.stream?.getTracks().forEach((track) => track.stop());
+    if (this.videoElement && this.videoElement.srcObject === this.stream)
       this.videoElement.srcObject = null;
-    }
+    this.stream = null;
     this.running = false;
     this.currentDeviceId = null;
   }
@@ -194,7 +212,7 @@ export class CameraManager {
   /**
    * Switch to a different camera
    */
-  async switchCamera(deviceId, opts = {}) {
+  async switchCamera(deviceId: string | null, opts: CameraStartOptions = {}) {
     if (this.running && this.videoElement) {
       return this.start(this.videoElement, deviceId, opts);
     }

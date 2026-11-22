@@ -23,7 +23,7 @@ import {
   snapFrameRate,
   shouldAppendFinalFrame,
 } from '../js/video-export.mjs';
-import { CameraManager } from '../js/core/camera-manager.mjs';
+import { CameraManager } from '../js/core/camera-manager.ts';
 import {
   classifyCameraError,
   getCameraStatePresentation,

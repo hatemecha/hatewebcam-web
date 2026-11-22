@@ -19,11 +19,13 @@ export function applyVideoEditorSourceMixin(proto) {
         faceConfig: this.faceDetectionEffect?.getConfig() || null,
         blinkConfig: this.blinkDetectionEffect?.getConfig() || null,
       };
-      if (this.isRunning) {
-        this.cameraManager.stop();
-        this.isRunning = false;
-        this.cancelRenderLoop();
-      }
+      if (this.isRecording) this.stopRecording(true);
+      this.cancelPhotoCountdown(false);
+      this.cameraRequest += 1;
+      this.cameraManager.stop();
+      this.isRunning = false;
+      this.cancelRenderLoop();
+      this.setCameraState('off');
       this.sourceMode = 'video';
       document.body.classList.add('video-mode');
       updateEditorUiState({ mode: 'video' });

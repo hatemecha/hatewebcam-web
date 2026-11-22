@@ -37,6 +37,7 @@ export default [
       'vendor/**',
       'coverage/**',
       'playwright-report/**',
+      'test-results/**',
       '.impeccable/**',
     ],
   },

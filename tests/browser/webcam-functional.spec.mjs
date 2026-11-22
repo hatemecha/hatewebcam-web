@@ -86,6 +86,42 @@ test('retry starts the camera after a transient error', async ({ page }) => {
   await waitForCamera(page);
 });
 
+test('switching to video releases a camera stream acquired after the mode change', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const devices = navigator.mediaDevices;
+    const acquire = devices.getUserMedia.bind(devices);
+    devices.getUserMedia = async (constraints) => {
+      const stream = await acquire(constraints);
+      window.delayedCameraStream = stream;
+      await new Promise((resolve) => {
+        window.releaseCameraRequest = resolve;
+      });
+      return stream;
+    };
+  });
+  await openWebcam(page);
+  await expect
+    .poll(() => page.evaluate(() => !!window.releaseCameraRequest))
+    .toBe(true);
+  await page.locator('#btnVideoMode').click();
+  await expect(page.locator('body')).toHaveClass(/video-mode/);
+  await page.evaluate(() => window.releaseCameraRequest());
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.delayedCameraStream
+          .getVideoTracks()
+          .every((track) => track.readyState === 'ended'),
+      ),
+    )
+    .toBe(true);
+  expect(
+    await page.locator('#videoElement').evaluate((video) => video.srcObject),
+  ).toBeNull();
+});
+
 test('mirror is quick, accessible and persisted', async ({ page }) => {
   await openWebcam(page);
   const mirror = page.locator('#btnMirrorQuick');

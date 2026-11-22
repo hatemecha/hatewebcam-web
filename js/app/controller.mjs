@@ -29,7 +29,7 @@ import {
   normalizePreviewQuality,
   normalizePerformanceMode,
 } from './constants.mjs';
-import { CameraManager } from '../core/camera-manager.mjs';
+import { CameraManager } from '../core/camera-manager.ts';
 import { EffectManager } from '../effects/effect-manager.mjs';
 import { setupDom } from './dom.mjs';
 import { applyStorageMixin } from './settings.mjs';
@@ -54,6 +54,7 @@ export class AppController {
     });
 
     this.cameraManager = new CameraManager();
+    this.cameraRequest = 0;
     this.isRunning = false;
     this.preferredDeviceId = null;
     this.webcamSessionState = null;

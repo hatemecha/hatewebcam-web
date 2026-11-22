@@ -9,20 +9,21 @@ export interface SettingsStoreOptions {
 }
 
 export class SettingsStore {
-  private storage: StorageLike | null;
+  private storage: StorageLike | null | undefined;
   private onError: ((error: unknown) => void) | null;
 
-  constructor({
-    storage = globalThis.localStorage as StorageLike | null,
-    onError = null,
-  }: SettingsStoreOptions = {}) {
+  constructor({ storage, onError = null }: SettingsStoreOptions = {}) {
     this.storage = storage;
     this.onError = onError;
   }
 
+  private get activeStorage(): StorageLike | null | undefined {
+    return this.storage === undefined ? globalThis.localStorage : this.storage;
+  }
+
   loadJson<T>(key: string, fallbackValue: T): T {
     try {
-      const raw = this.storage?.getItem(key);
+      const raw = this.activeStorage?.getItem(key);
       return raw ? (JSON.parse(raw) as T) : fallbackValue;
     } catch (err) {
       console.warn(
@@ -45,7 +46,7 @@ export class SettingsStore {
 
   saveJson(key: string, value: unknown): boolean {
     try {
-      this.storage?.setItem(key, JSON.stringify(value));
+      this.activeStorage?.setItem(key, JSON.stringify(value));
       return true;
     } catch (err) {
       if (this.onError) this.onError(err);
