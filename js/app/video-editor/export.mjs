@@ -4,6 +4,7 @@ import {
   formatObservedExportProgress,
   getEditorChromaColor,
 } from '../../video-export.ts';
+import { normalizeVideoFps } from '../media-format.ts';
 import { patchExportModalState } from '../../../src/lib/capture/session-state.ts';
 import { updateShellState } from '../../../src/lib/shell/shell-bridge.ts';
 import { translateCurrent } from '../../../src/lib/i18n/translate.ts';
@@ -41,6 +42,15 @@ export function applyVideoEditorExportMixin(proto) {
 
   proto.getEffectiveVideoExportFps = function () {
     return this.buildVideoExportPreflight()?.fps || null;
+  };
+
+  proto.getVideoExportFps = function () {
+    return (
+      this.videoExportPreflight?.fps ||
+      this.getEffectiveVideoExportFps() ||
+      normalizeVideoFps(this.videoSourceFps) ||
+      this.DEFAULT_CAMERA_FPS
+    );
   };
 
   proto.formatVideoExportPreflight = function (preflight) {
@@ -475,7 +485,7 @@ export function applyVideoEditorExportMixin(proto) {
       { stage: 'canvas', time },
     );
     if (exportMode === 'effects-chroma') {
-      this.ensureRecordingCanvas();
+      this.capture.ensureRecordingCanvas();
       this.renderEffectsOnlyFrame(
         this.renderEngine.recordingCanvas,
         this.renderEngine.recordingCtx,
@@ -484,7 +494,7 @@ export function applyVideoEditorExportMixin(proto) {
         'export',
       );
     } else {
-      this.renderSourceFrameBuffer(
+      this.capture.renderSourceFrameBuffer(
         !!this.imageSettings.qualityEnhancer,
         'export',
       );
@@ -549,7 +559,7 @@ export function applyVideoEditorExportMixin(proto) {
     const end = this.editor.timeline.trimEnd;
     const mode = preflight.mode;
     const totalFrames = preflight.totalFrames;
-    this.ensureRecordingCanvas();
+    this.capture.ensureRecordingCanvas();
     this.formatExportDebugInfo = formatExportDebugInfo;
     this.editor.exportSession.totalFrames = totalFrames;
     const bitrate = preflight.bitrate;
@@ -678,7 +688,7 @@ export function applyVideoEditorExportMixin(proto) {
         this.videoExportPreflight = null;
         return;
       }
-      this.ensureRecordingCanvas();
+      this.capture.ensureRecordingCanvas();
       const diagnosis = await diagnoseVideoExportSupport({
         width: preflight.width,
         height: preflight.height,

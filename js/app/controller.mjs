@@ -28,10 +28,6 @@ import {
   normalizePreviewQuality,
   normalizePerformanceMode,
 } from './constants.ts';
-import {
-  PhotoCountdown,
-  RecordingSession,
-} from '../../src/lib/capture/media-sessions.ts';
 import { EffectManager } from '../effects/effect-manager.ts';
 import { setupDom } from './dom.mjs';
 import { applyStorageMixin } from './settings.mjs';
@@ -44,7 +40,17 @@ import { applyColorPickMixin } from './color-pick.mjs';
 import { applyEffectConfigUIMixin } from './effect-config.mjs';
 import { applyUIHelpersMixin } from './ui-helpers.mjs';
 import { applyProfilesMixin } from './profiles.mjs';
-import { applyCaptureMixin } from './capture.mjs';
+import { WebcamCapture } from './webcam-capture.ts';
+import { downloadBlob, hideStatus, showStatus } from './feedback.ts';
+import {
+  formatBytes,
+  formatDuration,
+  formatDurationDetailed,
+  formatVideoBitrate,
+  formatVideoFps,
+  normalizeVideoFps,
+  timestamp,
+} from './media-format.ts';
 import { SettingsStore } from './settings-store.ts';
 import { RenderEngine } from './render-engine.ts';
 
@@ -77,11 +83,19 @@ export class AppController {
     this.saveQuickDetectorSettingsTimer = null;
     this.saveEffectSettingsTimer = null;
 
-    this.recordingSession = new RecordingSession();
-    this.photoCountdown = new PhotoCountdown();
-    this.pendingCapture = null;
-    this.photoPreviewRenderToken = 0;
-    this.previewPhotoEnhancerDebounceId = null;
+    this.capture = new WebcamCapture(this);
+    Object.assign(this, {
+      downloadBlob,
+      hideStatus,
+      showStatus,
+      formatBytes,
+      formatDuration,
+      formatDurationDetailed,
+      formatVideoBitrate,
+      formatVideoFps,
+      normalizeVideoFps,
+      timestamp,
+    });
 
     this.sourceMode = 'camera';
     this.requestedSourceMode = 'camera';
@@ -256,4 +270,3 @@ applyColorPickMixin(AppController.prototype);
 applyEffectConfigUIMixin(AppController.prototype);
 applyUIHelpersMixin(AppController.prototype);
 applyProfilesMixin(AppController.prototype);
-applyCaptureMixin(AppController.prototype);

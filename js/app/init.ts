@@ -1,6 +1,7 @@
 import { updateCameraSourceState } from '../../src/lib/webcam/camera-source-bridge.ts';
 import type { ImageSettings } from './constants.ts';
 import type { SettingsStore } from './settings-store.ts';
+import type { WebcamCapture } from './webcam-capture.ts';
 import type { WebcamCamera } from './webcam-camera.ts';
 import { loadWebcamSettings } from './webcam-settings.ts';
 
@@ -34,7 +35,7 @@ interface WebcamStartup {
   syncMobileViewportState(): void;
   setMobileFxPanelVisible(visible: boolean): void;
   isExportDebugVisible(): boolean;
-  updateCaptureButtons(): void;
+  capture: Pick<WebcamCapture, 'updateCaptureButtons'>;
   restoreActiveDetectors(config: Record<string, unknown>): Promise<void>;
 }
 
@@ -80,7 +81,7 @@ export async function initializeWebcam(app: WebcamStartup) {
   app.setMobileFxPanelVisible(false);
   if (app.isExportDebugVisible())
     document.body.classList.add('export-debug-visible');
-  app.updateCaptureButtons();
+  app.capture.updateCaptureButtons();
   app.camera.setCameraState('off');
   void app.restoreActiveDetectors(cfg);
   void app.camera.toggleCamera(true);

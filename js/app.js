@@ -61,10 +61,10 @@ try {
   });
   mountCaptureBar(document.querySelector('#captureBarMount'), {
     takePhoto: () => {
-      whenControllerReady(() => controller.requestPhotoCapture());
+      whenControllerReady(() => controller.capture.requestPhotoCapture());
     },
     toggleRecording: () => {
-      whenControllerReady(() => controller.toggleRecording());
+      whenControllerReady(() => controller.capture.toggleRecording());
     },
     setCaptureTimer: (seconds) => {
       whenControllerReady(() => controller.setCaptureTimerSeconds(seconds));
@@ -220,13 +220,13 @@ try {
     takePhoto: () => {
       whenControllerReady(() => {
         controller.setMobileFxPanelVisible(false);
-        controller.requestPhotoCapture();
+        controller.capture.requestPhotoCapture();
       });
     },
     toggleRecording: () => {
       whenControllerReady(() => {
         controller.setMobileFxPanelVisible(false);
-        controller.toggleRecording();
+        controller.capture.toggleRecording();
       });
     },
     toggleDetector: (type, checked) => {
@@ -267,19 +267,19 @@ try {
   mountDetectorChips(document.querySelector('#effectsInfo'));
   mountCaptureModal(document.querySelector('#captureModalTemplateSlot'), {
     download: () => {
-      whenControllerReady(() => controller.downloadPendingCapture());
+      whenControllerReady(() => controller.capture.downloadPendingCapture());
     },
     discard: () => {
-      whenControllerReady(() => controller.closeCapturePreview(true));
+      whenControllerReady(() => controller.capture.closeCapturePreview(true));
     },
     setEnhancer: (enabled) => {
       whenControllerReady(() =>
-        controller.onPreviewPhotoEnhancerToggle(enabled),
+        controller.capture.onPreviewPhotoEnhancerToggle(enabled),
       );
     },
     setEnhancerStrength: (strength) => {
       whenControllerReady(() =>
-        controller.onPreviewPhotoEnhancerStrengthInput(strength),
+        controller.capture.onPreviewPhotoEnhancerStrengthInput(strength),
       );
     },
   });
@@ -306,9 +306,9 @@ try {
       controller.hideStatus?.(controller.videoEditorStatus);
     }
     controller.publishWebcamPanel?.();
-    controller.updateCaptureButtons?.();
-    controller.publishCapturePreview?.();
-    controller.publishCaptureChrome?.();
+    controller.capture?.updateCaptureButtons();
+    controller.capture?.publishCapturePreview();
+    controller.capture?.publishCaptureChrome();
     updateShellState({ locale: getLocale() });
   };
   subscribeLocale(() => {

@@ -7,56 +7,149 @@ import {
   formatBytes,
   formatDuration,
   formatDurationDetailed,
-  formatVideoBitrate,
-  formatVideoFps,
   getRecommendedVideoBitrate,
-  normalizeVideoFps,
   pickSupportedMimeType,
   timestamp,
 } from './media-format.ts';
 
-/** @param {import('./controller.mjs').AppController} proto */
-export function applyCaptureMixin(proto) {
-  proto.isCapturePreviewOpen = function () {
-    return !!this.capturePreviewOpen;
-  };
+import {
+  PhotoCountdown,
+  RecordingSession,
+} from '../../src/lib/capture/media-sessions.ts';
+import { DEFAULT_CAMERA_FPS, type ImageSettings } from './constants.ts';
+import { downloadBlob, hideStatus, showStatus } from './feedback.ts';
+import type { RenderEngine } from './render-engine.ts';
+import type { WebcamCamera } from './webcam-camera.ts';
 
-  proto.publishCaptureChrome = function () {
+type CaptureKind = 'photo' | 'video';
+
+interface CaptureMetadata {
+  width?: number;
+  height?: number;
+  size?: number;
+  format?: string;
+  durationSec?: number;
+  jpegQuality?: number;
+  fps?: number;
+  bitrate?: number;
+  enhanced?: boolean;
+  enhancerStrength?: number;
+}
+
+interface Capture {
+  kind: CaptureKind;
+  blob: Blob;
+  filename: string;
+  meta: CaptureMetadata;
+  baseCanvas?: HTMLCanvasElement;
+}
+
+interface PendingCapture extends Capture {
+  objectUrl: string;
+  previewEnhancerEnabled: boolean;
+  previewEnhancerStrength: number;
+}
+
+interface CaptureHost {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  videoEl: HTMLVideoElement;
+  sourceMode: 'camera' | 'video';
+  isRunning: boolean;
+  mobileFxOpen: boolean;
+  captureStatus: HTMLElement | null;
+  chkBlobTracking: HTMLInputElement | null;
+  chkFaceDetection: HTMLInputElement | null;
+  videoFormatSelect: HTMLSelectElement | null;
+  sldJpegQuality: HTMLInputElement | null;
+  chkQualityEnhancer: HTMLInputElement | null;
+  sldQualityEnhancerStrength: HTMLInputElement | null;
+  imageSettings: ImageSettings;
+  camera: Pick<WebcamCamera, 'getStreamSettings'>;
+  renderEngine: RenderEngine;
+  videoExportPreflight: { width: number; height: number; fps: number } | null;
+  videoSourceAverageBitrate: number;
+  getSourceFrameDimensions(): { sourceWidth: number; sourceHeight: number };
+  getEffectiveFrameDimensions(
+    width: number,
+    height: number,
+  ): { width: number; height: number };
+  renderProcessedFrame(
+    canvas: HTMLCanvasElement,
+    ctx: CanvasRenderingContext2D,
+    mode: string,
+  ): void;
+  applySharpenFilter(imageData: ImageData, amount: number): void;
+  normalizeCaptureTimerSeconds(value: unknown): number;
+  toggleVisualFxBypass?(): void;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+export class WebcamCapture {
+  private readonly photoCountdown = new PhotoCountdown();
+  private readonly recordingSession = new RecordingSession();
+  private pendingCapture: PendingCapture | null = null;
+  private photoPreviewRenderToken = 0;
+  private captureFlashToken = 0;
+  private previewPhotoEnhancerDebounceId: ReturnType<typeof setTimeout> | null =
+    null;
+  private shutterAudioContext: AudioContext | null = null;
+  private shutterSoundArmed = false;
+
+  constructor(private readonly host: CaptureHost) {}
+
+  get recording() {
+    return this.recordingSession.active;
+  }
+
+  dispose(): void {
+    this.photoCountdown.cancel();
+    this.recordingSession.dispose();
+    this.clearPendingCapture();
+    void this.shutterAudioContext?.close().catch(() => {});
+    this.shutterAudioContext = null;
+    this.shutterSoundArmed = false;
+  }
+
+  publishCaptureChrome() {
     const seconds = Math.floor(this.recordingSession.elapsedSeconds);
     const format = this.recordingSession.format === 'webm' ? 'WebM' : 'MP4';
     patchCaptureChromeState({
-      cameraRunning: !!this.isRunning,
+      cameraRunning: !!this.host.isRunning,
       recording: !!this.recordingSession.active,
       countdownActive: !!this.photoCountdown.active,
       countdownRemaining: this.photoCountdown.remaining || 0,
       countdownTotal: this.photoCountdown.total || 0,
-      previewOpen: !!this.capturePreviewOpen,
-      mobileFxOpen: !!this.mobileFxOpen,
+      previewOpen: !!this.pendingCapture,
+      mobileFxOpen: !!this.host.mobileFxOpen,
       recordingTime: this.recordingSession.active
-        ? this.formatDuration(seconds)
+        ? formatDuration(seconds)
         : '00:00',
       recordingFormat: this.recordingSession.active ? format : 'WebM',
       flashToken: this.captureFlashToken || 0,
-      blobEnabled: !!this.chkBlobTracking?.checked,
-      faceEnabled: !!this.chkFaceDetection?.checked,
+      blobEnabled: !!this.host.chkBlobTracking?.checked,
+      faceEnabled: !!this.host.chkFaceDetection?.checked,
       lockCaptureSettings: !!(
         this.recordingSession.active ||
-        this.capturePreviewOpen ||
+        this.pendingCapture ||
         this.photoCountdown.active
       ),
-      lockDetectors: !!this.capturePreviewOpen,
+      lockDetectors: !!this.pendingCapture,
     });
-  };
+  }
 
-  proto.buildCapturePreviewRows = function (meta, kind) {
-    const rows = [
+  private buildCapturePreviewRows(meta: CaptureMetadata, kind: CaptureKind) {
+    const rows: [string, string][] = [
       ['Tipo', kind === 'video' ? 'Video' : 'Foto'],
       ['Resolución', `${meta.width || 0} × ${meta.height || 0}`],
       ['Formato', meta.format || (kind === 'video' ? 'WEBM/MP4' : 'JPEG')],
-      ['Tamaño', this.formatBytes(meta.size || 0)],
+      ['Tamaño', formatBytes(meta.size || 0)],
     ];
     if (meta.durationSec != null)
-      rows.push(['Duración', this.formatDurationDetailed(meta.durationSec)]);
+      rows.push(['Duración', formatDurationDetailed(meta.durationSec)]);
     if (meta.jpegQuality != null)
       rows.push(['Calidad JPEG', `${meta.jpegQuality}%`]);
     if (meta.fps != null) rows.push(['FPS', `${meta.fps}`]);
@@ -71,11 +164,11 @@ export function applyCaptureMixin(proto) {
         : 'Desactivado',
     ]);
     return rows.map(([key, value]) => ({ key, value }));
-  };
+  }
 
-  proto.publishCapturePreview = function () {
+  publishCapturePreview() {
     const capture = this.pendingCapture;
-    if (!this.capturePreviewOpen || !capture) {
+    if (!this.pendingCapture || !capture) {
       patchCapturePreviewState({
         open: false,
         kind: 'none',
@@ -85,7 +178,8 @@ export function applyCaptureMixin(proto) {
         mediaUrl: '',
         rows: [],
         enhancerEnabled: false,
-        enhancerStrength: this.imageSettings?.qualityEnhancerStrength ?? 35,
+        enhancerStrength:
+          this.host.imageSettings?.qualityEnhancerStrength ?? 35,
       });
       return;
     }
@@ -99,64 +193,52 @@ export function applyCaptureMixin(proto) {
       mediaUrl: capture.objectUrl || '',
       rows: this.buildCapturePreviewRows(capture.meta || {}, kind),
       enhancerEnabled: !!capture.previewEnhancerEnabled,
-      enhancerStrength: this.toFiniteInt(
-        capture.previewEnhancerStrength,
-        this.imageSettings?.qualityEnhancerStrength ?? 35,
-      ),
+      enhancerStrength: capture.previewEnhancerStrength,
     });
-  };
+  }
 
-  proto.onGlobalKeyDown = function (e) {
+  onGlobalKeyDown(e: KeyboardEvent) {
     if (
-      this.sourceMode === 'video' &&
+      this.host.sourceMode === 'video' &&
       !e.metaKey &&
       !e.ctrlKey &&
       !e.altKey &&
       e.key.toLowerCase() === 'b' &&
-      !['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target?.tagName)
+      !(
+        e.target instanceof HTMLElement &&
+        ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)
+      )
     ) {
-      this.toggleVisualFxBypass?.();
+      this.host.toggleVisualFxBypass?.();
     }
-  };
+  }
 
-  proto.isPendingPhotoCapture = function () {
-    return !!this.pendingCapture && this.pendingCapture.kind === 'photo';
-  };
-
-  proto.updatePreviewPhotoEnhancerControls = function () {
-    this.publishCapturePreview();
-  };
-
-  proto.syncPreviewPhotoTools = function () {
-    if (!this.isPendingPhotoCapture()) {
+  private syncPreviewPhotoTools() {
+    if (this.pendingCapture?.kind !== 'photo') {
       this.publishCapturePreview();
       return;
     }
-    const parsedStrength = parseInt(
-      this.pendingCapture.previewEnhancerStrength,
-      10,
-    );
-    const strength = this.clamp(
+    const parsedStrength = this.pendingCapture.previewEnhancerStrength;
+    const strength = clamp(
       Number.isFinite(parsedStrength)
         ? parsedStrength
-        : this.imageSettings.qualityEnhancerStrength,
+        : this.host.imageSettings.qualityEnhancerStrength,
       0,
       100,
     );
     this.pendingCapture.previewEnhancerStrength = strength;
     this.publishCapturePreview();
-  };
+  }
 
-  proto.rebuildPendingPhotoPreview = async function () {
-    if (!this.isPendingPhotoCapture() || !this.pendingCapture.baseCanvas)
+  private async rebuildPendingPhotoPreview() {
+    if (
+      this.pendingCapture?.kind !== 'photo' ||
+      !this.pendingCapture.baseCanvas
+    )
       return;
     const token = ++this.photoPreviewRenderToken;
     const enabled = !!this.pendingCapture.previewEnhancerEnabled;
-    const strength = this.clamp(
-      parseInt(this.pendingCapture.previewEnhancerStrength, 10) || 0,
-      0,
-      100,
-    );
+    const strength = clamp(this.pendingCapture.previewEnhancerStrength, 0, 100);
 
     try {
       const {
@@ -170,7 +252,7 @@ export function applyCaptureMixin(proto) {
       );
       if (
         token !== this.photoPreviewRenderToken ||
-        !this.isPendingPhotoCapture()
+        this.pendingCapture?.kind !== 'photo'
       )
         return;
 
@@ -193,16 +275,16 @@ export function applyCaptureMixin(proto) {
       this.publishCapturePreview();
     } catch (err) {
       console.error('Error rebuilding photo preview:', err);
-      this.showStatus(
-        this.captureStatus,
+      showStatus(
+        this.host.captureStatus,
         'No se pudo aplicar el mejorador a la foto',
         'error',
       );
     }
-  };
+  }
 
-  proto.onPreviewPhotoEnhancerToggle = function (enabled) {
-    if (!this.isPendingPhotoCapture()) return;
+  onPreviewPhotoEnhancerToggle(enabled: boolean) {
+    if (this.pendingCapture?.kind !== 'photo') return;
     if (this.previewPhotoEnhancerDebounceId) {
       clearTimeout(this.previewPhotoEnhancerDebounceId);
       this.previewPhotoEnhancerDebounceId = null;
@@ -210,11 +292,11 @@ export function applyCaptureMixin(proto) {
     this.pendingCapture.previewEnhancerEnabled = !!enabled;
     this.publishCapturePreview();
     this.rebuildPendingPhotoPreview();
-  };
+  }
 
-  proto.onPreviewPhotoEnhancerStrengthInput = function (value) {
-    if (!this.isPendingPhotoCapture()) return;
-    const strength = this.clamp(parseInt(value, 10) || 0, 0, 100);
+  onPreviewPhotoEnhancerStrengthInput(value: number) {
+    if (this.pendingCapture?.kind !== 'photo') return;
+    const strength = clamp(Math.trunc(value) || 0, 0, 100);
     this.pendingCapture.previewEnhancerStrength = strength;
     this.publishCapturePreview();
     if (this.pendingCapture.previewEnhancerEnabled) {
@@ -226,54 +308,58 @@ export function applyCaptureMixin(proto) {
         this.rebuildPendingPhotoPreview();
       }, 180);
     }
-  };
+  }
 
-  proto.cancelPhotoCountdown = function (showMessage = true) {
+  cancelPhotoCountdown(showMessage = true) {
     const wasActive = this.photoCountdown.cancel();
     this.updateCaptureButtons();
 
     if (showMessage && wasActive) {
-      this.showStatus(this.captureStatus, 'Temporizador cancelado', 'warning');
-      setTimeout(() => this.hideStatus(this.captureStatus), 1400);
+      showStatus(this.host.captureStatus, 'Temporizador cancelado', 'warning');
+      setTimeout(() => hideStatus(this.host.captureStatus), 1400);
     }
-  };
+  }
 
-  proto.validatePhotoCaptureReady = function () {
-    if (!this.isRunning) {
-      this.showStatus(
-        this.captureStatus,
+  private validatePhotoCaptureReady() {
+    if (!this.host.isRunning) {
+      showStatus(
+        this.host.captureStatus,
         'Primero encendé la cámara',
         'warning',
       );
       return false;
     }
-    if (this.isCapturePreviewOpen()) {
-      this.showStatus(
-        this.captureStatus,
+    if (this.pendingCapture) {
+      showStatus(
+        this.host.captureStatus,
         'Primero cerrá la vista previa actual',
         'info',
       );
       return false;
     }
-    const { sourceWidth, sourceHeight } = this.getSourceFrameDimensions();
-    if (this.videoEl.readyState < 2 || sourceWidth <= 1 || sourceHeight <= 1) {
-      this.showStatus(
-        this.captureStatus,
+    const { sourceWidth, sourceHeight } = this.host.getSourceFrameDimensions();
+    if (
+      this.host.videoEl.readyState < 2 ||
+      sourceWidth <= 1 ||
+      sourceHeight <= 1
+    ) {
+      showStatus(
+        this.host.captureStatus,
         'Esperá un momento y volvé a sacar la foto',
         'info',
       );
       return false;
     }
     return true;
-  };
+  }
 
-  proto.startPhotoCountdown = function (seconds) {
+  private startPhotoCountdown(seconds: number) {
     this.photoCountdown.start(
       seconds,
       (remaining) => {
         this.publishCaptureChrome();
-        this.showStatus(
-          this.captureStatus,
+        showStatus(
+          this.host.captureStatus,
           translateCurrent('Foto en {seconds} segundos', {
             seconds: remaining,
           }),
@@ -286,22 +372,22 @@ export function applyCaptureMixin(proto) {
       },
     );
     this.updateCaptureButtons();
-    this.showStatus(
-      this.captureStatus,
+    showStatus(
+      this.host.captureStatus,
       translateCurrent('Foto en {seconds} segundos', { seconds }),
       'info',
     );
-  };
+  }
 
-  proto.requestPhotoCapture = function () {
+  requestPhotoCapture() {
     this.armShutterSound();
     if (this.photoCountdown.active) {
       this.cancelPhotoCountdown(true);
       return;
     }
 
-    const timerSeconds = this.normalizeCaptureTimerSeconds(
-      this.imageSettings.captureTimerSeconds,
+    const timerSeconds = this.host.normalizeCaptureTimerSeconds(
+      this.host.imageSettings.captureTimerSeconds,
     );
     if (timerSeconds > 0) {
       if (!this.validatePhotoCaptureReady()) return;
@@ -310,100 +396,89 @@ export function applyCaptureMixin(proto) {
     }
 
     void this.takePhoto();
-  };
+  }
 
-  proto.updateCaptureButtons = function () {
-    const previewOpen = this.isCapturePreviewOpen();
+  updateCaptureButtons() {
+    const previewOpen = this.pendingCapture !== null;
     const lockCaptureSettings =
       this.recordingSession.active || previewOpen || this.photoCountdown.active;
 
-    if (this.videoFormatSelect)
-      this.videoFormatSelect.disabled = lockCaptureSettings;
-    if (this.sldJpegQuality) this.sldJpegQuality.disabled = lockCaptureSettings;
-    if (this.chkQualityEnhancer)
-      this.chkQualityEnhancer.disabled = lockCaptureSettings;
-    if (this.sldQualityEnhancerStrength) {
-      this.sldQualityEnhancerStrength.disabled =
-        lockCaptureSettings || !this.imageSettings.qualityEnhancer;
+    if (this.host.videoFormatSelect)
+      this.host.videoFormatSelect.disabled = lockCaptureSettings;
+    if (this.host.sldJpegQuality)
+      this.host.sldJpegQuality.disabled = lockCaptureSettings;
+    if (this.host.chkQualityEnhancer)
+      this.host.chkQualityEnhancer.disabled = lockCaptureSettings;
+    if (this.host.sldQualityEnhancerStrength) {
+      this.host.sldQualityEnhancerStrength.disabled =
+        lockCaptureSettings || !this.host.imageSettings.qualityEnhancer;
     }
 
-    if (previewOpen) this.mobileFxOpen = false;
+    if (previewOpen) this.host.mobileFxOpen = false;
     this.publishCaptureChrome();
-  };
+  }
 
-  proto.canvasToBlobAsync = function (sourceCanvas, mimeType, quality) {
-    return new Promise((resolve) => {
+  private canvasToBlobAsync(
+    sourceCanvas: HTMLCanvasElement,
+    mimeType: string,
+    quality: number,
+  ) {
+    return new Promise<Blob | null>((resolve) => {
       sourceCanvas.toBlob((blob) => resolve(blob), mimeType, quality);
     });
-  };
+  }
 
-  proto.ensureRecordingCanvas = function () {
-    const { sourceWidth, sourceHeight } = this.getSourceFrameDimensions();
+  ensureRecordingCanvas() {
+    const { sourceWidth, sourceHeight } = this.host.getSourceFrameDimensions();
     let { width: recordingWidth, height: recordingHeight } =
-      this.getEffectiveFrameDimensions(sourceWidth, sourceHeight);
+      this.host.getEffectiveFrameDimensions(sourceWidth, sourceHeight);
     if (
-      this.sourceMode === 'video' &&
-      this.videoExportPreflight?.width &&
-      this.videoExportPreflight?.height
+      this.host.sourceMode === 'video' &&
+      this.host.videoExportPreflight?.width &&
+      this.host.videoExportPreflight?.height
     ) {
-      recordingWidth = this.videoExportPreflight.width;
-      recordingHeight = this.videoExportPreflight.height;
+      recordingWidth = this.host.videoExportPreflight.width;
+      recordingHeight = this.host.videoExportPreflight.height;
     }
-    this.renderEngine.ensureRecordingCanvas(recordingWidth, recordingHeight);
-    return this.renderEngine.recordingCanvas;
-  };
-
-  proto.ensureRecordingEnhancerBuffer = function (width, height) {
-    this.renderEngine.ensureRecordingEnhancerBuffer(width, height);
-    return this.renderEngine.recordingEnhancerCanvas;
-  };
-
-  proto.getPreferredRecordingFps = function () {
-    const sourceFps = Number(this.camera.getStreamSettings().frameRate);
-    return this.clamp(Math.round(sourceFps || this.DEFAULT_CAMERA_FPS), 1, 120);
-  };
-
-  proto.normalizeVideoFps = function (value) {
-    return normalizeVideoFps(value);
-  };
-
-  proto.formatVideoFps = function (value) {
-    return formatVideoFps(value);
-  };
-
-  proto.formatVideoBitrate = function (value) {
-    return formatVideoBitrate(value);
-  };
-
-  proto.getVideoExportFps = function () {
-    return (
-      this.videoExportPreflight?.fps ||
-      this.getEffectiveVideoExportFps?.() ||
-      this.normalizeVideoFps(this.videoSourceFps) ||
-      this.DEFAULT_CAMERA_FPS
+    return this.host.renderEngine.ensureRecordingCanvas(
+      recordingWidth,
+      recordingHeight,
     );
-  };
+  }
 
-  proto.getRecommendedVideoBitrate = function (width, height, fps) {
+  private ensureRecordingEnhancerBuffer(width: number, height: number) {
+    return this.host.renderEngine.ensureRecordingEnhancerBuffer(width, height);
+  }
+
+  private getPreferredRecordingFps() {
+    const sourceFps = Number(this.host.camera.getStreamSettings().frameRate);
+    return clamp(Math.round(sourceFps || DEFAULT_CAMERA_FPS), 1, 120);
+  }
+
+  private getRecommendedVideoBitrate(
+    width: number,
+    height: number,
+    fps: number,
+  ) {
     return getRecommendedVideoBitrate({
       width,
       height,
       fps,
-      qualityEnhancer: !!this.imageSettings.qualityEnhancer,
-      sourceAverageBitrate: this.videoSourceAverageBitrate,
-      defaultFps: this.DEFAULT_CAMERA_FPS,
+      qualityEnhancer: !!this.host.imageSettings.qualityEnhancer,
+      sourceAverageBitrate: this.host.videoSourceAverageBitrate,
+      defaultFps: DEFAULT_CAMERA_FPS,
     });
-  };
+  }
 
-  proto.drawEnhancedFrameToContext = function (
-    targetCtx,
-    sourceCanvas,
-    width,
-    height,
-    strengthPct,
+  private drawEnhancedFrameToContext(
+    targetCtx: CanvasRenderingContext2D,
+    sourceCanvas: HTMLCanvasElement,
+    width: number,
+    height: number,
+    strengthPct: number,
     forExport = false,
   ) {
-    const amount = this.clamp((strengthPct || 0) / 100, 0, 1);
+    const amount = clamp((strengthPct || 0) / 100, 0, 1);
     const brightness = 100 + amount * 4;
     const contrast = 100 + amount * 14;
     const saturation = 100 + amount * 12;
@@ -416,9 +491,9 @@ export function applyCaptureMixin(proto) {
 
     if (forExport && amount > 0.05) {
       const imageData = targetCtx.getImageData(0, 0, width, height);
-      this.applySharpenFilter(
+      this.host.applySharpenFilter(
         imageData,
-        this.clamp(0.18 + amount * 0.62, 0, 1),
+        clamp(0.18 + amount * 0.62, 0, 1),
       );
       targetCtx.putImageData(imageData, 0, 0);
     } else if (!forExport && amount >= 0.22) {
@@ -428,79 +503,82 @@ export function applyCaptureMixin(proto) {
       targetCtx.drawImage(sourceCanvas, 0, 0, width, height);
       targetCtx.restore();
     }
-  };
+  }
 
-  proto.renderSourceFrameBuffer = function (
+  renderSourceFrameBuffer(
     applyQualityEnhancer = false,
-    mode = 'recording',
+    mode: string = 'recording',
   ) {
-    if (this.videoEl.readyState < 2) return;
+    if (this.host.videoEl.readyState < 2) return;
 
     this.ensureRecordingCanvas();
-    if (!this.renderEngine.recordingCanvas || !this.renderEngine.recordingCtx)
+    if (
+      !this.host.renderEngine.recordingCanvas ||
+      !this.host.renderEngine.recordingCtx
+    )
       return;
 
-    this.renderProcessedFrame(
-      this.renderEngine.recordingCanvas,
-      this.renderEngine.recordingCtx,
+    this.host.renderProcessedFrame(
+      this.host.renderEngine.recordingCanvas,
+      this.host.renderEngine.recordingCtx,
       mode,
     );
 
-    if (applyQualityEnhancer && this.imageSettings.qualityEnhancer) {
+    if (applyQualityEnhancer && this.host.imageSettings.qualityEnhancer) {
       const enhancerBuffer = this.ensureRecordingEnhancerBuffer(
-        this.renderEngine.recordingCanvas.width,
-        this.renderEngine.recordingCanvas.height,
+        this.host.renderEngine.recordingCanvas.width,
+        this.host.renderEngine.recordingCanvas.height,
       );
-      if (this.renderEngine.recordingEnhancerCtx) {
-        this.renderEngine.recordingEnhancerCtx.clearRect(
+      if (this.host.renderEngine.recordingEnhancerCtx) {
+        this.host.renderEngine.recordingEnhancerCtx.clearRect(
           0,
           0,
           enhancerBuffer.width,
           enhancerBuffer.height,
         );
-        this.renderEngine.recordingEnhancerCtx.drawImage(
-          this.renderEngine.recordingCanvas,
+        this.host.renderEngine.recordingEnhancerCtx.drawImage(
+          this.host.renderEngine.recordingCanvas,
           0,
           0,
           enhancerBuffer.width,
           enhancerBuffer.height,
         );
         this.drawEnhancedFrameToContext(
-          this.renderEngine.recordingCtx,
+          this.host.renderEngine.recordingCtx,
           enhancerBuffer,
-          this.renderEngine.recordingCanvas.width,
-          this.renderEngine.recordingCanvas.height,
-          this.imageSettings.qualityEnhancerStrength,
+          this.host.renderEngine.recordingCanvas.width,
+          this.host.renderEngine.recordingCanvas.height,
+          this.host.imageSettings.qualityEnhancerStrength,
           mode === 'export',
         );
       }
     }
-  };
+  }
 
-  proto.blitProcessedFrameToPreview = function () {
+  blitProcessedFrameToPreview() {
     if (
-      !this.renderEngine.recordingCanvas ||
-      this.renderEngine.recordingCanvas.width === 0 ||
-      this.canvas.width === 0
+      !this.host.renderEngine.recordingCanvas ||
+      this.host.renderEngine.recordingCanvas.width === 0 ||
+      this.host.canvas.width === 0
     )
       return;
-    this.ctx.drawImage(
-      this.renderEngine.recordingCanvas,
+    this.host.ctx.drawImage(
+      this.host.renderEngine.recordingCanvas,
       0,
       0,
-      this.canvas.width,
-      this.canvas.height,
+      this.host.canvas.width,
+      this.host.canvas.height,
     );
-  };
+  }
 
-  proto.copyFrameToRecordingCanvas = function () {
+  private copyFrameToRecordingCanvas() {
     this.renderSourceFrameBuffer(true);
-  };
+  }
 
-  proto.buildPhotoBlobFromCanvas = async function (
-    baseCanvas,
-    enhancerEnabled,
-    enhancerStrength,
+  private async buildPhotoBlobFromCanvas(
+    baseCanvas: HTMLCanvasElement,
+    enhancerEnabled: boolean,
+    enhancerStrength: number,
   ) {
     if (!baseCanvas || baseCanvas.width === 0 || baseCanvas.height === 0) {
       throw new Error('photo_base_canvas_invalid');
@@ -510,7 +588,7 @@ export function applyCaptureMixin(proto) {
       const rawBlob = await this.canvasToBlobAsync(
         baseCanvas,
         'image/jpeg',
-        this.imageSettings.jpegQuality / 100,
+        this.host.imageSettings.jpegQuality / 100,
       );
       if (!rawBlob) throw new Error('photo_blob_failed');
       return {
@@ -526,6 +604,7 @@ export function applyCaptureMixin(proto) {
     const exportCtx = exportCanvas.getContext('2d', {
       willReadFrequently: true,
     });
+    if (!exportCtx) throw new Error('photo_context_unavailable');
     this.drawEnhancedFrameToContext(
       exportCtx,
       baseCanvas,
@@ -538,7 +617,7 @@ export function applyCaptureMixin(proto) {
     const blob = await this.canvasToBlobAsync(
       exportCanvas,
       'image/jpeg',
-      this.imageSettings.jpegQuality / 100,
+      this.host.imageSettings.jpegQuality / 100,
     );
     if (!blob) throw new Error('photo_blob_failed');
     return {
@@ -546,24 +625,25 @@ export function applyCaptureMixin(proto) {
       width: exportCanvas.width,
       height: exportCanvas.height,
     };
-  };
+  }
 
-  proto.buildPhotoCaptureSnapshot = async function (
-    enhancerEnabled,
-    enhancerStrength,
+  private async buildPhotoCaptureSnapshot(
+    enhancerEnabled: boolean,
+    enhancerStrength: number,
   ) {
-    const { sourceWidth, sourceHeight } = this.getSourceFrameDimensions();
+    const { sourceWidth, sourceHeight } = this.host.getSourceFrameDimensions();
     if (sourceWidth <= 1 || sourceHeight <= 1) {
       throw new Error('source_frame_unavailable');
     }
 
     const { width: captureWidth, height: captureHeight } =
-      this.getEffectiveFrameDimensions(sourceWidth, sourceHeight);
+      this.host.getEffectiveFrameDimensions(sourceWidth, sourceHeight);
     const baseCanvas = document.createElement('canvas');
     baseCanvas.width = captureWidth;
     baseCanvas.height = captureHeight;
     const baseCtx = baseCanvas.getContext('2d', { willReadFrequently: true });
-    this.renderProcessedFrame(baseCanvas, baseCtx, 'capture');
+    if (!baseCtx) throw new Error('photo_context_unavailable');
+    this.host.renderProcessedFrame(baseCanvas, baseCtx, 'capture');
 
     const { blob, width, height } = await this.buildPhotoBlobFromCanvas(
       baseCanvas,
@@ -576,23 +656,23 @@ export function applyCaptureMixin(proto) {
       height,
       baseCanvas,
     };
-  };
+  }
 
-  proto.takePhoto = async function () {
+  private async takePhoto() {
     if (!this.validatePhotoCaptureReady()) return;
 
     try {
       this.showCaptureFlash();
       this.playShutterSound();
-      const initialEnhancerEnabled = !!this.imageSettings.qualityEnhancer;
+      const initialEnhancerEnabled = !!this.host.imageSettings.qualityEnhancer;
       const initialEnhancerStrength =
-        this.imageSettings.qualityEnhancerStrength;
+        this.host.imageSettings.qualityEnhancerStrength;
       const { blob, width, height, baseCanvas } =
         await this.buildPhotoCaptureSnapshot(
           initialEnhancerEnabled,
           initialEnhancerStrength,
         );
-      const filename = `hatewebcam-photo-${this.timestamp()}.jpg`;
+      const filename = `hatewebcam-photo-${timestamp()}.jpg`;
       this.openCapturePreview({
         kind: 'photo',
         blob,
@@ -603,36 +683,41 @@ export function applyCaptureMixin(proto) {
           height,
           size: blob.size,
           format: 'JPEG',
-          jpegQuality: this.imageSettings.jpegQuality,
+          jpegQuality: this.host.imageSettings.jpegQuality,
           enhanced: initialEnhancerEnabled,
           enhancerStrength: initialEnhancerStrength,
         },
       });
-      this.showStatus(this.captureStatus, 'Foto lista en vista previa', 'info');
+      showStatus(this.host.captureStatus, 'Foto lista en vista previa', 'info');
     } catch (err) {
       console.error('Error taking photo:', err);
-      this.showStatus(this.captureStatus, 'No se pudo tomar la foto', 'error');
+      showStatus(this.host.captureStatus, 'No se pudo tomar la foto', 'error');
     }
-  };
+  }
 
-  proto.toggleRecording = function () {
+  toggleRecording() {
     if (this.recordingSession.active) {
       this.stopRecording(true);
     } else {
       this.startRecording();
     }
-  };
+  }
 
-  proto.showCaptureFlash = function () {
+  private showCaptureFlash() {
     this.captureFlashToken = (this.captureFlashToken || 0) + 1;
     this.publishCaptureChrome();
-  };
+  }
 
-  proto.armShutterSound = function () {
-    if (!this.imageSettings.shutterSound) return;
+  private armShutterSound() {
+    if (!this.host.imageSettings.shutterSound) return;
     try {
       const AudioContextClass =
-        globalThis.AudioContext || globalThis.webkitAudioContext;
+        globalThis.AudioContext ||
+        (
+          globalThis as typeof globalThis & {
+            webkitAudioContext?: typeof AudioContext;
+          }
+        ).webkitAudioContext;
       if (!AudioContextClass) return;
       if (!this.shutterAudioContext)
         this.shutterAudioContext = new AudioContextClass();
@@ -641,11 +726,11 @@ export function applyCaptureMixin(proto) {
     } catch {
       this.shutterSoundArmed = false;
     }
-  };
+  }
 
-  proto.playShutterSound = function () {
+  private playShutterSound() {
     if (
-      !this.imageSettings.shutterSound ||
+      !this.host.imageSettings.shutterSound ||
       !this.shutterSoundArmed ||
       !this.shutterAudioContext
     )
@@ -668,37 +753,37 @@ export function applyCaptureMixin(proto) {
     } catch {
       // El sonido es opcional: la captura nunca depende de Web Audio.
     }
-  };
+  }
 
-  proto.startRecording = function () {
+  private startRecording() {
     if (this.recordingSession.mediaRecorder) return;
     if (this.photoCountdown.active) {
-      this.showStatus(
-        this.captureStatus,
+      showStatus(
+        this.host.captureStatus,
         'Cancelá el temporizador antes de grabar',
         'info',
       );
       return;
     }
-    if (!this.isRunning) {
-      this.showStatus(
-        this.captureStatus,
+    if (!this.host.isRunning) {
+      showStatus(
+        this.host.captureStatus,
         'Primero encendé la cámara',
         'warning',
       );
       return;
     }
-    if (this.isCapturePreviewOpen()) {
-      this.showStatus(
-        this.captureStatus,
+    if (this.pendingCapture) {
+      showStatus(
+        this.host.captureStatus,
         'Primero cierra la vista previa actual',
         'info',
       );
       return;
     }
     if (typeof MediaRecorder === 'undefined') {
-      this.showStatus(
-        this.captureStatus,
+      showStatus(
+        this.host.captureStatus,
         'Tu navegador no soporta grabación',
         'error',
       );
@@ -707,8 +792,8 @@ export function applyCaptureMixin(proto) {
 
     const recordingProfile = this.getRecordingProfile();
     if (!recordingProfile) {
-      this.showStatus(
-        this.captureStatus,
+      showStatus(
+        this.host.captureStatus,
         'No hay formato de video compatible',
         'error',
       );
@@ -719,8 +804,8 @@ export function applyCaptureMixin(proto) {
       const canvas = this.ensureRecordingCanvas();
       const { width, height } = canvas;
       if (width === 0 || height === 0) {
-        this.showStatus(
-          this.captureStatus,
+        showStatus(
+          this.host.captureStatus,
           'Esperá un momento y reintentá la grabación',
           'info',
         );
@@ -729,7 +814,8 @@ export function applyCaptureMixin(proto) {
       this.copyFrameToRecordingCanvas();
       const fps = this.getPreferredRecordingFps();
       const bitrate = this.getRecommendedVideoBitrate(width, height, fps);
-      const { qualityEnhancer, qualityEnhancerStrength } = this.imageSettings;
+      const { qualityEnhancer, qualityEnhancerStrength } =
+        this.host.imageSettings;
       this.recordingSession.start({
         stream: canvas.captureStream(fps),
         mimeType: recordingProfile.mimeType,
@@ -742,7 +828,7 @@ export function applyCaptureMixin(proto) {
           this.openCapturePreview({
             kind: 'video',
             blob: result.blob,
-            filename: `hatewebcam-record-${this.timestamp()}.${result.extension}`,
+            filename: `hatewebcam-record-${timestamp()}.${result.extension}`,
             meta: {
               width,
               height,
@@ -755,8 +841,8 @@ export function applyCaptureMixin(proto) {
               enhancerStrength: qualityEnhancerStrength,
             },
           });
-          this.showStatus(
-            this.captureStatus,
+          showStatus(
+            this.host.captureStatus,
             'Video listo en vista previa',
             'info',
           );
@@ -764,8 +850,8 @@ export function applyCaptureMixin(proto) {
       });
       const effectiveFormat =
         recordingProfile.extension === 'webm' ? 'WebM' : 'MP4';
-      this.showStatus(
-        this.captureStatus,
+      showStatus(
+        this.host.captureStatus,
         recordingProfile.fallbackMessage
           ? translateCurrent('{notice} Grabación iniciada en {format}.', {
               notice: translateCurrent(recordingProfile.fallbackMessage),
@@ -779,19 +865,19 @@ export function applyCaptureMixin(proto) {
       this.updateCaptureButtons();
     } catch (err) {
       console.error('Error starting recording:', err);
-      this.showStatus(
-        this.captureStatus,
+      showStatus(
+        this.host.captureStatus,
         'No se pudo iniciar la grabación',
         'error',
       );
       this.updateCaptureButtons();
     }
-  };
+  }
 
-  proto.stopRecording = function (saveFile) {
+  stopRecording(saveFile: boolean) {
     if (!this.recordingSession.mediaRecorder) return;
-    this.showStatus(
-      this.captureStatus,
+    showStatus(
+      this.host.captureStatus,
       saveFile
         ? 'Grabación detenida. Preparando vista previa.'
         : 'Grabación cancelada.',
@@ -799,29 +885,26 @@ export function applyCaptureMixin(proto) {
     );
     this.recordingSession.stop(saveFile);
     this.updateCaptureButtons();
-  };
+  }
 
-  proto.openCapturePreview = function (capture) {
+  private openCapturePreview(capture: Capture) {
     if (!capture?.blob) return;
 
-    this.clearPendingCapture(true);
+    this.clearPendingCapture();
     const objectUrl = URL.createObjectURL(capture.blob);
     const initialPreviewEnhancerEnabled =
       capture.kind === 'photo'
         ? !!(capture.meta && typeof capture.meta.enhanced === 'boolean'
             ? capture.meta.enhanced
-            : this.imageSettings.qualityEnhancer)
+            : this.host.imageSettings.qualityEnhancer)
         : false;
-    const parsedPreviewEnhancerStrength = parseInt(
-      capture.meta && capture.meta.enhancerStrength,
-      10,
-    );
+    const parsedPreviewEnhancerStrength = capture.meta?.enhancerStrength ?? NaN;
     const initialPreviewEnhancerStrength =
       capture.kind === 'photo'
-        ? this.clamp(
+        ? clamp(
             Number.isFinite(parsedPreviewEnhancerStrength)
               ? parsedPreviewEnhancerStrength
-              : this.imageSettings.qualityEnhancerStrength,
+              : this.host.imageSettings.qualityEnhancerStrength,
             0,
             100,
           )
@@ -834,18 +917,11 @@ export function applyCaptureMixin(proto) {
       previewEnhancerStrength: initialPreviewEnhancerStrength,
     };
     this.photoPreviewRenderToken++;
-    this.capturePreviewOpen = true;
     this.syncPreviewPhotoTools();
     this.updateCaptureButtons();
-  };
+  }
 
-  proto.renderCapturePreviewInfo = function (meta, _kind) {
-    if (!this.pendingCapture) return;
-    this.pendingCapture.meta = { ...(this.pendingCapture.meta || {}), ...meta };
-    this.publishCapturePreview();
-  };
-
-  proto.clearPendingCapture = function (silent = false) {
+  clearPendingCapture() {
     this.photoPreviewRenderToken++;
     if (this.previewPhotoEnhancerDebounceId) {
       clearTimeout(this.previewPhotoEnhancerDebounceId);
@@ -861,53 +937,43 @@ export function applyCaptureMixin(proto) {
     }
     this.pendingCapture = null;
     this.syncPreviewPhotoTools();
-    if (silent) return;
-  };
+  }
 
-  proto.closeCapturePreview = function (showDiscardStatus) {
-    if (!this.capturePreviewOpen) return;
-    this.capturePreviewOpen = false;
-    this.clearPendingCapture(false);
+  closeCapturePreview(showDiscardStatus: boolean) {
+    if (!this.pendingCapture) return;
+    this.clearPendingCapture();
     this.updateCaptureButtons();
 
     if (showDiscardStatus) {
-      this.showStatus(this.captureStatus, 'Captura descartada', 'warning');
-      setTimeout(() => this.hideStatus(this.captureStatus), 1800);
+      showStatus(this.host.captureStatus, 'Captura descartada', 'warning');
+      setTimeout(() => hideStatus(this.host.captureStatus), 1800);
     }
-  };
+  }
 
-  proto.downloadPendingCapture = function () {
+  downloadPendingCapture() {
     if (!this.pendingCapture) return;
 
-    this.downloadBlob(this.pendingCapture.blob, this.pendingCapture.filename);
+    downloadBlob(this.pendingCapture.blob, this.pendingCapture.filename);
     const label = this.pendingCapture.kind === 'video' ? 'Video' : 'Foto';
-    this.showStatus(
-      this.captureStatus,
+    showStatus(
+      this.host.captureStatus,
       `${label} guardado: ${this.pendingCapture.filename}`,
       'success',
     );
-    setTimeout(() => this.hideStatus(this.captureStatus), 2600);
+    setTimeout(() => hideStatus(this.host.captureStatus), 2600);
     this.closeCapturePreview(false);
-  };
+  }
 
-  proto.formatBytes = function (bytes) {
-    return formatBytes(bytes);
-  };
-
-  proto.formatDurationDetailed = function (seconds) {
-    return formatDurationDetailed(seconds);
-  };
-
-  proto.pickSupportedMimeType = function (list) {
+  private pickSupportedMimeType(list: readonly string[]) {
     return pickSupportedMimeType(
       list,
       (type) =>
         typeof MediaRecorder !== 'undefined' &&
         MediaRecorder.isTypeSupported(type),
     );
-  };
+  }
 
-  proto.getRecordingProfile = function () {
+  private getRecordingProfile() {
     const mp4List = [
       'video/mp4;codecs=avc1.64001F,mp4a.40.2',
       'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
@@ -922,9 +988,9 @@ export function applyCaptureMixin(proto) {
       'video/webm',
     ];
 
-    const desired = this.imageSettings.videoFormat || 'auto';
+    const desired = this.host.imageSettings.videoFormat || 'auto';
     let mimeType;
-    let extension;
+    let extension: 'webm' | 'mp4';
     let fallbackMessage = '';
 
     if (desired === 'mp4') {
@@ -963,38 +1029,5 @@ export function applyCaptureMixin(proto) {
 
     if (!mimeType) return null;
     return { mimeType, extension, fallbackMessage };
-  };
-
-  proto.downloadBlob = function (blob, filename) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-  };
-
-  proto.timestamp = function () {
-    return timestamp();
-  };
-
-  proto.formatDuration = function (seconds) {
-    return formatDuration(seconds);
-  };
-
-  proto.showStatus = function (el, msg, type) {
-    if (!el) return;
-    el.textContent = translateCurrent(msg);
-    el.classList.remove('hidden', 'success', 'warning', 'info', 'error');
-    el.classList.add('status-msg', type);
-  };
-
-  proto.hideStatus = function (el) {
-    if (!el) return;
-    el.textContent = '';
-    el.classList.add('hidden');
-    el.classList.remove('success', 'warning', 'info', 'error');
-  };
+  }
 }

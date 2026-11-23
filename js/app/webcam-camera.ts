@@ -24,6 +24,7 @@ import {
   type ImageSettings,
 } from './constants.ts';
 import type { SettingsStore } from './settings-store.ts';
+import type { WebcamCapture } from './webcam-capture.ts';
 
 type PerformanceProfile = (typeof PERFORMANCE_MODE_PRESETS)[PerformanceMode];
 type DetectorTiming = { processIntervalMs: number };
@@ -39,7 +40,13 @@ interface WebcamCameraHost {
   videoPlaceholderLoading: boolean;
   isRunning: boolean;
   isPageVisible: boolean;
-  recordingSession: { active: boolean };
+  capture: Pick<
+    WebcamCapture,
+    | 'recording'
+    | 'stopRecording'
+    | 'cancelPhotoCountdown'
+    | 'updateCaptureButtons'
+  >;
   frameCount: number;
   lastFpsTime: number;
   animFrameId: number | null;
@@ -68,9 +75,6 @@ interface WebcamCameraHost {
   saveImageSettings(): void;
   showStatus(element: HTMLElement | null, message: string, type: Status): void;
   hideStatus(element: HTMLElement | null): void;
-  stopRecording(save: boolean): void;
-  cancelPhotoCountdown(notify: boolean): void;
-  updateCaptureButtons(): void;
   syncMirrorControls(): void;
 }
 
@@ -272,8 +276,8 @@ export class WebcamCamera {
   async toggleCamera(forceStart = false) {
     if (this.host.sourceMode !== 'camera') return;
     if (this.host.isRunning && !forceStart) {
-      if (this.host.recordingSession.active) this.host.stopRecording(true);
-      this.host.cancelPhotoCountdown(false);
+      if (this.host.capture.recording) this.host.capture.stopRecording(true);
+      this.host.capture.cancelPhotoCountdown(false);
 
       this.stop();
       this.host.isRunning = false;
@@ -281,7 +285,7 @@ export class WebcamCamera {
       this.setCameraState('off');
       this.updatePreviewPlaceholder();
       updatePreviewMetrics({ resolution: '-', fps: '-' });
-      this.host.updateCaptureButtons();
+      this.host.capture.updateCaptureButtons();
       return;
     }
 
@@ -340,7 +344,7 @@ export class WebcamCamera {
         this.setCameraPlaceholderMessage(message);
         this.updatePreviewPlaceholder();
       }
-      this.host.updateCaptureButtons();
+      this.host.capture.updateCaptureButtons();
     }
   }
 

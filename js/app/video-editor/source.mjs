@@ -20,8 +20,8 @@ export function applyVideoEditorSourceMixin(proto) {
         faceConfig: this.faceDetectionEffect?.getConfig() || null,
         blinkConfig: this.blinkDetectionEffect?.getConfig() || null,
       };
-      if (this.recordingSession?.active) this.stopRecording(true);
-      this.cancelPhotoCountdown(false);
+      if (this.capture?.recording) this.capture.stopRecording(true);
+      this.capture.cancelPhotoCountdown(false);
       this.camera.stop();
       this.isRunning = false;
       this.cancelRenderLoop();

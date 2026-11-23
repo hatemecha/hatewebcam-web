@@ -1578,10 +1578,10 @@ async function checkExportPrepareRecoversDecodeFailure() {
     },
     seekCalls: 0,
     recoveredAt: null,
-    getVideoExportFps: () => 24,
     updateVideoExportProgress() {},
   };
   applyLocalvideoeditorMixin(app);
+  app.getVideoExportFps = () => 24;
   app.seekVideoForExport = async () => {
     app.seekCalls += 1;
     if (app.seekCalls === 1) throw new Error('video_decode_failed');
@@ -2336,9 +2336,11 @@ async function checkEffectsOnlyExportSkipsBaseRender() {
       this.lookCalls += 1;
     },
     syncVideoTimelineDetectorsAt: async () => {},
-    ensureRecordingCanvas() {},
-    renderSourceFrameBuffer() {
-      this.baseRenderCalls += 1;
+    capture: {
+      ensureRecordingCanvas() {},
+      renderSourceFrameBuffer() {
+        app.baseRenderCalls += 1;
+      },
     },
     renderEffectsOnlyFrame(canvas, ctx, chromaColor) {
       assert.equal(chromaColor, '#00ff00');
@@ -2386,7 +2388,7 @@ async function checkExportFrameProgressThrottlesInnerStages() {
     },
     applyVideoTimelineLook() {},
     syncVideoTimelineDetectorsAt: async () => {},
-    renderSourceFrameBuffer() {},
+    capture: { renderSourceFrameBuffer() {} },
   };
   applyLocalvideoeditorMixin(app);
   app.updateVideoExportProgress = (done, total, fps, meta) => {

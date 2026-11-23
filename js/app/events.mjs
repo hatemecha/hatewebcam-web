@@ -327,7 +327,9 @@ export function applyEventsMixin(proto) {
 
     this.canvas.addEventListener('click', this.onCanvasClick.bind(this));
 
-    window.addEventListener('keydown', this.onGlobalKeyDown.bind(this));
+    window.addEventListener('keydown', (event) =>
+      this.capture.onGlobalKeyDown(event),
+    );
     document.addEventListener(
       'visibilitychange',
       this.onVisibilityChange.bind(this),
@@ -338,9 +340,7 @@ export function applyEventsMixin(proto) {
     });
 
     window.addEventListener('beforeunload', () => {
-      this.cancelPhotoCountdown(false);
-      this.recordingSession.dispose();
-      this.clearPendingCapture(true);
+      this.capture.dispose();
       this.camera.stop();
       this.editor?.source.dispose();
       this.visualFxEffect?.dispose?.();

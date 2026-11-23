@@ -264,7 +264,7 @@ export function applyStorageMixin(proto) {
 
   proto.setMobileFxPanelVisible = function (visible) {
     this.mobileFxOpen = !!visible;
-    this.publishCaptureChrome?.();
+    this.capture?.publishCaptureChrome();
     if (this.isRunning && this.isMobileViewport()) {
       if (this.videoEl && this.videoEl.paused) {
         void this.videoEl.play().catch(() => {});
@@ -469,7 +469,7 @@ export function applyStorageMixin(proto) {
     }
     this.syncAdvancedQuickInputs();
     this.updateColorPaletteSelections?.();
-    this.updateCaptureButtons();
+    this.capture.updateCaptureButtons();
     this.updateVideoEffectInspector();
     this.updateVideoEditorUI();
     this.publishWebcamPanel();
@@ -1109,7 +1109,7 @@ export function applyStorageMixin(proto) {
       )
     )
       return;
-    this.cancelPhotoCountdown(false);
+    this.capture.cancelPhotoCountdown(false);
     const editorKeys = [
       'editorExportPreset',
       'editorExportFormat',
