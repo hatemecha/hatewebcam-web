@@ -88,18 +88,6 @@ export default [
     rules: baseRules,
   },
   {
-    files: ['js/workers/**/*.js'],
-    languageOptions: {
-      ecmaVersion: 'latest',
-      sourceType: 'script',
-      globals: {
-        ...globals.worker,
-        FaceMesh: 'readonly',
-      },
-    },
-    rules: baseRules,
-  },
-  {
     files: ['tests/**/*.mjs', 'scripts/**/*.mjs', 'playwright.config.mjs'],
     languageOptions: {
       ecmaVersion: 'latest',

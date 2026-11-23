@@ -1,13 +1,47 @@
+import type {
+  FaceMesh,
+  FaceMeshOptions,
+  FaceMeshRequest,
+  FaceMeshResults,
+  FaceMeshSettings,
+  FaceMeshWorkerRequest,
+  FaceMeshWorkerResponse,
+} from '../workers/face-mesh-protocol.ts';
+
+type FaceSource = HTMLVideoElement | HTMLCanvasElement;
+
+interface FaceFrameBuffer {
+  canvas: HTMLCanvasElement | null;
+  ctx: CanvasRenderingContext2D | null;
+}
+
+const environment = globalThis as typeof globalThis & {
+  HATEWEBCAM_FACE_MESH_WORKER?: boolean;
+  FaceMesh?: new (options: FaceMeshOptions) => FaceMesh<FaceSource>;
+};
+
+function mainThreadMesh(options: FaceMeshOptions): FaceMesh<FaceSource> {
+  if (!environment.FaceMesh) throw new Error('face_mesh_unavailable');
+  return new environment.FaceMesh(options);
+}
+
+function getFrameSize(source: FaceSource) {
+  return {
+    width: ('videoWidth' in source && source.videoWidth) || source.width || 0,
+    height:
+      ('videoHeight' in source && source.videoHeight) || source.height || 0,
+  };
+}
+
 // Shared FaceMesh input prep. Landmarks are normalized, so analysis can run on
 // a much smaller frame than the camera/recording canvas.
 export function prepareFaceMeshInput(
-  source,
-  state,
+  source: FaceSource | null,
+  state: FaceFrameBuffer,
   { maxEdge = 480, alpha = false } = {},
 ) {
   if (!source) return null;
-  const width = source.videoWidth || source.width || 0;
-  const height = source.videoHeight || source.height || 0;
+  const { width, height } = getFrameSize(source);
   if (width <= 0 || height <= 0) return source;
 
   const scale = Math.min(1, maxEdge / Math.max(width, height));
@@ -26,17 +60,18 @@ export function prepareFaceMeshInput(
     state.canvas.width = targetWidth;
     state.canvas.height = targetHeight;
   }
+  if (!state.ctx) return source;
   state.ctx.drawImage(source, 0, 0, targetWidth, targetHeight);
   return state.canvas;
 }
 
 // FaceMesh.send() returns a Promise, but its WASM work still blocks the thread
-// that owns the instance. A classic-worker port exists in face-mesh-worker.js,
+// that owns the instance. A classic-worker port exists in face-mesh-worker.ts,
 // but this vendored FaceMesh build leaves its GL context undefined in workers
 // (`Cannot read properties of undefined (reading 'canvas')`). Keep the API
 // seam so we can switch backends later without touching detectors again.
-export function createFaceMesh(options) {
-  if (globalThis.HATEWEBCAM_FACE_MESH_WORKER === true) {
+export function createFaceMesh(options: FaceMeshOptions): FaceMesh<FaceSource> {
+  if (environment.HATEWEBCAM_FACE_MESH_WORKER === true) {
     if (
       typeof Worker !== 'undefined' &&
       typeof OffscreenCanvas !== 'undefined' &&
@@ -49,29 +84,39 @@ export function createFaceMesh(options) {
       }
     }
   }
-  return new globalThis.FaceMesh(options);
+  return mainThreadMesh(options);
 }
 
-export class FaceMeshClient {
-  constructor(options) {
-    this.options = options;
-    this.settings = {};
-    this.callback = () => {};
-    this.pending = new Map();
-    this.sequence = 0;
-    this.closed = false;
-    this.sending = false;
-    this.worker = new Worker(
-      new URL('../workers/face-mesh-worker.js', import.meta.url),
+export class FaceMeshClient implements FaceMesh<FaceSource> {
+  private readonly settings: FaceMeshSettings = {};
+  private callback: (results: FaceMeshResults) => void = () => {};
+  private readonly pending = new Map<
+    number,
+    {
+      resolve: (results: FaceMeshResults) => void;
+      reject: (error: Error) => void;
+    }
+  >();
+  private sequence = 0;
+  private closed = false;
+  private sending = false;
+  private worker: Worker | null;
+  private fallback: FaceMesh<FaceSource> | null = null;
+  private initialization: Promise<void> | null = null;
+
+  constructor(private readonly options: FaceMeshOptions) {
+    const worker = new Worker(
+      new URL('../workers/face-mesh-worker.ts', import.meta.url),
     );
-    this.worker.onmessage = ({ data }) => {
+    this.worker = worker;
+    worker.onmessage = ({ data }: MessageEvent<FaceMeshWorkerResponse>) => {
       const request = this.pending.get(data.id);
       if (!request) return;
       this.pending.delete(data.id);
-      if (data.error) request.reject(new Error(data.error));
-      else request.resolve(data);
+      if ('error' in data) request.reject(new Error(data.error));
+      else request.resolve(data.results);
     };
-    this.worker.onerror = (event) => {
+    worker.onerror = (event) => {
       for (const request of this.pending.values()) {
         request.reject(new Error(event.message || 'face_worker_failed'));
       }
@@ -79,13 +124,21 @@ export class FaceMeshClient {
     };
   }
 
-  request(type, data = {}, transfer = []) {
-    if (this.closed) return Promise.reject(new Error('face_mesh_closed'));
+  private request(
+    message: FaceMeshRequest,
+    transfer: Transferable[] = [],
+  ): Promise<FaceMeshResults> {
+    const worker = this.worker;
+    if (this.closed || !worker)
+      return Promise.reject(new Error('face_mesh_closed'));
     return new Promise((resolve, reject) => {
       const id = ++this.sequence;
       this.pending.set(id, { resolve, reject });
       try {
-        this.worker.postMessage({ type, id, ...data }, transfer);
+        worker.postMessage(
+          { id, ...message } satisfies FaceMeshWorkerRequest,
+          transfer,
+        );
       } catch (error) {
         this.pending.delete(id);
         reject(error);
@@ -93,12 +146,12 @@ export class FaceMeshClient {
     });
   }
 
-  setOptions(settings) {
+  setOptions(settings: FaceMeshSettings) {
     Object.assign(this.settings, settings);
     this.fallback?.setOptions(settings);
   }
 
-  onResults(callback) {
+  onResults(callback: (results: FaceMeshResults) => void) {
     this.callback = callback;
     this.fallback?.onResults(callback);
   }
@@ -107,39 +160,42 @@ export class FaceMeshClient {
     if (!this.initialization) {
       const baseUrl = new URL(this.options.locateFile(''), document.baseURI)
         .href;
-      this.initialization = this.request('init', { baseUrl }).catch((error) =>
-        this.enableFallback(error),
+      this.initialization = this.request({ type: 'init', baseUrl }).then(
+        () => {},
+        async (error: unknown) => {
+          await this.enableFallback(error);
+        },
       );
     }
     return this.initialization;
   }
 
-  async enableFallback(reason) {
+  private async enableFallback(reason: unknown): Promise<FaceMesh<FaceSource>> {
     if (this.closed) throw reason || new Error('face_mesh_closed');
-    if (this.fallback) return;
+    if (this.fallback) return this.fallback;
     try {
       this.worker?.terminate();
     } catch {
       // Worker may already be dead after a GL/init failure.
     }
     this.worker = null;
-    this.fallback = new globalThis.FaceMesh(this.options);
+    this.fallback = mainThreadMesh(this.options);
     this.fallback.setOptions(this.settings);
     this.fallback.onResults(this.callback);
     await this.fallback.initialize();
+    return this.fallback;
   }
 
-  async send({ image }) {
+  async send({ image }: { image: FaceSource }) {
     if (this.sending || this.closed) return;
     this.sending = true;
-    let bitmap;
+    let bitmap: ImageBitmap | null = null;
     try {
       await this.initialize();
       if (this.closed) return;
       if (this.fallback) return await this.fallback.send({ image });
       const maxEdge = 640;
-      const width = image.videoWidth || image.width || 0;
-      const height = image.videoHeight || image.height || 0;
+      const { width, height } = getFrameSize(image);
       const scale =
         width > 0 && height > 0
           ? Math.min(1, maxEdge / Math.max(width, height))
@@ -157,20 +213,18 @@ export class FaceMeshClient {
         bitmap = await createImageBitmap(image);
       }
       if (this.closed) return;
-      let result;
+      let result: FaceMeshResults;
       try {
         result = await this.request(
-          'analyze',
-          { bitmap, settings: { ...this.settings } },
+          { type: 'analyze', bitmap, settings: { ...this.settings } },
           [bitmap],
         );
       } catch (error) {
-        bitmap = null;
-        await this.enableFallback(error);
+        const fallback = await this.enableFallback(error);
         if (this.closed) return;
-        return await this.fallback.send({ image });
+        return await fallback.send({ image });
       }
-      if (!this.closed) this.callback(result.results);
+      if (!this.closed) this.callback(result);
     } finally {
       bitmap?.close?.();
       this.sending = false;

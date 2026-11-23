@@ -1,5 +1,5 @@
 import { perfDev } from '../app/perf-dev.ts';
-import { createFaceMesh, prepareFaceMeshInput } from './face-mesh-client.mjs';
+import { createFaceMesh, prepareFaceMeshInput } from './face-mesh-client.ts';
 
 /**
  * FaceDetection — MediaPipe Face Mesh-based face detection

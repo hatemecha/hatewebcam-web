@@ -24,6 +24,7 @@ import {
   shouldAppendFinalFrame,
 } from '../js/video-export.mjs';
 import { CameraManager } from '../js/core/camera-manager.ts';
+import { createFaceMesh } from '../js/effects/face-mesh-client.ts';
 import {
   classifyCameraError,
   getCameraStatePresentation,
@@ -229,6 +230,64 @@ function checkCameraPreservesSupportedFps() {
     30,
     'an explicit camera FPS should be preserved',
   );
+}
+
+async function checkFaceMeshFallsBackAfterClassicWorkerFailure() {
+  let workerTerminated = false;
+  let fallbackInitialized = false;
+  let fallbackImage = null;
+  class ClassicWorker {
+    constructor(url, options) {
+      assert.match(url.pathname, /face-mesh-worker\.ts$/);
+      assert.equal(options, undefined);
+    }
+    postMessage(message) {
+      assert.equal(message.type, 'init');
+      queueMicrotask(() =>
+        this.onmessage({
+          data: { id: message.id, error: 'worker_init_failed' },
+        }),
+      );
+    }
+    terminate() {
+      workerTerminated = true;
+    }
+  }
+  class FaceMeshFallback {
+    setOptions() {}
+    onResults() {}
+    async initialize() {
+      fallbackInitialized = true;
+    }
+    async send({ image }) {
+      fallbackImage = image;
+    }
+    async close() {}
+  }
+  const restore = [
+    mockGlobal('document', { baseURI: 'http://localhost/' }),
+    mockGlobal('Worker', ClassicWorker),
+    mockGlobal('OffscreenCanvas', class {}),
+    mockGlobal('createImageBitmap', () => {
+      throw new Error('Fallback should receive the original image');
+    }),
+    mockGlobal('HATEWEBCAM_FACE_MESH_WORKER', true),
+    mockGlobal('FaceMesh', FaceMeshFallback),
+  ];
+  try {
+    const mesh = createFaceMesh({
+      locateFile: (file) => 'vendor/face_mesh/' + file,
+    });
+    await mesh.initialize();
+    assert.equal(workerTerminated, true);
+    assert.equal(fallbackInitialized, true);
+    const image = {};
+    await mesh.send({ image });
+    assert.equal(fallbackImage, image);
+    await mesh.close();
+  } finally {
+    for (const restoreGlobal of restore.reverse()) restoreGlobal();
+  }
 }
 
 function checkReusableMorphologyBuffers() {
@@ -2982,6 +3041,7 @@ async function checkSubjectClipAwaitsEffectBeforeAnalyzer() {
 }
 
 await checkCameraStreamCleanup();
+await checkFaceMeshFallsBackAfterClassicWorkerFailure();
 checkSettingsStoreRejectsNonObjectState();
 checkCameraPreservesSupportedFps();
 checkReusableMorphologyBuffers();
