@@ -34,7 +34,7 @@ interface WebcamCameraHost {
   settingsStore: SettingsStore;
   imageSettings: ImageSettings;
   videoEl: HTMLVideoElement;
-  videoSource: { file: File | null } | null;
+  editor: { source: { file: File | null } } | null;
   previewWrapper: HTMLElement | null;
   videoPlaceholderLoading: boolean;
   isRunning: boolean;
@@ -130,7 +130,7 @@ export class WebcamCamera {
     const inVideoMode = this.host.sourceMode === 'video';
     const isLoading = this.host.videoPlaceholderLoading;
     const showVideoPlaceholder =
-      inVideoMode && (isLoading || !this.host.videoSource?.file);
+      inVideoMode && (isLoading || !this.host.editor?.source.file);
     const cameraIdle = !inVideoMode && !this.host.isRunning;
     const view = showVideoPlaceholder
       ? isLoading

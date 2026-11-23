@@ -4,8 +4,8 @@ import { translateCurrent } from '../../../src/lib/i18n/translate.ts';
 export function applyVideoEditorTimelineInteractionMixin(proto) {
   proto.beginTimelineSelection = function (event) {
     if (
-      !this.videoSource?.file ||
-      this.videoExportSession?.active ||
+      !this.editor.source?.file ||
+      this.editor.exportSession?.active ||
       event.button !== 0
     )
       return;
@@ -78,12 +78,12 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
   };
 
   proto.selectVideoEffectsInRect = function (left, right, top, bottom, bounds) {
-    const start = (left / bounds.width) * this.videoTimeline.duration;
-    const end = (right / bounds.width) * this.videoTimeline.duration;
+    const start = (left / bounds.width) * this.editor.timeline.duration;
+    const end = (right / bounds.width) * this.editor.timeline.duration;
     // Rows are counted like the rest of the timeline: row 0 is VIDEO and the
     // effect rows start at 1, so every track is height / trackCount tall.
     const rowHeight = bounds.height / this.getTimelineTrackCount();
-    const ids = this.videoTimeline.items
+    const ids = this.editor.timeline.items
       .filter((item) => {
         const row = this.TIMELINE_EFFECT_META[item.type]?.row || 1;
         const rowTop = row * rowHeight;
@@ -107,8 +107,8 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
 
   proto.beginTrimDrag = function (event, edge) {
     if (
-      !this.videoSource?.file ||
-      this.videoExportSession?.active ||
+      !this.editor.source?.file ||
+      this.editor.exportSession?.active ||
       this.editorTool !== 'trim'
     )
       return;
@@ -116,13 +116,14 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
     event.stopPropagation();
     // Snapshot now and commit it only if the trim actually moved, so clicking
     // a handle does not add an empty undo step.
-    const snapshot = this.editorHistory?.snapshot?.(this.videoTimeline) || null;
-    const itemStarts = this.videoTimeline.items.map((item) => item.startTime);
-    const itemEnds = this.videoTimeline.items.map((item) => item.endTime);
+    const snapshot =
+      this.editor.history?.snapshot?.(this.editor.timeline) || null;
+    const itemStarts = this.editor.timeline.items.map((item) => item.startTime);
+    const itemEnds = this.editor.timeline.items.map((item) => item.endTime);
     const minEnd = itemEnds.length ? Math.max(...itemEnds) : 0.05;
     const maxStart = itemStarts.length
       ? Math.min(...itemStarts)
-      : this.videoTimeline.duration - 0.05;
+      : this.editor.timeline.duration - 0.05;
 
     const move = (moveEvent) => {
       const time = this.getTimelineTime(moveEvent.clientX);
@@ -130,13 +131,13 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
         this.videoTrimStart.value = this.clamp(
           time,
           0,
-          Math.min(maxStart, this.videoTimeline.trimEnd - 0.05),
+          Math.min(maxStart, this.editor.timeline.trimEnd - 0.05),
         ).toFixed(2);
       } else {
         this.videoTrimEnd.value = this.clamp(
           time,
-          Math.max(minEnd, this.videoTimeline.trimStart + 0.05),
-          this.videoTimeline.duration,
+          Math.max(minEnd, this.editor.timeline.trimStart + 0.05),
+          this.editor.timeline.duration,
         ).toFixed(2);
       }
       this.applyVideoTrim(false);
@@ -146,8 +147,8 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
       document.removeEventListener('pointerup', end);
       if (
         snapshot &&
-        (snapshot.trimStart !== this.videoTimeline.trimStart ||
-          snapshot.trimEnd !== this.videoTimeline.trimEnd)
+        (snapshot.trimStart !== this.editor.timeline.trimStart ||
+          snapshot.trimEnd !== this.editor.timeline.trimEnd)
       ) {
         this.pushTimelineHistorySnapshot(snapshot);
       }
@@ -158,8 +159,8 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
 
   proto.beginTimelineDrag = function (event, item, element) {
     if (
-      !this.videoSource?.file ||
-      this.videoExportSession?.active ||
+      !this.editor.source?.file ||
+      this.editor.exportSession?.active ||
       event.button !== 0
     )
       return;
@@ -193,7 +194,8 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
     const bounds = this.getTimelineTrackAreaBounds();
     const originX = event.clientX;
     const original = { ...item };
-    const snapshot = this.editorHistory?.snapshot?.(this.videoTimeline) || null;
+    const snapshot =
+      this.editor.history?.snapshot?.(this.editor.timeline) || null;
     const handleStart = event.target.closest('.timeline-item-handle.start');
     const handleEnd = event.target.closest('.timeline-item-handle.end');
     let edge = 'move';
@@ -204,7 +206,7 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
     const move = (moveEvent) => {
       const delta =
         ((moveEvent.clientX - originX) / bounds.width) *
-        this.videoTimeline.duration;
+        this.editor.timeline.duration;
       let startTime = original.startTime;
       let endTime = original.endTime;
       if (edge === 'start') startTime = original.startTime + delta;
@@ -243,7 +245,7 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
       try {
         const startTime = Number(this.videoEffectStart.value);
         const endTime = Number(this.videoEffectEnd.value);
-        this.videoTimeline.upsert({
+        this.editor.timeline.upsert({
           ...item,
           startTime,
           endTime,
@@ -267,7 +269,7 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
       if (time <= item.startTime + 0.05 || time >= item.endTime - 0.05)
         throw new Error('Elegí un punto dentro del clip.');
       this.pushTimelineHistory();
-      const [, right] = this.videoTimeline.split(item.id, time);
+      const [, right] = this.editor.timeline.split(item.id, time);
       this.selectedVideoEffectIds = new Set([right.id]);
       this.selectedVideoEffectId = right.id;
       this.renderVideoTimeline();
@@ -283,8 +285,8 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
   proto.updateTimelineCutGuide = function (event) {
     if (
       this.editorTool !== 'cut' ||
-      !this.videoSource?.file ||
-      this.videoExportSession?.active ||
+      !this.editor.source?.file ||
+      this.editor.exportSession?.active ||
       !this.timelineCutGuide
     ) {
       this.hideTimelineCutGuide();
@@ -301,15 +303,15 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
   };
 
   proto.splitAllEffectsAtMarkers = function () {
-    if (!this.videoSource?.file || this.videoExportSession?.active) return;
+    if (!this.editor.source?.file || this.editor.exportSession?.active) return;
     const times = Array.from(
       new Set(
-        (this.videoTimeline.markers || [])
+        (this.editor.timeline.markers || [])
           .map((marker) => this.roundTimelineTime(marker.time))
           .filter(
             (time) =>
-              time > this.videoTimeline.trimStart &&
-              time < this.videoTimeline.trimEnd,
+              time > this.editor.timeline.trimStart &&
+              time < this.editor.timeline.trimEnd,
           ),
       ),
     ).sort((a, b) => a - b);
@@ -323,7 +325,7 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
     }
 
     const hasCuts = times.some((time) =>
-      this.videoTimeline.items.some(
+      this.editor.timeline.items.some(
         (item) => time > item.startTime + 0.05 && time < item.endTime - 0.05,
       ),
     );
@@ -340,8 +342,8 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
     try {
       this.pushTimelineHistory();
       times.forEach((time) => {
-        [...this.videoTimeline.items].forEach((item) => {
-          const current = this.videoTimeline.items.find(
+        [...this.editor.timeline.items].forEach((item) => {
+          const current = this.editor.timeline.items.find(
             (candidate) => candidate.id === item.id,
           );
           if (
@@ -349,7 +351,7 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
             time > current.startTime + 0.05 &&
             time < current.endTime - 0.05
           ) {
-            this.videoTimeline.split(current.id, time);
+            this.editor.timeline.split(current.id, time);
             cuts += 1;
           }
         });
@@ -375,8 +377,8 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
 
   proto.beginPlayheadDrag = function (event) {
     if (
-      !this.videoSource?.file ||
-      this.videoExportSession?.active ||
+      !this.editor.source?.file ||
+      this.editor.exportSession?.active ||
       event.button !== 0
     )
       return;
@@ -394,7 +396,8 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
   };
 
   proto.handleVideoEditorKeydown = function (event) {
-    if (this.sourceMode !== 'video' || this.videoExportSession?.active) return;
+    if (this.sourceMode !== 'video' || this.editor.exportSession?.active)
+      return;
     const tag = event.target.tagName;
     if (
       tag === 'INPUT' ||

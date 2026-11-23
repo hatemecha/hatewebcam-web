@@ -157,7 +157,7 @@ export function applyRenderLoopMixin(proto) {
   };
 
   proto.scheduleRenderLoop = function () {
-    if (this.videoExportSession?.active) return;
+    if (this.editor?.exportSession.active) return;
     const useVideoFrame =
       typeof this.videoEl.requestVideoFrameCallback === 'function' &&
       !(this.sourceMode === 'video' && this.videoEl.paused);
@@ -185,7 +185,7 @@ export function applyRenderLoopMixin(proto) {
     if (
       this.sourceMode !== 'video' ||
       !this.videoEl?.paused ||
-      this.videoExportSession?.active
+      this.editor?.exportSession.active
     )
       return;
     this.cancelRenderLoop();
@@ -193,7 +193,7 @@ export function applyRenderLoopMixin(proto) {
   };
 
   proto.renderLoop = function () {
-    if (!this.isRunning || this.videoExportSession?.active) {
+    if (!this.isRunning || this.editor?.exportSession.active) {
       this.animFrameId = null;
       return;
     }
@@ -208,8 +208,8 @@ export function applyRenderLoopMixin(proto) {
           this.syncVideoTimelineLookNow();
           void this.syncVideoTimelineDetectors();
           const trimEnd =
-            this.getVideoPlayableEnd?.(this.videoTimeline.trimEnd) ??
-            this.videoTimeline.trimEnd;
+            this.getVideoPlayableEnd?.(this.editor.timeline.trimEnd) ??
+            this.editor.timeline.trimEnd;
           if (!this.videoEl.paused && this.videoEl.currentTime >= trimEnd) {
             this.videoEl.pause();
             this.videoEl.currentTime = trimEnd;

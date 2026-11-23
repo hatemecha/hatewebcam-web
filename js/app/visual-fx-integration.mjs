@@ -51,10 +51,10 @@ export function applyVisualFxIntegrationMixin(proto) {
     mediaTime,
     force = false,
   ) {
-    if (this.sourceMode !== 'video' || !this.videoSource?.file) return;
+    if (this.sourceMode !== 'video' || !this.editor.source?.file) return;
     const syncRequestId = (this._visualFxSyncRequestId || 0) + 1;
     this._visualFxSyncRequestId = syncRequestId;
-    const active = this.videoTimeline.activeAt(mediaTime);
+    const active = this.editor.timeline.activeAt(mediaTime);
     const item = active.find((entry) => isVisualFxClipType(entry.type));
     const nextId = item?.id || '';
     if (!force && this.appliedVisualFxClipId === nextId) {
@@ -90,7 +90,7 @@ export function applyVisualFxIntegrationMixin(proto) {
   };
 
   proto.syncVideoTimelineVisualFx = async function (force = false) {
-    if (this.sourceMode !== 'video' || !this.videoSource?.file) return;
+    if (this.sourceMode !== 'video' || !this.editor.source?.file) return;
     await this.syncVideoTimelineVisualFxAt(
       this.videoEl.currentTime || 0,
       force,
@@ -146,7 +146,7 @@ export function applyVisualFxIntegrationMixin(proto) {
     if (!item || !isVisualFxClipType(item.type)) return;
     const next = applyVisualSystem(item.config, systemId);
     this.pushTimelineHistory?.();
-    this.videoTimeline.upsert({ ...item, config: next });
+    this.editor.timeline.upsert({ ...item, config: next });
     this.visualFxEffect?.setConfig(next);
     this.renderVisualFxInspector?.();
     this.renderVideoTimeline?.();
@@ -157,12 +157,13 @@ export function applyVisualFxIntegrationMixin(proto) {
     const item = this.getSelectedVideoEffectItem?.();
     if (!item || !isVisualFxClipType(item.type)) return;
     const live =
-      this.videoTimeline?.items?.find((entry) => entry.id === item.id) || item;
+      this.editor.timeline?.items?.find((entry) => entry.id === item.id) ||
+      item;
     const current = live.config?.seed ?? 18412;
     const seed = (current + delta * 137 + 999983) % 999999;
     const config = normalizeVisualConfig({ ...live.config, seed });
     this.pushTimelineHistory?.();
-    this.videoTimeline.upsert({ ...live, config });
+    this.editor.timeline.upsert({ ...live, config });
     this.visualFxEffect?.setConfig(config);
     this.renderVisualFxInspector?.();
     void this.syncVideoTimelineVisualFx(true);
@@ -180,7 +181,7 @@ export function applyVisualFxIntegrationMixin(proto) {
     }
     const config = normalizeVisualConfig(merged);
     this.pushTimelineHistory?.();
-    this.videoTimeline.upsert({ ...item, config });
+    this.editor.timeline.upsert({ ...item, config });
     // Applies immediately: `setConfig` only restarts the simulation for a
     // real topology change, so dragging a macro slider never resets it.
     this.visualFxEffect?.setConfig(config);

@@ -7,7 +7,7 @@ export function applyVideoEditorInspectorShellMixin(proto) {
     const item = this.getSelectedVideoEffectItem();
     if (!item) return;
     this.pushTimelineHistory();
-    this.videoTimeline.upsert({
+    this.editor.timeline.upsert({
       ...item,
       config: {
         ...(item.config || {}),
@@ -146,7 +146,7 @@ export function applyVideoEditorInspectorShellMixin(proto) {
 
   proto.updateEffectTrackHighlight = function (activeType = null) {
     if (!this.videoTimelineEl) return;
-    const selected = this.videoTimeline.items.find(
+    const selected = this.editor.timeline.items.find(
       (item) => item.id === this.selectedVideoEffectId,
     );
     const type =
@@ -187,7 +187,7 @@ export function applyVideoEditorInspectorShellMixin(proto) {
 
   proto.updateTimelineHint = function () {
     if (!this.timelineHintText) return;
-    if (!this.videoSource?.file) {
+    if (!this.editor.source?.file) {
       this.timelineHintText.textContent = '';
       return;
     }

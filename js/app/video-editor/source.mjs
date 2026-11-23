@@ -8,7 +8,7 @@ import { translateCurrent } from '../../../src/lib/i18n/translate.ts';
 export function applyVideoEditorSourceMixin(proto) {
   proto.applySourceMode = async function (mode) {
     if (mode === this.sourceMode) return;
-    if (this.videoExportSession?.active) return;
+    if (this.editor.exportSession?.active) return;
 
     if (mode === 'video') {
       this.webcamSessionState = {
@@ -98,14 +98,14 @@ export function applyVideoEditorSourceMixin(proto) {
   };
 
   proto.disposeVideoSource = function () {
-    if (this.videoExportSession?.active) this.cancelVideoExport();
-    this.videoSource.dispose();
+    if (this.editor.exportSession?.active) this.cancelVideoExport();
+    this.editor.source.dispose();
     this.cancelRenderLoop();
     this.isRunning = false;
     this.videoSourceFps = 30;
     this.videoSourceAverageBitrate = 0;
-    this.videoTimeline = new VideoTimeline();
-    this.editorHistory?.clear();
+    this.editor.timeline = new VideoTimeline();
+    this.editor.history?.clear();
     this.updateEditorHistoryButtons();
     this.timelineZoom = 1;
     this.selectedVideoEffectId = '';
@@ -118,7 +118,7 @@ export function applyVideoEditorSourceMixin(proto) {
     this.timelineDetectorSyncPromise = null;
     this.timelineDetectorSyncForce = false;
     this.videoBaseImageSettings = null;
-    this.editAssist?.reset();
+    this.editor.editAssist?.reset();
     this.clearTimelineItemElements();
     this.videoPlaceholderLoading = false;
     if (this.sourceMode === 'video') {
@@ -131,8 +131,8 @@ export function applyVideoEditorSourceMixin(proto) {
   };
 
   proto.updateVideoFileMeta = function () {
-    if (!this.videoFileMeta || !this.videoSource?.file) return;
-    const file = this.videoSource?.file;
+    if (!this.videoFileMeta || !this.editor.source?.file) return;
+    const file = this.editor.source?.file;
     this.videoFileMeta.textContent = `${file.name} · ${this.formatBytes(file.size)} · ${this.videoEl.videoWidth}×${this.videoEl.videoHeight} · ${this.formatDurationDetailed(this.videoEl.duration)} · ${this.formatVideoFps(this.videoSourceFps)} FPS · ${this.formatVideoBitrate(this.videoSourceAverageBitrate)} ${translateCurrent('estimado')}`;
   };
 
@@ -151,7 +151,7 @@ export function applyVideoEditorSourceMixin(proto) {
     this.camera.showVideoPlaceholderLoading('Leyendo metadata del video...');
     let signal;
     try {
-      const request = this.videoSource.open(file);
+      const request = this.editor.source.open(file);
       signal = request.signal;
       await request.ready;
       signal.throwIfAborted();
@@ -180,7 +180,7 @@ export function applyVideoEditorSourceMixin(proto) {
         file.size,
         this.videoEl.duration,
       );
-      this.videoTimeline.setDuration(this.videoEl.duration);
+      this.editor.timeline.setDuration(this.videoEl.duration);
       this.videoBaseImageSettings = this.createVideoBaseImageSettings();
       this.imageSettings = { ...this.videoBaseImageSettings };
       this.isRunning = true;

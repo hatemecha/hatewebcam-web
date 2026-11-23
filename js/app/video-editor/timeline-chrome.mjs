@@ -6,29 +6,29 @@ import { translateCurrent } from '../../../src/lib/i18n/translate.ts';
 export function applyVideoEditorTimelineChromeMixin(proto) {
   proto.pushTimelineHistory = function () {
     if (
-      !this.editorHistory ||
+      !this.editor.history ||
       this.timelineHistorySuspended ||
-      !this.videoSource?.file
+      !this.editor.source?.file
     )
       return;
-    this.editorHistory.push(this.videoTimeline);
+    this.editor.history.push(this.editor.timeline);
     this.updateEditorHistoryButtons();
   };
 
   proto.pushTimelineHistorySnapshot = function (snapshot) {
     if (
       !snapshot ||
-      !this.editorHistory ||
+      !this.editor.history ||
       this.timelineHistorySuspended ||
-      !this.videoSource?.file
+      !this.editor.source?.file
     )
       return;
-    this.editorHistory.pushSnapshot(snapshot);
+    this.editor.history.pushSnapshot(snapshot);
     this.updateEditorHistoryButtons();
   };
 
   proto.undoTimelineEdit = function () {
-    if (!this.editorHistory?.undo(this.videoTimeline)) return;
+    if (!this.editor.history?.undo(this.editor.timeline)) return;
     this.selectedVideoEffectId = '';
     this.selectedVideoEffectIds = new Set();
     this.applyVideoTrim(false);
@@ -38,7 +38,7 @@ export function applyVideoEditorTimelineChromeMixin(proto) {
   };
 
   proto.redoTimelineEdit = function () {
-    if (!this.editorHistory?.redo(this.videoTimeline)) return;
+    if (!this.editor.history?.redo(this.editor.timeline)) return;
     this.selectedVideoEffectId = '';
     this.selectedVideoEffectIds = new Set();
     this.applyVideoTrim(false);
@@ -50,10 +50,10 @@ export function applyVideoEditorTimelineChromeMixin(proto) {
   proto.updateEditorHistoryButtons = function () {
     updateEditorUiState({
       canUndo:
-        !!this.editorHistory?.canUndo && !this.videoExportSession?.active,
+        !!this.editor.history?.canUndo && !this.editor.exportSession?.active,
       canRedo:
-        !!this.editorHistory?.canRedo && !this.videoExportSession?.active,
-      exporting: !!this.videoExportSession?.active,
+        !!this.editor.history?.canRedo && !this.editor.exportSession?.active,
+      exporting: !!this.editor.exportSession?.active,
     });
   };
 
@@ -84,9 +84,9 @@ export function applyVideoEditorTimelineChromeMixin(proto) {
 
   proto.renderTimelineRuler = function () {
     if (!this.timelineTimeRuler || !this.timelineTrackArea) return;
-    const duration = Math.max(0.001, this.videoTimeline.duration);
+    const duration = Math.max(0.001, this.editor.timeline.duration);
     const width = this.timelineTrackArea.offsetWidth;
-    this.timelineView.renderRuler({
+    this.editor.timelineView.renderRuler({
       ruler: this.timelineTimeRuler,
       duration,
       width,
@@ -94,7 +94,7 @@ export function applyVideoEditorTimelineChromeMixin(proto) {
   };
 
   proto.positionTimelineElement = function (el, startTime, endTime = null) {
-    const duration = Math.max(0.001, this.videoTimeline.duration);
+    const duration = Math.max(0.001, this.editor.timeline.duration);
     const left = (startTime / duration) * 100;
     el.style.left = `${this.clamp(left, 0, 100)}%`;
     if (endTime != null) {
@@ -151,14 +151,14 @@ export function applyVideoEditorTimelineChromeMixin(proto) {
 
   proto.toggleTimelineMarkerAtPlayhead = function () {
     if (
-      !this.videoSource?.file ||
-      typeof this.videoTimeline.toggleMarker !== 'function'
+      !this.editor.source?.file ||
+      typeof this.editor.timeline.toggleMarker !== 'function'
     )
       return;
     const threshold = 0.08 / Math.max(1, this.timelineZoom);
     this.pushTimelineHistory();
-    const result = this.videoTimeline.toggleMarker(
-      this.videoEl.currentTime || this.videoTimeline.trimStart,
+    const result = this.editor.timeline.toggleMarker(
+      this.videoEl.currentTime || this.editor.timeline.trimStart,
       threshold,
     );
     this.renderVideoTimeline();
@@ -182,6 +182,6 @@ export function applyVideoEditorTimelineChromeMixin(proto) {
   proto.getTimelineRawTime = function (clientX) {
     const bounds = this.getTimelineTrackAreaBounds();
     const ratio = this.clamp((clientX - bounds.left) / bounds.width, 0, 1);
-    return ratio * this.videoTimeline.duration;
+    return ratio * this.editor.timeline.duration;
   };
 }

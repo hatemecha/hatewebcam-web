@@ -19,28 +19,30 @@ export function applyVideoEditorTimelineMixin(proto) {
     if (edge === 'move') {
       start = this.clamp(
         start,
-        this.videoTimeline.trimStart,
-        this.videoTimeline.trimEnd - span,
+        this.editor.timeline.trimStart,
+        this.editor.timeline.trimEnd - span,
       );
       end = start + span;
     } else if (edge === 'start') {
-      start = this.clamp(start, this.videoTimeline.trimStart, end - minSpan);
+      start = this.clamp(start, this.editor.timeline.trimStart, end - minSpan);
     } else {
-      end = this.clamp(end, start + minSpan, this.videoTimeline.trimEnd);
+      end = this.clamp(end, start + minSpan, this.editor.timeline.trimEnd);
     }
 
     if (this.chkTimelineSnap?.checked) {
       const threshold = 0.12 / Math.max(1, this.timelineZoom);
       const points = [
-        this.videoTimeline.trimStart,
-        this.videoTimeline.trimEnd,
+        this.editor.timeline.trimStart,
+        this.editor.timeline.trimEnd,
         this.videoEl.currentTime || 0,
       ];
-      this.videoTimeline.items.forEach((item) => {
+      this.editor.timeline.items.forEach((item) => {
         if (item.id === itemId || item.type !== type) return;
         points.push(item.startTime, item.endTime);
       });
-      this.videoTimeline.markers?.forEach((marker) => points.push(marker.time));
+      this.editor.timeline.markers?.forEach((marker) =>
+        points.push(marker.time),
+      );
       let bestDelta = threshold;
       let bestShift = 0;
       for (const point of points) {
@@ -69,17 +71,17 @@ export function applyVideoEditorTimelineMixin(proto) {
     if (edge === 'move') {
       start = this.clamp(
         start,
-        this.videoTimeline.trimStart,
-        this.videoTimeline.trimEnd - span,
+        this.editor.timeline.trimStart,
+        this.editor.timeline.trimEnd - span,
       );
       end = start + span;
     } else {
       start = this.clamp(
         start,
-        this.videoTimeline.trimStart,
-        this.videoTimeline.trimEnd - minSpan,
+        this.editor.timeline.trimStart,
+        this.editor.timeline.trimEnd - minSpan,
       );
-      end = this.clamp(end, start + minSpan, this.videoTimeline.trimEnd);
+      end = this.clamp(end, start + minSpan, this.editor.timeline.trimEnd);
     }
     return {
       startTime: this.roundTimelineTime(start),
@@ -89,15 +91,15 @@ export function applyVideoEditorTimelineMixin(proto) {
 
   proto.getTimelineIntervalPoints = function () {
     const points = [
-      this.videoTimeline.trimStart,
-      this.videoTimeline.trimEnd,
-      ...(this.videoTimeline.markers || []).map((marker) => marker.time),
+      this.editor.timeline.trimStart,
+      this.editor.timeline.trimEnd,
+      ...(this.editor.timeline.markers || []).map((marker) => marker.time),
     ]
       .filter(
         (time) =>
           Number.isFinite(Number(time)) &&
-          time >= this.videoTimeline.trimStart &&
-          time <= this.videoTimeline.trimEnd,
+          time >= this.editor.timeline.trimStart &&
+          time <= this.editor.timeline.trimEnd,
       )
       .sort((a, b) => a - b);
     return [...new Set(points.map((time) => this.roundTimelineTime(time)))];
@@ -124,7 +126,7 @@ export function applyVideoEditorTimelineMixin(proto) {
       minSpan,
       Math.min(
         duration,
-        this.videoTimeline.trimEnd - this.videoTimeline.trimStart,
+        this.editor.timeline.trimEnd - this.editor.timeline.trimStart,
       ),
     );
     return this.resolveTimelineClipTimes({
@@ -140,7 +142,7 @@ export function applyVideoEditorTimelineMixin(proto) {
     anchorTime,
     duration = this.DEFAULT_TIMELINE_EFFECT_DURATION,
   ) {
-    if (!this.videoSource?.file || !this.TIMELINE_EFFECT_META[type])
+    if (!this.editor.source?.file || !this.TIMELINE_EFFECT_META[type])
       return null;
     const placed = this.resolveTimelineInsertionTimes({
       type,
@@ -158,7 +160,7 @@ export function applyVideoEditorTimelineMixin(proto) {
     }
     try {
       this.pushTimelineHistory();
-      const saved = this.videoTimeline.upsert({
+      const saved = this.editor.timeline.upsert({
         id: crypto.randomUUID
           ? crypto.randomUUID()
           : `${Date.now()}-${Math.random()}`,
@@ -195,7 +197,7 @@ export function applyVideoEditorTimelineMixin(proto) {
     this.syncLookClipConfigNow();
     this.selectedVideoEffectId = id || '';
     this.selectedVideoEffectIds = new Set(id ? [id] : []);
-    const item = this.videoTimeline.items.find(
+    const item = this.editor.timeline.items.find(
       (candidate) => candidate.id === this.selectedVideoEffectId,
     );
     if (item) {
@@ -223,18 +225,22 @@ export function applyVideoEditorTimelineMixin(proto) {
   proto.snapTimelineTime = function (time) {
     if (!this.chkTimelineSnap?.checked) return time;
     const points = new Set([
-      this.videoTimeline.trimStart,
-      this.videoTimeline.trimEnd,
+      this.editor.timeline.trimStart,
+      this.editor.timeline.trimEnd,
       this.videoEl.currentTime || 0,
     ]);
-    if (typeof this.videoTimeline.getSnapPoints === 'function') {
-      this.videoTimeline.getSnapPoints().forEach((point) => points.add(point));
+    if (typeof this.editor.timeline.getSnapPoints === 'function') {
+      this.editor.timeline
+        .getSnapPoints()
+        .forEach((point) => points.add(point));
     } else {
-      this.videoTimeline.items.forEach((item) => {
+      this.editor.timeline.items.forEach((item) => {
         points.add(item.startTime);
         points.add(item.endTime);
       });
-      this.videoTimeline.markers?.forEach((marker) => points.add(marker.time));
+      this.editor.timeline.markers?.forEach((marker) =>
+        points.add(marker.time),
+      );
     }
     let closest = time;
     let minDelta = 0.12 / Math.max(1, this.timelineZoom);
@@ -255,47 +261,49 @@ export function applyVideoEditorTimelineMixin(proto) {
       '--timeline-track-count',
       String(this.getTimelineTrackCount()),
     );
-    const duration = Math.max(0.001, this.videoTimeline.duration);
+    const duration = Math.max(0.001, this.editor.timeline.duration);
     const percent = (time) => `${this.clamp((time / duration) * 100, 0, 100)}%`;
 
     if (this.timelineVideoClip) {
       this.timelineVideoClip.style.left = '0';
       this.timelineVideoClip.style.width = '100%';
     }
-    this.timelineTrim.style.left = percent(this.videoTimeline.trimStart);
+    this.timelineTrim.style.left = percent(this.editor.timeline.trimStart);
     this.timelineTrim.style.width = percent(
-      this.videoTimeline.trimEnd - this.videoTimeline.trimStart,
+      this.editor.timeline.trimEnd - this.editor.timeline.trimStart,
     );
     this.timelineTrimStartHandle.style.left = percent(
-      this.videoTimeline.trimStart,
+      this.editor.timeline.trimStart,
     );
-    this.timelineTrimEndHandle.style.left = percent(this.videoTimeline.trimEnd);
+    this.timelineTrimEndHandle.style.left = percent(
+      this.editor.timeline.trimEnd,
+    );
     if (this.timelineTrimOutsideStart) {
       this.timelineTrimOutsideStart.style.width = percent(
-        this.videoTimeline.trimStart,
+        this.editor.timeline.trimStart,
       );
     }
     if (this.timelineTrimOutsideEnd) {
       this.timelineTrimOutsideEnd.style.left = percent(
-        this.videoTimeline.trimEnd,
+        this.editor.timeline.trimEnd,
       );
       this.timelineTrimOutsideEnd.style.width = percent(
-        duration - this.videoTimeline.trimEnd,
+        duration - this.editor.timeline.trimEnd,
       );
     }
 
     const selectionStart = this.selectedVideoEffectId
       ? this.clamp(
           Number(this.videoEffectStart.value) || 0,
-          this.videoTimeline.trimStart,
-          this.videoTimeline.trimEnd,
+          this.editor.timeline.trimStart,
+          this.editor.timeline.trimEnd,
         )
       : this.videoEl.currentTime || 0;
     const selectionEnd = this.selectedVideoEffectId
       ? this.clamp(
           Number(this.videoEffectEnd.value) || 0,
           selectionStart,
-          this.videoTimeline.trimEnd,
+          this.editor.timeline.trimEnd,
         )
       : selectionStart;
     if (this.selectedVideoEffectId) {
@@ -313,7 +321,7 @@ export function applyVideoEditorTimelineMixin(proto) {
 
     if (this.timelineMarkers) {
       this.timelineMarkers.innerHTML = '';
-      (this.videoTimeline.markers || []).forEach((marker) => {
+      (this.editor.timeline.markers || []).forEach((marker) => {
         const markerEl = document.createElement('button');
         markerEl.type = 'button';
         markerEl.className = 'timeline-marker';
@@ -332,7 +340,7 @@ export function applyVideoEditorTimelineMixin(proto) {
     }
 
     this.clearTimelineItemElements();
-    this.videoTimeline.items.forEach((item) => {
+    this.editor.timeline.items.forEach((item) => {
       const meta = this.TIMELINE_EFFECT_META[item.type] || {
         trackLabel: item.type,
         row: 1,
@@ -363,6 +371,6 @@ export function applyVideoEditorTimelineMixin(proto) {
     });
     this.renderTimelineRuler();
     this.updateEffectTrackHighlight();
-    this.editAssist?.updateUI();
+    this.editor.editAssist?.updateUI();
   };
 }

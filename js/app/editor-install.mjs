@@ -6,12 +6,7 @@
  * bootstrap graph is what lets the webcam start without the timeline, export
  * encoder or Visual FX engine.
  */
-import { VideoTimeline } from '../editor/video-timeline.ts';
-import { EditorHistory } from '../editor/editor-history.ts';
-import { TimelineView } from './timeline-view.ts';
-import { EditAssistController } from './edit-assist-controller.ts';
-import { VideoExportSession } from './video-export-session.ts';
-import { VideoFileSource } from './video-editor/video-file-source.ts';
+import { VideoEditorSession } from './video-editor/session.ts';
 import { applyLocalvideoeditorMixin } from './video-editor.mjs';
 import { applyVisualFxIntegrationMixin } from './visual-fx-integration.mjs';
 import { applyVisualFxUIMixin } from './visual-fx-ui.mjs';
@@ -21,53 +16,47 @@ import { applyVisualFxLabMixin } from './visual-fx-lab.mjs';
  * @param {import('./controller.mjs').AppController} app
  */
 export async function installVideoEditor(app) {
-  if (app._editorInstalled) return app;
+  if (app.editor) return app.editor;
 
   applyLocalvideoeditorMixin(app);
   applyVisualFxIntegrationMixin(app);
   applyVisualFxUIMixin(app);
   applyVisualFxLabMixin(app);
 
-  app.videoSource = new VideoFileSource(app.videoEl);
-  app.videoTimeline = new VideoTimeline();
-  app.editorHistory = new EditorHistory();
-  app.timelineView = new TimelineView({
+  const editor = new VideoEditorSession({
+    video: app.videoEl,
     formatTime: (seconds) => app.formatDurationDetailed(seconds),
+    editAssist: {
+      getElements: () => ({
+        analyzeButton: app.btnEditAssistAnalyze,
+        beatButton: app.btnEditAssistBeat,
+        every2Button: app.btnEditAssistEvery2,
+        every4Button: app.btnEditAssistEvery4,
+        every8Button: app.btnEditAssistEvery8,
+        halfButton: app.btnEditAssistHalf,
+        doubleButton: app.btnEditAssistDouble,
+        offsetDownButton: app.btnEditAssistOffsetDown,
+        offsetUpButton: app.btnEditAssistOffsetUp,
+        regenerateButton: app.btnEditAssistRegenerate,
+        clearButton: app.btnEditAssistClear,
+        bpmInput: app.editAssistBpmInput,
+        offsetInput: app.editAssistOffsetInput,
+        densitySelect: app.editAssistDensitySelect,
+        result: app.editAssistResult,
+        status: app.editAssistStatus,
+      }),
+      pushHistory: () => app.pushTimelineHistory(),
+      renderTimeline: () => app.renderVideoTimeline(),
+      showStatus: (el, message, type) => app.showStatus(el, message, type),
+      updateTimelineHint: () => app.updateTimelineHint(),
+    },
   });
-  app.editAssist = new EditAssistController({
-    getSourceFile: () => app.videoSource?.file,
-    getTimeline: () => app.videoTimeline,
-    isExporting: () => app.videoExportSession?.active,
-    getElements: () => ({
-      analyzeButton: app.btnEditAssistAnalyze,
-      beatButton: app.btnEditAssistBeat,
-      every2Button: app.btnEditAssistEvery2,
-      every4Button: app.btnEditAssistEvery4,
-      every8Button: app.btnEditAssistEvery8,
-      halfButton: app.btnEditAssistHalf,
-      doubleButton: app.btnEditAssistDouble,
-      offsetDownButton: app.btnEditAssistOffsetDown,
-      offsetUpButton: app.btnEditAssistOffsetUp,
-      regenerateButton: app.btnEditAssistRegenerate,
-      clearButton: app.btnEditAssistClear,
-      bpmInput: app.editAssistBpmInput,
-      offsetInput: app.editAssistOffsetInput,
-      densitySelect: app.editAssistDensitySelect,
-      result: app.editAssistResult,
-      status: app.editAssistStatus,
-    }),
-    pushHistory: () => app.pushTimelineHistory(),
-    renderTimeline: () => app.renderVideoTimeline(),
-    showStatus: (el, message, type) => app.showStatus(el, message, type),
-    updateTimelineHint: () => app.updateTimelineHint(),
-  });
-  app.videoExportSession = new VideoExportSession();
 
-  app._editorInstalled = true;
+  app.editor = editor;
   app.bindVideoEditorEvents();
   app.bindTimelinePaletteDrag();
   app.bindEditorSplitters();
-  app.editAssist.bind();
+  editor.editAssist.bind();
   app.updateVideoEditorUI();
-  return app;
+  return editor;
 }

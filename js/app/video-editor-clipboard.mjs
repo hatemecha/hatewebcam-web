@@ -4,14 +4,14 @@ export function applyVideoEditorClipboardMixin(proto) {
     const ids = this.selectedVideoEffectIds?.size
       ? this.selectedVideoEffectIds
       : new Set(this.selectedVideoEffectId ? [this.selectedVideoEffectId] : []);
-    return this.videoTimeline.items.filter((item) => ids.has(item.id));
+    return this.editor.timeline.items.filter((item) => ids.has(item.id));
   };
 
   proto.deleteSelectedVideoEffect = function () {
     const items = this.getSelectedVideoEffectItems();
     if (!items.length) return;
     this.pushTimelineHistory();
-    items.forEach((item) => this.videoTimeline.remove(item.id));
+    items.forEach((item) => this.editor.timeline.remove(item.id));
     this.selectedVideoEffectId = '';
     this.selectedVideoEffectIds = new Set();
     this.renderVideoTimeline();
@@ -43,13 +43,13 @@ export function applyVideoEditorClipboardMixin(proto) {
   };
 
   proto.pasteVideoEffects = function (settingsOnly = false) {
-    if (!this.timelineClipboard?.items?.length || !this.videoSource?.file)
+    if (!this.timelineClipboard?.items?.length || !this.editor.source?.file)
       return;
     const selectedItems = this.getSelectedVideoEffectItems();
     if (settingsOnly) {
       if (!selectedItems.length) return;
       const snapshot =
-        this.editorHistory?.snapshot?.(this.videoTimeline) || null;
+        this.editor.history?.snapshot?.(this.editor.timeline) || null;
       let applied = 0;
       selectedItems.forEach((item) => {
         const source =
@@ -57,7 +57,7 @@ export function applyVideoEditorClipboardMixin(proto) {
             (clip) => clip.type === item.type,
           ) || this.timelineClipboard.items[0];
         if (source.type !== item.type) return;
-        this.videoTimeline.upsert({
+        this.editor.timeline.upsert({
           ...item,
           config:
             typeof structuredClone === 'function'
@@ -76,21 +76,22 @@ export function applyVideoEditorClipboardMixin(proto) {
     }
 
     const anchor = this.clamp(
-      this.videoEl.currentTime || this.videoTimeline.trimStart,
-      this.videoTimeline.trimStart,
-      this.videoTimeline.trimEnd,
+      this.videoEl.currentTime || this.editor.timeline.trimStart,
+      this.editor.timeline.trimStart,
+      this.editor.timeline.trimEnd,
     );
     const newIds = [];
     // Paste is all or nothing: a clip that lands outside the trim used to
     // leave the earlier ones applied plus a history entry.
-    const snapshot = this.editorHistory?.snapshot?.(this.videoTimeline) || null;
+    const snapshot =
+      this.editor.history?.snapshot?.(this.editor.timeline) || null;
     try {
       this.timelineClipboard.items.forEach((clip) => {
         const offset = clip.startTime - this.timelineClipboard.origin;
         const span = clip.endTime - clip.startTime;
         const startTime = this.roundTimelineTime(anchor + offset);
         const endTime = this.roundTimelineTime(startTime + span);
-        const saved = this.videoTimeline.upsert({
+        const saved = this.editor.timeline.upsert({
           id: crypto.randomUUID
             ? crypto.randomUUID()
             : `${Date.now()}-${Math.random()}`,
@@ -112,8 +113,8 @@ export function applyVideoEditorClipboardMixin(proto) {
       this.updateTimelineClipboardStatus(`Clips pegados: ${newIds.length}.`);
       void this.syncVideoTimelineEffects(true);
     } catch (err) {
-      if (snapshot && this.editorHistory) {
-        this.editorHistory.restore(this.videoTimeline, snapshot);
+      if (snapshot && this.editor.history) {
+        this.editor.history.restore(this.editor.timeline, snapshot);
         this.renderVideoTimeline();
         this.updateVideoEffectInspector();
       }

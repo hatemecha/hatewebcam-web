@@ -41,7 +41,7 @@ export function applyVideoEditorTimelineSyncMixin(proto) {
       checkbox.checked = shouldEnable;
       const wasSuppressed = !!this.suppressEffectSideEffects;
       this.suppressEffectSideEffects =
-        wasSuppressed || !!this.videoExportSession?.active;
+        wasSuppressed || !!this.editor.exportSession?.active;
       try {
         await this.toggleEffect(type);
       } finally {
@@ -78,7 +78,7 @@ export function applyVideoEditorTimelineSyncMixin(proto) {
   };
 
   proto.getBeatMarkerIndexAt = function (mediaTime) {
-    const markers = (this.videoTimeline.markers || []).filter(
+    const markers = (this.editor.timeline.markers || []).filter(
       (marker) =>
         marker.source === 'edit-assist' &&
         (marker.kind === 'beat' || marker.kind === 'bar') &&
@@ -89,7 +89,7 @@ export function applyVideoEditorTimelineSyncMixin(proto) {
 
   proto.getNearestBeatDelta = function (mediaTime) {
     let delta = Infinity;
-    (this.videoTimeline.markers || []).forEach((marker) => {
+    (this.editor.timeline.markers || []).forEach((marker) => {
       if (
         marker.source !== 'edit-assist' ||
         (marker.kind !== 'beat' && marker.kind !== 'bar')
@@ -140,8 +140,8 @@ export function applyVideoEditorTimelineSyncMixin(proto) {
   };
 
   proto.applyVideoTimelineLook = function (mediaTime, options = {}) {
-    if (this.sourceMode !== 'video' || !this.videoSource?.file) return false;
-    const lookItem = this.videoTimeline
+    if (this.sourceMode !== 'video' || !this.editor.source?.file) return false;
+    const lookItem = this.editor.timeline
       .activeAt(mediaTime)
       .find((item) => item.type === 'look');
     const nextId = lookItem?.id || '';
@@ -169,7 +169,7 @@ export function applyVideoEditorTimelineSyncMixin(proto) {
   };
 
   proto.syncVideoTimelineLookNow = function (options = {}) {
-    if (this.sourceMode !== 'video' || !this.videoSource?.file) return;
+    if (this.sourceMode !== 'video' || !this.editor.source?.file) return;
     const changed = this.applyVideoTimelineLook(
       this.videoEl.currentTime || 0,
       options,
@@ -178,7 +178,7 @@ export function applyVideoEditorTimelineSyncMixin(proto) {
   };
 
   proto.syncVideoTimelineLookAt = function (mediaTime, options = {}) {
-    if (this.sourceMode !== 'video' || !this.videoSource?.file) return;
+    if (this.sourceMode !== 'video' || !this.editor.source?.file) return;
     this.applyVideoTimelineLook(mediaTime, options);
     this.updateEffectsInfo();
   };
@@ -187,8 +187,8 @@ export function applyVideoEditorTimelineSyncMixin(proto) {
     mediaTime,
     force = false,
   ) {
-    if (this.sourceMode !== 'video' || !this.videoSource?.file) return;
-    const active = this.videoTimeline.activeAt(mediaTime);
+    if (this.sourceMode !== 'video' || !this.editor.source?.file) return;
+    const active = this.editor.timeline.activeAt(mediaTime);
     const byType = Object.fromEntries(
       active
         .filter(
@@ -208,7 +208,7 @@ export function applyVideoEditorTimelineSyncMixin(proto) {
   };
 
   proto.syncVideoTimelineDetectors = async function (force = false) {
-    if (this.sourceMode !== 'video' || !this.videoSource?.file) return;
+    if (this.sourceMode !== 'video' || !this.editor.source?.file) return;
     this.timelineDetectorSyncForce =
       !!force || !!this.timelineDetectorSyncForce;
     if (this.timelineDetectorSyncPromise)
@@ -234,7 +234,7 @@ export function applyVideoEditorTimelineSyncMixin(proto) {
   };
 
   proto.timelineDetectorIdsAt = function (mediaTime) {
-    const active = this.videoTimeline.activeAt(mediaTime);
+    const active = this.editor.timeline.activeAt(mediaTime);
     return Object.fromEntries(
       ['blob', 'face', 'blink'].map((type) => {
         const item = active.find((entry) => entry.type === type);
@@ -251,7 +251,7 @@ export function applyVideoEditorTimelineSyncMixin(proto) {
   };
 
   proto.syncVideoTimelineEffects = async function (force = false) {
-    if (this.sourceMode !== 'video' || !this.videoSource?.file) return;
+    if (this.sourceMode !== 'video' || !this.editor.source?.file) return;
     this.syncVideoTimelineLookNow({ force });
     await this.syncVideoTimelineVisualFx?.(force);
     await this.syncVideoTimelineDetectors(force);
@@ -259,8 +259,8 @@ export function applyVideoEditorTimelineSyncMixin(proto) {
 
   proto.updateInspectorWorkflow = function () {
     if (!this.inspectorWorkflowSteps) return;
-    const hasVideo = !!this.videoSource?.file;
-    const hasEffects = this.videoTimeline.items.length > 0;
+    const hasVideo = !!this.editor.source?.file;
+    const hasEffects = this.editor.timeline.items.length > 0;
     this.inspectorWorkflowSteps
       .querySelectorAll('[data-step]')
       .forEach((stepEl) => {

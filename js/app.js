@@ -298,7 +298,7 @@ try {
     controller.updateEffectsInfo?.(true);
     controller.updateVideoEditorUI?.();
     controller.updateEditorExportControls?.();
-    controller.editAssist?.updateUI();
+    controller.editor?.editAssist.updateUI();
     controller._adjustClipStatusKey = '';
     controller.updateAdjustmentsContext?.();
     controller.updateAdjustmentsClipStatus?.();

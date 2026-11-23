@@ -93,14 +93,12 @@ export class AppController {
 
     this.sourceMode = 'camera';
     this.requestedSourceMode = 'camera';
-    this.videoSource = null;
+    this.editor = null;
     this.videoPlaceholderLoading = false;
     this.videoSourceFps = 30;
     this.videoSourceAverageBitrate = 0;
     // Editor state is installed on first use by installVideoEditor(). Keep
     // only the inert defaults the webcam path may read.
-    this.videoTimeline = null;
-    this.editorHistory = null;
     this.editorTool = 'select';
     this.inspectorTab = 'project';
     this.adjustmentsContext = 'look';
@@ -116,7 +114,6 @@ export class AppController {
     this.timelineDetectorSyncForce = false;
     this.videoBaseImageSettings = null;
     this.pendingEditorProject = null;
-    this.videoExportSession = null;
     this.videoExportDiagnosis = null;
     this.videoExportPreflight = null;
     this.videoExportRecoveredSource = false;
@@ -179,7 +176,7 @@ export class AppController {
   }
 
   async setSourceMode(mode) {
-    if (this.videoExportSession?.active) return;
+    if (this.editor?.exportSession.active) return;
     this.requestedSourceMode = mode;
     if (mode === this.sourceMode) return;
     if (mode === 'video') {

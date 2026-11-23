@@ -13,33 +13,33 @@ const VIDEO_EFFECT_AUTOMATION_MODES = new Set([
 /** @param {import('../controller.mjs').AppController} proto */
 export function applyVideoEditorClipInspectorMixin(proto) {
   proto.applyVideoTrim = function (resetSelection = true) {
-    if (!this.videoSource?.file) return;
+    if (!this.editor.source?.file) return;
     try {
-      this.videoTimeline.setTrim(
+      this.editor.timeline.setTrim(
         this.videoTrimStart.value,
         this.videoTrimEnd.value,
       );
       this.videoEl.currentTime = this.clamp(
         this.videoEl.currentTime,
-        this.videoTimeline.trimStart,
-        this.videoTimeline.trimEnd,
+        this.editor.timeline.trimStart,
+        this.editor.timeline.trimEnd,
       );
       if (resetSelection) {
-        this.videoEffectStart.value = this.videoTimeline.trimStart.toFixed(2);
-        this.videoEffectEnd.value = this.videoTimeline.trimEnd.toFixed(2);
+        this.videoEffectStart.value = this.editor.timeline.trimStart.toFixed(2);
+        this.videoEffectEnd.value = this.editor.timeline.trimEnd.toFixed(2);
       }
       this.renderVideoTimeline();
       this.updateVideoEditorUI();
     } catch (err) {
-      this.videoTrimStart.value = this.videoTimeline.trimStart.toFixed(2);
-      this.videoTrimEnd.value = this.videoTimeline.trimEnd.toFixed(2);
+      this.videoTrimStart.value = this.editor.timeline.trimStart.toFixed(2);
+      this.videoTrimEnd.value = this.editor.timeline.trimEnd.toFixed(2);
       this.showStatus(this.videoEditorStatus, err.message, 'error');
     }
   };
 
   proto.getSelectedVideoEffectItem = function () {
     return (
-      this.videoTimeline.items.find(
+      this.editor.timeline.items.find(
         (candidate) => candidate.id === this.selectedVideoEffectId,
       ) || null
     );
@@ -47,7 +47,7 @@ export function applyVideoEditorClipInspectorMixin(proto) {
 
   proto.isPlayheadInSelectedClip = function () {
     const item = this.getSelectedVideoEffectItem();
-    if (!item || !this.videoSource?.file) return false;
+    if (!item || !this.editor.source?.file) return false;
     const time = this.videoEl.currentTime || 0;
     return time >= item.startTime && time < item.endTime;
   };
@@ -124,7 +124,7 @@ export function applyVideoEditorClipInspectorMixin(proto) {
   };
 
   proto.updateAdjustmentsPanelState = function () {
-    const hasVideo = !!this.videoSource?.file;
+    const hasVideo = !!this.editor.source?.file;
     const item = this.getSelectedVideoEffectItem();
     const hasSelection = !!item;
     const isVisualFx = isVisualFxClipType(item?.type);
@@ -185,12 +185,12 @@ export function applyVideoEditorClipInspectorMixin(proto) {
 
   proto.syncLookClipConfigNow = function () {
     if (this.sourceMode !== 'video' || !this.selectedVideoEffectId) return;
-    const item = this.videoTimeline.items.find(
+    const item = this.editor.timeline.items.find(
       (candidate) => candidate.id === this.selectedVideoEffectId,
     );
     if (!item || item.type !== 'look') return;
     try {
-      this.videoTimeline.upsert({
+      this.editor.timeline.upsert({
         ...item,
         config: this.snapshotVideoEffectConfig('look'),
       });
@@ -299,26 +299,26 @@ export function applyVideoEditorClipInspectorMixin(proto) {
 
   proto.commitSelectedEffectTiming = function (options = {}) {
     if (!this.selectedVideoEffectId) return;
-    const item = this.videoTimeline.items.find(
+    const item = this.editor.timeline.items.find(
       (candidate) => candidate.id === this.selectedVideoEffectId,
     );
     if (!item) return;
     const minSpan = 0.05;
     const startTime = this.clamp(
       Number(this.videoEffectStart.value) || 0,
-      this.videoTimeline.trimStart,
-      this.videoTimeline.trimEnd - minSpan,
+      this.editor.timeline.trimStart,
+      this.editor.timeline.trimEnd - minSpan,
     );
     const endTime = this.clamp(
       Number(this.videoEffectEnd.value) || 0,
       startTime + minSpan,
-      this.videoTimeline.trimEnd,
+      this.editor.timeline.trimEnd,
     );
     this.videoEffectStart.value = startTime.toFixed(2);
     this.videoEffectEnd.value = endTime.toFixed(2);
     try {
       if (options.pushHistory) this.pushTimelineHistory();
-      this.videoTimeline.upsert({ ...item, startTime, endTime });
+      this.editor.timeline.upsert({ ...item, startTime, endTime });
       this.renderVideoTimeline();
       void this.syncVideoTimelineEffects(true);
     } catch (err) {
@@ -368,7 +368,9 @@ export function applyVideoEditorClipInspectorMixin(proto) {
     label,
     type = null,
   ) {
-    this.timelineDragGhost = this.timelineView.ensureDragGhost(document.body);
+    this.timelineDragGhost = this.editor.timelineView.ensureDragGhost(
+      document.body,
+    );
     this.timelineDragGhost.textContent = label;
     this.timelineDragGhost.dataset.type = type || '';
     const rowType = this.getTimelineRowFromClientY(clientY);
@@ -380,7 +382,7 @@ export function applyVideoEditorClipInspectorMixin(proto) {
         anchorTime: rawTime,
         duration: this.DEFAULT_TIMELINE_EFFECT_DURATION,
       });
-      const duration = Math.max(0.001, this.videoTimeline.duration);
+      const duration = Math.max(0.001, this.editor.timeline.duration);
       const row = this.TIMELINE_EFFECT_META[type]?.row || 1;
       const rowSize = bounds.height / this.getTimelineTrackCount();
       this.timelineDragGhost.classList.add('is-timeline-preview');
@@ -398,7 +400,7 @@ export function applyVideoEditorClipInspectorMixin(proto) {
   };
 
   proto.removeTimelineDragGhost = function () {
-    this.timelineView.removeDragGhost();
+    this.editor.timelineView.removeDragGhost();
     this.timelineDragGhost = null;
   };
 
@@ -420,7 +422,7 @@ export function applyVideoEditorClipInspectorMixin(proto) {
         this.suppressPaletteClick = false;
       }, 0);
     }
-    if (!moved || !this.videoSource?.file) return;
+    if (!moved || !this.editor.source?.file) return;
     if (!this.getTimelineRowFromClientY(event.clientY)) {
       this.showStatus(
         this.videoEditorStatus,
@@ -441,21 +443,21 @@ export function applyVideoEditorClipInspectorMixin(proto) {
         chip.addEventListener('click', (event) => {
           if (
             this.suppressPaletteClick ||
-            !this.videoSource?.file ||
-            this.videoExportSession?.active ||
+            !this.editor.source?.file ||
+            this.editor.exportSession?.active ||
             chip.disabled
           )
             return;
           event.preventDefault();
           void this.addTimelineEffectClip(
             chip.dataset.effectType,
-            this.videoEl.currentTime || this.videoTimeline.trimStart,
+            this.videoEl.currentTime || this.editor.timeline.trimStart,
           );
         });
         chip.addEventListener('pointerdown', (event) => {
           if (
-            !this.videoSource?.file ||
-            this.videoExportSession?.active ||
+            !this.editor.source?.file ||
+            this.editor.exportSession?.active ||
             event.button !== 0 ||
             chip.disabled
           )
@@ -501,12 +503,15 @@ export function applyVideoEditorClipInspectorMixin(proto) {
       ?.querySelectorAll('.timeline-track-effects')
       .forEach((track) => {
         track.addEventListener('dblclick', (event) => {
-          if (!this.videoSource?.file || event.target.closest('.timeline-item'))
+          if (
+            !this.editor.source?.file ||
+            event.target.closest('.timeline-item')
+          )
             return;
           event.preventDefault();
           void this.addTimelineEffectClip(
             track.dataset.track,
-            this.videoEl.currentTime || this.videoTimeline.trimStart,
+            this.videoEl.currentTime || this.editor.timeline.trimStart,
           );
         });
       });
@@ -522,7 +527,7 @@ export function applyVideoEditorClipInspectorMixin(proto) {
       ? id
       : this.selectedVideoEffectIds.values().next().value || '';
     if (this.selectedVideoEffectId) {
-      const item = this.videoTimeline.items.find(
+      const item = this.editor.timeline.items.find(
         (candidate) => candidate.id === this.selectedVideoEffectId,
       );
       if (item) {
@@ -538,8 +543,8 @@ export function applyVideoEditorClipInspectorMixin(proto) {
   };
 
   proto.selectVideoEffectsByType = function (type) {
-    if (!type || !this.videoSource?.file) return;
-    const ids = this.videoTimeline.items
+    if (!type || !this.editor.source?.file) return;
+    const ids = this.editor.timeline.items
       .filter((item) => item.type === type)
       .map((item) => item.id);
     if (!ids.length) return;
@@ -561,9 +566,9 @@ export function applyVideoEditorClipInspectorMixin(proto) {
 
   proto.selectAllVideoEffects = function () {
     this.selectedVideoEffectIds = new Set(
-      this.videoTimeline.items.map((item) => item.id),
+      this.editor.timeline.items.map((item) => item.id),
     );
-    this.selectedVideoEffectId = this.videoTimeline.items[0]?.id || '';
+    this.selectedVideoEffectId = this.editor.timeline.items[0]?.id || '';
     this.renderVideoTimeline();
     this.updateVideoEffectInspector();
     this.updateAdjustmentsPanelState();
@@ -571,8 +576,8 @@ export function applyVideoEditorClipInspectorMixin(proto) {
   };
 
   proto.updateVideoEffectInspector = function () {
-    const hasVideo = !!this.videoSource?.file;
-    const item = this.videoTimeline.items.find(
+    const hasVideo = !!this.editor.source?.file;
+    const item = this.editor.timeline.items.find(
       (candidate) => candidate.id === this.selectedVideoEffectId,
     );
     const editing = !!item;

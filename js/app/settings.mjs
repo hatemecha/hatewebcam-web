@@ -563,12 +563,12 @@ export function applyStorageMixin(proto) {
 
   proto.syncSelectedClipConfig = function () {
     if (this.sourceMode !== 'video' || !this.selectedVideoEffectId) return;
-    const item = this.videoTimeline.items.find(
+    const item = this.editor.timeline.items.find(
       (candidate) => candidate.id === this.selectedVideoEffectId,
     );
     if (!item) return;
     try {
-      this.videoTimeline.upsert({
+      this.editor.timeline.upsert({
         ...item,
         config: this.snapshotVideoEffectConfig(item.type),
       });

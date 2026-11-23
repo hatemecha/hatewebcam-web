@@ -165,7 +165,9 @@ assert.equal(
 const timeline = new VideoTimeline(4);
 const item = timeline.upsert(migrated.timeline.items[0]);
 Object.assign(app, {
-  videoTimeline: timeline,
+  editor: {
+    timeline: timeline,
+  },
   getSelectedVideoEffectItem: () => timeline.items[0],
   syncVideoTimelineVisualFx() {},
 });
@@ -198,9 +200,11 @@ console.log('Visual FX unit checks passed.');
   };
   const app2 = {
     sourceMode: 'video',
-    videoSource: { file: {} },
-    videoTimeline: {
-      activeAt: () => [{ id: 'clip', type: 'visual-fx', config: {} }],
+    editor: {
+      source: { file: {} },
+      timeline: {
+        activeAt: () => [{ id: 'clip', type: 'visual-fx', config: {} }],
+      },
     },
   };
   applyVisualFxIntegrationMixin(app2);
@@ -234,9 +238,11 @@ console.log('Visual FX unit checks passed.');
   };
   const app3 = {
     sourceMode: 'video',
-    videoSource: { file: {} },
-    videoTimeline: {
-      activeAt: () => [{ id: 'same-clip', type: 'visual-fx', config: {} }],
+    editor: {
+      source: { file: {} },
+      timeline: {
+        activeAt: () => [{ id: 'same-clip', type: 'visual-fx', config: {} }],
+      },
     },
   };
   applyVisualFxIntegrationMixin(app3);

@@ -996,14 +996,16 @@ function checkEditorExportPresets() {
 
 function checkTimelineClipSnappingHelper() {
   const app = {
-    videoTimeline: {
-      trimStart: 0,
-      trimEnd: 10,
-      duration: 10,
-      markers: [{ id: 'm1', time: 2.5 }],
-      items: [{ id: 'a', type: 'blob', startTime: 1, endTime: 4 }],
-      getSnapPoints() {
-        return [this.trimStart, this.trimEnd, this.markers[0].time, 1, 4];
+    editor: {
+      timeline: {
+        trimStart: 0,
+        trimEnd: 10,
+        duration: 10,
+        markers: [{ id: 'm1', time: 2.5 }],
+        items: [{ id: 'a', type: 'blob', startTime: 1, endTime: 4 }],
+        getSnapPoints() {
+          return [this.trimStart, this.trimEnd, this.markers[0].time, 1, 4];
+        },
       },
     },
     videoEl: { currentTime: 6 },
@@ -1071,7 +1073,9 @@ function checkTimelineClipsMountInTheirTrack() {
     },
   };
   const app = {
-    videoTimeline: { duration: 10 },
+    editor: {
+      timeline: { duration: 10 },
+    },
     clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
     timelineItems: { innerHTML: 'stale', appendChild() {} },
     timelineTrackArea: {
@@ -1132,7 +1136,9 @@ function checkTimelineMarkerIntervalsForInsertion() {
     { time: 2, kind: 'beat', source: 'edit-assist' },
   ]);
   const app = {
-    videoTimeline: timeline,
+    editor: {
+      timeline: timeline,
+    },
     videoEl: { currentTime: 0 },
     chkTimelineSnap: { checked: true },
     timelineZoom: 1,
@@ -1155,13 +1161,15 @@ function checkTimelineClipboardBasics() {
   const timeline = new VideoTimeline(10);
   const look = timeline.add('look', 1, 2, { contrast: 120 });
   const app = {
-    videoTimeline: timeline,
-    videoSource: { file: {} },
+    editor: {
+      timeline: timeline,
+      source: { file: {} },
+      history: { push() {} },
+    },
     videoEl: { currentTime: 5 },
     selectedVideoEffectId: look.id,
     selectedVideoEffectIds: new Set([look.id]),
     timelineHistorySuspended: false,
-    editorHistory: { push() {} },
     clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
     updateEditorHistoryButtons() {},
     renderVideoTimeline() {},
@@ -1185,13 +1193,15 @@ function checkTimelineClipboardPasteIsAtomic() {
   const editorHistory = new EditorHistory();
   let statusMessage = '';
   const app = {
-    videoTimeline: timeline,
-    videoSource: { file: {} },
+    editor: {
+      timeline: timeline,
+      source: { file: {} },
+      history: editorHistory,
+    },
     videoEl: { currentTime: 9 },
     selectedVideoEffectId: look.id,
     selectedVideoEffectIds: new Set([look.id, blob.id]),
     timelineHistorySuspended: false,
-    editorHistory,
     clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
     updateEditorHistoryButtons() {},
     renderVideoTimeline() {},
@@ -1228,7 +1238,9 @@ function checkTimelineRectSelectionUsesEveryTrackRow() {
   const look = timeline.add('look', 0, 10, {});
   const blob = timeline.add('blob', 0, 10, {});
   const app = {
-    videoTimeline: timeline,
+    editor: {
+      timeline: timeline,
+    },
     TIMELINE_EFFECT_META: { look: { row: 1 }, blob: { row: 3 } },
     selectedVideoEffectIds: new Set(),
     selectedVideoEffectId: '',
@@ -1275,20 +1287,22 @@ function checkProjectJsonRoundTrip() {
   timeline.add('look', 2, 4, { contrast: 120 });
   timeline.addMarker({ time: 3, kind: 'bar', source: 'edit-assist' });
   const app = {
-    videoSource: { file: { name: 'clip.mp4', size: 1234 } },
-    videoTimeline: timeline,
+    editor: {
+      source: { file: { name: 'clip.mp4', size: 1234 } },
+      timeline: timeline,
+      editAssist: {
+        toJSON: () => ({
+          bpm: 128,
+          confidence: 0.72,
+          offset: 0.184,
+          markerStep: 4,
+          generatedAt: 1,
+        }),
+      },
+    },
     videoEl: { videoWidth: 1920, videoHeight: 1080 },
     videoSourceFps: 29.97,
     imageSettings: { ...DEFAULT_IMAGE_SETTINGS, editorExportMode: 'webm' },
-    editAssist: {
-      toJSON: () => ({
-        bpm: 128,
-        confidence: 0.72,
-        offset: 0.184,
-        markerStep: 4,
-        generatedAt: 1,
-      }),
-    },
   };
   applyLocalvideoeditorMixin(app);
   const project = JSON.parse(JSON.stringify(app.buildEditorProjectData()));
@@ -1321,7 +1335,9 @@ function checkBeatReactiveAutomation() {
     { time: 2, kind: 'beat', source: 'edit-assist' },
   ]);
   const app = {
-    videoTimeline: timeline,
+    editor: {
+      timeline: timeline,
+    },
     DEFAULT_IMAGE_SETTINGS,
     clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
   };
@@ -1365,13 +1381,15 @@ function checkSplitAllEffectsAtMarkers() {
   timeline.addMarker({ time: 3 });
   timeline.addMarker({ time: 6 });
   const app = {
-    videoTimeline: timeline,
-    videoSource: { file: {} },
-    videoExportSession: { active: false },
+    editor: {
+      timeline: timeline,
+      source: { file: {} },
+      exportSession: { active: false },
+      history: { push() {} },
+    },
     selectedVideoEffectId: '',
     selectedVideoEffectIds: new Set(),
     timelineHistorySuspended: false,
-    editorHistory: { push() {} },
     updateEditorHistoryButtons() {},
     renderVideoTimeline() {},
     updateVideoEffectInspector() {},
@@ -1405,7 +1423,9 @@ async function checkSequentialExportAdvance() {
         pauseCalls += 1;
       },
     },
-    videoExportSession: { active: true },
+    editor: {
+      exportSession: { active: true },
+    },
     seekCalls: 0,
     playCalls: 0,
     waitCalls: 0,
@@ -1438,7 +1458,7 @@ async function checkSequentialExportAdvance() {
     'sequential export should not wait for an extra frame after every step',
   );
   assert.equal(
-    app.videoExportSession.skippedFrames,
+    app.editor.exportSession.skippedFrames,
     1,
     'overshot frames should be reused instead of forcing a late seek',
   );
@@ -1462,7 +1482,9 @@ async function checkSequentialExportAdvance() {
 async function checkExportPlaybackPausesAtTarget() {
   let pauseCalls = 0;
   const app = {
-    videoExportSession: { active: true },
+    editor: {
+      exportSession: { active: true },
+    },
     videoExportPlayback: { playbackRate: 4 },
     videoEl: {
       currentTime: 1,
@@ -1490,7 +1512,9 @@ async function checkExportSeekFallsBackWhenSeekedIsMissing() {
   let waited = false;
   let fastSeekCalled = false;
   const app = {
-    videoTimeline: { duration: 10 },
+    editor: {
+      timeline: { duration: 10 },
+    },
     videoEl: {
       readyState: 2,
       get currentTime() {
@@ -1527,8 +1551,10 @@ async function checkExportSeekFallsBackWhenSeekedIsMissing() {
 
 async function checkExportPrepareRecoversDecodeFailure() {
   const app = {
-    videoSource: { file: {} },
-    videoExportSession: { totalFrames: 10 },
+    editor: {
+      source: { file: {} },
+      exportSession: { totalFrames: 10 },
+    },
     videoExportRecoveredSource: false,
     videoEl: {
       currentTime: 0,
@@ -1561,9 +1587,11 @@ function checkVideoSeekAvoidsExactDuration() {
   let currentTime = 0;
   let scheduled = 0;
   const app = {
-    videoSource: { file: {} },
-    videoExportSession: { active: false },
-    videoTimeline: { trimStart: 0, trimEnd: 10, duration: 10 },
+    editor: {
+      source: { file: {} },
+      exportSession: { active: false },
+      timeline: { trimStart: 0, trimEnd: 10, duration: 10 },
+    },
     videoEl: {
       duration: 10,
       get currentTime() {
@@ -1612,10 +1640,12 @@ function checkPausedVideoPreviewUsesAnimationFrame() {
       frameCount: 0,
       isPageVisible: true,
       isRunning: true,
-      videoExportSession: { active: false },
+      editor: {
+        exportSession: { active: false },
+        timeline: { trimEnd: 10, duration: 10 },
+      },
       lastFpsTime: performance.now(),
       sourceMode: 'video',
-      videoTimeline: { trimEnd: 10, duration: 10 },
       videoEl: {
         currentTime: 0,
         paused: true,
@@ -1691,10 +1721,12 @@ async function checkVideoPlaybackRestartsFromEnd() {
   let cancelled = 0;
   let scheduled = 0;
   const app = {
-    videoSource: { file: {} },
-    videoExportSession: { active: false },
+    editor: {
+      source: { file: {} },
+      exportSession: { active: false },
+      timeline: { trimStart: 0, trimEnd: 10, duration: 10 },
+    },
     animFrameId: 77,
-    videoTimeline: { trimStart: 0, trimEnd: 10, duration: 10 },
     videoEl: {
       paused: true,
       duration: 10,
@@ -1749,16 +1781,18 @@ async function checkExportPlaybackRateRestores() {
       addEventListener() {},
       removeEventListener() {},
     },
-    videoTimeline: { duration: 10 },
-    clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
-    videoExportSession: {
-      stop() {},
-      releaseWakeLock: async () => {},
+    editor: {
+      timeline: { duration: 10 },
+      exportSession: {
+        stop() {},
+        releaseWakeLock: async () => {},
+      },
+      source: { file: null },
     },
+    clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
     videoExportProgress: { value: 0 },
     videoExportModal: { classList: { add() {} } },
     isRunning: false,
-    videoSource: { file: null },
     updateVideoEditorUI() {},
     updateVideoTransport() {},
     waitForExportVideoFrame: async () => {},
@@ -1790,7 +1824,9 @@ async function checkExportTimelineDetectorToggleIsQuiet() {
   const calls = [];
   const effect = {};
   const app = {
-    videoExportSession: { active: true },
+    editor: {
+      exportSession: { active: true },
+    },
     chkBlobTracking: { checked: true },
     chkFaceDetection: { checked: false },
     chkBlinkDetection: { checked: false },
@@ -2229,7 +2265,9 @@ function checkPaletteDropUsesEffectTypeRow() {
       face: { label: 'Caras', trackLabel: 'CARAS', row: 3 },
     },
     paletteDragState: { type: 'blob', chip, moved: true },
-    videoSource: { file: {} },
+    editor: {
+      source: { file: {} },
+    },
     removeTimelineDragGhost() {},
     clearTimelineDropTargets() {},
     updateEffectTrackHighlight() {},
@@ -2253,13 +2291,15 @@ function checkPaletteDropUsesEffectTypeRow() {
 
 async function checkEffectsOnlyExportSkipsBaseRender() {
   const app = {
-    videoTimeline: { trimStart: 2 },
+    editor: {
+      timeline: { trimStart: 2 },
+      exportSession: { totalFrames: 1 },
+    },
     imageSettings: {
       editorExportMode: 'effects-chroma',
       effectsExportChroma: 'green',
       qualityEnhancer: true,
     },
-    videoExportSession: { totalFrames: 1 },
     renderEngine: {
       recordingCanvas: { width: 100, height: 100 },
       recordingCtx: {},
@@ -2319,12 +2359,14 @@ async function checkEffectsOnlyExportSkipsBaseRender() {
 async function checkExportFrameProgressThrottlesInnerStages() {
   const calls = [];
   const app = {
-    videoTimeline: { trimStart: 0 },
+    editor: {
+      timeline: { trimStart: 0 },
+      exportSession: { totalFrames: 10 },
+    },
     imageSettings: {
       editorExportMode: 'full',
       qualityEnhancer: false,
     },
-    videoExportSession: { totalFrames: 10 },
     updateVideoExportProgress(done, total, fps, meta) {
       calls.push(meta);
     },
@@ -2706,7 +2748,9 @@ function checkSubjectVariationStep() {
     config: createDefaultVisualConfig('fragment'),
   });
   const app = {
-    videoTimeline: timeline,
+    editor: {
+      timeline: timeline,
+    },
     getSelectedVideoEffectItem: () => item,
     pushTimelineHistory() {},
     visualFxEffect: { setConfig() {} },
@@ -3048,10 +3092,12 @@ async function checkSubjectClipAwaitsEffectBeforeAnalyzer() {
     config: createDefaultVisualConfig('anatomy'),
   };
   const app = {
-    videoSource: { file: {} },
+    editor: {
+      source: { file: {} },
+      timeline: { upsert: () => saved },
+    },
     TIMELINE_EFFECT_META: { 'visual-fx': { label: 'Visual FX' } },
     DEFAULT_TIMELINE_EFFECT_DURATION: 3,
-    videoTimeline: { upsert: () => saved },
     pushTimelineHistory() {},
     snapshotVideoEffectConfig: () => saved.config,
     ensureVisualFxEffect: async () => {

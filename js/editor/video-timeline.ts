@@ -20,7 +20,6 @@ export interface TimelineMarker {
   source: string;
   strength: number;
   label: string;
-  [key: string]: unknown;
 }
 
 export interface TimelineJson {

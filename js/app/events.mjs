@@ -122,7 +122,7 @@ export function applyEventsMixin(proto) {
       });
     }
     this.btnVideoStart.addEventListener('click', () =>
-      this.seekVideo(this.videoTimeline.trimStart),
+      this.seekVideo(this.editor.timeline.trimStart),
     );
     this.btnVideoBack.addEventListener('click', () => this.jumpVideo(-5));
     this.btnVideoPlay.addEventListener('click', () => {
@@ -130,7 +130,7 @@ export function applyEventsMixin(proto) {
     });
     this.btnVideoForward.addEventListener('click', () => this.jumpVideo(5));
     this.btnVideoEnd.addEventListener('click', () =>
-      this.seekVideo(this.videoTimeline.trimEnd),
+      this.seekVideo(this.editor.timeline.trimEnd),
     );
     this.videoSeek.addEventListener('input', () =>
       this.seekVideo(this.videoSeek.value),
@@ -155,7 +155,7 @@ export function applyEventsMixin(proto) {
     });
     if (this.btnOpenEffectAdjust) {
       this.btnOpenEffectAdjust.addEventListener('click', () => {
-        const item = this.videoTimeline.items.find(
+        const item = this.editor.timeline.items.find(
           (candidate) => candidate.id === this.selectedVideoEffectId,
         );
         if (item) this.openAdjustmentsForContext(item.type);
@@ -342,14 +342,14 @@ export function applyEventsMixin(proto) {
       this.stopRecording(false);
       this.clearPendingCapture(true);
       this.camera.stop();
-      this.videoSource?.dispose();
+      this.editor?.source.dispose();
       this.visualFxEffect?.dispose?.();
     });
   };
 
   proto.onVisibilityChange = function () {
     this.isPageVisible = document.visibilityState !== 'hidden';
-    if (this.videoExportSession?.active) return;
+    if (this.editor?.exportSession.active) return;
     if (!this.isRunning) return;
 
     if (!this.isPageVisible) {
