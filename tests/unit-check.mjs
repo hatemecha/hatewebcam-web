@@ -61,6 +61,7 @@ import {
   updateEditorUiState,
 } from '../src/lib/editor/editor-state.ts';
 import { SettingsStore } from '../js/app/settings-store.ts';
+import { loadWebcamSettings } from '../js/app/webcam-settings.ts';
 import { applyEffectsMixin } from '../js/app/effects.mjs';
 import { applyCameraMixin } from '../js/app/camera.mjs';
 import { applyRenderLoopMixin } from '../js/app/render.mjs';
@@ -154,6 +155,46 @@ function checkSettingsStoreRejectsNonObjectState() {
     storage: { getItem: () => JSON.stringify(saved) },
   });
   assert.deepEqual(store.loadObject('settings'), saved);
+}
+
+function checkWebcamSettingsMigrateOnce() {
+  let saved = {
+    flipH: true,
+    quickDetectorSettings: {
+      faceVisualMode: 'pixelate',
+      faceLabelText: 'TEST',
+    },
+    imageSettings: { previewQuality: 'high', exposure: 12 },
+    effectSettings: { blob: { targetColor: '#112233' } },
+  };
+  let writes = 0;
+  const store = new SettingsStore({
+    storage: {
+      getItem: () => JSON.stringify(saved),
+      setItem: (_key, value) => {
+        writes += 1;
+        saved = JSON.parse(value);
+      },
+    },
+  });
+  const migrated = loadWebcamSettings(store);
+  assert.equal(migrated.flipH, false);
+  assert.equal(migrated.quickDetectorSettings.faceShowBox, true);
+  assert.equal(migrated.quickDetectorSettings.faceShowBlur, false);
+  assert.equal(migrated.quickDetectorSettings.faceLabelText, 'TEST');
+  assert.deepEqual(migrated.imageSettings, {
+    previewQuality: 'balanced',
+    exposure: 12,
+  });
+  assert.equal(migrated.effectSettings.blob.targetColor, '#112233');
+  assert.equal(writes, 4);
+
+  saved.flipH = true;
+  saved.imageSettings.previewQuality = 'high';
+  const restarted = loadWebcamSettings(store);
+  assert.equal(restarted.flipH, true);
+  assert.equal(restarted.imageSettings.previewQuality, 'high');
+  assert.equal(writes, 4);
 }
 
 async function checkCameraStreamCleanup() {
@@ -3043,6 +3084,7 @@ async function checkSubjectClipAwaitsEffectBeforeAnalyzer() {
 await checkCameraStreamCleanup();
 await checkFaceMeshFallsBackAfterClassicWorkerFailure();
 checkSettingsStoreRejectsNonObjectState();
+checkWebcamSettingsMigrateOnce();
 checkCameraPreservesSupportedFps();
 checkReusableMorphologyBuffers();
 checkBlinkDetectionUsesRefinedEyeLandmarks();

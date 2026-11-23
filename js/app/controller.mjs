@@ -33,7 +33,7 @@ import { CameraManager } from '../core/camera-manager.ts';
 import { EffectManager } from '../effects/effect-manager.ts';
 import { setupDom } from './dom.mjs';
 import { applyStorageMixin } from './settings.mjs';
-import { applyInitMixin } from './init.mjs';
+import { initializeWebcam } from './init.ts';
 import { applyEventsMixin } from './events.mjs';
 import { applyCameraMixin } from './camera.mjs';
 import { applyEffectsMixin } from './effects.mjs';
@@ -260,15 +260,13 @@ export class AppController {
     // worker) cannot lose clicks and file selections while settings load.
     // Init still publishes the initial UI state after this.
     this.bindEvents();
-    this.bindQuickDetectorEvents();
     this.bindImageControlEvents();
     this.initializeColorPalettes();
-    await this.init();
+    await initializeWebcam(this);
   }
 }
 
 applyStorageMixin(AppController.prototype);
-applyInitMixin(AppController.prototype);
 applyEventsMixin(AppController.prototype);
 applyCameraMixin(AppController.prototype);
 applyEffectsMixin(AppController.prototype);

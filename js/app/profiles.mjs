@@ -1,3 +1,4 @@
+import { faceFlagsFromVisualMode } from './webcam-settings.ts';
 import { translateCurrent } from '../../src/lib/i18n/translate.ts';
 
 /** @param {import('./controller.mjs').AppController} proto */
@@ -97,7 +98,7 @@ export function applyProfilesMixin(proto) {
       if (config.face.showBlur != null)
         this.quickDetectorSettings.faceShowBlur = !!config.face.showBlur;
       if (config.face.visualMode != null) {
-        const legacy = this.faceFlagsFromVisualMode(config.face.visualMode);
+        const legacy = faceFlagsFromVisualMode(config.face.visualMode);
         if (config.face.showBox == null)
           this.quickDetectorSettings.faceShowBox = legacy.showBox;
         if (config.face.showBlur == null)

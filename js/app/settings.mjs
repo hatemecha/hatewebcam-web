@@ -1,3 +1,7 @@
+import {
+  faceVisualModeFromFlags,
+  normalizeFaceVisualFlags,
+} from './webcam-settings.ts';
 import { normalizePreviewQuality } from './constants.ts';
 import { translateCurrent } from '../../src/lib/i18n/translate.ts';
 import {
@@ -19,9 +23,7 @@ export function applyStorageMixin(proto) {
   proto.publishWebcamPanel = function () {
     const image = this.imageSettings || {};
     const quick = this.quickDetectorSettings || {};
-    const faceFlags = this.normalizeFaceVisualFlags
-      ? this.normalizeFaceVisualFlags(quick)
-      : { showBox: true, showBlur: false };
+    const faceFlags = normalizeFaceVisualFlags(quick);
     const selectedEffect =
       this.sourceMode === 'video'
         ? this.getSelectedVideoEffectItem?.()?.type || null
@@ -160,52 +162,9 @@ export function applyStorageMixin(proto) {
     return label ? label.slice(0, 28) : 'CARA';
   };
 
-  proto.normalizeFaceVisualMode = function (value) {
-    const normalized = String(value || '')
-      .trim()
-      .toLowerCase();
-    return ['pixelate', 'box', 'hybrid'].includes(normalized)
-      ? normalized
-      : 'box';
-  };
-
-  proto.faceVisualModeFromFlags = function (showBox, showBlur) {
-    if (showBox && showBlur) return 'hybrid';
-    if (showBlur) return 'pixelate';
-    return 'box';
-  };
-
-  proto.faceFlagsFromVisualMode = function (mode) {
-    const normalized = this.normalizeFaceVisualMode(mode);
-    return {
-      showBox: normalized === 'box' || normalized === 'hybrid',
-      showBlur: normalized === 'pixelate' || normalized === 'hybrid',
-    };
-  };
-
-  proto.normalizeFaceVisualFlags = function (
-    settings = this.quickDetectorSettings,
-  ) {
-    let showBox = settings.faceShowBox;
-    let showBlur = settings.faceShowBlur;
-    if (
-      showBox == null &&
-      showBlur == null &&
-      settings.faceVisualMode != null
-    ) {
-      const legacy = this.faceFlagsFromVisualMode(settings.faceVisualMode);
-      showBox = legacy.showBox;
-      showBlur = legacy.showBlur;
-    }
-    showBox = showBox !== false;
-    showBlur = !!showBlur;
-    if (!showBox && !showBlur) showBox = true;
-    return { showBox, showBlur };
-  };
-
   proto.getFaceVisualMode = function (settings = this.quickDetectorSettings) {
-    const { showBox, showBlur } = this.normalizeFaceVisualFlags(settings);
-    return this.faceVisualModeFromFlags(showBox, showBlur);
+    const { showBox, showBlur } = normalizeFaceVisualFlags(settings);
+    return faceVisualModeFromFlags(showBox, showBlur);
   };
 
   proto.normalizeCaptureTimerSeconds = function (value) {
@@ -220,17 +179,17 @@ export function applyStorageMixin(proto) {
   };
 
   proto.isFaceBoxVisualMode = function (settings = this.quickDetectorSettings) {
-    return this.normalizeFaceVisualFlags(settings).showBox;
+    return normalizeFaceVisualFlags(settings).showBox;
   };
 
   proto.isFacePixelVisualMode = function (
     settings = this.quickDetectorSettings,
   ) {
-    return this.normalizeFaceVisualFlags(settings).showBlur;
+    return normalizeFaceVisualFlags(settings).showBlur;
   };
 
   proto.applyFaceVisualFlags = function (showBox, showBlur, options = {}) {
-    const normalized = this.normalizeFaceVisualFlags({
+    const normalized = normalizeFaceVisualFlags({
       faceShowBox: showBox,
       faceShowBlur: showBlur,
     });
@@ -413,7 +372,7 @@ export function applyStorageMixin(proto) {
     this.quickDetectorSettings.faceLabelText = this.normalizeFaceLabel(
       this.quickDetectorSettings.faceLabelText,
     );
-    const faceFlags = this.normalizeFaceVisualFlags(this.quickDetectorSettings);
+    const faceFlags = normalizeFaceVisualFlags(this.quickDetectorSettings);
     this.quickDetectorSettings.faceShowBox = faceFlags.showBox;
     this.quickDetectorSettings.faceShowBlur = faceFlags.showBlur;
     this.quickDetectorSettings.facePixelationCellSize = this.clamp(
@@ -466,7 +425,7 @@ export function applyStorageMixin(proto) {
   };
 
   proto.updateQuickDetectorControlsUI = function () {
-    const faceFlags = this.normalizeFaceVisualFlags(this.quickDetectorSettings);
+    const faceFlags = normalizeFaceVisualFlags(this.quickDetectorSettings);
     this.quickDetectorSettings.faceShowBox = faceFlags.showBox;
     this.quickDetectorSettings.faceShowBlur = faceFlags.showBlur;
     const showFaceBoxVisuals = faceFlags.showBox;
@@ -650,37 +609,6 @@ export function applyStorageMixin(proto) {
       this.syncSelectedClipConfigTimer = null;
       this.syncSelectedClipConfig();
     }, 120);
-  };
-
-  proto.migrateResponsiveEditorDefaults = function (cfg) {
-    if (cfg.responsiveEditorDefaultsV1 === true) return false;
-    cfg.imageSettings = { ...(cfg.imageSettings || {}) };
-    if (
-      !cfg.imageSettings.previewQuality ||
-      cfg.imageSettings.previewQuality === 'high'
-    ) {
-      cfg.imageSettings.previewQuality = 'balanced';
-    }
-    cfg.effectSettings = { ...(cfg.effectSettings || {}) };
-    cfg.effectSettings.blob = {
-      ...(cfg.effectSettings.blob || {}),
-      processScale: 0.45,
-      processIntervalMs: 33,
-    };
-    cfg.effectSettings.face = {
-      ...(cfg.effectSettings.face || {}),
-      processIntervalMs: 30,
-      boxSmoothing: 0.5,
-      detectionHoldMs: 120,
-    };
-    cfg.effectSettings.blink = {
-      ...(cfg.effectSettings.blink || {}),
-      processIntervalMs: 30,
-      minClosedFrames: 1,
-      earSmoothing: 0.35,
-    };
-    cfg.responsiveEditorDefaultsV1 = true;
-    return true;
   };
 
   proto.loadImageSettings = function (cfg) {
@@ -1112,8 +1040,6 @@ export function applyStorageMixin(proto) {
     this.publishWebcamPanel();
     this.saveImageSettings();
   };
-
-  proto.bindQuickDetectorEvents = function () {};
 
   proto.syncMirrorControls = function () {
     if (this.chkMirror) this.chkMirror.checked = !!this.flipH;
