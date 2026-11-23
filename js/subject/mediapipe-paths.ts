@@ -5,14 +5,16 @@ const SUBJECT_ASSET_PATHS = Object.freeze({
 });
 
 /** Resolve static assets against the page URL before crossing into a Worker. */
-export function resolveSubjectAssetUrls(baseUrl) {
+export type SubjectAssets = Record<keyof typeof SUBJECT_ASSET_PATHS, string>;
+
+export function resolveSubjectAssetUrls(baseUrl: string | URL): SubjectAssets {
   if (!baseUrl) throw new Error('subject_asset_base_url_missing');
   return Object.fromEntries(
     Object.entries(SUBJECT_ASSET_PATHS).map(([key, path]) => [
       key,
       new URL(path, baseUrl).href.replace(/\/$/, ''),
     ]),
-  );
+  ) as SubjectAssets;
 }
 
 export { SUBJECT_ASSET_PATHS };

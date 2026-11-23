@@ -17,17 +17,52 @@ const WRIST_L = 15;
 const WRIST_R = 16;
 const HEAD = 0;
 
-function clampRange(value, min, max) {
+export interface SubjectPoint {
+  x: number;
+  y: number;
+}
+
+export interface PoseLandmark extends SubjectPoint {
+  z?: number;
+  visibility?: number;
+  presence?: number;
+}
+
+interface MotionAnalyzerOptions {
+  smoothing?: number;
+  motionSensitivity?: number;
+  confidenceThreshold?: number;
+  holdMs?: number;
+}
+
+export interface SubjectMotionFrame {
+  landmarks: PoseLandmark[];
+  segmentationMask: null;
+  boundingBox: ReturnType<typeof computeBoundingBox>;
+  center: SubjectPoint;
+  motionEnergy: number;
+  movementDirection: number;
+  bodyExpansion: number;
+  jointVelocities: SubjectPoint[];
+  headVelocity: SubjectPoint;
+  wristVelocities: { left: SubjectPoint; right: SubjectPoint };
+  timestamp: number;
+  confidence: number;
+  held: boolean;
+  bodyExpansionBase: number;
+}
+
+function clampRange(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function dist(a, b) {
+function dist(a: SubjectPoint, b: SubjectPoint) {
   const dx = (a?.x || 0) - (b?.x || 0);
   const dy = (a?.y || 0) - (b?.y || 0);
   return Math.hypot(dx, dy);
 }
 
-function avgPoint(points) {
+function avgPoint(points: readonly SubjectPoint[]): SubjectPoint {
   if (!points.length) return { x: 0.5, y: 0.5 };
   const sum = points.reduce(
     (acc, point) => ({ x: acc.x + point.x, y: acc.y + point.y }),
@@ -36,7 +71,10 @@ function avgPoint(points) {
   return { x: sum.x / points.length, y: sum.y / points.length };
 }
 
-export function computeBoundingBox(landmarks, visibilityThreshold = 0.35) {
+export function computeBoundingBox(
+  landmarks: readonly PoseLandmark[] | null | undefined,
+  visibilityThreshold = 0.35,
+) {
   const visible = (landmarks || []).filter(
     (point) => (point.visibility ?? point.presence ?? 1) >= visibilityThreshold,
   );
@@ -61,7 +99,11 @@ export function computeBoundingBox(landmarks, visibilityThreshold = 0.35) {
   };
 }
 
-export function smoothLandmarks(current, previous, alpha = 0.35) {
+export function smoothLandmarks(
+  current: PoseLandmark[] | null | undefined,
+  previous: PoseLandmark[] | null | undefined,
+  alpha = 0.35,
+): PoseLandmark[] {
   if (!current?.length) return previous || [];
   if (!previous?.length) return current.map((point) => ({ ...point }));
   return current.map((point, index) => {
@@ -80,16 +122,21 @@ export function smoothLandmarks(current, previous, alpha = 0.35) {
 }
 
 export class SubjectMotionAnalyzer {
-  constructor(options = {}) {
+  private readonly smoothing: number;
+  private readonly motionSensitivity: number;
+  private readonly confidenceThreshold: number;
+  private readonly holdMs: number;
+  private previousLandmarks: PoseLandmark[] | null = null;
+  private previousCenter: SubjectPoint | null = null;
+  private previousTimestamp = 0;
+  private lastGood: SubjectMotionFrame | null = null;
+  private lastGoodTimestamp = 0;
+
+  constructor(options: MotionAnalyzerOptions = {}) {
     this.smoothing = options.smoothing ?? 0.35;
     this.motionSensitivity = options.motionSensitivity ?? 1;
     this.confidenceThreshold = options.confidenceThreshold ?? 0.35;
     this.holdMs = options.holdMs ?? 280;
-    this.previousLandmarks = null;
-    this.previousCenter = null;
-    this.previousTimestamp = 0;
-    this.lastGood = null;
-    this.lastGoodTimestamp = 0;
   }
 
   reset() {
@@ -100,7 +147,11 @@ export class SubjectMotionAnalyzer {
     this.lastGoodTimestamp = 0;
   }
 
-  analyze(rawLandmarks, timestampMs, confidence = 1) {
+  analyze(
+    rawLandmarks: PoseLandmark[] | null | undefined,
+    timestampMs: number,
+    confidence = 1,
+  ): SubjectMotionFrame | null {
     const now = Number(timestampMs) || 0;
     const dt = Math.max(0.001, (now - this.previousTimestamp) / 1000);
     const visibleCount = (rawLandmarks || []).filter(
@@ -191,7 +242,7 @@ export class SubjectMotionAnalyzer {
         )
       : 1;
 
-    const frame = {
+    const frame: SubjectMotionFrame = {
       landmarks,
       segmentationMask: null,
       boundingBox: bbox,
@@ -223,7 +274,9 @@ export class SubjectMotionAnalyzer {
       confidence: clampRange(confidence, 0, 1),
       held: false,
       bodyExpansionBase:
-        this.lastGood?.bodyExpansionBase || bbox?.width * bbox?.height || 1,
+        this.lastGood?.bodyExpansionBase ||
+        (bbox && bbox.width * bbox.height) ||
+        1,
     };
 
     this.previousLandmarks = landmarks;

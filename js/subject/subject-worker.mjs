@@ -3,7 +3,7 @@ import {
   PoseLandmarker,
   ImageSegmenter,
 } from '@mediapipe/tasks-vision';
-import { SubjectMotionAnalyzer } from './subject-motion.mjs';
+import { SubjectMotionAnalyzer } from './subject-motion.ts';
 
 let poseLandmarker = null;
 let imageSegmenter = null;

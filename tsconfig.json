@@ -15,5 +15,6 @@
     "checkJs": false,
     "types": ["svelte", "vite/client"]
   },
-  "include": ["src/**/*.ts", "src/**/*.svelte", "js/**/*.ts"]
+  "include": ["src/**/*.ts", "src/**/*.svelte", "js/**/*.ts"],
+  "exclude": ["js/workers/*-worker.ts", "js/subject/*-worker.ts"]
 }

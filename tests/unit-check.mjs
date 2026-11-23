@@ -42,7 +42,7 @@ import {
 } from '../js/app/media-format.ts';
 import { VideoTimeline } from '../js/editor/video-timeline.ts';
 import { EditorHistory } from '../js/editor/editor-history.ts';
-import { BlobTracking } from '../js/effects/blob-tracking.mjs';
+import { BlobTracking } from '../js/effects/blob-tracking.ts';
 import { BlinkDetection } from '../js/effects/blink-detection.mjs';
 import { FaceDetection } from '../js/effects/face-detection.mjs';
 import { RENDER_PROFILES } from '../js/app/render-engine.ts';
@@ -52,7 +52,7 @@ import {
   PERFORMANCE_MODE_PRESETS,
   TIMELINE_TRACK_COUNT,
   normalizePerformanceMode,
-} from '../js/app/constants.mjs';
+} from '../js/app/constants.ts';
 import { EditAssistController } from '../js/app/edit-assist-controller.ts';
 import {
   getEditorUiState,
@@ -69,8 +69,8 @@ import {
   migrateProjectToV2,
   normalizeVisualConfig,
 } from '../js/visual-fx/config.mjs';
-import { SubjectMotionAnalyzer } from '../js/subject/subject-motion.mjs';
-import { createSeededRandom, seededInt } from '../js/subject/subject-prng.mjs';
+import { SubjectMotionAnalyzer } from '../js/subject/subject-motion.ts';
+import { createSeededRandom, seededInt } from '../js/subject/subject-prng.ts';
 import { applyVisualFxIntegrationMixin } from '../js/app/visual-fx-integration.mjs';
 import {
   SubjectMask,
@@ -92,7 +92,7 @@ import {
   SUBJECT_ANALYSIS_STATUS,
   SubjectAnalyzer,
 } from '../js/subject/subject-analyzer.mjs';
-import { resolveSubjectAssetUrls } from '../js/subject/mediapipe-paths.mjs';
+import { resolveSubjectAssetUrls } from '../js/subject/mediapipe-paths.ts';
 import {
   estimateTempoFromSamples,
   extractMediaAudioSamples,

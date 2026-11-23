@@ -60,8 +60,13 @@ void main() {
   gl_FragColor = vec4(min(max(rgb, 0.0), 1.0), color.a);
 }`;
 
-function compileShader(gl, type, source) {
+function compileShader(
+  gl: WebGLRenderingContext,
+  type: number,
+  source: string,
+) {
   const shader = gl.createShader(type);
+  if (!shader) throw new Error('webgl_shader_unavailable');
   gl.shaderSource(shader, source);
   gl.compileShader(shader);
   if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
@@ -72,10 +77,15 @@ function compileShader(gl, type, source) {
   return shader;
 }
 
-function createProgram(gl) {
+function createProgram(gl: WebGLRenderingContext) {
   const vertex = compileShader(gl, gl.VERTEX_SHADER, VERTEX_SHADER);
   const fragment = compileShader(gl, gl.FRAGMENT_SHADER, FRAGMENT_SHADER);
   const program = gl.createProgram();
+  if (!program) {
+    gl.deleteShader(vertex);
+    gl.deleteShader(fragment);
+    throw new Error('webgl_program_unavailable');
+  }
   gl.attachShader(program, vertex);
   gl.attachShader(program, fragment);
   gl.linkProgram(program);
@@ -102,16 +112,26 @@ const DEFAULT_LOOK = Object.freeze({
 });
 
 export class WebGLFilterRenderer {
-  constructor({ createCanvas = () => document.createElement('canvas') } = {}) {
-    this.canvas = createCanvas();
-    this.gl =
-      this.canvas.getContext('webgl', { premultipliedAlpha: false }) ||
-      this.canvas.getContext('experimental-webgl', {
-        premultipliedAlpha: false,
-      });
-    if (!this.gl) throw new Error('webgl_unavailable');
+  readonly canvas: HTMLCanvasElement;
+  private readonly gl: WebGLRenderingContext;
+  private readonly program: WebGLProgram;
+  private readonly locations;
+  private readonly positionBuffer: WebGLBuffer | null;
+  private readonly texCoordBuffer: WebGLBuffer | null;
+  private readonly texture: WebGLTexture | null;
 
-    const gl = this.gl;
+  constructor({
+    createCanvas = () => document.createElement('canvas'),
+  }: { createCanvas?: () => HTMLCanvasElement } = {}) {
+    this.canvas = createCanvas();
+    const gl =
+      this.canvas.getContext('webgl', { premultipliedAlpha: false }) ||
+      (this.canvas.getContext('experimental-webgl', {
+        premultipliedAlpha: false,
+      }) as WebGLRenderingContext | null);
+    if (!gl) throw new Error('webgl_unavailable');
+
+    this.gl = gl;
     this.program = createProgram(gl);
     this.locations = {
       position: gl.getAttribLocation(this.program, 'a_position'),
@@ -152,7 +172,12 @@ export class WebGLFilterRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   }
 
-  render(source, width, height, values = DEFAULT_LOOK) {
+  render(
+    source: TexImageSource,
+    width: number,
+    height: number,
+    values: Partial<Record<keyof typeof DEFAULT_LOOK, number>> = DEFAULT_LOOK,
+  ) {
     const gl = this.gl;
     const safeWidth = Math.max(1, Math.round(width || 1));
     const safeHeight = Math.max(1, Math.round(height || 1));

@@ -19,17 +19,35 @@ function detectEnabled() {
 export const PERF_DEV_ENABLED =
   typeof window !== 'undefined' && detectEnabled();
 
-class RollingWindow {
-  constructor(capacity = 180) {
-    this.capacity = capacity;
-    this.values = [];
+interface MetricSummary {
+  median: number;
+  p95: number;
+  n: number;
+}
+
+interface PerfSnapshot {
+  metrics: Record<string, MetricSummary>;
+  gauges: Record<string, number | string>;
+  counters: Record<string, number>;
+}
+
+declare global {
+  interface Window {
+    __hatewebcamPerfSnapshot?: () => PerfSnapshot;
   }
-  push(value) {
+}
+
+class RollingWindow {
+  private values: number[] = [];
+
+  constructor(private readonly capacity = 180) {}
+
+  push(value: number) {
     if (!Number.isFinite(value)) return;
     this.values.push(value);
     if (this.values.length > this.capacity) this.values.shift();
   }
-  percentile(p) {
+  percentile(p: number) {
     if (!this.values.length) return 0;
     const sorted = [...this.values].sort((a, b) => a - b);
     const idx = Math.min(sorted.length - 1, Math.floor(p * sorted.length));
@@ -44,23 +62,24 @@ class RollingWindow {
 }
 
 class PerfDev {
-  constructor(enabled) {
-    this.enabled = enabled;
-    this.metrics = new Map();
-    this.gauges = new Map();
-    this.counters = new Map();
-    this._counterWindowStart = performance.now();
+  private readonly metrics = new Map<string, RollingWindow>();
+  private readonly gauges = new Map<string, number | string>();
+  private readonly counters = new Map<string, number>();
+  private counterWindowStart = performance.now();
+  private overlay: HTMLPreElement | null = null;
+
+  constructor(readonly enabled: boolean) {
     if (!enabled) return;
     this._installOverlay();
     this._installLongTaskObserver();
-    this._reportTimer = setInterval(() => this._report(), 2000);
+    setInterval(() => this._report(), 2000);
     // Lets a stress-test/dev script read exact numbers instead of scraping
     // the console/overlay text.
     window.__hatewebcamPerfSnapshot = () => this.snapshot();
   }
 
-  snapshot() {
-    const metrics = {};
+  snapshot(): PerfSnapshot {
+    const metrics: PerfSnapshot['metrics'] = {};
     for (const [name, window_] of this.metrics) {
       metrics[name] = {
         median: window_.median(),
@@ -82,18 +101,22 @@ class PerfDev {
     return this.enabled ? performance.now() : 0;
   }
 
-  record(name, ms) {
+  record(name: string, ms: number) {
     if (!this.enabled) return;
-    if (!this.metrics.has(name)) this.metrics.set(name, new RollingWindow());
-    this.metrics.get(name).push(ms);
+    let metric = this.metrics.get(name);
+    if (!metric) {
+      metric = new RollingWindow();
+      this.metrics.set(name, metric);
+    }
+    metric.push(ms);
   }
 
-  gauge(name, value) {
+  gauge(name: string, value: number | string) {
     if (!this.enabled) return;
     this.gauges.set(name, value);
   }
 
-  count(name, n = 1) {
+  count(name: string, n = 1) {
     if (!this.enabled) return;
     this.counters.set(name, (this.counters.get(name) || 0) + n);
   }
@@ -108,7 +131,6 @@ class PerfDev {
         }
       });
       observer.observe({ entryTypes: ['longtask'] });
-      this._longTaskObserver = observer;
     } catch {
       /* longtask not supported everywhere - fine, this is best-effort */
     }
@@ -127,13 +149,13 @@ class PerfDev {
       document.body?.appendChild(el);
     });
     if (document.body) document.body.appendChild(el);
-    this._overlayEl = el;
+    this.overlay = el;
   }
 
   _report() {
     const now = performance.now();
-    const windowSec = Math.max(0.001, (now - this._counterWindowStart) / 1000);
-    const rows = {};
+    const windowSec = Math.max(0.001, (now - this.counterWindowStart) / 1000);
+    const rows: Record<string, MetricSummary> = {};
     for (const [name, window_] of this.metrics) {
       rows[name] = {
         median: round2(window_.median()),
@@ -141,12 +163,12 @@ class PerfDev {
         n: window_.count(),
       };
     }
-    const rates = {};
+    const rates: Record<string, number> = {};
     for (const [name, value] of this.counters) {
       rates[`${name}/s`] = round2(value / windowSec);
     }
     this.counters.clear();
-    this._counterWindowStart = now;
+    this.counterWindowStart = now;
 
     const lines = ['Visual FX / detector perf (median, p95, ms)'];
     for (const [name, row] of Object.entries(rows)) {
@@ -162,13 +184,13 @@ class PerfDev {
     for (const [name, value] of Object.entries(rates)) {
       lines.push(`  ${name}: ${value}`);
     }
-    if (this._overlayEl) this._overlayEl.textContent = lines.join('\n');
+    if (this.overlay) this.overlay.textContent = lines.join('\n');
     // eslint-disable-next-line no-console
     console.table({ ...rows, ...Object.fromEntries(this.gauges), ...rates });
   }
 }
 
-function round2(value) {
+function round2(value: number) {
   return Math.round((value || 0) * 100) / 100;
 }
 

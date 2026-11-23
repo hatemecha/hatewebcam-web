@@ -1,4 +1,4 @@
-import { TIMELINE_TRACK_COUNT } from '../constants.mjs';
+import { TIMELINE_TRACK_COUNT } from '../constants.ts';
 import { updateEditorUiState } from '../../../src/lib/editor/editor-state.ts';
 import { translateCurrent } from '../../../src/lib/i18n/translate.ts';
 

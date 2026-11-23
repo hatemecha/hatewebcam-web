@@ -3,8 +3,10 @@ import {
   PREVIEW_MIN_WIDTH,
   PREVIEW_MIN_HEIGHT,
   normalizePreviewQuality,
+  type PreviewQuality,
 } from '../preview-metrics.ts';
 import { COMMON_VIDEO_FPS } from './media-format.ts';
+import type { PerformanceMode } from '../../src/lib/webcam/camera-source-bridge.ts';
 
 export {
   PREVIEW_QUALITY_PRESETS,
@@ -24,7 +26,38 @@ export const TIMELINE_EFFECT_META = Object.freeze({
 export const TIMELINE_TRACK_COUNT =
   1 + Object.keys(TIMELINE_EFFECT_META).length;
 export const DEFAULT_TIMELINE_EFFECT_DURATION = 3;
-export const DEFAULT_IMAGE_SETTINGS = {
+export interface ImageSettings {
+  blackAndWhite: boolean;
+  exposure: number;
+  shadows: number;
+  highlights: number;
+  contrast: number;
+  saturation: number;
+  temperature: number;
+  detail: number;
+  sharpness: number;
+  jpegQuality: number;
+  videoFormat: 'auto' | 'webm' | 'mp4';
+  editorExportPreset:
+    | 'fast'
+    | 'balanced'
+    | 'high'
+    | 'chroma'
+    | 'experimental-mp4';
+  editorExportFormat: 'auto' | 'webm' | 'mp4';
+  editorExportMode: 'full' | 'effects-chroma';
+  editorCopyAudio: boolean;
+  experimentalExportFeatures: boolean;
+  effectsExportChroma: 'green' | 'blue';
+  previewQuality: PreviewQuality;
+  captureTimerSeconds: number;
+  shutterSound: boolean;
+  qualityEnhancer: boolean;
+  qualityEnhancerStrength: number;
+  performanceMode: PerformanceMode;
+}
+
+export const DEFAULT_IMAGE_SETTINGS: ImageSettings = {
   blackAndWhite: false,
   exposure: 0,
   shadows: 0,
@@ -81,9 +114,10 @@ export const PERFORMANCE_MODE_PRESETS = Object.freeze({
     detectorIntervalMs: 33,
   }),
 });
-export function normalizePerformanceMode(value) {
-  return Object.prototype.hasOwnProperty.call(PERFORMANCE_MODE_PRESETS, value)
-    ? value
+export function normalizePerformanceMode(value: unknown): PerformanceMode {
+  return typeof value === 'string' &&
+    Object.hasOwn(PERFORMANCE_MODE_PRESETS, value)
+    ? (value as PerformanceMode)
     : 'normal';
 }
 export const MEDIAPIPE_FACE_MESH_VERSION = '0.4.1633559619';

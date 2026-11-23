@@ -1,4 +1,4 @@
-import { normalizePreviewQuality } from './constants.mjs';
+import { normalizePreviewQuality } from './constants.ts';
 import { translateCurrent } from '../../src/lib/i18n/translate.ts';
 import {
   getCameraSourceState,

@@ -136,7 +136,7 @@ for (const file of javascriptFiles) {
   }
   if (
     file.startsWith('js/app/') &&
-    !['js/app/constants.mjs', 'js/app/controller.mjs'].includes(file) &&
+    !['js/app/constants.ts', 'js/app/controller.mjs'].includes(file) &&
     controllerConstantPattern.test(source)
   ) {
     fail(`${file} accesses a controller constant without this.`);
@@ -198,7 +198,7 @@ const controllerJs = readFileSync(
 );
 if (
   !controllerJs.includes("from '../video-export.mjs'") &&
-  !controllerJs.includes("from './constants.mjs'")
+  !controllerJs.includes("from './constants.ts'")
 ) {
   fail('controller.mjs must wire video export/constants modules');
 }

@@ -73,7 +73,7 @@ export default [
     },
   },
   {
-    files: ['src/**/*.{ts,svelte}'],
+    files: ['src/**/*.{ts,svelte}', 'js/**/*.ts'],
     rules: {
       'no-console': ['error', { allow: ['warn', 'error'] }],
     },

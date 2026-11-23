@@ -1,4 +1,4 @@
-import { BlobTracking } from '../effects/blob-tracking.mjs';
+import { BlobTracking } from '../effects/blob-tracking.ts';
 import { FaceDetection } from '../effects/face-detection.mjs';
 import { BlinkDetection } from '../effects/blink-detection.mjs';
 

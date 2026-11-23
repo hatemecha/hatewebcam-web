@@ -1,4 +1,4 @@
-import { SubjectMotionAnalyzer } from './subject-motion.mjs';
+import { SubjectMotionAnalyzer } from './subject-motion.ts';
 import {
   normalizeMaskBuffer,
   smoothMaskTemporal,
@@ -6,7 +6,7 @@ import {
 } from './subject-mask.mjs';
 import { buildLocalMotionRegions } from './subject-local-motion.mjs';
 import { SubjectAnalysisCache } from './subject-cache.mjs';
-import { perfDev } from '../app/perf-dev.mjs';
+import { perfDev } from '../app/perf-dev.ts';
 
 export const SUBJECT_ANALYSIS_STATUS = Object.freeze({
   idle: 'idle',

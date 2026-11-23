@@ -5,7 +5,7 @@ import {
 } from '../subject/subject-frame-map.mjs';
 import { normalizeVisualConfig, visualConfigTopologyKey } from './config.mjs';
 import { VisualRenderer } from './renderer.mjs';
-import { perfDev } from '../app/perf-dev.mjs';
+import { perfDev } from '../app/perf-dev.ts';
 
 // Never below 0.6 here: the analyzer's own floor (0.35) exists for other
 // callers, but this preview-quality ladder keeps enough resolution that

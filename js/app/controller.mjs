@@ -28,9 +28,9 @@ import {
   PERFORMANCE_MODE_PRESETS,
   normalizePreviewQuality,
   normalizePerformanceMode,
-} from './constants.mjs';
+} from './constants.ts';
 import { CameraManager } from '../core/camera-manager.ts';
-import { EffectManager } from '../effects/effect-manager.mjs';
+import { EffectManager } from '../effects/effect-manager.ts';
 import { setupDom } from './dom.mjs';
 import { applyStorageMixin } from './settings.mjs';
 import { applyInitMixin } from './init.mjs';

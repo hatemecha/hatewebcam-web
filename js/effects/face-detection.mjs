@@ -1,4 +1,4 @@
-import { perfDev } from '../app/perf-dev.mjs';
+import { perfDev } from '../app/perf-dev.ts';
 import { createFaceMesh, prepareFaceMeshInput } from './face-mesh-client.mjs';
 
 /**

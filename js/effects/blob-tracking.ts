@@ -1,71 +1,81 @@
-import { perfDev } from '../app/perf-dev.mjs';
+import { perfDev } from '../app/perf-dev.ts';
+import type { RenderProfile } from '../app/render-engine.ts';
+import type {
+  BlobDetectionMode,
+  BlobWorkerRequest,
+  BlobWorkerResponse,
+  DetectedBlob,
+} from '../workers/blob-tracking-protocol.ts';
+
+interface TrackedBlob extends DetectedBlob {
+  lastSeen: number;
+}
 
 /**
  * BlobTracking — Canvas-based HSV color detection
  * Optimized for lower CPU usage and more stable detections.
  */
 export class BlobTracking {
-  constructor() {
-    // HSV ranges
-    this.hsvMin = [0, 50, 50];
-    this.hsvMax = [180, 255, 255];
+  // HSV ranges
+  hsvMin = [0, 50, 50];
+  hsvMax = [180, 255, 255];
 
-    // Area filters
-    this.minArea = 100;
-    this.maxArea = 100000;
-    this.maxObjects = 10;
+  // Area filters
+  minArea = 100;
+  maxArea = 100000;
+  maxObjects = 10;
 
-    // Morphology
-    this.erodeIterations = 0;
-    this.dilateIterations = 0;
+  // Morphology
+  erodeIterations = 0;
+  dilateIterations = 0;
 
-    // Visualization
-    this.boxColor = '#ff2222';
-    this.boxThickness = 2;
-    this.showCoordinates = true;
-    this.showCentroid = false;
-    this.labelSize = 12;
+  // Visualization
+  boxColor = '#ff2222';
+  boxThickness = 2;
+  showCoordinates = true;
+  showCentroid = false;
+  labelSize = 12;
 
-    // Detection mode
-    this.detectionMode = 'manual'; // 'manual', 'lights', 'shadows'
+  // Detection mode
+  detectionMode: BlobDetectionMode = 'manual'; // 'manual', 'lights', 'shadows'
 
-    // Connection state (from blink detection)
-    this.leftActive = false;
-    this.rightActive = false;
-    this.connectionColor = '#ff2222';
-    this.connectionThickness = 1;
+  // Connection state (from blink detection)
+  leftActive = false;
+  rightActive = false;
+  connectionColor = '#ff2222';
+  connectionThickness = 1;
 
-    // Centroids for connections
-    this.centroids = [];
+  // Centroids for connections
+  centroids: { x: number; y: number }[] = [];
 
-    // Tolerance for color picking
-    this._tolerance = 30;
-    this.targetColor = '#00c853';
+  // Tolerance for color picking
+  _tolerance = 30;
+  targetColor = '#00c853';
 
-    // Process on a downscaled copy for better performance
-    this.processScale = 0.45;
-    this.processIntervalMs = 33;
-    this.detectionHoldMs = 110;
-    this.detectionSmoothing = 0.35;
-    this._trackedBlobs = [];
-    this._lastProcessTs = -Infinity;
+  // Process on a downscaled copy for better performance
+  processScale = 0.45;
+  processIntervalMs = 33;
+  detectionHoldMs = 110;
+  detectionSmoothing = 0.35;
+  _trackedBlobs: TrackedBlob[] = [];
+  _lastProcessTs = -Infinity;
 
-    // Internal processing buffers
-    this._tempCanvas = document.createElement('canvas');
-    this._tempCtx = this._tempCanvas.getContext('2d', {
-      willReadFrequently: true,
-    });
-    this._workW = 0;
-    this._workH = 0;
-    this._mask = null;
-    this._morphBufferA = null;
-    this._morphBufferB = null;
-    this._visited = null;
-    this._queue = null;
-    this._worker = this._createWorker();
-    this._workerBusy = false;
-    this._workerSeq = 0;
-  }
+  // Internal processing buffers
+  _tempCanvas = document.createElement('canvas');
+  _tempCtx = this._tempCanvas.getContext('2d', {
+    willReadFrequently: true,
+  });
+  _workW = 0;
+  _workH = 0;
+  _mask = new Uint8Array(0);
+  _morphBufferA = new Uint8Array(0);
+  _morphBufferB = new Uint8Array(0);
+  _visited = new Uint8Array(0);
+  _queue = new Int32Array(0);
+  _worker = this._createWorker();
+  _workerBusy = false;
+  _workerSeq = 0;
+  _workerDispatchTs = 0;
 
   getName() {
     return 'Detector de Objetos';
@@ -86,7 +96,7 @@ export class BlobTracking {
     return { status: count > 0 ? 'detected' : 'searching', count };
   }
 
-  triggerConnection(eye) {
+  triggerConnection(eye: string) {
     if (eye === 'left') {
       this.leftActive = true;
       this.rightActive = false;
@@ -105,7 +115,7 @@ export class BlobTracking {
   /**
    * Convert RGB to HSV (H: 0-180, S: 0-255, V: 0-255) to match OpenCV convention
    */
-  rgbToHsv(r, g, b) {
+  rgbToHsv(r: number, g: number, b: number) {
     r /= 255;
     g /= 255;
     b /= 255;
@@ -130,9 +140,9 @@ export class BlobTracking {
     return [Math.round(h), Math.round(s * 255), Math.round(v * 255)];
   }
 
-  _ensureBuffers(w, h) {
+  _ensureBuffers(w: number, h: number) {
     const size = w * h;
-    if (!this._mask || this._mask.length !== size) {
+    if (this._mask.length !== size) {
       this._mask = new Uint8Array(size);
       this._morphBufferA = new Uint8Array(size);
       this._morphBufferB = new Uint8Array(size);
@@ -149,7 +159,7 @@ export class BlobTracking {
     }
   }
 
-  _stabilizeBlobs(blobs, now = performance.now()) {
+  _stabilizeBlobs(blobs: DetectedBlob[], now = performance.now()) {
     const usedPrevious = new Set();
     const keep = this.detectionSmoothing;
     const next = blobs.map((blob) => {
@@ -181,7 +191,8 @@ export class BlobTracking {
 
       usedPrevious.add(bestIndex);
       const previous = this._trackedBlobs[bestIndex];
-      const smooth = (key) => previous[key] * keep + blob[key] * (1 - keep);
+      const smooth = (key: keyof DetectedBlob) =>
+        previous[key] * keep + blob[key] * (1 - keep);
       return {
         ...blob,
         x: smooth('x'),
@@ -207,14 +218,14 @@ export class BlobTracking {
     return this._trackedBlobs;
   }
 
-  _createWorker() {
+  _createWorker(): Worker | null {
     if (typeof Worker === 'undefined') return null;
     try {
       const worker = new Worker(
-        new URL('../workers/blob-tracking-worker.mjs', import.meta.url),
+        new URL('../workers/blob-tracking-worker.ts', import.meta.url),
         { type: 'module' },
       );
-      worker.onmessage = (event) => {
+      worker.onmessage = (event: MessageEvent<BlobWorkerResponse>) => {
         this._workerBusy = false;
         if (this._workerDispatchTs) {
           perfDev.record(
@@ -227,8 +238,7 @@ export class BlobTracking {
         this._stabilizeBlobs(event.data.blobs || []);
       };
       worker.onerror = () => {
-        this._workerBusy = false;
-        this._worker = null;
+        this.dispose();
       };
       return worker;
     } catch {
@@ -236,7 +246,12 @@ export class BlobTracking {
     }
   }
 
-  _postWorkerAnalysis(imageData, sw, sh, scale) {
+  _postWorkerAnalysis(
+    imageData: ImageData,
+    sw: number,
+    sh: number,
+    scale: number,
+  ) {
     if (!this._worker || this._workerBusy) return false;
     this._workerBusy = true;
     this._workerSeq += 1;
@@ -258,18 +273,23 @@ export class BlobTracking {
           minAreaScaled: this.minArea * areaScale,
           maxAreaScaled: this.maxArea * areaScale,
           maxObjects: this.maxObjects,
-        },
+        } satisfies BlobWorkerRequest,
         [imageData.data.buffer],
       );
       return true;
     } catch {
-      this._workerBusy = false;
-      this._worker = null;
+      this.dispose();
       return false;
     }
   }
 
-  _analyzeImageData(imageData, sw, sh, scale, now) {
+  _analyzeImageData(
+    imageData: ImageData,
+    sw: number,
+    sh: number,
+    scale: number,
+    now: number,
+  ) {
     const data = imageData.data;
     const mask = this._mask;
 
@@ -360,7 +380,12 @@ export class BlobTracking {
   /**
    * Process frame — detect blobs and draw overlays
    */
-  processFrame(ctx, canvas, video, renderProfile = null) {
+  processFrame(
+    ctx: CanvasRenderingContext2D,
+    canvas: HTMLCanvasElement,
+    _video: HTMLVideoElement,
+    renderProfile: RenderProfile | null = null,
+  ) {
     const w = canvas.width;
     const h = canvas.height;
     if (w === 0 || h === 0) return;
@@ -387,6 +412,7 @@ export class BlobTracking {
     // back to synchronous analysis here defeats the worker under load.
     const analysisBusy = useWorker && this._worker && this._workerBusy;
     if (
+      this._tempCtx &&
       !analysisBusy &&
       (dimensionsChanged ||
         processIntervalMs === 0 ||
@@ -452,7 +478,10 @@ export class BlobTracking {
 
     const numCentroids = this.centroids.length;
     if ((this.leftActive || this.rightActive) && numCentroids > 1) {
-      const pairs = [];
+      const pairs: [
+        (typeof this.centroids)[number],
+        (typeof this.centroids)[number],
+      ][] = [];
       for (let i = 0; i < numCentroids; i++) {
         for (let j = i + 1; j < numCentroids; j++) {
           pairs.push([this.centroids[i], this.centroids[j]]);
@@ -460,7 +489,7 @@ export class BlobTracking {
       }
 
       const mid = Math.floor(pairs.length / 2);
-      let pairsToDraw = [];
+      let pairsToDraw: typeof pairs = [];
 
       if (this.leftActive && this.rightActive) {
         pairsToDraw = pairs;
@@ -485,7 +514,7 @@ export class BlobTracking {
   /**
    * Simple 3x3 erode (shrink white regions)
    */
-  _erode(mask, out, w, h) {
+  _erode(mask: Uint8Array, out: Uint8Array, w: number, h: number) {
     out.fill(0);
     for (let y = 1; y < h - 1; y++) {
       for (let x = 1; x < w - 1; x++) {
@@ -504,7 +533,7 @@ export class BlobTracking {
   /**
    * Simple 3x3 dilate (grow white regions)
    */
-  _dilate(mask, out, w, h) {
+  _dilate(mask: Uint8Array, out: Uint8Array, w: number, h: number) {
     out.fill(0);
     for (let y = 1; y < h - 1; y++) {
       for (let x = 1; x < w - 1; x++) {
@@ -524,7 +553,7 @@ export class BlobTracking {
    * Connected-component labeling using BFS flood fill.
    * Returns array of blob objects: { x, y, width, height, area, cx, cy }
    */
-  _findBlobs(mask, w, h) {
+  _findBlobs(mask: Uint8Array, w: number, h: number): DetectedBlob[] {
     const visited = this._visited;
     visited.fill(0);
 
@@ -606,14 +635,14 @@ export class BlobTracking {
   /**
    * Set color from a picked pixel (RGB)
    */
-  setColorFromPixel(r, g, b) {
+  setColorFromPixel(r: number, g: number, b: number) {
     const channels = [r, g, b].map((value) =>
       Math.max(0, Math.min(255, Math.round(Number(value) || 0))),
     );
     this.targetColor = `#${channels
       .map((value) => value.toString(16).padStart(2, '0'))
       .join('')}`;
-    const [h, s, v] = this.rgbToHsv(...channels);
+    const [h, s, v] = this.rgbToHsv(channels[0], channels[1], channels[2]);
     const tol = this._tolerance;
 
     let hMin = h - tol;
@@ -634,7 +663,7 @@ export class BlobTracking {
     this.detectionMode = 'manual';
   }
 
-  setColorFromHex(value) {
+  setColorFromHex(value: unknown) {
     const match = /^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(
       String(value || ''),
     );
@@ -669,7 +698,7 @@ export class BlobTracking {
     };
   }
 
-  setConfig(config) {
+  setConfig(config: Partial<BlobTrackingConfig>) {
     if (config.hsvMin) this.hsvMin = config.hsvMin;
     if (config.hsvMax) this.hsvMax = config.hsvMax;
     if (config.minArea != null) this.minArea = config.minArea;
@@ -687,7 +716,7 @@ export class BlobTracking {
     if (config.labelSize != null)
       this.labelSize = this._normalizeLabelSize(config.labelSize);
     if (config.tolerance != null) this._tolerance = config.tolerance;
-    if (/^#[\da-f]{6}$/i.test(config.targetColor || ''))
+    if (config.targetColor && /^#[\da-f]{6}$/i.test(config.targetColor))
       this.targetColor = config.targetColor.toLowerCase();
     if (config.detectionMode) this.detectionMode = config.detectionMode;
     if (config.processScale != null) this.processScale = config.processScale;
@@ -707,8 +736,10 @@ export class BlobTracking {
     this._lastProcessTs = -Infinity;
   }
 
-  _normalizeLabelSize(value) {
+  _normalizeLabelSize(value: unknown) {
     const size = Math.round(Number(value) || 12);
     return Math.max(8, Math.min(32, size));
   }
 }
+
+export type BlobTrackingConfig = ReturnType<BlobTracking['getConfig']>;

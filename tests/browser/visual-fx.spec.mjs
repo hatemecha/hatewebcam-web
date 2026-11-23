@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 
 // Test the exact source modules in a real browser alongside the built application.
 async function loadEngine(page) {
@@ -10,10 +11,19 @@ async function loadEngine(page) {
       '',
     );
     if (path.includes('..')) return route.abort();
-    await route.fulfill({
-      contentType: 'text/javascript',
-      body: await readFile(new URL('../../' + path, import.meta.url), 'utf8'),
-    });
+    const source = await readFile(
+      new URL('../../' + path, import.meta.url),
+      'utf8',
+    );
+    const body = path.endsWith('.ts')
+      ? ts.transpileModule(source, {
+          compilerOptions: {
+            module: ts.ModuleKind.ESNext,
+            target: ts.ScriptTarget.ES2022,
+          },
+        }).outputText
+      : source;
+    await route.fulfill({ contentType: 'text/javascript', body });
   });
   await page.goto('/');
   await page.evaluate(async () => {

@@ -1,4 +1,12 @@
-function erode(mask, out, w, h) {
+import type {
+  BlobWorkerRequest,
+  BlobWorkerResponse,
+  DetectedBlob,
+} from './blob-tracking-protocol.ts';
+
+const worker = self as DedicatedWorkerGlobalScope;
+
+function erode(mask: Uint8Array, out: Uint8Array, w: number, h: number) {
   out.fill(0);
   for (let y = 1; y < h - 1; y++) {
     for (let x = 1; x < w - 1; x++) {
@@ -14,7 +22,7 @@ function erode(mask, out, w, h) {
   }
 }
 
-function dilate(mask, out, w, h) {
+function dilate(mask: Uint8Array, out: Uint8Array, w: number, h: number) {
   out.fill(0);
   for (let y = 1; y < h - 1; y++) {
     for (let x = 1; x < w - 1; x++) {
@@ -37,14 +45,14 @@ function dilate(mask, out, w, h) {
 // `.fill(0)` / the flood fill below before being read).
 let cachedW = 0;
 let cachedH = 0;
-let mask = null;
-let morphA = null;
-let morphB = null;
-let visited = null;
-let queue = null;
+let mask = new Uint8Array(0);
+let morphA = new Uint8Array(0);
+let morphB = new Uint8Array(0);
+let visited = new Uint8Array(0);
+let queue = new Int32Array(0);
 
-function ensureBuffers(w, h) {
-  if (cachedW === w && cachedH === h && mask) return;
+function ensureBuffers(w: number, h: number) {
+  if (cachedW === w && cachedH === h) return;
   cachedW = w;
   cachedH = h;
   const size = w * h;
@@ -55,7 +63,7 @@ function ensureBuffers(w, h) {
   queue = new Int32Array(size);
 }
 
-function findBlobs(mask, w, h) {
+function findBlobs(mask: Uint8Array, w: number, h: number): DetectedBlob[] {
   visited.fill(0);
   const blobs = [];
 
@@ -130,7 +138,7 @@ function findBlobs(mask, w, h) {
   return blobs;
 }
 
-self.onmessage = (event) => {
+worker.onmessage = (event: MessageEvent<BlobWorkerRequest>) => {
   const {
     seq,
     width,
@@ -205,5 +213,5 @@ self.onmessage = (event) => {
     .sort((a, b) => b.area - a.area)
     .slice(0, maxObjects);
 
-  self.postMessage({ seq, blobs });
+  worker.postMessage({ seq, blobs } satisfies BlobWorkerResponse);
 };

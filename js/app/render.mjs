@@ -1,7 +1,7 @@
 import { updatePreviewMetrics } from '../../src/lib/preview/metrics-state.ts';
-import { WebGLFilterRenderer } from './webgl-filter-renderer.mjs';
+import { WebGLFilterRenderer } from './webgl-filter-renderer.ts';
 import { metricsFromApp } from '../subject/subject-frame-map.mjs';
-import { perfDev } from './perf-dev.mjs';
+import { perfDev } from './perf-dev.ts';
 
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyRenderLoopMixin(proto) {

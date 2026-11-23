@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { applyRenderLoopMixin } from '../../js/app/render.mjs';
-import { DEFAULT_IMAGE_SETTINGS } from '../../js/app/constants.mjs';
+import { DEFAULT_IMAGE_SETTINGS } from '../../js/app/constants.ts';
 
 async function openWebcam(page) {
   await page.goto('/');
