@@ -4,7 +4,7 @@ import { translateCurrent } from '../../../src/lib/i18n/translate.ts';
 export function applyVideoEditorTimelineInteractionMixin(proto) {
   proto.beginTimelineSelection = function (event) {
     if (
-      !this.videoSourceFile ||
+      !this.videoSource?.file ||
       this.videoExportSession?.active ||
       event.button !== 0
     )
@@ -107,7 +107,7 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
 
   proto.beginTrimDrag = function (event, edge) {
     if (
-      !this.videoSourceFile ||
+      !this.videoSource?.file ||
       this.videoExportSession?.active ||
       this.editorTool !== 'trim'
     )
@@ -158,7 +158,7 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
 
   proto.beginTimelineDrag = function (event, item, element) {
     if (
-      !this.videoSourceFile ||
+      !this.videoSource?.file ||
       this.videoExportSession?.active ||
       event.button !== 0
     )
@@ -283,7 +283,7 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
   proto.updateTimelineCutGuide = function (event) {
     if (
       this.editorTool !== 'cut' ||
-      !this.videoSourceFile ||
+      !this.videoSource?.file ||
       this.videoExportSession?.active ||
       !this.timelineCutGuide
     ) {
@@ -301,7 +301,7 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
   };
 
   proto.splitAllEffectsAtMarkers = function () {
-    if (!this.videoSourceFile || this.videoExportSession?.active) return;
+    if (!this.videoSource?.file || this.videoExportSession?.active) return;
     const times = Array.from(
       new Set(
         (this.videoTimeline.markers || [])
@@ -375,7 +375,7 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
 
   proto.beginPlayheadDrag = function (event) {
     if (
-      !this.videoSourceFile ||
+      !this.videoSource?.file ||
       this.videoExportSession?.active ||
       event.button !== 0
     )

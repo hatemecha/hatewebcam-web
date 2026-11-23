@@ -198,7 +198,7 @@ console.log('Visual FX unit checks passed.');
   };
   const app2 = {
     sourceMode: 'video',
-    videoSourceFile: {},
+    videoSource: { file: {} },
     videoTimeline: {
       activeAt: () => [{ id: 'clip', type: 'visual-fx', config: {} }],
     },
@@ -234,7 +234,7 @@ console.log('Visual FX unit checks passed.');
   };
   const app3 = {
     sourceMode: 'video',
-    videoSourceFile: {},
+    videoSource: { file: {} },
     videoTimeline: {
       activeAt: () => [{ id: 'same-clip', type: 'visual-fx', config: {} }],
     },

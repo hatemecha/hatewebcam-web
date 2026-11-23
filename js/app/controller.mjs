@@ -99,8 +99,7 @@ export class AppController {
 
     this.sourceMode = 'camera';
     this.requestedSourceMode = 'camera';
-    this.videoObjectUrl = '';
-    this.videoSourceFile = null;
+    this.videoSource = null;
     this.videoPlaceholderLoading = false;
     this.videoSourceFps = 30;
     this.videoSourceAverageBitrate = 0;

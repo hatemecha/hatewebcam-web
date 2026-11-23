@@ -8,7 +8,7 @@ export function applyVideoEditorTimelineChromeMixin(proto) {
     if (
       !this.editorHistory ||
       this.timelineHistorySuspended ||
-      !this.videoSourceFile
+      !this.videoSource?.file
     )
       return;
     this.editorHistory.push(this.videoTimeline);
@@ -20,7 +20,7 @@ export function applyVideoEditorTimelineChromeMixin(proto) {
       !snapshot ||
       !this.editorHistory ||
       this.timelineHistorySuspended ||
-      !this.videoSourceFile
+      !this.videoSource?.file
     )
       return;
     this.editorHistory.pushSnapshot(snapshot);
@@ -151,7 +151,7 @@ export function applyVideoEditorTimelineChromeMixin(proto) {
 
   proto.toggleTimelineMarkerAtPlayhead = function () {
     if (
-      !this.videoSourceFile ||
+      !this.videoSource?.file ||
       typeof this.videoTimeline.toggleMarker !== 'function'
     )
       return;

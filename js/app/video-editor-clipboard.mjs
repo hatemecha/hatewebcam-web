@@ -43,7 +43,8 @@ export function applyVideoEditorClipboardMixin(proto) {
   };
 
   proto.pasteVideoEffects = function (settingsOnly = false) {
-    if (!this.timelineClipboard?.items?.length || !this.videoSourceFile) return;
+    if (!this.timelineClipboard?.items?.length || !this.videoSource?.file)
+      return;
     const selectedItems = this.getSelectedVideoEffectItems();
     if (settingsOnly) {
       if (!selectedItems.length) return;

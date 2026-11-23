@@ -11,6 +11,7 @@ import { EditorHistory } from '../editor/editor-history.ts';
 import { TimelineView } from './timeline-view.ts';
 import { EditAssistController } from './edit-assist-controller.ts';
 import { VideoExportSession } from './video-export-session.ts';
+import { VideoFileSource } from './video-editor/video-file-source.ts';
 import { applyLocalvideoeditorMixin } from './video-editor.mjs';
 import { applyVisualFxIntegrationMixin } from './visual-fx-integration.mjs';
 import { applyVisualFxUIMixin } from './visual-fx-ui.mjs';
@@ -27,13 +28,14 @@ export async function installVideoEditor(app) {
   applyVisualFxUIMixin(app);
   applyVisualFxLabMixin(app);
 
+  app.videoSource = new VideoFileSource(app.videoEl);
   app.videoTimeline = new VideoTimeline();
   app.editorHistory = new EditorHistory();
   app.timelineView = new TimelineView({
     formatTime: (seconds) => app.formatDurationDetailed(seconds),
   });
   app.editAssist = new EditAssistController({
-    getSourceFile: () => app.videoSourceFile,
+    getSourceFile: () => app.videoSource?.file,
     getTimeline: () => app.videoTimeline,
     isExporting: () => app.videoExportSession?.active,
     getElements: () => ({

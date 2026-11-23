@@ -13,7 +13,7 @@ const VIDEO_EFFECT_AUTOMATION_MODES = new Set([
 /** @param {import('../controller.mjs').AppController} proto */
 export function applyVideoEditorClipInspectorMixin(proto) {
   proto.applyVideoTrim = function (resetSelection = true) {
-    if (!this.videoSourceFile) return;
+    if (!this.videoSource?.file) return;
     try {
       this.videoTimeline.setTrim(
         this.videoTrimStart.value,
@@ -47,7 +47,7 @@ export function applyVideoEditorClipInspectorMixin(proto) {
 
   proto.isPlayheadInSelectedClip = function () {
     const item = this.getSelectedVideoEffectItem();
-    if (!item || !this.videoSourceFile) return false;
+    if (!item || !this.videoSource?.file) return false;
     const time = this.videoEl.currentTime || 0;
     return time >= item.startTime && time < item.endTime;
   };
@@ -124,7 +124,7 @@ export function applyVideoEditorClipInspectorMixin(proto) {
   };
 
   proto.updateAdjustmentsPanelState = function () {
-    const hasVideo = !!this.videoSourceFile;
+    const hasVideo = !!this.videoSource?.file;
     const item = this.getSelectedVideoEffectItem();
     const hasSelection = !!item;
     const isVisualFx = isVisualFxClipType(item?.type);
@@ -420,7 +420,7 @@ export function applyVideoEditorClipInspectorMixin(proto) {
         this.suppressPaletteClick = false;
       }, 0);
     }
-    if (!moved || !this.videoSourceFile) return;
+    if (!moved || !this.videoSource?.file) return;
     if (!this.getTimelineRowFromClientY(event.clientY)) {
       this.showStatus(
         this.videoEditorStatus,
@@ -441,7 +441,7 @@ export function applyVideoEditorClipInspectorMixin(proto) {
         chip.addEventListener('click', (event) => {
           if (
             this.suppressPaletteClick ||
-            !this.videoSourceFile ||
+            !this.videoSource?.file ||
             this.videoExportSession?.active ||
             chip.disabled
           )
@@ -454,7 +454,7 @@ export function applyVideoEditorClipInspectorMixin(proto) {
         });
         chip.addEventListener('pointerdown', (event) => {
           if (
-            !this.videoSourceFile ||
+            !this.videoSource?.file ||
             this.videoExportSession?.active ||
             event.button !== 0 ||
             chip.disabled
@@ -501,7 +501,7 @@ export function applyVideoEditorClipInspectorMixin(proto) {
       ?.querySelectorAll('.timeline-track-effects')
       .forEach((track) => {
         track.addEventListener('dblclick', (event) => {
-          if (!this.videoSourceFile || event.target.closest('.timeline-item'))
+          if (!this.videoSource?.file || event.target.closest('.timeline-item'))
             return;
           event.preventDefault();
           void this.addTimelineEffectClip(
@@ -538,7 +538,7 @@ export function applyVideoEditorClipInspectorMixin(proto) {
   };
 
   proto.selectVideoEffectsByType = function (type) {
-    if (!type || !this.videoSourceFile) return;
+    if (!type || !this.videoSource?.file) return;
     const ids = this.videoTimeline.items
       .filter((item) => item.type === type)
       .map((item) => item.id);
@@ -571,7 +571,7 @@ export function applyVideoEditorClipInspectorMixin(proto) {
   };
 
   proto.updateVideoEffectInspector = function () {
-    const hasVideo = !!this.videoSourceFile;
+    const hasVideo = !!this.videoSource?.file;
     const item = this.videoTimeline.items.find(
       (candidate) => candidate.id === this.selectedVideoEffectId,
     );

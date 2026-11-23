@@ -140,7 +140,8 @@ export function applyVideoEditorTimelineMixin(proto) {
     anchorTime,
     duration = this.DEFAULT_TIMELINE_EFFECT_DURATION,
   ) {
-    if (!this.videoSourceFile || !this.TIMELINE_EFFECT_META[type]) return null;
+    if (!this.videoSource?.file || !this.TIMELINE_EFFECT_META[type])
+      return null;
     const placed = this.resolveTimelineInsertionTimes({
       type,
       anchorTime,

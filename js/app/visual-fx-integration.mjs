@@ -51,7 +51,7 @@ export function applyVisualFxIntegrationMixin(proto) {
     mediaTime,
     force = false,
   ) {
-    if (this.sourceMode !== 'video' || !this.videoSourceFile) return;
+    if (this.sourceMode !== 'video' || !this.videoSource?.file) return;
     const syncRequestId = (this._visualFxSyncRequestId || 0) + 1;
     this._visualFxSyncRequestId = syncRequestId;
     const active = this.videoTimeline.activeAt(mediaTime);
@@ -90,7 +90,7 @@ export function applyVisualFxIntegrationMixin(proto) {
   };
 
   proto.syncVideoTimelineVisualFx = async function (force = false) {
-    if (this.sourceMode !== 'video' || !this.videoSourceFile) return;
+    if (this.sourceMode !== 'video' || !this.videoSource?.file) return;
     await this.syncVideoTimelineVisualFxAt(
       this.videoEl.currentTime || 0,
       force,

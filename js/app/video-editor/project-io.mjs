@@ -4,13 +4,13 @@ import { translateCurrent } from '../../../src/lib/i18n/translate.ts';
 /** @param {import('../controller.mjs').AppController} proto */
 export function applyVideoEditorProjectMixin(proto) {
   proto.buildEditorProjectData = function () {
-    if (!this.videoSourceFile) return null;
+    if (!this.videoSource?.file) return null;
     const timeline = this.videoTimeline.toJSON();
     return {
       version: 2,
       source: {
-        name: this.videoSourceFile.name,
-        size: this.videoSourceFile.size,
+        name: this.videoSource?.file.name,
+        size: this.videoSource?.file.size,
         duration: this.videoTimeline.duration,
         width: this.videoEl.videoWidth || 0,
         height: this.videoEl.videoHeight || 0,
@@ -59,7 +59,7 @@ export function applyVideoEditorProjectMixin(proto) {
       type: 'application/json',
     });
     const basename =
-      this.videoSourceFile.name.replace(/\.[^.]+$/, '') || 'hatewebcam';
+      this.videoSource?.file.name.replace(/\.[^.]+$/, '') || 'hatewebcam';
     this.downloadBlob(blob, `${basename}.hatewebcam.json`);
     this.showStatus(
       this.videoEditorStatus,
@@ -74,8 +74,8 @@ export function applyVideoEditorProjectMixin(proto) {
         JSON.parse(await file.text()),
       );
       if (
-        this.videoSourceFile &&
-        this.editorProjectMatchesSource(project, this.videoSourceFile)
+        this.videoSource?.file &&
+        this.editorProjectMatchesSource(project, this.videoSource?.file)
       ) {
         this.applyEditorProject(project);
         this.pendingEditorProject = null;
@@ -163,6 +163,6 @@ export function applyVideoEditorProjectMixin(proto) {
     this.updateTimelineClipboardStatus();
     this.renderVideoTimeline();
     this.updateVideoEditorUI();
-    if (this.videoSourceFile) void this.syncVideoTimelineEffects(true);
+    if (this.videoSource?.file) void this.syncVideoTimelineEffects(true);
   };
 }

@@ -187,7 +187,7 @@ export function applyVideoEditorInspectorShellMixin(proto) {
 
   proto.updateTimelineHint = function () {
     if (!this.timelineHintText) return;
-    if (!this.videoSourceFile) {
+    if (!this.videoSource?.file) {
       this.timelineHintText.textContent = '';
       return;
     }

@@ -16,7 +16,6 @@ import {
   getRecommendedVideoBitrate,
   normalizeVideoFps,
   pickSupportedMimeType,
-  snapVideoSourceFps,
   timestamp,
 } from './media-format.ts';
 
@@ -403,10 +402,6 @@ export function applyCaptureMixin(proto) {
     return normalizeVideoFps(value);
   };
 
-  proto.snapVideoSourceFps = function (value) {
-    return snapVideoSourceFps(value, this.COMMON_VIDEO_FPS);
-  };
-
   proto.formatVideoFps = function (value) {
     return formatVideoFps(value);
   };
@@ -422,90 +417,6 @@ export function applyCaptureMixin(proto) {
       this.normalizeVideoFps(this.videoSourceFps) ||
       this.DEFAULT_CAMERA_FPS
     );
-  };
-
-  proto.readFpsFromCaptureStream = function (video) {
-    if (typeof video.captureStream !== 'function') return null;
-    const stream = video.captureStream();
-    const track = stream.getVideoTracks()[0];
-    const settingsFps = Number(track?.getSettings?.().frameRate);
-    stream.getTracks().forEach((t) => t.stop());
-    return this.snapVideoSourceFps(settingsFps);
-  };
-
-  proto.probeVideoFrameRate = function (video, calculateFrameRate) {
-    if (typeof video.requestVideoFrameCallback !== 'function')
-      return Promise.resolve(null);
-    const savedTime = video.currentTime;
-    const wasPaused = video.paused;
-    this.frameCount = 0;
-    let callbackId = null;
-    const mediaTimes = [];
-
-    return new Promise((resolve) => {
-      let settled = false;
-      const timeout = setTimeout(
-        () => finish(calculateFrameRate(mediaTimes)),
-        3500,
-      );
-      const finish = (fps) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timeout);
-        if (
-          callbackId != null &&
-          typeof video.cancelVideoFrameCallback === 'function'
-        ) {
-          video.cancelVideoFrameCallback(callbackId);
-        }
-        video.pause();
-        video.currentTime = savedTime;
-        if (!wasPaused) void video.play().catch(() => {});
-        resolve(this.snapVideoSourceFps(fps));
-      };
-
-      const onFrame = (_now, metadata) => {
-        this.frameCount += 1;
-        if (metadata && Number.isFinite(metadata.mediaTime)) {
-          const previousTime = mediaTimes.at(-1);
-          if (
-            previousTime == null ||
-            metadata.mediaTime - previousTime > 0.0005
-          ) {
-            mediaTimes.push(metadata.mediaTime);
-          }
-        }
-        if (mediaTimes.length >= 25) {
-          finish(calculateFrameRate(mediaTimes));
-          return;
-        }
-        if (this.frameCount >= 120) {
-          finish(calculateFrameRate(mediaTimes));
-          return;
-        }
-        callbackId = video.requestVideoFrameCallback(onFrame);
-      };
-
-      void video.play().catch(() => finish(null));
-      callbackId = video.requestVideoFrameCallback(onFrame);
-    });
-  };
-
-  proto.detectVideoSourceFps = async function (video, calculateFrameRate) {
-    const probed = await this.probeVideoFrameRate(video, calculateFrameRate);
-    if (probed) return probed;
-
-    const fromStream = this.readFpsFromCaptureStream(video);
-    if (fromStream) return fromStream;
-
-    const quality = video.getVideoPlaybackQuality?.();
-    if (quality && video.currentTime > 0.2) {
-      const measured = quality.totalVideoFrames / video.currentTime;
-      const normalized = this.snapVideoSourceFps(measured);
-      if (normalized) return normalized;
-    }
-
-    return this.DEFAULT_CAMERA_FPS;
   };
 
   proto.getRecommendedVideoBitrate = function (width, height, fps) {

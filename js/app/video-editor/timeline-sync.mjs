@@ -140,7 +140,7 @@ export function applyVideoEditorTimelineSyncMixin(proto) {
   };
 
   proto.applyVideoTimelineLook = function (mediaTime, options = {}) {
-    if (this.sourceMode !== 'video' || !this.videoSourceFile) return false;
+    if (this.sourceMode !== 'video' || !this.videoSource?.file) return false;
     const lookItem = this.videoTimeline
       .activeAt(mediaTime)
       .find((item) => item.type === 'look');
@@ -169,7 +169,7 @@ export function applyVideoEditorTimelineSyncMixin(proto) {
   };
 
   proto.syncVideoTimelineLookNow = function (options = {}) {
-    if (this.sourceMode !== 'video' || !this.videoSourceFile) return;
+    if (this.sourceMode !== 'video' || !this.videoSource?.file) return;
     const changed = this.applyVideoTimelineLook(
       this.videoEl.currentTime || 0,
       options,
@@ -178,7 +178,7 @@ export function applyVideoEditorTimelineSyncMixin(proto) {
   };
 
   proto.syncVideoTimelineLookAt = function (mediaTime, options = {}) {
-    if (this.sourceMode !== 'video' || !this.videoSourceFile) return;
+    if (this.sourceMode !== 'video' || !this.videoSource?.file) return;
     this.applyVideoTimelineLook(mediaTime, options);
     this.updateEffectsInfo();
   };
@@ -187,7 +187,7 @@ export function applyVideoEditorTimelineSyncMixin(proto) {
     mediaTime,
     force = false,
   ) {
-    if (this.sourceMode !== 'video' || !this.videoSourceFile) return;
+    if (this.sourceMode !== 'video' || !this.videoSource?.file) return;
     const active = this.videoTimeline.activeAt(mediaTime);
     const byType = Object.fromEntries(
       active
@@ -208,7 +208,7 @@ export function applyVideoEditorTimelineSyncMixin(proto) {
   };
 
   proto.syncVideoTimelineDetectors = async function (force = false) {
-    if (this.sourceMode !== 'video' || !this.videoSourceFile) return;
+    if (this.sourceMode !== 'video' || !this.videoSource?.file) return;
     this.timelineDetectorSyncForce =
       !!force || !!this.timelineDetectorSyncForce;
     if (this.timelineDetectorSyncPromise)
@@ -251,7 +251,7 @@ export function applyVideoEditorTimelineSyncMixin(proto) {
   };
 
   proto.syncVideoTimelineEffects = async function (force = false) {
-    if (this.sourceMode !== 'video' || !this.videoSourceFile) return;
+    if (this.sourceMode !== 'video' || !this.videoSource?.file) return;
     this.syncVideoTimelineLookNow({ force });
     await this.syncVideoTimelineVisualFx?.(force);
     await this.syncVideoTimelineDetectors(force);
@@ -259,7 +259,7 @@ export function applyVideoEditorTimelineSyncMixin(proto) {
 
   proto.updateInspectorWorkflow = function () {
     if (!this.inspectorWorkflowSteps) return;
-    const hasVideo = !!this.videoSourceFile;
+    const hasVideo = !!this.videoSource?.file;
     const hasEffects = this.videoTimeline.items.length > 0;
     this.inspectorWorkflowSteps
       .querySelectorAll('[data-step]')

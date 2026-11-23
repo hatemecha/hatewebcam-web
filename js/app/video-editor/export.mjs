@@ -15,7 +15,7 @@ const VIDEO_EXPORT_PLAYBACK_RATE = 4;
 /** @param {import('../controller.mjs').AppController} proto */
 export function applyVideoEditorExportMixin(proto) {
   proto.buildVideoExportPreflight = function () {
-    if (!this.videoSourceFile) return null;
+    if (!this.videoSource?.file) return null;
     const { sourceWidth, sourceHeight } = this.getSourceFrameDimensions();
     const { width, height } = this.getEffectiveFrameDimensions(
       sourceWidth,
@@ -52,7 +52,7 @@ export function applyVideoEditorExportMixin(proto) {
   };
 
   proto.updateVideoEditorUI = function () {
-    const loaded = !!this.videoSourceFile;
+    const loaded = !!this.videoSource?.file;
     document.body.classList.toggle('video-has-source', loaded);
     if (!loaded && this.inspectorTabs) this.setInspectorTab('project');
     const canExport =
@@ -287,7 +287,7 @@ export function applyVideoEditorExportMixin(proto) {
   };
 
   proto.refreshVideoExportDiagnostics = async function () {
-    if (!this.videoExportDiagnostics || !this.videoSourceFile) return null;
+    if (!this.videoExportDiagnostics || !this.videoSource?.file) return null;
     const preflight = this.buildVideoExportPreflight();
     if (!preflight) return null;
     const diagnosis = await diagnoseVideoExportSupport({
@@ -352,7 +352,7 @@ export function applyVideoEditorExportMixin(proto) {
   };
 
   proto.toggleVideoPlayback = async function () {
-    if (!this.videoSourceFile || this.videoExportSession?.active) return;
+    if (!this.videoSource?.file || this.videoExportSession?.active) return;
     if (this.videoEl.paused) {
       const end = this.getVideoPlayableEnd(this.videoTimeline.trimEnd);
       if (
@@ -379,7 +379,7 @@ export function applyVideoEditorExportMixin(proto) {
   };
 
   proto.seekVideo = function (time) {
-    if (!this.videoSourceFile || this.videoExportSession?.active) return;
+    if (!this.videoSource?.file || this.videoExportSession?.active) return;
     const previous = this.videoEl.currentTime || 0;
     const next = this.clampVideoSeekTime(time);
     if (this.visualFxEffect?.active && next !== previous) {
@@ -565,7 +565,7 @@ export function applyVideoEditorExportMixin(proto) {
       }));
 
     const baseName =
-      this.videoSourceFile.name.replace(/\.[^.]+$/, '') || 'hatewebcam-video';
+      this.videoSource?.file.name.replace(/\.[^.]+$/, '') || 'hatewebcam-video';
     const suffix = mode === 'effects-chroma' ? 'efectos-chroma' : 'editado';
     this.videoExportSession.fileName = `${baseName}-${suffix}.${diagnosis.extension || 'webm'}`;
 
@@ -582,7 +582,7 @@ export function applyVideoEditorExportMixin(proto) {
       requestedFormat: preflight.format,
       mode,
       chromaColor: this.imageSettings.effectsExportChroma,
-      audioSourceFile: this.videoSourceFile,
+      audioSourceFile: this.videoSource?.file,
       trimStart: start,
       trimEnd: end,
       copyAudio: !!preflight.copyAudio,
@@ -633,7 +633,7 @@ export function applyVideoEditorExportMixin(proto) {
   };
 
   proto.startVideoExport = async function () {
-    if (!this.videoSourceFile || this.videoExportSession?.active) return;
+    if (!this.videoSource?.file || this.videoExportSession?.active) return;
     if (typeof HTMLCanvasElement === 'undefined') {
       this.showStatus(
         this.videoEditorStatus,
@@ -796,7 +796,7 @@ export function applyVideoEditorExportMixin(proto) {
   };
 
   proto.recoverVideoSourceForExport = async function (time) {
-    if (!this.videoSourceFile) throw new Error('video_decode_failed');
+    if (!this.videoSource?.file) throw new Error('video_decode_failed');
     this.videoExportRecoveredSource = true;
     this.updateVideoExportProgress(
       0,
@@ -810,50 +810,7 @@ export function applyVideoEditorExportMixin(proto) {
       },
     );
 
-    const previousUrl = this.videoObjectUrl;
-    const nextUrl = URL.createObjectURL(this.videoSourceFile);
-    try {
-      await new Promise((resolve, reject) => {
-        let timeout = null;
-        const cleanup = () => {
-          clearTimeout(timeout);
-          this.videoEl.removeEventListener('loadedmetadata', loaded);
-          this.videoEl.removeEventListener('error', failed);
-        };
-        const loaded = () => {
-          cleanup();
-          resolve();
-        };
-        const failed = () => {
-          cleanup();
-          reject(new Error('video_decode_failed'));
-        };
-        timeout = setTimeout(() => {
-          cleanup();
-          reject(new Error('video_seek_timeout'));
-        }, 5000);
-        this.videoEl.addEventListener('loadedmetadata', loaded, {
-          once: true,
-        });
-        this.videoEl.addEventListener('error', failed, { once: true });
-        this.videoEl.pause();
-        this.videoEl.srcObject = null;
-        this.videoEl.src = nextUrl;
-        this.videoEl.muted = true;
-        this.videoEl.preload = 'auto';
-        this.videoEl.load();
-      });
-      if (previousUrl && previousUrl !== nextUrl)
-        URL.revokeObjectURL(previousUrl);
-      this.videoObjectUrl = nextUrl;
-    } catch (err) {
-      URL.revokeObjectURL(nextUrl);
-      if (previousUrl) {
-        this.videoEl.src = previousUrl;
-        this.videoEl.load();
-      }
-      throw err;
-    }
+    await this.videoSource.reload(5000);
   };
 
   proto.prepareSequentialVideoExport = async function (startTime) {
@@ -1079,7 +1036,7 @@ export function applyVideoEditorExportMixin(proto) {
     void this.videoExportSession.releaseWakeLock();
     this.updateVideoEditorUI();
     this.updateVideoTransport();
-    if (this.isRunning && this.videoSourceFile && !this.animFrameId)
+    if (this.isRunning && this.videoSource?.file && !this.animFrameId)
       this.scheduleRenderLoop();
   };
 

@@ -80,7 +80,7 @@ export function applyCameraMixin(proto) {
   proto.updatePreviewPlaceholder = function () {
     if (!this.placeholder) return;
     const inVideoMode = this.sourceMode === 'video';
-    const hasVideo = !!this.videoSourceFile;
+    const hasVideo = !!this.videoSource?.file;
     const isLoading = !!this.videoPlaceholderLoading;
     const showPlaceholder = inVideoMode ? !hasVideo : !this.isRunning;
 

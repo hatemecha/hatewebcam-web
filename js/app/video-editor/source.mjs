@@ -1,3 +1,4 @@
+import { detectVideoSourceFps } from './video-frame-rate.ts';
 import { VideoTimeline } from '../../editor/video-timeline.ts';
 import { updateShellState } from '../../../src/lib/shell/shell-bridge.ts';
 import { updateEditorUiState } from '../../../src/lib/editor/editor-state.ts';
@@ -97,16 +98,11 @@ export function applyVideoEditorSourceMixin(proto) {
 
   proto.disposeVideoSource = function () {
     if (this.videoExportSession?.active) this.cancelVideoExport();
-    this.videoEl.pause();
+    this.videoSource.dispose();
     this.cancelRenderLoop();
     this.isRunning = false;
-    if (this.videoObjectUrl) URL.revokeObjectURL(this.videoObjectUrl);
-    this.videoObjectUrl = '';
-    this.videoSourceFile = null;
     this.videoSourceFps = 30;
     this.videoSourceAverageBitrate = 0;
-    this.videoEl.removeAttribute('src');
-    this.videoEl.load();
     this.videoTimeline = new VideoTimeline();
     this.editorHistory?.clear();
     this.updateEditorHistoryButtons();
@@ -134,8 +130,8 @@ export function applyVideoEditorSourceMixin(proto) {
   };
 
   proto.updateVideoFileMeta = function () {
-    if (!this.videoFileMeta || !this.videoSourceFile) return;
-    const file = this.videoSourceFile;
+    if (!this.videoFileMeta || !this.videoSource?.file) return;
+    const file = this.videoSource?.file;
     this.videoFileMeta.textContent = `${file.name} · ${this.formatBytes(file.size)} · ${this.videoEl.videoWidth}×${this.videoEl.videoHeight} · ${this.formatDurationDetailed(this.videoEl.duration)} · ${this.formatVideoFps(this.videoSourceFps)} FPS · ${this.formatVideoBitrate(this.videoSourceAverageBitrate)} ${translateCurrent('estimado')}`;
   };
 
@@ -151,28 +147,13 @@ export function applyVideoEditorSourceMixin(proto) {
     }
 
     this.disposeVideoSource();
-    this.videoSourceFile = file;
-    this.videoObjectUrl = URL.createObjectURL(file);
-    this.videoEl.srcObject = null;
-    this.videoEl.src = this.videoObjectUrl;
-    this.videoEl.muted = true;
-    this.videoEl.preload = 'auto';
     this.showVideoPlaceholderLoading('Leyendo metadata del video...');
-
+    let signal;
     try {
-      await new Promise((resolve, reject) => {
-        const loaded = () => {
-          this.videoEl.removeEventListener('error', failed);
-          resolve();
-        };
-        const failed = () => {
-          this.videoEl.removeEventListener('loadedmetadata', loaded);
-          reject(new Error('video_decode_failed'));
-        };
-        this.videoEl.addEventListener('loadedmetadata', loaded, { once: true });
-        this.videoEl.addEventListener('error', failed, { once: true });
-        this.videoEl.load();
-      });
+      const request = this.videoSource.open(file);
+      signal = request.signal;
+      await request.ready;
+      signal.throwIfAborted();
       if (
         !Number.isFinite(this.videoEl.duration) ||
         this.videoEl.duration <= 0 ||
@@ -187,10 +168,13 @@ export function applyVideoEditorSourceMixin(proto) {
         calculateFrameRateFromMediaTimes,
         calculateSourceAverageBitrate,
       } = await import('../../video-export.mjs');
-      this.videoSourceFps = await this.detectVideoSourceFps(
+      const fps = await detectVideoSourceFps(
         this.videoEl,
         calculateFrameRateFromMediaTimes,
+        signal,
       );
+      signal.throwIfAborted();
+      this.videoSourceFps = fps;
       this.videoSourceAverageBitrate = calculateSourceAverageBitrate(
         file.size,
         this.videoEl.duration,
@@ -233,6 +217,7 @@ export function applyVideoEditorSourceMixin(proto) {
       this.scheduleRenderLoop();
       this.renderVideoTimeline();
       await this.syncVideoTimelineEffects(true);
+      signal.throwIfAborted();
       this.updateVideoEditorUI();
       this.applyTimelineZoom();
       this.showStatus(
@@ -240,8 +225,11 @@ export function applyVideoEditorSourceMixin(proto) {
         translateCurrent(projectMessage || 'Video listo.'),
         projectMessage && this.pendingEditorProject ? 'warning' : 'success',
       );
-      setTimeout(() => this.hideStatus(this.videoEditorStatus), 1800);
+      setTimeout(() => {
+        if (!signal.aborted) this.hideStatus(this.videoEditorStatus);
+      }, 1800);
     } catch (err) {
+      if (signal?.aborted || this.sourceMode !== 'video') return;
       console.error('Error loading video:', err);
       this.disposeVideoSource();
       const message =
