@@ -1,18 +1,68 @@
 import { translateCurrent } from '../src/lib/i18n/translate.ts';
+import type { ImageSettings } from './app/constants.ts';
 import { COMMON_VIDEO_FPS } from './app/media-format.ts';
+import {
+  loadMediabunny,
+  type AudioTrack,
+  type EncodedAudioSource,
+  type MediaInput,
+  type MediaOutput,
+  type MediabunnyModule,
+} from './mediabunny.ts';
 
-const MEDIABUNNY_URL = '../vendor/mediabunny/mediabunny.min.mjs?v=1.49.0-local';
 export { COMMON_VIDEO_FPS };
 
-const EXPORT_FORMATS = new Set(['auto', 'mp4', 'webm']);
-const EXPORT_MODES = new Set(['full', 'effects-chroma']);
-const EXPORT_PRESETS = new Set([
-  'fast',
-  'balanced',
-  'high',
-  'chroma',
-  'experimental-mp4',
-]);
+type RequestedFormat = ImageSettings['editorExportFormat'];
+type ExportMode = ImageSettings['editorExportMode'];
+type ExportPreset = ImageSettings['editorExportPreset'];
+type ContainerFormat = Exclude<RequestedFormat, 'auto'>;
+type ExportCodec = '' | 'avc' | 'vp8' | 'vp9';
+type EncoderSupport = Pick<typeof VideoEncoder, 'isConfigSupported'>;
+
+interface ExportSelectionOptions {
+  requestedFormat?: unknown;
+  mode?: unknown;
+  mp4Supported?: boolean;
+  webmSupported?: boolean;
+}
+
+interface CodecSupport {
+  supported: boolean;
+  codec: string;
+  mediaCodec: ExportCodec;
+  muxerCodec: 'V_VP9' | 'V_VP8' | '' | null;
+}
+
+interface DiagnosisOptions extends Pick<
+  ExportSelectionOptions,
+  'requestedFormat' | 'mode'
+> {
+  width?: number;
+  height?: number;
+  fps?: number;
+  bitrate?: number;
+  format?: unknown;
+  copyAudio?: boolean;
+  audioCodec?: unknown;
+  VideoEncoderImpl?: EncoderSupport;
+  VideoFrameImpl?: typeof VideoFrame;
+}
+
+export interface VideoExportDiagnosis extends CodecSupport {
+  webCodecs: boolean;
+  videoFrame: boolean;
+  format: ContainerFormat | '';
+  extension: string;
+  mimeType: string;
+  mode: ExportMode;
+  requestedFormat: RequestedFormat;
+  reason: string;
+  audioCopyRequested: boolean;
+  audioCopySupported: boolean;
+  audioCodec: string;
+  audioReason: string;
+}
+
 const CHROMA_COLORS = {
   green: '#00ff00',
   blue: '#0047ff',
@@ -79,20 +129,27 @@ const MP4_CODEC_CANDIDATES = [
   { codec: 'avc1.640028', mediaCodec: 'avc' },
   { codec: 'avc1.4d4028', mediaCodec: 'avc' },
   { codec: 'avc1.42001f', mediaCodec: 'avc' },
-];
+] as const;
 const WEBM_CODEC_CANDIDATES = [
   { codec: 'vp09.00.10.08', mediaCodec: 'vp9' },
   { codec: 'vp09.00.10.10', mediaCodec: 'vp9' },
   { codec: 'vp8', mediaCodec: 'vp8' },
-];
+] as const;
 
-export function normalizeFrameRate(value) {
+const UNAVAILABLE_CODEC: CodecSupport = {
+  supported: false,
+  codec: '',
+  mediaCodec: '',
+  muxerCodec: '',
+};
+
+export function normalizeFrameRate(value: unknown) {
   const fps = Number(value);
   if (!Number.isFinite(fps) || fps <= 0) return null;
   return Math.min(240, Math.max(1, Math.round(fps * 1000) / 1000));
 }
 
-export function snapFrameRate(value) {
+export function snapFrameRate(value: unknown) {
   const fps = normalizeFrameRate(value);
   if (!fps) return null;
   const nearest = COMMON_VIDEO_FPS.reduce((best, candidate) =>
@@ -101,7 +158,9 @@ export function snapFrameRate(value) {
   return Math.abs(fps - nearest) <= 0.08 ? nearest : fps;
 }
 
-export function calculateFrameRateFromMediaTimes(mediaTimes) {
+export function calculateFrameRateFromMediaTimes(
+  mediaTimes: readonly number[],
+) {
   if (!Array.isArray(mediaTimes) || mediaTimes.length < 2) return null;
   const deltas = mediaTimes
     .slice(1)
@@ -117,7 +176,7 @@ export function calculateFrameRateFromMediaTimes(mediaTimes) {
   return snapFrameRate(1 / median);
 }
 
-export function getWebmMuxerCodec(codec) {
+export function getWebmMuxerCodec(codec: unknown) {
   return typeof codec === 'string' && codec.startsWith('vp09')
     ? 'V_VP9'
     : codec === 'vp8'
@@ -125,31 +184,33 @@ export function getWebmMuxerCodec(codec) {
       : null;
 }
 
-export function normalizeEditorExportFormat(value) {
+export function normalizeEditorExportFormat(value: unknown): RequestedFormat {
   const format = String(value || 'auto').toLowerCase();
-  return EXPORT_FORMATS.has(format) ? format : 'auto';
+  return format === 'mp4' || format === 'webm' ? format : 'auto';
 }
 
-export function normalizeEditorExportMode(value) {
+export function normalizeEditorExportMode(value: unknown): ExportMode {
   const mode = String(value || 'full').toLowerCase();
-  return EXPORT_MODES.has(mode) ? mode : 'full';
+  return mode === 'effects-chroma' ? mode : 'full';
 }
 
-export function normalizeEditorExportPreset(value) {
+export function normalizeEditorExportPreset(value: unknown): ExportPreset {
   const preset = String(value || 'balanced').toLowerCase();
-  return EXPORT_PRESETS.has(preset) ? preset : 'balanced';
+  return Object.hasOwn(EXPORT_PRESET_PROFILES, preset)
+    ? (preset as ExportPreset)
+    : 'balanced';
 }
 
-export function getEditorExportPresetProfile(value) {
+export function getEditorExportPresetProfile(value: unknown) {
   const preset = normalizeEditorExportPreset(value);
   return { preset, ...EXPORT_PRESET_PROFILES[preset] };
 }
 
-export function getEditorChromaColor(value) {
-  return CHROMA_COLORS[value] || CHROMA_COLORS.green;
+export function getEditorChromaColor(value: unknown) {
+  return value === 'blue' ? CHROMA_COLORS.blue : CHROMA_COLORS.green;
 }
 
-export function normalizeAudioCodec(codec) {
+export function normalizeAudioCodec(codec: unknown) {
   const normalized = String(codec || '').toLowerCase();
   if (!normalized) return '';
   if (normalized === 'aac' || normalized.startsWith('mp4a.40')) return 'aac';
@@ -164,7 +225,7 @@ export function normalizeAudioCodec(codec) {
   return normalized;
 }
 
-export function canCopyAudioCodecToFormat(codec, format) {
+export function canCopyAudioCodecToFormat(codec: unknown, format: unknown) {
   const audioCodec = normalizeAudioCodec(codec);
   const container = normalizeEditorExportFormat(format);
   if (!audioCodec || container === 'auto') return false;
@@ -174,11 +235,11 @@ export function canCopyAudioCodecToFormat(codec, format) {
   return false;
 }
 
-export function getEditorExportMimeType(format) {
+export function getEditorExportMimeType(format: unknown) {
   return format === 'mp4' ? 'video/mp4' : 'video/webm';
 }
 
-export function getEditorExportExtension(format) {
+export function getEditorExportExtension(format: unknown) {
   return format === 'mp4' ? 'mp4' : 'webm';
 }
 
@@ -187,7 +248,7 @@ export function chooseEditorExportFormat({
   mode = 'full',
   mp4Supported = false,
   webmSupported = false,
-} = {}) {
+}: ExportSelectionOptions = {}): ContainerFormat | '' {
   if (normalizeEditorExportMode(mode) === 'effects-chroma')
     return webmSupported ? 'webm' : '';
   const requested = normalizeEditorExportFormat(requestedFormat);
@@ -197,7 +258,7 @@ export function chooseEditorExportFormat({
   return mp4Supported ? 'mp4' : '';
 }
 
-function formatProgressFps(value) {
+function formatProgressFps(value: unknown) {
   const fps = normalizeFrameRate(value);
   if (!fps) return '?';
   return Number.isInteger(fps)
@@ -205,7 +266,7 @@ function formatProgressFps(value) {
     : fps.toFixed(3).replace(/\.?0+$/, '');
 }
 
-function formatObservedFps(value) {
+function formatObservedFps(value: unknown) {
   const fps = Number(value);
   if (!Number.isFinite(fps) || fps <= 0) return '?';
   if (fps < 1) return fps.toFixed(2);
@@ -213,7 +274,7 @@ function formatObservedFps(value) {
   return Math.round(fps).toString();
 }
 
-function formatObservedDuration(seconds) {
+function formatObservedDuration(seconds: number) {
   const safeSeconds = Math.max(0, Math.round(Number(seconds) || 0));
   const minutes = Math.floor(safeSeconds / 60);
   const restSeconds = safeSeconds % 60;
@@ -251,7 +312,10 @@ export function formatObservedExportProgress({
   );
 }
 
-async function testVideoCodecSupport(VideoEncoderImpl, config) {
+async function testVideoCodecSupport(
+  VideoEncoderImpl: EncoderSupport,
+  config: VideoEncoderConfig,
+) {
   try {
     const support = await VideoEncoderImpl.isConfigSupported(config);
     return support?.supported
@@ -272,7 +336,14 @@ async function pickSupportedVideoCodec({
   fps,
   bitrate,
   VideoEncoderImpl,
-}) {
+}: {
+  format: ContainerFormat;
+  width: number;
+  height: number;
+  fps: number;
+  bitrate: number;
+  VideoEncoderImpl: EncoderSupport;
+}): Promise<CodecSupport> {
   const candidates =
     format === 'mp4' ? MP4_CODEC_CANDIDATES : WEBM_CODEC_CANDIDATES;
   for (const candidate of candidates) {
@@ -294,7 +365,7 @@ async function pickSupportedVideoCodec({
       };
     }
   }
-  return { supported: false, codec: '', mediaCodec: '', muxerCodec: '' };
+  return UNAVAILABLE_CODEC;
 }
 
 export async function diagnoseVideoExportSupport({
@@ -309,14 +380,14 @@ export async function diagnoseVideoExportSupport({
   audioCodec = '',
   VideoEncoderImpl = globalThis.VideoEncoder,
   VideoFrameImpl = globalThis.VideoFrame,
-} = {}) {
+}: DiagnosisOptions = {}): Promise<VideoExportDiagnosis> {
   const exportMode = normalizeEditorExportMode(mode);
   const requested =
     exportMode === 'effects-chroma'
       ? 'webm'
       : normalizeEditorExportFormat(format || requestedFormat);
   const safeFps = normalizeFrameRate(fps) || 30;
-  const diagnosis = {
+  const diagnosis: VideoExportDiagnosis = {
     supported: false,
     webCodecs: typeof VideoEncoderImpl !== 'undefined',
     videoFrame: typeof VideoFrameImpl !== 'undefined',
@@ -335,7 +406,7 @@ export async function diagnoseVideoExportSupport({
     audioReason: '',
   };
 
-  if (!diagnosis.webCodecs) {
+  if (!VideoEncoderImpl) {
     diagnosis.reason = 'webcodecs_unavailable';
     return diagnosis;
   }
@@ -359,7 +430,7 @@ export async function diagnoseVideoExportSupport({
         bitrate,
         VideoEncoderImpl,
       })
-    : { supported: false };
+    : UNAVAILABLE_CODEC;
   const webm = shouldTryWebm
     ? await pickSupportedVideoCodec({
         format: 'webm',
@@ -369,7 +440,7 @@ export async function diagnoseVideoExportSupport({
         bitrate,
         VideoEncoderImpl,
       })
-    : { supported: false };
+    : UNAVAILABLE_CODEC;
 
   const pickedFormat = chooseEditorExportFormat({
     requestedFormat: requested,
@@ -408,12 +479,12 @@ export async function diagnoseVideoExportSupport({
 }
 
 async function pickVideoCodec(
-  width,
-  height,
-  fps,
-  bitrate,
-  requestedFormat = 'webm',
-  mode = 'full',
+  width: number,
+  height: number,
+  fps: number,
+  bitrate: number,
+  requestedFormat: unknown = 'webm',
+  mode: unknown = 'full',
 ) {
   const diagnosis = await diagnoseVideoExportSupport({
     width,
@@ -427,7 +498,10 @@ async function pickVideoCodec(
   throw new Error('webcodecs_codec_unsupported');
 }
 
-export function calculateSourceAverageBitrate(fileSize, duration) {
+export function calculateSourceAverageBitrate(
+  fileSize: unknown,
+  duration: unknown,
+) {
   const bytes = Number(fileSize);
   const seconds = Number(duration);
   return Number.isFinite(bytes) &&
@@ -439,10 +513,10 @@ export function calculateSourceAverageBitrate(fileSize, duration) {
 }
 
 export function calculateExportBitrate(
-  sourceBitrate,
-  width,
-  height,
-  fps,
+  sourceBitrate: number,
+  width: number,
+  height: number,
+  fps: number,
   enhanced = false,
 ) {
   const safeWidth = Math.max(1, Number(width) || 1);
@@ -527,6 +601,19 @@ export function classifyExportMemoryRisk({
   };
 }
 
+interface ExportPreflightOptions {
+  preset?: unknown;
+  width?: number;
+  height?: number;
+  sourceFps?: number;
+  duration?: number;
+  sourceBitrate?: number;
+  mode?: unknown;
+  requestedFormat?: unknown;
+  copyAudio?: boolean | null;
+  qualityEnhancer?: boolean | null;
+}
+
 export function buildEditorExportPreflight({
   preset = 'balanced',
   width = 1,
@@ -538,7 +625,7 @@ export function buildEditorExportPreflight({
   requestedFormat,
   copyAudio,
   qualityEnhancer,
-} = {}) {
+}: ExportPreflightOptions = {}) {
   const profile = getEditorExportPresetProfile(preset);
   const exportMode = normalizeEditorExportMode(mode || profile.mode);
   const exportFormat =
@@ -595,7 +682,7 @@ export function buildEditorExportPreflight({
   };
 }
 
-export function calculateExportFrameCount(duration, fps) {
+export function calculateExportFrameCount(duration: number, fps: number) {
   return Math.max(
     1,
     Math.round(
@@ -604,13 +691,13 @@ export function calculateExportFrameCount(duration, fps) {
   );
 }
 
-export function calculateFrameTimestampUs(frameIndex, fps) {
+export function calculateFrameTimestampUs(frameIndex: number, fps: number) {
   return Math.round(
     ((Number(frameIndex) || 0) / Math.max(1, Number(fps) || 1)) * 1_000_000,
   );
 }
 
-export function calculateFrameDurationUs(frameIndex, fps) {
+export function calculateFrameDurationUs(frameIndex: number, fps: number) {
   return Math.max(
     1,
     calculateFrameTimestampUs(frameIndex + 1, fps) -
@@ -618,15 +705,19 @@ export function calculateFrameDurationUs(frameIndex, fps) {
   );
 }
 
-function calculateFrameTimestampSeconds(frameIndex, fps) {
+function calculateFrameTimestampSeconds(frameIndex: number, fps: number) {
   return calculateFrameTimestampUs(frameIndex, fps) / 1_000_000;
 }
 
-function calculateFrameDurationSeconds(frameIndex, fps) {
+function calculateFrameDurationSeconds(frameIndex: number, fps: number) {
   return calculateFrameDurationUs(frameIndex, fps) / 1_000_000;
 }
 
-export function shouldAppendFinalFrame(duration, fps, totalFrames) {
+export function shouldAppendFinalFrame(
+  duration: number,
+  fps: number,
+  totalFrames: number,
+) {
   const finalTimestamp = Math.round(
     Math.max(0, Number(duration) || 0) * 1_000_000,
   );
@@ -667,8 +758,27 @@ export function formatExportDebugInfo({
   return `stage:${stage} · frame:${frame} · fps:${fpsText} · t:${timeText}s · ${sizeText} · queue:${Math.max(0, Number(queueSize) || 0)}${noteText}`;
 }
 
-async function loadMediabunny() {
-  return import(/* @vite-ignore */ MEDIABUNNY_URL);
+interface AudioCopyOptions {
+  mediabunny: MediabunnyModule;
+  output: MediaOutput;
+  format: ContainerFormat | '';
+  audioSourceFile: Blob | null;
+  trimStart?: number;
+  trimEnd?: number;
+  copyAudio?: boolean;
+}
+
+interface AudioCopy {
+  enabled: boolean;
+  copied: boolean;
+  codec: string;
+  reason: string;
+  input: MediaInput | null;
+  track: AudioTrack | null;
+  source: EncodedAudioSource | null;
+  decoderConfig: AudioDecoderConfig | null;
+  trimStart: number;
+  trimEnd: number;
 }
 
 async function prepareAudioCopy({
@@ -679,8 +789,8 @@ async function prepareAudioCopy({
   trimStart = 0,
   trimEnd = 0,
   copyAudio = false,
-}) {
-  const result = {
+}: AudioCopyOptions): Promise<AudioCopy> {
+  const result: AudioCopy = {
     enabled: false,
     copied: false,
     codec: '',
@@ -701,27 +811,25 @@ async function prepareAudioCopy({
     return result;
   }
 
+  let input: MediaInput | null = null;
   try {
     const { Input, BlobSource, ALL_FORMATS, EncodedAudioPacketSource } =
       mediabunny;
-    const input = new Input({
+    input = new Input({
       source: new BlobSource(audioSourceFile),
       formats: ALL_FORMATS,
     });
     if (!(await input.canRead())) {
-      input.dispose();
       result.reason = 'audio_input_unreadable';
       return result;
     }
     const track = await input.getPrimaryAudioTrack();
     if (!track) {
-      input.dispose();
       result.reason = 'audio_track_missing';
       return result;
     }
     const codec = normalizeAudioCodec(await track.getCodec());
     if (!canCopyAudioCodecToFormat(codec, format)) {
-      input.dispose();
       result.codec = codec;
       result.reason = codec
         ? 'audio_codec_incompatible'
@@ -729,6 +837,7 @@ async function prepareAudioCopy({
       return result;
     }
 
+    const decoderConfig = await track.getDecoderConfig();
     const source = new EncodedAudioPacketSource(codec);
     output.addAudioTrack(source);
     result.enabled = true;
@@ -736,21 +845,30 @@ async function prepareAudioCopy({
     result.input = input;
     result.track = track;
     result.source = source;
-    result.decoderConfig = await track.getDecoderConfig();
+    result.decoderConfig = decoderConfig;
     result.trimEnd = result.trimEnd || Number.POSITIVE_INFINITY;
     return result;
   } catch (err) {
-    result.reason = err?.message || 'audio_copy_failed';
-    try {
-      result.input?.dispose?.();
-    } catch {
-      // ignore dispose failures
-    }
+    result.reason = err instanceof Error ? err.message : 'audio_copy_failed';
     return result;
+  } finally {
+    if (!result.enabled) disposeAudioInput(input);
   }
 }
 
-async function writeCopiedAudioPackets(mediabunny, audioCopy) {
+function disposeAudioInput(input: MediaInput | null) {
+  try {
+    input?.dispose();
+  } catch {
+    // Preserve the export error when releasing a failed input.
+  }
+}
+
+async function writeCopiedAudioPackets(
+  mediabunny: MediabunnyModule,
+  audioCopy: AudioCopy,
+  shouldCancel?: () => boolean,
+) {
   if (!audioCopy?.enabled || !audioCopy.source || !audioCopy.track)
     return audioCopy;
   const { EncodedPacketSink } = mediabunny;
@@ -760,6 +878,7 @@ async function writeCopiedAudioPackets(mediabunny, audioCopy) {
 
   try {
     for await (const packet of sink.packets()) {
+      if (shouldCancel?.()) throw new Error('export_cancelled');
       const packetStart = Number(packet.timestamp) || 0;
       const packetEnd = packetStart + Math.max(0, Number(packet.duration) || 0);
       if (packetEnd <= audioCopy.trimStart) continue;
@@ -782,15 +901,47 @@ async function writeCopiedAudioPackets(mediabunny, audioCopy) {
     audioCopy.reason = copiedCount > 0 ? '' : 'audio_packets_missing';
     return audioCopy;
   } catch (err) {
-    audioCopy.reason = err?.message || 'audio_copy_failed';
+    if (err instanceof Error && err.message === 'export_cancelled') throw err;
+    audioCopy.reason = err instanceof Error ? err.message : 'audio_copy_failed';
     return audioCopy;
-  } finally {
-    try {
-      audioCopy.input?.dispose?.();
-    } catch {
-      // ignore dispose failures
-    }
   }
+}
+
+interface CanvasSequenceOptions {
+  canvas: HTMLCanvasElement;
+  width: number;
+  height: number;
+  fps: number;
+  totalFrames: number;
+  duration: number;
+  bitrate: number;
+  renderFrame(
+    frameIndex: number,
+    options: {
+      mode: ExportMode;
+      chromaColor: string;
+      format: ContainerFormat | '';
+    },
+  ): void | Promise<void>;
+  onProgress?(
+    done: number,
+    total: number,
+    meta: {
+      stage: 'encode' | 'audio' | 'mux';
+      queueSize: number;
+      force?: boolean;
+    },
+  ): void;
+  shouldCancel?(): boolean;
+  requestedFormat?: RequestedFormat;
+  format?: RequestedFormat;
+  mode?: ExportMode;
+  chromaColor?: ImageSettings['effectsExportChroma'];
+  audioSourceFile?: Blob | null;
+  trimStart?: number;
+  trimEnd?: number;
+  copyAudio?: boolean;
+  diagnosis?: VideoExportDiagnosis | null;
 }
 
 /**
@@ -817,7 +968,7 @@ export async function encodeCanvasSequence({
   trimEnd = duration,
   copyAudio = false,
   diagnosis = null,
-}) {
+}: CanvasSequenceOptions) {
   const mediabunny = await loadMediabunny();
   const {
     Output,
@@ -907,9 +1058,10 @@ export async function encodeCanvasSequence({
         queueSize: 0,
         force: true,
       });
-      await writeCopiedAudioPackets(mediabunny, audioCopy);
+      await writeCopiedAudioPackets(mediabunny, audioCopy, shouldCancel);
     }
 
+    if (shouldCancel?.()) throw new Error('export_cancelled');
     onProgress?.(totalFrames, totalFrames, {
       stage: 'mux',
       queueSize: 0,
@@ -923,12 +1075,15 @@ export async function encodeCanvasSequence({
       // ignore cancel failures
     }
     throw err;
+  } finally {
+    disposeAudioInput(audioCopy.input);
   }
 
+  if (!target.buffer) throw new Error('export_buffer_unavailable');
   const blob = new Blob([target.buffer], {
     type: exportDiagnosis.mimeType || outputFormat.mimeType,
   });
-  blob.exportInfo = {
+  const exportInfo = {
     format: exportDiagnosis.format,
     extension: exportDiagnosis.extension,
     mimeType: exportDiagnosis.mimeType || outputFormat.mimeType,
@@ -940,5 +1095,5 @@ export async function encodeCanvasSequence({
     audioCodec: audioCopy.codec || '',
     audioReason: audioCopy.reason || '',
   };
-  return blob;
+  return Object.assign(blob, { exportInfo });
 }

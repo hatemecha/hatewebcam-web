@@ -167,7 +167,7 @@ export function applyVideoEditorSourceMixin(proto) {
       const {
         calculateFrameRateFromMediaTimes,
         calculateSourceAverageBitrate,
-      } = await import('../../video-export.mjs');
+      } = await import('../../video-export.ts');
       const fps = await detectVideoSourceFps(
         this.videoEl,
         calculateFrameRateFromMediaTimes,

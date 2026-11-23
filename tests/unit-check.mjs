@@ -22,7 +22,7 @@ import {
   buildEditorExportPreflight,
   snapFrameRate,
   shouldAppendFinalFrame,
-} from '../js/video-export.mjs';
+} from '../js/video-export.ts';
 import { CameraManager } from '../js/core/camera-manager.ts';
 import { createFaceMesh } from '../js/effects/face-mesh-client.ts';
 import {

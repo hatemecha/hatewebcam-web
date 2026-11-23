@@ -3,7 +3,7 @@ import {
   diagnoseVideoExportSupport,
   formatObservedExportProgress,
   getEditorChromaColor,
-} from '../../video-export.mjs';
+} from '../../video-export.ts';
 import { patchExportModalState } from '../../../src/lib/capture/session-state.ts';
 import { updateShellState } from '../../../src/lib/shell/shell-bridge.ts';
 import { translateCurrent } from '../../../src/lib/i18n/translate.ts';
@@ -538,7 +538,7 @@ export function applyVideoEditorExportMixin(proto) {
 
   proto.runVideoExportViaWebCodecs = async function () {
     const { encodeCanvasSequence, formatExportDebugInfo } =
-      await import('../../video-export.mjs');
+      await import('../../video-export.ts');
     const preflight =
       this.videoExportPreflight || this.buildVideoExportPreflight();
     if (!preflight) throw new Error('video_export_preflight_missing');

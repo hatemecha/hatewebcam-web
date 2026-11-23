@@ -1,4 +1,9 @@
-const MEDIABUNNY_URL = '../vendor/mediabunny/mediabunny.min.mjs?v=1.49.0-local';
+import {
+  loadMediabunny,
+  type AudioSample,
+  type MediabunnyModule,
+} from './mediabunny.ts';
+
 const DEFAULT_MIN_BPM = 60;
 const DEFAULT_MAX_BPM = 180;
 
@@ -22,39 +27,10 @@ interface Onset extends TempoBeat {
   value: number;
 }
 
-interface AudioSample {
-  numberOfChannels: number;
-  numberOfFrames: number;
-  sampleRate: number;
-  allocationSize(options: { planeIndex: number; format: 'f32' }): number;
-  copyTo(
-    data: Float32Array,
-    options: { planeIndex: number; format: 'f32' },
-  ): void;
-  close?(): void;
-}
-
-interface AudioTrack {
-  canDecode?(): Promise<boolean>;
-}
-
-interface AudioInput {
-  canRead?(): Promise<boolean>;
-  getPrimaryAudioTrack(): Promise<AudioTrack | null>;
-  dispose?(): void;
-}
-
-interface AudioMediaModule {
-  ALL_FORMATS: readonly object[];
-  Input: new (options: {
-    source: object;
-    formats: readonly object[];
-  }) => AudioInput;
-  BlobSource: new (file: Blob) => object;
-  AudioSampleSink: new (track: AudioTrack) => {
-    samples(start: number, end: number): AsyncIterable<AudioSample>;
-  };
-}
+type AudioMediaModule = Pick<
+  MediabunnyModule,
+  'ALL_FORMATS' | 'Input' | 'BlobSource' | 'AudioSampleSink'
+>;
 
 interface TempoOptions {
   minBpm?: number;
@@ -297,7 +273,7 @@ export async function extractMediaAudioSamples(
 ) {
   if (!file) throw new Error('audio_file_unavailable');
   const mediabunny: AudioMediaModule =
-    options.mediaModule || (await import(/* @vite-ignore */ MEDIABUNNY_URL));
+    options.mediaModule || (await loadMediabunny());
   const { Input, BlobSource, ALL_FORMATS, AudioSampleSink } = mediabunny;
   const input = new Input({
     source: new BlobSource(file),

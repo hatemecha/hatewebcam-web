@@ -197,7 +197,7 @@ const controllerJs = readFileSync(
   'utf8',
 );
 if (
-  !controllerJs.includes("from '../video-export.mjs'") &&
+  !controllerJs.includes("from '../video-export.ts'") &&
   !controllerJs.includes("from './constants.ts'")
 ) {
   fail('controller.mjs must wire video export/constants modules');
@@ -215,9 +215,9 @@ const videoEditorJs = readFileSync(
   resolve(rootDir, 'js/app/video-editor.mjs'),
   'utf8',
 );
-if (videoEditorJs.includes("import('./video-export.mjs')")) {
+if (videoEditorJs.includes("import('./video-export.ts')")) {
   fail(
-    'video-editor.mjs must import video-export.mjs from its parent directory.',
+    'video-editor.mjs must import video-export.ts from its parent directory.',
   );
 }
 for (const fragment of requiredHtmlFragments) {
