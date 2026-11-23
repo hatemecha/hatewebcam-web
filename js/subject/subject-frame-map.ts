@@ -175,37 +175,3 @@ export function drawSubjectMask(
   );
   ctx.restore();
 }
-
-interface FrameMetricsSource {
-  getSourceFrameDimensions(): { sourceWidth: number; sourceHeight: number };
-  getEffectiveRotationDegrees(
-    sourceWidth: number,
-    sourceHeight: number,
-  ): number;
-  isMobileViewport?(): boolean;
-  getEffectiveFlipH?(): boolean;
-  flipV?: boolean;
-}
-
-export function metricsFromApp(
-  app: FrameMetricsSource,
-  canvas: HTMLCanvasElement,
-  mode = 'preview',
-) {
-  const { sourceWidth, sourceHeight } = app.getSourceFrameDimensions();
-  const effectiveRotation = app.getEffectiveRotationDegrees(
-    sourceWidth,
-    sourceHeight,
-  );
-  const useCover = mode === 'preview' && app.isMobileViewport?.();
-  return getVideoDrawMetrics({
-    canvasWidth: canvas.width,
-    canvasHeight: canvas.height,
-    sourceWidth,
-    sourceHeight,
-    effectiveRotation,
-    flipH: app.getEffectiveFlipH?.() ?? false,
-    flipV: !!app.flipV,
-    useCover,
-  });
-}

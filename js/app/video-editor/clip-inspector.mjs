@@ -154,7 +154,7 @@ export function applyVideoEditorClipInspectorMixin(proto) {
     if (this.adjustClipStatus)
       this.adjustClipStatus.classList.toggle('hidden', isVisualFx);
     if (hasSelection) this.updateAdjustmentsContext();
-    if (isVisualFx) this.renderVisualFxInspector?.();
+    if (isVisualFx) this.editor.visualFx?.updateInspector();
   };
 
   proto.normalizeLookClipConfig = function (config = {}) {
@@ -289,8 +289,8 @@ export function applyVideoEditorClipInspectorMixin(proto) {
     } else if (item.type === 'blink' && this.blinkDetectionEffect) {
       this.blinkDetectionEffect.setConfig(item.config);
     } else if (isVisualFxClipType(item.type)) {
-      this.visualFxEffect?.setConfig(item.config || {});
-      this.renderVisualFxInspector?.();
+      this.editor.visualFx?.setEffectConfig(item.config);
+      this.editor.visualFx?.updateInspector();
     }
     this.syncQuickDetectorSettingsFromEffects();
     this.updateQuickDetectorControlsUI();
@@ -606,6 +606,6 @@ export function applyVideoEditorClipInspectorMixin(proto) {
     if (this.btnDeleteVideoEffect)
       this.btnDeleteVideoEffect.disabled = !editing;
     if (this.btnOpenEffectAdjust) this.btnOpenEffectAdjust.disabled = !editing;
-    this.renderVisualFxInspector?.();
+    this.editor.visualFx?.updateInspector();
   };
 }

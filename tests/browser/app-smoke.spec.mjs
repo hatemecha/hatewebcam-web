@@ -94,6 +94,22 @@ test('a pending editor load honors the most recent mode choice', async ({
   await expect(page.locator('#btnPreviewImportVideo')).toBeVisible();
 });
 
+test('the editor can retry after its lazy chunk fails to load', async ({
+  page,
+}) => {
+  await page.route('**/assets/editor-install-*.js', (route) => route.abort(), {
+    times: 1,
+  });
+  await page.goto('/');
+  const videoTab = page.getByRole('tab', { name: /video/i });
+  await videoTab.click();
+  await expect(page.locator('#captureStatus')).toContainText(
+    'No se pudo abrir el editor',
+  );
+  await videoTab.click();
+  await expect(page.locator('#btnPreviewImportVideo')).toBeVisible();
+});
+
 test('video empty state stays usable on a narrow screen', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');

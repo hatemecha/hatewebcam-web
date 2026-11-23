@@ -9,6 +9,8 @@
 // renderer maps macros/tuning onto many internal uniforms (see systems.ts),
 // but the saved/serialized shape stays flat and readable.
 
+import type { MessageKey } from '../../src/lib/i18n/catalog.ts';
+
 const clamp01 = (v: number) =>
   Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0));
 const clamp = (v: number, min: number, max: number) =>
@@ -42,7 +44,7 @@ export const VISUAL_SYSTEM_IDS = Object.freeze(
 
 interface TuningField {
   key: string;
-  label: string;
+  label: MessageKey;
   min: number;
   max: number;
   default: number;
@@ -86,7 +88,7 @@ const DEFAULT_MACROS = Object.freeze({
 export const TUNING_SCHEMA: Readonly<
   Record<VisualSystem, readonly TuningField[]>
 > = Object.freeze({
-  recursive: Object.freeze([
+  recursive: Object.freeze<TuningField[]>([
     {
       key: 'grain',
       label: 'Resolución',
@@ -98,7 +100,7 @@ export const TUNING_SCHEMA: Readonly<
     { key: 'spin', label: 'Carácter del giro', min: 0, max: 1, default: 0.5 },
     { key: 'palette', label: 'Paleta', min: 0, max: 4, step: 1, default: 1 },
   ]),
-  flow: Object.freeze([
+  flow: Object.freeze<TuningField[]>([
     {
       key: 'grain',
       label: 'Resolución',
@@ -110,7 +112,7 @@ export const TUNING_SCHEMA: Readonly<
     { key: 'turbulence', label: 'Turbulencia', min: 0, max: 1, default: 0.4 },
     { key: 'palette', label: 'Paleta', min: 0, max: 4, step: 1, default: 3 },
   ]),
-  pixelfield: Object.freeze([
+  pixelfield: Object.freeze<TuningField[]>([
     {
       key: 'grain',
       label: 'Resolución',
@@ -122,7 +124,7 @@ export const TUNING_SCHEMA: Readonly<
     { key: 'jitter', label: 'Inquietud', min: 0, max: 1, default: 0.45 },
     { key: 'palette', label: 'Paleta', min: 0, max: 4, step: 1, default: 4 },
   ]),
-  trace: Object.freeze([
+  trace: Object.freeze<TuningField[]>([
     {
       key: 'grain',
       label: 'Resolución',
@@ -148,7 +150,7 @@ export const PALETTE_OPTIONS = Object.freeze([
   { id: 2, label: 'Monocromo cálido' },
   { id: 3, label: 'Monocromo frío' },
   { id: 4, label: 'Duotono' },
-]);
+] as const);
 
 const MACRO_KEYS = Object.freeze([
   'intensity',

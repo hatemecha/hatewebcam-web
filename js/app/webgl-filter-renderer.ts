@@ -7,7 +7,7 @@ void main() {
   v_texCoord = a_texCoord;
 }`;
 
-// Mirrors Canvas2D base filters plus the CPU advanced look math in render.mjs.
+// Mirrors Canvas2D base filters plus the CPU advanced look math in PreviewRenderer.
 const FRAGMENT_SHADER = `
 precision mediump float;
 uniform sampler2D u_image;
@@ -213,5 +213,12 @@ export class WebGLFilterRenderer {
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
     return this.canvas;
+  }
+
+  dispose(): void {
+    this.gl.deleteBuffer(this.positionBuffer);
+    this.gl.deleteBuffer(this.texCoordBuffer);
+    this.gl.deleteTexture(this.texture);
+    this.gl.deleteProgram(this.program);
   }
 }

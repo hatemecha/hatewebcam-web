@@ -1,3 +1,4 @@
+import { escapeHtml, toFiniteNumber } from './ui-helpers.ts';
 import {
   faceVisualModeFromFlags,
   normalizeFaceVisualFlags,
@@ -126,10 +127,7 @@ export function applyStorageMixin(proto) {
     return Math.min(max, Math.max(min, v));
   };
 
-  proto.toFiniteNumber = function (value, fallback = 0) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : fallback;
-  };
+  proto.toFiniteNumber = toFiniteNumber;
 
   // parseInt(...) || fallback silently replaced valid zeros with the fallback,
   // which broke settings whose range includes 0 (saturation, censor padding).
@@ -139,14 +137,7 @@ export function applyStorageMixin(proto) {
     return Number.isFinite(parsed) ? parsed : fallback;
   };
 
-  proto.escapeHtml = function (value) {
-    return String(value)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  };
+  proto.escapeHtml = escapeHtml;
 
   proto.normalizeHexColor = function (value, fallback = '#ffffff') {
     const color = String(value || '').trim();
@@ -269,7 +260,7 @@ export function applyStorageMixin(proto) {
       if (this.videoEl && this.videoEl.paused) {
         void this.videoEl.play().catch(() => {});
       }
-      this.requestPreviewRefresh(true);
+      this.renderer.requestPreviewRefresh(true);
     }
   };
 
@@ -551,7 +542,7 @@ export function applyStorageMixin(proto) {
   };
 
   proto.scheduleSaveActiveEffectSettings = function () {
-    this.refreshPausedVideoPreview?.();
+    this.renderer?.refreshPausedVideoPreview();
     if (this.saveEffectSettingsTimer)
       clearTimeout(this.saveEffectSettingsTimer);
     this.saveEffectSettingsTimer = setTimeout(() => {
@@ -577,7 +568,7 @@ export function applyStorageMixin(proto) {
       } else {
         void this.syncVideoTimelineEffects(true);
       }
-      this.refreshPausedVideoPreview?.();
+      this.renderer?.refreshPausedVideoPreview();
     } catch (err) {
       console.warn('No se pudo actualizar el clip seleccionado:', err.message);
     }
@@ -735,7 +726,7 @@ export function applyStorageMixin(proto) {
 
   proto.scheduleSaveImageSettings = function () {
     this.syncLookClipConfigNow?.();
-    this.refreshPausedVideoPreview?.();
+    this.renderer?.refreshPausedVideoPreview();
     if (this.saveImageSettingsTimer) clearTimeout(this.saveImageSettingsTimer);
     this.saveImageSettingsTimer = setTimeout(() => {
       this.saveImageSettingsTimer = null;

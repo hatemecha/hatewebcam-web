@@ -7,7 +7,8 @@ import {
   visualConfigTopologyKey,
 } from '../js/visual-fx/config.ts';
 import { VisualFxEffect, maskStaleBudgetSec } from '../js/visual-fx/effect.ts';
-import { applyVisualFxIntegrationMixin } from '../js/app/visual-fx-integration.mjs';
+import { VisualFxSession } from '../js/app/video-editor/visual-fx-session.ts';
+import { normalizeEditorProject } from '../js/app/video-editor/projects.ts';
 import { VideoTimeline } from '../js/editor/video-timeline.ts';
 
 for (const system of VISUAL_SYSTEM_IDS) {
@@ -139,10 +140,9 @@ assert.equal(effect.maskTime, null);
   );
 }
 
-const app = {};
-applyVisualFxIntegrationMixin(app);
 const legacy = {
   version: 1,
+  source: { name: 'test.webm' },
   timeline: {
     items: [
       {
@@ -155,7 +155,7 @@ const legacy = {
     ],
   },
 };
-const migrated = app.normalizeEditorProjectV2(legacy);
+const migrated = normalizeEditorProject(legacy);
 assert.equal(migrated.timeline.items[0].config.system, 'pixelfield');
 assert.equal(
   legacy.timeline.items[0].config.preset,
@@ -164,15 +164,16 @@ assert.equal(
 );
 const timeline = new VideoTimeline(4);
 const item = timeline.upsert(migrated.timeline.items[0]);
-Object.assign(app, {
-  editor: {
-    timeline: timeline,
-  },
-  getSelectedVideoEffectItem: () => timeline.items[0],
-  syncVideoTimelineVisualFx() {},
+const session = new VisualFxSession({
+  getTimeline: () => timeline,
+  getSelection: () => timeline.items[0],
+  getTime: () => 0,
+  hasSource: () => false,
+  pushHistory() {},
+  publishVisibility() {},
 });
 const otherTuning = { ...timeline.items[0].config.tuning };
-app.commitVisualFxConfig({ macros: { memory: 0.22 } });
+session.commit({ macros: { memory: 0.22 } });
 assert.equal(timeline.items[0].config.macros.memory, 0.22);
 assert.deepEqual(timeline.items[0].config.tuning, otherTuning);
 assert.equal(timeline.activeAt(1)[0].id, item.id);
@@ -198,19 +199,20 @@ console.log('Visual FX unit checks passed.');
       return '';
     },
   };
-  const app2 = {
-    sourceMode: 'video',
-    editor: {
-      source: { file: {} },
-      timeline: {
+  const session = new VisualFxSession(
+    {
+      hasSource: () => true,
+      getTimeline: () => ({
         activeAt: () => [{ id: 'clip', type: 'visual-fx', config: {} }],
-      },
+      }),
+      getSelection: () => null,
+      getTime: () => 0,
+      publishVisibility() {},
     },
-  };
-  applyVisualFxIntegrationMixin(app2);
-  app2.ensureVisualFxEffect = () => loaded;
-  const first = app2.syncVideoTimelineVisualFxAt(0),
-    second = app2.syncVideoTimelineVisualFxAt(0.03);
+    () => loaded,
+  );
+  const first = session.syncAt(0);
+  const second = session.syncAt(0.03);
   resolveLoad(fx);
   await Promise.all([first, second]);
   assert.equal(fx.active, true);
@@ -236,20 +238,21 @@ console.log('Visual FX unit checks passed.');
       return '';
     },
   };
-  const app3 = {
-    sourceMode: 'video',
-    editor: {
-      source: { file: {} },
-      timeline: {
+  const session = new VisualFxSession(
+    {
+      hasSource: () => true,
+      getTimeline: () => ({
         activeAt: () => [{ id: 'same-clip', type: 'visual-fx', config: {} }],
-      },
+      }),
+      getSelection: () => null,
+      getTime: () => 0,
+      publishVisibility() {},
     },
-  };
-  applyVisualFxIntegrationMixin(app3);
-  app3.ensureVisualFxEffect = () => fx;
-  await app3.syncVideoTimelineVisualFxAt(0, true);
+    async () => fx,
+  );
+  await session.syncAt(0, true);
   assert.equal(onSeekCalls, 1, 'first sync of a clip must seek once');
-  for (let i = 0; i < 10; i++) await app3.syncVideoTimelineVisualFxAt(0, true);
+  for (let i = 0; i < 10; i++) await session.syncAt(0, true);
   assert.equal(
     onSeekCalls,
     1,

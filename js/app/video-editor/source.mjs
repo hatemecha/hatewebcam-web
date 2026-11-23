@@ -1,3 +1,7 @@
+import {
+  calculateFrameRateFromMediaTimes,
+  calculateSourceAverageBitrate,
+} from '../../video-export.ts';
 import { detectVideoSourceFps } from './video-frame-rate.ts';
 import { VideoTimeline } from '../../editor/video-timeline.ts';
 import { updateShellState } from '../../../src/lib/shell/shell-bridge.ts';
@@ -10,6 +14,7 @@ export function applyVideoEditorSourceMixin(proto) {
     if (mode === this.sourceMode) return;
     if (this.editor.exportSession?.active) return;
 
+    this.colorPicker.cancel();
     if (mode === 'video') {
       this.webcamSessionState = {
         imageSettings: { ...this.imageSettings },
@@ -24,7 +29,7 @@ export function applyVideoEditorSourceMixin(proto) {
       this.capture.cancelPhotoCountdown(false);
       this.camera.stop();
       this.isRunning = false;
-      this.cancelRenderLoop();
+      this.renderer.cancelRenderLoop();
       this.camera.setCameraState('off');
       this.sourceMode = 'video';
       document.body.classList.add('video-mode');
@@ -40,7 +45,7 @@ export function applyVideoEditorSourceMixin(proto) {
       updateShellState({ mode: 'video' });
       this.publishWebcamPanel?.();
       this.videoPlaceholderLoading = false;
-      this.clearPreviewCanvas();
+      this.renderer.clearPreviewCanvas();
       void this.resetVideoTimelineDetectors();
       this.camera.updatePreviewPlaceholder();
       this.updateVideoEditorUI();
@@ -100,11 +105,12 @@ export function applyVideoEditorSourceMixin(proto) {
   proto.disposeVideoSource = function () {
     if (this.editor.exportSession?.active) this.cancelVideoExport();
     this.editor.source.dispose();
-    this.cancelRenderLoop();
+    this.renderer.cancelRenderLoop();
     this.isRunning = false;
     this.videoSourceFps = 30;
     this.videoSourceAverageBitrate = 0;
     this.editor.timeline = new VideoTimeline();
+    this.editor.transport.update();
     this.editor.history?.clear();
     this.updateEditorHistoryButtons();
     this.timelineZoom = 1;
@@ -113,8 +119,7 @@ export function applyVideoEditorSourceMixin(proto) {
     this.timelineClipboard = null;
     this.updateTimelineClipboardStatus();
     this.appliedTimelineItemIds = {};
-    this.appliedVisualFxClipId = '';
-    this.resetVisualFxTemporalState?.({ hard: true });
+    this.editor.visualFx.reset(true);
     this.timelineDetectorSyncPromise = null;
     this.timelineDetectorSyncForce = false;
     this.videoBaseImageSettings = null;
@@ -123,7 +128,7 @@ export function applyVideoEditorSourceMixin(proto) {
     this.videoPlaceholderLoading = false;
     if (this.sourceMode === 'video') {
       void this.resetVideoTimelineDetectors();
-      this.clearPreviewCanvas();
+      this.renderer.clearPreviewCanvas();
       this.camera.updatePreviewPlaceholder();
     } else {
       this.camera.updatePreviewPlaceholder();
@@ -165,10 +170,6 @@ export function applyVideoEditorSourceMixin(proto) {
       }
       this.videoEl.currentTime = Math.min(0.001, this.videoEl.duration);
 
-      const {
-        calculateFrameRateFromMediaTimes,
-        calculateSourceAverageBitrate,
-      } = await import('../../video-export.ts');
       const fps = await detectVideoSourceFps(
         this.videoEl,
         calculateFrameRateFromMediaTimes,
@@ -186,7 +187,6 @@ export function applyVideoEditorSourceMixin(proto) {
       this.isRunning = true;
       this.videoPlaceholderLoading = false;
       this.camera.updatePreviewPlaceholder();
-      this.videoSeek.max = String(this.videoEl.duration);
       this.videoTrimStart.max = String(this.videoEl.duration);
       this.videoTrimEnd.max = String(this.videoEl.duration);
       this.videoEffectStart.max = String(this.videoEl.duration);
@@ -195,27 +195,21 @@ export function applyVideoEditorSourceMixin(proto) {
       this.videoTrimEnd.value = this.videoEl.duration.toFixed(2);
       this.videoEffectStart.value = '0';
       this.videoEffectEnd.value = this.videoEl.duration.toFixed(2);
-      const pendingProject = this.pendingEditorProject;
-      let projectMessage = '';
-      if (pendingProject) {
-        if (this.editorProjectMatchesSource(pendingProject, file)) {
-          this.applyEditorProject(pendingProject);
-          this.pendingEditorProject = null;
-          projectMessage = 'Proyecto restaurado con el video reimportado.';
-        } else {
-          projectMessage =
-            'El video no coincide con el proyecto cargado. Elegí el archivo original.';
-        }
-      }
+      const restore = this.editor.projects.restorePending(file);
+      const projectMessage = {
+        none: 'Video listo.',
+        restored: 'Proyecto restaurado con el video reimportado.',
+        mismatch:
+          'El video no coincide con el proyecto cargado. Elegí el archivo original.',
+      }[restore];
       this.updateVideoFileMeta();
-      this.frameCount = 0;
-      this.lastFpsTime = performance.now();
-      this.syncPreviewCanvasMetrics(
+      this.renderer.resetCadence();
+      this.renderer.syncPreviewCanvasMetrics(
         this.videoEl.videoWidth,
         this.videoEl.videoHeight,
         true,
       );
-      this.scheduleRenderLoop();
+      this.renderer.scheduleRenderLoop();
       this.renderVideoTimeline();
       await this.syncVideoTimelineEffects(true);
       signal.throwIfAborted();
@@ -223,8 +217,8 @@ export function applyVideoEditorSourceMixin(proto) {
       this.applyTimelineZoom();
       this.showStatus(
         this.videoEditorStatus,
-        translateCurrent(projectMessage || 'Video listo.'),
-        projectMessage && this.pendingEditorProject ? 'warning' : 'success',
+        translateCurrent(projectMessage),
+        restore === 'mismatch' ? 'warning' : 'success',
       );
       setTimeout(() => {
         if (!signal.aborted) this.hideStatus(this.videoEditorStatus);

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { m } from '../i18n/text.svelte';
   import { editorState } from './editor-store';
+  import { transportActions, transportReadout } from './transport-store';
 </script>
 
 <div class="video-editor-toolbar">
@@ -41,6 +42,7 @@
       id="btnVideoStart"
       aria-label={m('Inicio')}
       disabled={!$editorState.hasSource || $editorState.exporting}
+      onclick={() => $transportActions?.boundary('start')}
     >
       <i class="fa-solid fa-backward-step"></i>
     </button>
@@ -50,6 +52,7 @@
       id="btnVideoBack"
       aria-label="-5 s"
       disabled={!$editorState.hasSource || $editorState.exporting}
+      onclick={() => $transportActions?.jump(-5)}
     >
       <i class="fa-solid fa-backward"></i>
     </button>
@@ -59,8 +62,13 @@
       id="btnVideoPlay"
       aria-label={m('Play (Espacio)')}
       disabled={!$editorState.hasSource || $editorState.exporting}
+      onclick={() => void $transportActions?.toggle()}
     >
-      <i class="fa-solid fa-play"></i>
+      <i
+        class={$transportReadout.paused
+          ? 'fa-solid fa-play'
+          : 'fa-solid fa-pause'}
+      ></i>
     </button>
     <button
       type="button"
@@ -68,6 +76,7 @@
       id="btnVideoForward"
       aria-label="+5 s"
       disabled={!$editorState.hasSource || $editorState.exporting}
+      onclick={() => $transportActions?.jump(5)}
     >
       <i class="fa-solid fa-forward"></i>
     </button>
@@ -77,11 +86,12 @@
       id="btnVideoEnd"
       aria-label={m('Final')}
       disabled={!$editorState.hasSource || $editorState.exporting}
+      onclick={() => $transportActions?.boundary('end')}
     >
       <i class="fa-solid fa-forward-step"></i>
     </button>
     <span class="mono video-time-readout" id="videoTimeLabel"
-      >00:00 / 00:00</span
+      >{$transportReadout.timeLabel}</span
     >
   </div>
   <div class="video-timeline-controls" aria-label="Timeline">

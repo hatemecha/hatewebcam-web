@@ -1,4 +1,14 @@
+import { bindSlider, createSection, slider } from './ui-helpers.ts';
 import { translateCurrent } from '../../src/lib/i18n/translate.ts';
+
+function bindDetectorSliders(app) {
+  return (element, input, label, apply) => {
+    bindSlider(element, input, label, (value) => {
+      apply(value);
+      app.scheduleSaveActiveEffectSettings();
+    });
+  };
+}
 
 /** @param {import('./controller.mjs').AppController} proto */
 export function applyEffectConfigUIMixin(proto) {
@@ -22,6 +32,7 @@ export function applyEffectConfigUIMixin(proto) {
 
   // --- Blob Tracking Config ---
   proto.buildBlobConfig = function () {
+    const bindConfigSlider = bindDetectorSliders(this);
     const bt = this.blobTrackingEffect;
     const boxColor = this.normalizeHexColor(
       bt.boxColor,
@@ -30,7 +41,7 @@ export function applyEffectConfigUIMixin(proto) {
     const targetColor = this.normalizeHexColor(bt.targetColor, '#00c853');
     bt.boxColor = boxColor;
     bt.targetColor = targetColor;
-    const el = this.createSection(
+    const el = createSection(
       'Detector de objetos por color',
       `
       <div class="config-block">
@@ -71,37 +82,37 @@ export function applyEffectConfigUIMixin(proto) {
         <div class="status-msg hidden" id="cfgTargetColorStatus" role="status" aria-live="polite"></div>
         <div class="config-subsection-title">${translateCurrent('Sensibilidad')}</div>
         <div class="help-text">${translateCurrent('Si la detección es demasiado estricta, subí este valor. Si detecta demasiado, bajalo.')}</div>
-        ${this.slider('sldTolerance', 'valTolerance', 'Tolerancia', bt._tolerance, 10, 100)}
+        ${slider('sldTolerance', 'valTolerance', 'Tolerancia', bt._tolerance, 10, 100)}
 
         <button type="button" class="btn config-advanced-toggle" id="btnAdvancedHsv">${translateCurrent('Ajustes avanzados (HSV manual)')}</button>
         <div id="hsvAdvanced" class="config-advanced-panel hidden">
           <div class="help-text">${translateCurrent('Estos controles permiten ajustar el rango de color manualmente usando el modelo HSV (Tono, Saturación, Brillo).')}</div>
-          ${this.slider('sldHMin', 'valHMin', 'Tono mínimo (H)', bt.hsvMin[0], 0, 180)}
-          ${this.slider('sldSMin', 'valSMin', 'Saturación mín. (S)', bt.hsvMin[1], 0, 255)}
-          ${this.slider('sldVMin', 'valVMin', 'Brillo mínimo (V)', bt.hsvMin[2], 0, 255)}
-          ${this.slider('sldHMax', 'valHMax', 'Tono máximo (H)', bt.hsvMax[0], 0, 180)}
-          ${this.slider('sldSMax', 'valSMax', 'Saturación máx. (S)', bt.hsvMax[1], 0, 255)}
-          ${this.slider('sldVMax', 'valVMax', 'Brillo máx. (V)', bt.hsvMax[2], 0, 255)}
+          ${slider('sldHMin', 'valHMin', 'Tono mínimo (H)', bt.hsvMin[0], 0, 180)}
+          ${slider('sldSMin', 'valSMin', 'Saturación mín. (S)', bt.hsvMin[1], 0, 255)}
+          ${slider('sldVMin', 'valVMin', 'Brillo mínimo (V)', bt.hsvMin[2], 0, 255)}
+          ${slider('sldHMax', 'valHMax', 'Tono máximo (H)', bt.hsvMax[0], 0, 180)}
+          ${slider('sldSMax', 'valSMax', 'Saturación máx. (S)', bt.hsvMax[1], 0, 255)}
+          ${slider('sldVMax', 'valVMax', 'Brillo máx. (V)', bt.hsvMax[2], 0, 255)}
         </div>
       </div>
 
       <div class="config-block">
         <div class="config-block-title">${translateCurrent('Cantidad y tamaño')}</div>
         <div class="help-text">${translateCurrent('Limitá cuántos objetos detectar y qué tan grandes deben ser para ser considerados.')}</div>
-        ${this.slider('sldMaxObj', 'valMaxObj', 'Máximo de objetos', bt.maxObjects, 1, 50)}
-        ${this.slider('sldMinArea', 'valMinArea', 'Tamaño mínimo (píxeles)', bt.minArea, 0, 5000, 10)}
+        ${slider('sldMaxObj', 'valMaxObj', 'Máximo de objetos', bt.maxObjects, 1, 50)}
+        ${slider('sldMinArea', 'valMinArea', 'Tamaño mínimo (píxeles)', bt.minArea, 0, 5000, 10)}
       </div>
 
       <div class="config-block">
         <div class="config-block-title">${translateCurrent('Limpieza de imagen')}</div>
         <div class="help-text">${translateCurrent('Si aparecen detecciones falsas o ruido, subí este valor para limpiar la imagen.')}</div>
-        ${this.slider('sldErode', 'valErode', 'Nivel de limpieza', bt.erodeIterations, 0, 5)}
+        ${slider('sldErode', 'valErode', 'Nivel de limpieza', bt.erodeIterations, 0, 5)}
       </div>
 
       <div class="config-block">
         <div class="config-block-title">${translateCurrent('Respuesta')}</div>
         <div class="help-text">${translateCurrent('Bajá la resolución de análisis si notás retraso. Subirla da más precisión, pero consume más CPU.')}</div>
-        ${this.slider('sldBlobProcessScale', 'valBlobProcessScale', 'Resolución de análisis (%)', Math.round((bt.processScale || 0.45) * 100), 25, 100)}
+        ${slider('sldBlobProcessScale', 'valBlobProcessScale', 'Resolución de análisis (%)', Math.round((bt.processScale || 0.45) * 100), 25, 100)}
       </div>
 
       <div class="config-block">
@@ -114,8 +125,8 @@ export function applyEffectConfigUIMixin(proto) {
         <div style="height:6px"></div>
         <label class="checkbox-group"><input type="checkbox" id="chkShowCoords" ${bt.showCoordinates ? 'checked' : ''}><span>${translateCurrent('Mostrar posición (X, Y)')}</span></label>
         <label class="checkbox-group"><input type="checkbox" id="chkShowCentroid" ${bt.showCentroid ? 'checked' : ''}><span>${translateCurrent('Mostrar punto central')}</span></label>
-        ${this.slider('sldBlobLabelSize', 'valBlobLabelSize', 'Tamaño del texto', bt.labelSize || 12, 8, 32)}
-        ${this.slider('sldThickness', 'valThickness', 'Grosor del recuadro', bt.boxThickness, 1, 8)}
+        ${slider('sldBlobLabelSize', 'valBlobLabelSize', 'Tamaño del texto', bt.labelSize || 12, 8, 32)}
+        ${slider('sldThickness', 'valThickness', 'Grosor del recuadro', bt.boxThickness, 1, 8)}
       </div>
     `,
     );
@@ -137,7 +148,7 @@ export function applyEffectConfigUIMixin(proto) {
         });
       });
 
-      this.bindSlider(
+      bindConfigSlider(
         el,
         'sldTolerance',
         'valTolerance',
@@ -160,33 +171,43 @@ export function applyEffectConfigUIMixin(proto) {
         this.scheduleSaveActiveEffectSettings();
       });
       el.querySelector('#btnPickTargetColor').addEventListener('click', () =>
-        this.enableColorPick(targetStatus),
+        this.colorPicker.start(targetStatus),
       );
 
-      this.bindSlider(el, 'sldHMin', 'valHMin', (v) => (bt.hsvMin[0] = v));
-      this.bindSlider(el, 'sldSMin', 'valSMin', (v) => (bt.hsvMin[1] = v));
-      this.bindSlider(el, 'sldVMin', 'valVMin', (v) => (bt.hsvMin[2] = v));
-      this.bindSlider(el, 'sldHMax', 'valHMax', (v) => (bt.hsvMax[0] = v));
-      this.bindSlider(el, 'sldSMax', 'valSMax', (v) => (bt.hsvMax[1] = v));
-      this.bindSlider(el, 'sldVMax', 'valVMax', (v) => (bt.hsvMax[2] = v));
-      this.bindSlider(el, 'sldMaxObj', 'valMaxObj', (v) => (bt.maxObjects = v));
-      this.bindSlider(el, 'sldMinArea', 'valMinArea', (v) => (bt.minArea = v));
-      this.bindSlider(
+      bindConfigSlider(el, 'sldHMin', 'valHMin', (v) => (bt.hsvMin[0] = v));
+      bindConfigSlider(el, 'sldSMin', 'valSMin', (v) => (bt.hsvMin[1] = v));
+      bindConfigSlider(el, 'sldVMin', 'valVMin', (v) => (bt.hsvMin[2] = v));
+      bindConfigSlider(el, 'sldHMax', 'valHMax', (v) => (bt.hsvMax[0] = v));
+      bindConfigSlider(el, 'sldSMax', 'valSMax', (v) => (bt.hsvMax[1] = v));
+      bindConfigSlider(el, 'sldVMax', 'valVMax', (v) => (bt.hsvMax[2] = v));
+      bindConfigSlider(
+        el,
+        'sldMaxObj',
+        'valMaxObj',
+        (v) => (bt.maxObjects = v),
+      );
+      bindConfigSlider(el, 'sldMinArea', 'valMinArea', (v) => (bt.minArea = v));
+      bindConfigSlider(
         el,
         'sldErode',
         'valErode',
         (v) => (bt.erodeIterations = v),
       );
-      this.bindSlider(el, 'sldBlobProcessScale', 'valBlobProcessScale', (v) => {
-        bt.processScale = this.clamp(v / 100, 0.25, 1);
-      });
-      this.bindSlider(
+      bindConfigSlider(
+        el,
+        'sldBlobProcessScale',
+        'valBlobProcessScale',
+        (v) => {
+          bt.processScale = this.clamp(v / 100, 0.25, 1);
+        },
+      );
+      bindConfigSlider(
         el,
         'sldBlobLabelSize',
         'valBlobLabelSize',
         (v) => (bt.labelSize = this.clamp(Math.round(v), 8, 32)),
       );
-      this.bindSlider(
+      bindConfigSlider(
         el,
         'sldThickness',
         'valThickness',
@@ -219,6 +240,7 @@ export function applyEffectConfigUIMixin(proto) {
 
   // --- Face Detection Config ---
   proto.buildFaceConfig = function () {
+    const bindConfigSlider = bindDetectorSliders(this);
     const fd = this.faceDetectionEffect;
     const showBoxVisuals = fd.showBox !== false;
     const showPixelVisuals = !!fd.showBlur;
@@ -227,20 +249,20 @@ export function applyEffectConfigUIMixin(proto) {
       this.DEFAULT_QUICK_DETECTOR_SETTINGS.faceBoxColor,
     );
     fd.boxColor = faceBoxColor;
-    const el = this.createSection(
+    const el = createSection(
       'Detector de caras',
       `
       <div class="config-block">
         <div class="config-block-title">Configuración</div>
         <div class="help-text">${translateCurrent('Activá recuadro, blur/pixelado o ambos a la vez sobre cada cara detectada.')}</div>
-        ${this.slider('sldMaxFaces', 'valMaxFaces', 'Máximo de caras a detectar', fd.maxFaces, 1, 5)}
+        ${slider('sldMaxFaces', 'valMaxFaces', 'Máximo de caras a detectar', fd.maxFaces, 1, 5)}
         <div class="face-visual-toggles">
           <label class="checkbox-group"><input type="checkbox" id="chkAdvFaceShowBox" ${showBoxVisuals ? 'checked' : ''}><span>${translateCurrent('Recuadro')}</span></label>
           <label class="checkbox-group"><input type="checkbox" id="chkAdvFaceShowBlur" ${showPixelVisuals ? 'checked' : ''}><span>${translateCurrent('Blur / pixelado')}</span></label>
         </div>
         <div id="facePixelControls" class="${showPixelVisuals ? '' : 'hidden'}">
-          ${this.slider('sldFacePixelation', 'valFacePixelation', 'Tamaño del pixelado', fd.pixelationCellSize, 4, 32)}
-          ${this.slider('sldFacePadding', 'valFacePadding', 'Margen extra de censura (%)', fd.censorPaddingPercent, 0, 40)}
+          ${slider('sldFacePixelation', 'valFacePixelation', 'Tamaño del pixelado', fd.pixelationCellSize, 4, 32)}
+          ${slider('sldFacePadding', 'valFacePadding', 'Margen extra de censura (%)', fd.censorPaddingPercent, 0, 40)}
         </div>
         <div id="faceBoxControls" class="${showBoxVisuals ? '' : 'hidden'}">
           <div class="slider-group">
@@ -253,17 +275,17 @@ export function applyEffectConfigUIMixin(proto) {
             <input type="color" id="inpFaceColor" value="${faceBoxColor}">
           </label>
           <div style="height:6px"></div>
-          ${this.slider('sldFaceLabelSize', 'valFaceLabelSize', 'Tamaño del texto', fd.labelSize || 12, 8, 32)}
-          ${this.slider('sldFaceThickness', 'valFaceThickness', 'Grosor del recuadro', fd.boxThickness, 1, 8)}
+          ${slider('sldFaceLabelSize', 'valFaceLabelSize', 'Tamaño del texto', fd.labelSize || 12, 8, 32)}
+          ${slider('sldFaceThickness', 'valFaceThickness', 'Grosor del recuadro', fd.boxThickness, 1, 8)}
         </div>
         <label class="checkbox-group"><input type="checkbox" id="chkShowLandmarks" ${fd.showLandmarks ? 'checked' : ''}><span>${translateCurrent('Mostrar puntos faciales')}</span></label>
       </div>
       <div class="config-block">
         <div class="config-block-title">${translateCurrent('Respuesta')}</div>
         <div class="help-text">${translateCurrent('Menos suavizado y menos retención responden más rápido. Si vibra demasiado, subilos un poco.')}</div>
-        ${this.slider('sldFaceInterval', 'valFaceInterval', 'Intervalo de análisis (ms)', fd.processIntervalMs, 16, 120)}
-        ${this.slider('sldFaceSmoothing', 'valFaceSmoothing', 'Suavizado del recuadro (%)', Math.round((fd.boxSmoothing || 0) * 100), 0, 95)}
-        ${this.slider('sldFaceHold', 'valFaceHold', 'Retención al perder cara (ms)', fd.detectionHoldMs, 80, 300, 10)}
+        ${slider('sldFaceInterval', 'valFaceInterval', 'Intervalo de análisis (ms)', fd.processIntervalMs, 16, 120)}
+        ${slider('sldFaceSmoothing', 'valFaceSmoothing', 'Suavizado del recuadro (%)', Math.round((fd.boxSmoothing || 0) * 100), 0, 95)}
+        ${slider('sldFaceHold', 'valFaceHold', 'Retención al perder cara (ms)', fd.detectionHoldMs, 80, 300, 10)}
       </div>
     `,
     );
@@ -315,39 +337,39 @@ export function applyEffectConfigUIMixin(proto) {
           onAdvFaceVisualChange('blur'),
         );
 
-      this.bindSlider(el, 'sldMaxFaces', 'valMaxFaces', (v) => {
+      bindConfigSlider(el, 'sldMaxFaces', 'valMaxFaces', (v) => {
         fd.maxFaces = v;
         if (fd.faceMesh) fd.faceMesh.setOptions({ maxNumFaces: v });
       });
-      this.bindSlider(el, 'sldFacePixelation', 'valFacePixelation', (v) => {
+      bindConfigSlider(el, 'sldFacePixelation', 'valFacePixelation', (v) => {
         fd.pixelationCellSize = v;
         this.quickDetectorSettings.facePixelationCellSize = v;
         this.scheduleSaveQuickDetectorSettings();
       });
-      this.bindSlider(el, 'sldFacePadding', 'valFacePadding', (v) => {
+      bindConfigSlider(el, 'sldFacePadding', 'valFacePadding', (v) => {
         fd.censorPaddingPercent = v;
         this.quickDetectorSettings.faceCensorPaddingPercent = v;
         this.scheduleSaveQuickDetectorSettings();
       });
-      this.bindSlider(
+      bindConfigSlider(
         el,
         'sldFaceLabelSize',
         'valFaceLabelSize',
         (v) => (fd.labelSize = this.clamp(Math.round(v), 8, 32)),
       );
-      this.bindSlider(
+      bindConfigSlider(
         el,
         'sldFaceThickness',
         'valFaceThickness',
         (v) => (fd.boxThickness = v),
       );
-      this.bindSlider(el, 'sldFaceInterval', 'valFaceInterval', (v) => {
+      bindConfigSlider(el, 'sldFaceInterval', 'valFaceInterval', (v) => {
         fd.processIntervalMs = this.clamp(Math.round(v), 16, 120);
       });
-      this.bindSlider(el, 'sldFaceSmoothing', 'valFaceSmoothing', (v) => {
+      bindConfigSlider(el, 'sldFaceSmoothing', 'valFaceSmoothing', (v) => {
         fd.boxSmoothing = this.clamp(v / 100, 0, 0.95);
       });
-      this.bindSlider(el, 'sldFaceHold', 'valFaceHold', (v) => {
+      bindConfigSlider(el, 'sldFaceHold', 'valFaceHold', (v) => {
         fd.detectionHoldMs = this.clamp(Math.round(v), 80, 300);
       });
 
@@ -404,17 +426,18 @@ export function applyEffectConfigUIMixin(proto) {
 
   // --- Blink Detection Config ---
   proto.buildBlinkConfig = function () {
+    const bindConfigSlider = bindDetectorSliders(this);
     const bd = this.blinkDetectionEffect;
-    const el = this.createSection(
+    const el = createSection(
       'Detección de pestañeos',
       `
       <div class="config-block">
         <div class="config-block-title">Configuración</div>
         <div class="help-text">${translateCurrent('Cuando cerrás un ojo, se dibujan líneas entre los objetos detectados. Necesitás tener el detector de objetos activado para ver las conexiones.')}</div>
-        ${this.slider('sldEar', 'valEar', 'Sensibilidad (cuanto más alto, más fácil detectar)', bd.eyeArThreshold, 0.1, 0.4, 0.01)}
-        ${this.slider('sldBlinkInterval', 'valBlinkInterval', 'Intervalo de análisis (ms)', bd.processIntervalMs, 16, 120)}
-        ${this.slider('sldBlinkClosedFrames', 'valBlinkClosedFrames', 'Frames cerrados mínimos', bd.minClosedFrames, 1, 4)}
-        ${this.slider('sldBlinkSmoothing', 'valBlinkSmoothing', 'Suavizado del párpado (%)', Math.round((bd._earSmoothing || 0) * 100), 0, 90)}
+        ${slider('sldEar', 'valEar', 'Sensibilidad (cuanto más alto, más fácil detectar)', bd.eyeArThreshold, 0.1, 0.4, 0.01)}
+        ${slider('sldBlinkInterval', 'valBlinkInterval', 'Intervalo de análisis (ms)', bd.processIntervalMs, 16, 120)}
+        ${slider('sldBlinkClosedFrames', 'valBlinkClosedFrames', 'Frames cerrados mínimos', bd.minClosedFrames, 1, 4)}
+        ${slider('sldBlinkSmoothing', 'valBlinkSmoothing', 'Suavizado del párpado (%)', Math.round((bd._earSmoothing || 0) * 100), 0, 90)}
       </div>
     `,
     );
@@ -427,10 +450,10 @@ export function applyEffectConfigUIMixin(proto) {
         val.textContent = bd.eyeArThreshold.toFixed(2);
         this.scheduleSaveActiveEffectSettings();
       });
-      this.bindSlider(el, 'sldBlinkInterval', 'valBlinkInterval', (v) => {
+      bindConfigSlider(el, 'sldBlinkInterval', 'valBlinkInterval', (v) => {
         bd.processIntervalMs = this.clamp(Math.round(v), 16, 120);
       });
-      this.bindSlider(
+      bindConfigSlider(
         el,
         'sldBlinkClosedFrames',
         'valBlinkClosedFrames',
@@ -438,7 +461,7 @@ export function applyEffectConfigUIMixin(proto) {
           bd.minClosedFrames = this.clamp(Math.round(v), 1, 4);
         },
       );
-      this.bindSlider(el, 'sldBlinkSmoothing', 'valBlinkSmoothing', (v) => {
+      bindConfigSlider(el, 'sldBlinkSmoothing', 'valBlinkSmoothing', (v) => {
         bd._earSmoothing = this.clamp(v / 100, 0, 0.9);
       });
     });

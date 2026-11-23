@@ -113,7 +113,7 @@ export function applyVisualFxLabMixin(proto) {
 
   proto.updateVisualFxLab = function () {
     if (!this._visualFxLabReady) return;
-    const effect = this.visualFxEffect;
+    const effect = this.editor.visualFx.effect;
     const frame = effect?.analyzer?.lastFrame;
     const mask = effect?.analyzer?.lastMask;
     const regions = frame?.regions || {};
@@ -152,7 +152,10 @@ export function applyVisualFxLabMixin(proto) {
         this.visualFxLabOverlay.width,
         this.visualFxLabOverlay.height,
       );
-      const drawMetrics = this.getVideoDrawMetrics?.(this.canvas, 'preview');
+      const drawMetrics = this.renderer?.getVideoDrawMetrics(
+        this.canvas,
+        'preview',
+      );
       if (frame && drawMetrics) {
         if (mask?.data?.length) {
           octx.save();

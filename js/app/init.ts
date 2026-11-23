@@ -3,6 +3,7 @@ import type { ImageSettings } from './constants.ts';
 import type { SettingsStore } from './settings-store.ts';
 import type { WebcamCapture } from './webcam-capture.ts';
 import type { WebcamCamera } from './webcam-camera.ts';
+import { isExportDebugVisible } from './ui-helpers.ts';
 import { loadWebcamSettings } from './webcam-settings.ts';
 
 interface WebcamStartup {
@@ -34,7 +35,6 @@ interface WebcamStartup {
   updateProfilesList(): void;
   syncMobileViewportState(): void;
   setMobileFxPanelVisible(visible: boolean): void;
-  isExportDebugVisible(): boolean;
   capture: Pick<WebcamCapture, 'updateCaptureButtons'>;
   restoreActiveDetectors(config: Record<string, unknown>): Promise<void>;
 }
@@ -79,7 +79,7 @@ export async function initializeWebcam(app: WebcamStartup) {
   app.updateProfilesList();
   app.syncMobileViewportState();
   app.setMobileFxPanelVisible(false);
-  if (app.isExportDebugVisible())
+  if (isExportDebugVisible())
     document.body.classList.add('export-debug-visible');
   app.capture.updateCaptureButtons();
   app.camera.setCameraState('off');

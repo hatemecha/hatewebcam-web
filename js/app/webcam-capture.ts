@@ -18,7 +18,9 @@ import {
 } from '../../src/lib/capture/media-sessions.ts';
 import { DEFAULT_CAMERA_FPS, type ImageSettings } from './constants.ts';
 import { downloadBlob, hideStatus, showStatus } from './feedback.ts';
-import type { RenderEngine } from './render-engine.ts';
+import type { VideoEditorSession } from './video-editor/session.ts';
+import type { PreviewRenderer } from './preview-renderer.ts';
+import type { BufferMode, RenderEngine } from './render-engine.ts';
 import type { WebcamCamera } from './webcam-camera.ts';
 
 type CaptureKind = 'photo' | 'video';
@@ -69,19 +71,15 @@ interface CaptureHost {
   renderEngine: RenderEngine;
   videoExportPreflight: { width: number; height: number; fps: number } | null;
   videoSourceAverageBitrate: number;
-  getSourceFrameDimensions(): { sourceWidth: number; sourceHeight: number };
-  getEffectiveFrameDimensions(
-    width: number,
-    height: number,
-  ): { width: number; height: number };
-  renderProcessedFrame(
-    canvas: HTMLCanvasElement,
-    ctx: CanvasRenderingContext2D,
-    mode: string,
-  ): void;
-  applySharpenFilter(imageData: ImageData, amount: number): void;
+  renderer: Pick<
+    PreviewRenderer,
+    | 'getSourceFrameDimensions'
+    | 'getEffectiveFrameDimensions'
+    | 'renderProcessedFrame'
+    | 'applySharpenFilter'
+  >;
   normalizeCaptureTimerSeconds(value: unknown): number;
-  toggleVisualFxBypass?(): void;
+  editor: Pick<VideoEditorSession, 'visualFx'> | null;
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -209,7 +207,7 @@ export class WebcamCapture {
         ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)
       )
     ) {
-      this.host.toggleVisualFxBypass?.();
+      this.host.editor?.visualFx.toggleBypass();
     }
   }
 
@@ -337,7 +335,8 @@ export class WebcamCapture {
       );
       return false;
     }
-    const { sourceWidth, sourceHeight } = this.host.getSourceFrameDimensions();
+    const { sourceWidth, sourceHeight } =
+      this.host.renderer.getSourceFrameDimensions();
     if (
       this.host.videoEl.readyState < 2 ||
       sourceWidth <= 1 ||
@@ -429,9 +428,10 @@ export class WebcamCapture {
   }
 
   ensureRecordingCanvas() {
-    const { sourceWidth, sourceHeight } = this.host.getSourceFrameDimensions();
+    const { sourceWidth, sourceHeight } =
+      this.host.renderer.getSourceFrameDimensions();
     let { width: recordingWidth, height: recordingHeight } =
-      this.host.getEffectiveFrameDimensions(sourceWidth, sourceHeight);
+      this.host.renderer.getEffectiveFrameDimensions(sourceWidth, sourceHeight);
     if (
       this.host.sourceMode === 'video' &&
       this.host.videoExportPreflight?.width &&
@@ -491,7 +491,7 @@ export class WebcamCapture {
 
     if (forExport && amount > 0.05) {
       const imageData = targetCtx.getImageData(0, 0, width, height);
-      this.host.applySharpenFilter(
+      this.host.renderer.applySharpenFilter(
         imageData,
         clamp(0.18 + amount * 0.62, 0, 1),
       );
@@ -507,7 +507,7 @@ export class WebcamCapture {
 
   renderSourceFrameBuffer(
     applyQualityEnhancer = false,
-    mode: string = 'recording',
+    mode: BufferMode = 'recording',
   ) {
     if (this.host.videoEl.readyState < 2) return;
 
@@ -518,7 +518,7 @@ export class WebcamCapture {
     )
       return;
 
-    this.host.renderProcessedFrame(
+    this.host.renderer.renderProcessedFrame(
       this.host.renderEngine.recordingCanvas,
       this.host.renderEngine.recordingCtx,
       mode,
@@ -631,19 +631,20 @@ export class WebcamCapture {
     enhancerEnabled: boolean,
     enhancerStrength: number,
   ) {
-    const { sourceWidth, sourceHeight } = this.host.getSourceFrameDimensions();
+    const { sourceWidth, sourceHeight } =
+      this.host.renderer.getSourceFrameDimensions();
     if (sourceWidth <= 1 || sourceHeight <= 1) {
       throw new Error('source_frame_unavailable');
     }
 
     const { width: captureWidth, height: captureHeight } =
-      this.host.getEffectiveFrameDimensions(sourceWidth, sourceHeight);
+      this.host.renderer.getEffectiveFrameDimensions(sourceWidth, sourceHeight);
     const baseCanvas = document.createElement('canvas');
     baseCanvas.width = captureWidth;
     baseCanvas.height = captureHeight;
     const baseCtx = baseCanvas.getContext('2d', { willReadFrequently: true });
     if (!baseCtx) throw new Error('photo_context_unavailable');
-    this.host.renderProcessedFrame(baseCanvas, baseCtx, 'capture');
+    this.host.renderer.renderProcessedFrame(baseCanvas, baseCtx, 'capture');
 
     const { blob, width, height } = await this.buildPhotoBlobFromCanvas(
       baseCanvas,

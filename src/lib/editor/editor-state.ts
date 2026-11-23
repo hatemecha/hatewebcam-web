@@ -3,6 +3,8 @@
  * load editor modules without importing Svelte; the store wrapper lives in
  * editor-store.ts.
  */
+import type { MessageKey } from '../i18n/catalog.ts';
+
 export type SourceMode = 'camera' | 'video';
 export type InspectorTab = 'project' | 'effect' | 'adjust';
 
@@ -14,6 +16,8 @@ export interface EditorUiState {
   canUndo: boolean;
   canRedo: boolean;
   inspectorTab: InspectorTab;
+  visualFxSelected: boolean;
+  visualFxStatus: MessageKey | '';
 }
 
 let state: EditorUiState = {
@@ -24,6 +28,8 @@ let state: EditorUiState = {
   canUndo: false,
   canRedo: false,
   inspectorTab: 'project',
+  visualFxSelected: false,
+  visualFxStatus: '',
 };
 
 const listeners = new Set<(next: EditorUiState) => void>();

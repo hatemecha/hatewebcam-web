@@ -131,8 +131,8 @@ for (const file of javascriptFiles) {
   ) {
     fail(`${file} calls a controller helper without this.`);
   }
-  if (file !== 'js/app/dom.mjs' && /(?<![.\w$])\$\s*\(/.test(source)) {
-    fail(`${file} uses the DOM helper outside dom.mjs.`);
+  if (file !== 'js/app/dom.ts' && /(?<![.\w$])\$\s*\(/.test(source)) {
+    fail(`${file} uses the DOM helper outside dom.ts.`);
   }
   if (
     file.startsWith('js/app/') &&

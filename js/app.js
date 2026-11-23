@@ -130,7 +130,7 @@ try {
       whenControllerReady(() => controller.setFaceVisualChecked(kind, checked));
     },
     pickColor: () => {
-      whenControllerReady(() => controller.enableColorPick());
+      whenControllerReady(() => controller.colorPicker.start());
     },
     toggleAdvanced: () => {
       whenControllerReady(() => controller.toggleAdvancedOptions());
@@ -238,7 +238,7 @@ try {
     },
     pickColor: () => {
       whenControllerReady(() => {
-        controller.enableColorPick();
+        controller.colorPicker.start();
         controller.setMobileFxPanelVisible(false);
       });
     },

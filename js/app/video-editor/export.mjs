@@ -1,24 +1,27 @@
 import {
   buildEditorExportPreflight,
   diagnoseVideoExportSupport,
+  encodeCanvasSequence,
+  formatExportDebugInfo,
   formatObservedExportProgress,
   getEditorChromaColor,
 } from '../../video-export.ts';
+import { getVideoPlayableEnd } from './playable-end.ts';
 import { normalizeVideoFps } from '../media-format.ts';
 import { patchExportModalState } from '../../../src/lib/capture/session-state.ts';
 import { updateShellState } from '../../../src/lib/shell/shell-bridge.ts';
 import { translateCurrent } from '../../../src/lib/i18n/translate.ts';
 import { updateEditorUiState } from '../../../src/lib/editor/editor-state.ts';
 
-const VIDEO_END_EPSILON = 0.001;
 const VIDEO_EXPORT_PLAYBACK_RATE = 4;
 
 /** @param {import('../controller.mjs').AppController} proto */
 export function applyVideoEditorExportMixin(proto) {
   proto.buildVideoExportPreflight = function () {
     if (!this.editor.source?.file) return null;
-    const { sourceWidth, sourceHeight } = this.getSourceFrameDimensions();
-    const { width, height } = this.getEffectiveFrameDimensions(
+    const { sourceWidth, sourceHeight } =
+      this.renderer.getSourceFrameDimensions();
+    const { width, height } = this.renderer.getEffectiveFrameDimensions(
       sourceWidth,
       sourceHeight,
     );
@@ -317,94 +320,6 @@ export function applyVideoEditorExportMixin(proto) {
     return diagnosis;
   };
 
-  proto.updateVideoTransport = function () {
-    if (this.sourceMode !== 'video') return;
-    const duration = this.editor.timeline.duration || 0;
-    const currentTime = this.videoEl.currentTime || 0;
-    this.videoSeek.value = String(currentTime);
-
-    // Called every render tick during playback; the play/pause icon in
-    // particular changes at most a few times per session, so an innerHTML
-    // rewrite 30-60 times a second was pure waste.
-    const timeLabel = `${this.formatDurationDetailed(currentTime)} / ${this.formatDurationDetailed(duration)}`;
-    if (this._lastVideoTimeLabel !== timeLabel) {
-      this._lastVideoTimeLabel = timeLabel;
-      this.videoTimeLabel.textContent = timeLabel;
-    }
-    const paused = this.videoEl.paused;
-    if (this._lastVideoPlayPaused !== paused) {
-      this._lastVideoPlayPaused = paused;
-      this.btnVideoPlay.innerHTML = paused
-        ? '<i class="fa-solid fa-play"></i>'
-        : '<i class="fa-solid fa-pause"></i>';
-    }
-    if (duration > 0) {
-      const left = `${this.clamp((currentTime / duration) * 100, 0, 100)}%`;
-      if (this._lastPlayheadLeft !== left) {
-        this._lastPlayheadLeft = left;
-        this.timelinePlayhead.style.left = left;
-      }
-    }
-  };
-
-  proto.getVideoPlayableEnd = function (end = this.editor.timeline?.trimEnd) {
-    const duration =
-      Number(this.editor.timeline?.duration || this.videoEl?.duration) || 0;
-    const safeEnd = Number.isFinite(Number(end)) ? Number(end) : duration;
-    return duration > 0 && safeEnd >= duration
-      ? Math.max(0, duration - VIDEO_END_EPSILON)
-      : Math.max(0, safeEnd);
-  };
-
-  proto.clampVideoSeekTime = function (time) {
-    const start = Math.max(0, Number(this.editor.timeline?.trimStart) || 0);
-    const end = this.getVideoPlayableEnd(this.editor.timeline?.trimEnd);
-    return this.clamp(Number(time) || 0, start, Math.max(start, end));
-  };
-
-  proto.toggleVideoPlayback = async function () {
-    if (!this.editor.source?.file || this.editor.exportSession?.active) return;
-    if (this.videoEl.paused) {
-      const end = this.getVideoPlayableEnd(this.editor.timeline.trimEnd);
-      if (
-        this.videoEl.currentTime < this.editor.timeline.trimStart ||
-        this.videoEl.currentTime >= end
-      ) {
-        this.cancelRenderLoop();
-        this.videoEl.currentTime = this.editor.timeline.trimStart;
-      }
-      await this.videoEl
-        .play()
-        .catch(() =>
-          this.showStatus(
-            this.videoEditorStatus,
-            'No se pudo reproducir el video.',
-            'error',
-          ),
-        );
-      if (!this.animFrameId) this.scheduleRenderLoop();
-    } else {
-      this.videoEl.pause();
-    }
-    this.updateVideoTransport();
-  };
-
-  proto.seekVideo = function (time) {
-    if (!this.editor.source?.file || this.editor.exportSession?.active) return;
-    const previous = this.videoEl.currentTime || 0;
-    const next = this.clampVideoSeekTime(time);
-    if (this.visualFxEffect?.active && next !== previous) {
-      this.visualFxEffect.onSeek?.();
-    }
-    this.videoEl.currentTime = next;
-    this.updateVideoTransport();
-    if (!this.animFrameId) this.scheduleRenderLoop();
-  };
-
-  proto.jumpVideo = function (seconds) {
-    this.seekVideo((this.videoEl.currentTime || 0) + seconds);
-  };
-
   proto.renderVideoExportFrame = async function (
     frameIndex,
     fps,
@@ -470,9 +385,10 @@ export function applyVideoEditorExportMixin(proto) {
       { stage: 'detectors', time },
     );
     await this.syncVideoTimelineDetectorsAt(time, false);
-    await this.syncVideoTimelineVisualFxAt?.(time, false);
-    if (this.visualFxEffect?.active && !this.visualFxBypass) {
-      await this.visualFxEffect.analyze(
+    await this.editor.visualFx?.syncAt(time);
+    const visualFx = this.editor.visualFx?.activeEffect;
+    if (visualFx) {
+      await visualFx.analyze(
         this.videoEl,
         time * 1000,
         this.renderEngine.getProfile('export'),
@@ -486,7 +402,7 @@ export function applyVideoEditorExportMixin(proto) {
     );
     if (exportMode === 'effects-chroma') {
       this.capture.ensureRecordingCanvas();
-      this.renderEffectsOnlyFrame(
+      this.renderer.renderEffectsOnlyFrame(
         this.renderEngine.recordingCanvas,
         this.renderEngine.recordingCtx,
         exportMeta.chromaColor ||
@@ -548,8 +464,6 @@ export function applyVideoEditorExportMixin(proto) {
   };
 
   proto.runVideoExportViaWebCodecs = async function () {
-    const { encodeCanvasSequence, formatExportDebugInfo } =
-      await import('../../video-export.ts');
     const preflight =
       this.videoExportPreflight || this.buildVideoExportPreflight();
     if (!preflight) throw new Error('video_export_preflight_missing');
@@ -721,8 +635,7 @@ export function applyVideoEditorExportMixin(proto) {
         face: '',
         blink: '',
       };
-      this.appliedVisualFxClipId = '';
-      this.resetVisualFxTemporalState?.();
+      this.editor.visualFx?.reset();
       this.videoExportRecoveredSource = false;
       this.editor.exportSession.start(0);
       this.exportProgressRatio = 0;
@@ -737,7 +650,7 @@ export function applyVideoEditorExportMixin(proto) {
         showClose: false,
       });
       this.updateVideoEditorUI();
-      this.cancelRenderLoop();
+      this.renderer.cancelRenderLoop();
       if ('wakeLock' in navigator) {
         this.editor.exportSession.wakeLock = await navigator.wakeLock
           .request('screen')
@@ -759,7 +672,9 @@ export function applyVideoEditorExportMixin(proto) {
     const target = this.clamp(
       time,
       0,
-      this.getVideoPlayableEnd(this.editor.timeline.duration),
+      getVideoPlayableEnd(
+        this.editor.timeline.duration || this.videoEl.duration || 0,
+      ),
     );
     const tolerance = 0.02;
     if (Math.abs(this.videoEl.currentTime - target) <= tolerance)
@@ -1047,9 +962,13 @@ export function applyVideoEditorExportMixin(proto) {
     }
     void this.editor.exportSession.releaseWakeLock();
     this.updateVideoEditorUI();
-    this.updateVideoTransport();
-    if (this.isRunning && this.editor.source?.file && !this.animFrameId)
-      this.scheduleRenderLoop();
+    this.editor.transport?.update();
+    if (
+      this.isRunning &&
+      this.editor.source?.file &&
+      !this.renderer.hasPendingFrame
+    )
+      this.renderer.scheduleRenderLoop();
   };
 
   proto.closeVideoExportModal = function () {

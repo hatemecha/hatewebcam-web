@@ -107,7 +107,7 @@ export function applyEventsMixin(proto) {
     if (this._videoEditorEventsBound) return;
     this._videoEditorEventsBound = true;
     this.btnSaveProject?.addEventListener('click', () =>
-      this.saveEditorProject(),
+      this.editor.projects.save(),
     );
     this.btnLoadProject?.addEventListener('click', () =>
       this.projectFileInput?.click(),
@@ -121,20 +121,6 @@ export function applyEventsMixin(proto) {
         }
       });
     }
-    this.btnVideoStart.addEventListener('click', () =>
-      this.seekVideo(this.editor.timeline.trimStart),
-    );
-    this.btnVideoBack.addEventListener('click', () => this.jumpVideo(-5));
-    this.btnVideoPlay.addEventListener('click', () => {
-      void this.toggleVideoPlayback();
-    });
-    this.btnVideoForward.addEventListener('click', () => this.jumpVideo(5));
-    this.btnVideoEnd.addEventListener('click', () =>
-      this.seekVideo(this.editor.timeline.trimEnd),
-    );
-    this.videoSeek.addEventListener('input', () =>
-      this.seekVideo(this.videoSeek.value),
-    );
     this.videoTrimStart.addEventListener('change', () => {
       this.pushTimelineHistory();
       this.applyVideoTrim();
@@ -305,16 +291,6 @@ export function applyEventsMixin(proto) {
     this.timelineTrimEndHandle.addEventListener('pointerdown', (event) =>
       this.beginTrimDrag(event, 'end'),
     );
-    this.videoEl.addEventListener('play', this.updateVideoTransport.bind(this));
-    this.videoEl.addEventListener(
-      'pause',
-      this.updateVideoTransport.bind(this),
-    );
-    this.videoEl.addEventListener('seeked', () => {
-      this.updateVideoTransport();
-      void this.syncVideoTimelineEffects();
-      this.refreshPausedVideoPreview();
-    });
   };
 
   proto.bindCameraShellEvents = function () {
@@ -325,7 +301,9 @@ export function applyEventsMixin(proto) {
       this.camera.onTransformChange(),
     );
 
-    this.canvas.addEventListener('click', this.onCanvasClick.bind(this));
+    this.canvas.addEventListener('click', (event) =>
+      this.colorPicker.sample(event),
+    );
 
     window.addEventListener('keydown', (event) =>
       this.capture.onGlobalKeyDown(event),
@@ -336,14 +314,14 @@ export function applyEventsMixin(proto) {
     );
     window.addEventListener('resize', () => {
       this.syncMobileViewportState();
-      this.requestPreviewRefresh(true);
+      this.renderer.requestPreviewRefresh(true);
     });
 
     window.addEventListener('beforeunload', () => {
+      this.renderer.dispose();
       this.capture.dispose();
       this.camera.stop();
-      this.editor?.source.dispose();
-      this.visualFxEffect?.dispose?.();
+      this.editor?.dispose();
     });
   };
 
@@ -353,14 +331,13 @@ export function applyEventsMixin(proto) {
     if (!this.isRunning) return;
 
     if (!this.isPageVisible) {
-      this.cancelRenderLoop();
+      this.renderer.cancelRenderLoop();
       return;
     }
 
-    if (!this.animFrameId) {
-      this.frameCount = 0;
-      this.lastFpsTime = performance.now();
-      this.scheduleRenderLoop();
+    if (!this.renderer.hasPendingFrame) {
+      this.renderer.resetCadence();
+      this.renderer.scheduleRenderLoop();
     }
   };
 }

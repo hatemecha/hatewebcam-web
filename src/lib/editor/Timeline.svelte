@@ -1,6 +1,7 @@
 <script lang="ts">
   import { m } from '../i18n/text.svelte';
   import { editorState } from './editor-store';
+  import { transportActions, transportPosition } from './transport-store';
 </script>
 
 <div class="timeline-viewport" id="timelineViewport">
@@ -172,10 +173,12 @@
   id="videoSeek"
   class="visually-hidden"
   min="0"
-  max="0"
+  max={$transportPosition.duration}
   step="0.01"
-  value="0"
+  value={$transportPosition.currentTime}
   aria-label={m('Posición del video')}
   disabled={!$editorState.hasSource || $editorState.exporting}
   tabindex="-1"
+  oninput={(event) =>
+    $transportActions?.seek(event.currentTarget.valueAsNumber)}
 />

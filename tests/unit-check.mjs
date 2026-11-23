@@ -63,7 +63,9 @@ import { SettingsStore } from '../js/app/settings-store.ts';
 import { loadWebcamSettings } from '../js/app/webcam-settings.ts';
 import { applyEffectsMixin } from '../js/app/effects.mjs';
 import { WebcamCamera } from '../js/app/webcam-camera.ts';
-import { applyRenderLoopMixin } from '../js/app/render.mjs';
+import { VideoTransport } from '../js/app/video-editor/transport.ts';
+import { EditorProjects } from '../js/app/video-editor/projects.ts';
+import { PreviewRenderer } from '../js/app/preview-renderer.ts';
 import { applyLocalvideoeditorMixin } from '../js/app/video-editor.mjs';
 import {
   createDefaultVisualConfig,
@@ -72,7 +74,7 @@ import {
 } from '../js/visual-fx/config.ts';
 import { SubjectMotionAnalyzer } from '../js/subject/subject-motion.ts';
 import { createSeededRandom, seededInt } from '../js/subject/subject-prng.ts';
-import { applyVisualFxIntegrationMixin } from '../js/app/visual-fx-integration.mjs';
+import { VisualFxSession } from '../js/app/video-editor/visual-fx-session.ts';
 import {
   SubjectMask,
   normalizeMaskBuffer,
@@ -1318,8 +1320,12 @@ function checkProjectJsonRoundTrip() {
     videoSourceFps: 29.97,
     imageSettings: { ...DEFAULT_IMAGE_SETTINGS, editorExportMode: 'webm' },
   };
-  applyLocalvideoeditorMixin(app);
-  const project = JSON.parse(JSON.stringify(app.buildEditorProjectData()));
+  const projects = new EditorProjects(app.editor, {
+    video: app.videoEl,
+    getSourceFps: () => app.videoSourceFps,
+    getImageSettings: () => app.imageSettings,
+  });
+  const project = JSON.parse(JSON.stringify(projects.build()));
   assert.equal(project.version, 2);
   assert.equal(project.source.name, 'clip.mp4');
   assert.equal(project.trim.start, 1);
@@ -1617,13 +1623,17 @@ function checkVideoSeekAvoidsExactDuration() {
     },
     animFrameId: null,
     clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
-    updateVideoTransport() {},
     scheduleRenderLoop() {
       scheduled += 1;
     },
   };
-  applyLocalvideoeditorMixin(app);
-  app.seekVideo(10);
+  const transport = new VideoTransport(app.editor, {
+    video: app.videoEl,
+    inVideoMode: () => true,
+    onSeek() {},
+    ensureRender: () => app.scheduleRenderLoop(),
+  });
+  transport.seek(10);
   assert.ok(
     currentTime < 10,
     'timeline-end seeks must avoid the exact media duration',
@@ -1640,7 +1650,9 @@ function checkPausedVideoPreviewUsesAnimationFrame() {
   const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
   let rafCalls = 0;
   let cancelled = 0;
-  globalThis.requestAnimationFrame = () => {
+  let runFrame;
+  globalThis.requestAnimationFrame = (callback) => {
+    runFrame = callback;
     rafCalls += 1;
     return 41;
   };
@@ -1671,24 +1683,22 @@ function checkPausedVideoPreviewUsesAnimationFrame() {
       },
       fpsInfo: { textContent: '' },
     };
-    applyRenderLoopMixin(app);
+    const renderer = new PreviewRenderer(app);
     app.syncVideoTimelineLookNow = () => {};
     app.syncVideoTimelineDetectors = () => {};
-    app.syncPreviewCanvasMetrics = () => {};
-    app.renderProcessedFrame = () => {};
-    app.updateVideoTransport = () => {};
-    app.scheduleRenderLoop();
-    assert.equal(app.animFrameType, 'animation');
+    renderer.syncPreviewCanvasMetrics = () => {};
+    renderer.renderProcessedFrame = () => {};
+    renderer.scheduleRenderLoop();
+    assert.equal(renderer.hasPendingFrame, true);
     assert.equal(rafCalls, 1);
-    app.cancelRenderLoop();
+    renderer.cancelRenderLoop();
     assert.equal(cancelled, 41);
+    renderer.scheduleRenderLoop();
     rafCalls = 0;
-    app.animFrameId = 43;
-    app.animFrameType = 'animation';
-    app.refreshPausedVideoPreview();
+    renderer.refreshPausedVideoPreview();
     assert.equal(
       cancelled,
-      43,
+      41,
       'paused preview refresh must cancel stale renders after seeked',
     );
     assert.equal(
@@ -1696,21 +1706,16 @@ function checkPausedVideoPreviewUsesAnimationFrame() {
       1,
       'paused preview refresh must schedule one fresh render after seeked',
     );
-    let scheduled = 0;
-    app.animFrameId = 42;
-    app.animFrameType = 'animation';
-    app.scheduleRenderLoop = () => {
-      scheduled += 1;
-    };
+    rafCalls = 0;
     app.videoEl.currentTime = 10;
     let pauseCalls = 0;
     app.videoEl.pause = () => {
       pauseCalls += 1;
     };
-    app.renderLoop();
-    assert.equal(app.animFrameId, null);
+    runFrame();
+    assert.equal(renderer.hasPendingFrame, false);
     assert.equal(
-      scheduled,
+      rafCalls,
       0,
       'paused video preview should render once, not spin forever',
     );
@@ -1761,11 +1766,17 @@ async function checkVideoPlaybackRestartsFromEnd() {
       scheduled += 1;
       this.animFrameId = 78;
     },
-    updateVideoTransport() {},
     showStatus() {},
   };
-  applyLocalvideoeditorMixin(app);
-  await app.toggleVideoPlayback();
+  const transport = new VideoTransport(app.editor, {
+    video: app.videoEl,
+    inVideoMode: () => true,
+    cancelRender: () => app.cancelRenderLoop(),
+    ensureRender: () => {
+      if (app.animFrameId === null) app.scheduleRenderLoop();
+    },
+  });
+  await transport.toggle();
   assert.equal(
     cancelled,
     1,
@@ -1808,12 +1819,10 @@ async function checkExportPlaybackRateRestores() {
     videoExportModal: { classList: { add() {} } },
     isRunning: false,
     updateVideoEditorUI() {},
-    updateVideoTransport() {},
     waitForExportVideoFrame: async () => {},
   };
   applyLocalvideoeditorMixin(app);
   app.updateVideoEditorUI = () => {};
-  app.updateVideoTransport = () => {};
   await app.prepareSequentialVideoExport(0);
   assert.equal(
     app.videoEl.playbackRate,
@@ -2082,7 +2091,7 @@ function checkAutoPerformanceDowngrade() {
     faceDetectionEffect: { processIntervalMs: 30 },
     blinkDetectionEffect: { processIntervalMs: 30 },
     updateImageControlsUI() {},
-    requestPreviewRefresh() {},
+    renderer: { requestPreviewRefresh() {} },
     renderEffectConfig() {},
     showStatus() {},
   };
@@ -2342,9 +2351,11 @@ async function checkEffectsOnlyExportSkipsBaseRender() {
         app.baseRenderCalls += 1;
       },
     },
-    renderEffectsOnlyFrame(canvas, ctx, chromaColor) {
-      assert.equal(chromaColor, '#00ff00');
-      this.effectsOnlyCalls += 1;
+    renderer: {
+      renderEffectsOnlyFrame(canvas, ctx, chromaColor) {
+        assert.equal(chromaColor, '#00ff00');
+        app.effectsOnlyCalls += 1;
+      },
     },
   };
   applyLocalvideoeditorMixin(app);
@@ -2740,18 +2751,19 @@ function checkSubjectFrameMap() {
 }
 
 function checkSubjectBypassToggle() {
-  const app = {
-    visualFxBypass: false,
-    btnVisualFxBypass: { checked: true, setAttribute() {} },
-    visualFxEffect: { setBypass() {}, resetTemporalState() {} },
-    syncVideoTimelineVisualFx() {},
-    renderVisualFxInspector() {},
-  };
-  applyVisualFxIntegrationMixin(app);
-  app.toggleVisualFxBypass();
-  assert.equal(app.visualFxBypass, true);
-  app.updateVisualFxBypassUI();
-  assert.equal(app.btnVisualFxBypass.checked, false);
+  const session = new VisualFxSession({
+    getSelection: () => null,
+    getTime: () => 0,
+    hasSource: () => false,
+    publishVisibility() {},
+    refreshPreview() {},
+  });
+  let panel;
+  const stop = session.inspector.subscribe((state) => (panel = state));
+  assert.equal(panel.bypass, false);
+  session.toggleBypass();
+  assert.equal(panel.bypass, true);
+  stop();
 }
 
 function checkSubjectVariationStep() {
@@ -2763,22 +2775,19 @@ function checkSubjectVariationStep() {
     endTime: 8,
     config: createDefaultVisualConfig('fragment'),
   });
-  const app = {
-    editor: {
-      timeline: timeline,
-    },
-    getSelectedVideoEffectItem: () => item,
-    pushTimelineHistory() {},
-    visualFxEffect: { setConfig() {} },
-    renderVisualFxInspector() {},
-    syncVideoTimelineVisualFx() {},
-  };
-  applyVisualFxIntegrationMixin(app);
+  const session = new VisualFxSession({
+    getTimeline: () => timeline,
+    getSelection: () => timeline.items[0],
+    getTime: () => 0,
+    hasSource: () => false,
+    pushHistory() {},
+    publishVisibility() {},
+  });
   const before = item.config.seed;
-  app.stepVisualFxVariation(1);
+  session.vary();
   const updated = timeline.items.find((entry) => entry.id === 'subject-1');
   assert.notEqual(updated.config.seed, before);
-  app.stepVisualFxVariation(1);
+  session.vary();
   const again = timeline.items.find((entry) => entry.id === 'subject-1');
   assert.notEqual(again.config.seed, updated.config.seed);
 }
@@ -3099,6 +3108,7 @@ async function checkSubjectAnalyzerDiscardsSupersededResults() {
 }
 
 async function checkSubjectClipAwaitsEffectBeforeAnalyzer() {
+  let effectLoaded = false;
   let readyCalls = 0;
   const saved = {
     id: 'subject-async',
@@ -3111,23 +3121,21 @@ async function checkSubjectClipAwaitsEffectBeforeAnalyzer() {
     editor: {
       source: { file: {} },
       timeline: { upsert: () => saved },
+      visualFx: {
+        ensureEffect: async () => {
+          await Promise.resolve();
+          effectLoaded = true;
+          return { analyzer: { ensureReady: async () => readyCalls++ } };
+        },
+      },
     },
     TIMELINE_EFFECT_META: { 'visual-fx': { label: 'Visual FX' } },
     DEFAULT_TIMELINE_EFFECT_DURATION: 3,
     pushTimelineHistory() {},
     snapshotVideoEffectConfig: () => saved.config,
-    ensureVisualFxEffect: async () => {
-      await Promise.resolve();
-      return {
-        analyzer: {
-          ensureReady: async () => {
-            readyCalls += 1;
-            return true;
-          },
-        },
-      };
+    selectVideoEffect() {
+      assert.equal(effectLoaded, true);
     },
-    selectVideoEffect() {},
     syncVideoTimelineEffects() {},
     showStatus() {},
     hideStatus() {},
@@ -3136,7 +3144,6 @@ async function checkSubjectClipAwaitsEffectBeforeAnalyzer() {
   applyLocalvideoeditorMixin(app);
   app.resolveTimelineInsertionTimes = () => ({ startTime: 0, endTime: 2 });
   app.snapshotVideoEffectConfig = () => saved.config;
-  app.selectVideoEffect = () => {};
   await app.addTimelineEffectClip('visual-fx', 0);
   assert.equal(
     readyCalls,
@@ -3213,23 +3220,25 @@ checkObservedExportProgressAndTimelineTicks();
 // frame into four full-resolution Canvas2D filter passes.
 {
   const app = { imageSettings: { ...DEFAULT_IMAGE_SETTINGS } };
-  applyRenderLoopMixin(app);
-  app.clamp = (value, min, max) => Math.max(min, Math.min(max, value));
-  assert.equal(app.buildCanvasFilter(), 'none');
+  const renderer = new PreviewRenderer(app);
+  assert.equal(renderer.buildCanvasFilter(), 'none');
   app.imageSettings.blackAndWhite = true;
-  assert.equal(app.buildCanvasFilter(), 'grayscale(100%)');
+  assert.equal(renderer.buildCanvasFilter(), 'grayscale(100%)');
   app.imageSettings.exposure = 30;
-  assert.equal(app.buildCanvasFilter(), 'brightness(124%) grayscale(100%)');
+  assert.equal(
+    renderer.buildCanvasFilter(),
+    'brightness(124%) grayscale(100%)',
+  );
   app.imageSettings.blackAndWhite = false;
   app.imageSettings.saturation = 120;
   app.imageSettings.contrast = 110;
   assert.equal(
-    app.buildCanvasFilter(),
+    renderer.buildCanvasFilter(),
     'brightness(124%) contrast(110%) saturate(120%)',
   );
   app.imageSettings.shadows = 35;
   app.imageSettings.sharpness = 40;
-  const look = app.getLookFilterValues();
+  const look = renderer.getLookFilterValues();
   assert.equal(look.shadows, 0.35);
   assert.ok(look.sharpen > 0, 'sharpness >= 8 must enable GPU sharpen');
 }

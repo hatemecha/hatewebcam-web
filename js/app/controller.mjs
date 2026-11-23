@@ -5,6 +5,7 @@
  * methods (camera, render buffers, export session) live here as fields;
  * there is no property-proxy layer between them and the mixins.
  */
+import editorEntryUrl from 'virtual:editor-entry-url';
 import {
   TIMELINE_EFFECT_META,
   DEFAULT_TIMELINE_EFFECT_DURATION,
@@ -29,16 +30,15 @@ import {
   normalizePerformanceMode,
 } from './constants.ts';
 import { EffectManager } from '../effects/effect-manager.ts';
-import { setupDom } from './dom.mjs';
+import { readAppDom } from './dom.ts';
 import { applyStorageMixin } from './settings.mjs';
 import { initializeWebcam } from './init.ts';
 import { applyEventsMixin } from './events.mjs';
 import { WebcamCamera } from './webcam-camera.ts';
 import { applyEffectsMixin } from './effects.mjs';
-import { applyRenderLoopMixin } from './render.mjs';
-import { applyColorPickMixin } from './color-pick.mjs';
+import { PreviewRenderer } from './preview-renderer.ts';
+import { ColorPicker } from './color-pick.ts';
 import { applyEffectConfigUIMixin } from './effect-config.mjs';
-import { applyUIHelpersMixin } from './ui-helpers.mjs';
 import { applyProfilesMixin } from './profiles.mjs';
 import { WebcamCapture } from './webcam-capture.ts';
 import { downloadBlob, hideStatus, showStatus } from './feedback.ts';
@@ -65,11 +65,7 @@ export class AppController {
     this.webcamSessionState = null;
 
     this.renderEngine = new RenderEngine();
-    this.animFrameId = null;
-    this.animFrameType = '';
-    this.frameCount = 0;
-    this.lastFpsTime = performance.now();
-    this.previewScale = 1;
+    this.renderer = new PreviewRenderer(this);
 
     this.effectManager = new EffectManager();
     this.blobTrackingEffect = null;
@@ -100,6 +96,7 @@ export class AppController {
     this.sourceMode = 'camera';
     this.requestedSourceMode = 'camera';
     this.editor = null;
+    this.editorLoadAttempt = 0;
     this.videoPlaceholderLoading = false;
     this.videoSourceFps = 30;
     this.videoSourceAverageBitrate = 0;
@@ -119,13 +116,12 @@ export class AppController {
     this.timelineDetectorSyncPromise = null;
     this.timelineDetectorSyncForce = false;
     this.videoBaseImageSettings = null;
-    this.pendingEditorProject = null;
     this.videoExportDiagnosis = null;
     this.videoExportPreflight = null;
     this.videoExportRecoveredSource = false;
     this.videoExportPlayback = null;
 
-    this.colorPickMode = false;
+    this.colorPicker = new ColorPicker(this);
     this.flipH = false;
     this.flipV = false;
     this.rotation = 0;
@@ -165,7 +161,13 @@ export class AppController {
    */
   async installVideoEditor() {
     if (!this._editorInstallPromise) {
-      this._editorInstallPromise = import('./editor-install.mjs')
+      const entry = new URL(editorEntryUrl, import.meta.url);
+      // A failed module fetch is cached for its URL by the browser.
+      if (this.editorLoadAttempt > 0) {
+        entry.searchParams.set('retry', String(this.editorLoadAttempt));
+      }
+      this.editorLoadAttempt += 1;
+      this._editorInstallPromise = import(/* @vite-ignore */ entry.href)
         .then(({ installVideoEditor }) => installVideoEditor(this))
         .catch((error) => {
           this._editorInstallPromise = null;
@@ -208,7 +210,7 @@ export class AppController {
       await this.setSourceMode('video');
     }
     if (this.sourceMode !== 'video') return;
-    return this.loadEditorProjectFile(file);
+    return this.editor.projects.load(file);
   }
 
   // Editor presentation hooks. The editor mixins replace these when the
@@ -228,30 +230,15 @@ export class AppController {
     void this.toggleEffect(type);
   }
 
-  updateVideoTransport() {}
   updateVideoEditorUI() {}
   updateVideoEffectInspector() {}
   updateTimelineHint() {}
   syncVideoTimelineLookNow() {}
   syncVideoTimelineDetectors() {}
   syncVideoTimelineEffects() {}
-  getVideoPlayableEnd(end) {
-    return end;
-  }
 
   async start() {
-    setupDom(this);
-    if (
-      !this.videoEl ||
-      !this.canvas ||
-      !this.ctx ||
-      !this.btnToggleCamera ||
-      !this.cameraSelect
-    ) {
-      throw new Error(
-        'HateWebcam: faltan elementos base del DOM para iniciar la app.',
-      );
-    }
+    Object.assign(this, readAppDom());
     // Bind DOM events before the first await so a fast user (or a slow CI
     // worker) cannot lose clicks and file selections while settings load.
     // Init still publishes the initial UI state after this.
@@ -265,8 +252,5 @@ export class AppController {
 applyStorageMixin(AppController.prototype);
 applyEventsMixin(AppController.prototype);
 applyEffectsMixin(AppController.prototype);
-applyRenderLoopMixin(AppController.prototype);
-applyColorPickMixin(AppController.prototype);
 applyEffectConfigUIMixin(AppController.prototype);
-applyUIHelpersMixin(AppController.prototype);
 applyProfilesMixin(AppController.prototype);

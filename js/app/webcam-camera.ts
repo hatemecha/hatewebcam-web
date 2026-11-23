@@ -24,6 +24,7 @@ import {
   type ImageSettings,
 } from './constants.ts';
 import type { SettingsStore } from './settings-store.ts';
+import type { PreviewRenderer } from './preview-renderer.ts';
 import type { WebcamCapture } from './webcam-capture.ts';
 
 type PerformanceProfile = (typeof PERFORMANCE_MODE_PRESETS)[PerformanceMode];
@@ -35,11 +36,15 @@ interface WebcamCameraHost {
   settingsStore: SettingsStore;
   imageSettings: ImageSettings;
   videoEl: HTMLVideoElement;
-  editor: { source: { file: File | null } } | null;
+  editor: {
+    source: { file: File | null };
+    visualFx: {
+      activeEffect: { adaptPreviewQuality(fps: number): void } | null;
+    };
+  } | null;
   previewWrapper: HTMLElement | null;
   videoPlaceholderLoading: boolean;
   isRunning: boolean;
-  isPageVisible: boolean;
   capture: Pick<
     WebcamCapture,
     | 'recording'
@@ -47,16 +52,19 @@ interface WebcamCameraHost {
     | 'cancelPhotoCountdown'
     | 'updateCaptureButtons'
   >;
-  frameCount: number;
-  lastFpsTime: number;
-  animFrameId: number | null;
+  renderer: Pick<
+    PreviewRenderer,
+    | 'clearPreviewCanvas'
+    | 'getSourceFrameDimensions'
+    | 'syncPreviewCanvasMetrics'
+    | 'cancelRenderLoop'
+    | 'scheduleRenderLoop'
+    | 'requestPreviewRefresh'
+    | 'resetCadence'
+  >;
   blobTrackingEffect: (DetectorTiming & { processScale: number }) | null;
   faceDetectionEffect: DetectorTiming | null;
   blinkDetectionEffect: DetectorTiming | null;
-  visualFxEffect?: {
-    active: boolean;
-    adaptPreviewQuality(fps: number): void;
-  } | null;
   captureStatus: HTMLElement | null;
   flipH: boolean;
   flipV: boolean;
@@ -64,14 +72,8 @@ interface WebcamCameraHost {
   chkMirror: HTMLInputElement;
   chkFlipV: HTMLInputElement;
   rotationSelect: HTMLSelectElement;
-  clearPreviewCanvas(): void;
-  getSourceFrameDimensions(): { sourceWidth: number; sourceHeight: number };
-  syncPreviewCanvasMetrics(width: number, height: number, force: boolean): void;
-  cancelRenderLoop(): void;
-  scheduleRenderLoop(): void;
   renderEffectConfig(): void;
   updateImageControlsUI(): void;
-  requestPreviewRefresh(force: boolean): void;
   saveImageSettings(): void;
   showStatus(element: HTMLElement | null, message: string, type: Status): void;
   hideStatus(element: HTMLElement | null): void;
@@ -150,7 +152,7 @@ export class WebcamCamera {
       showVideoPlaceholder,
     );
     this.host.previewWrapper?.classList.toggle('is-camera-idle', cameraIdle);
-    if (showVideoPlaceholder) this.host.clearPreviewCanvas();
+    if (showVideoPlaceholder) this.host.renderer.clearPreviewCanvas();
   }
 
   showVideoPlaceholderLoading(
@@ -212,7 +214,7 @@ export class WebcamCamera {
     this.host.imageSettings.previewQuality = profile.previewQuality;
     this.applyDetectorPerformanceProfile(profile);
     this.host.updateImageControlsUI();
-    this.host.requestPreviewRefresh(true);
+    this.host.renderer.requestPreviewRefresh(true);
     if (save) this.host.saveImageSettings();
   }
 
@@ -244,15 +246,14 @@ export class WebcamCamera {
     ) {
       this.stop();
       this.host.isRunning = false;
-      this.host.cancelRenderLoop();
+      this.host.renderer.cancelRenderLoop();
       await this.toggleCamera(true);
     }
   }
 
   handlePreviewFpsSample(fps: number) {
-    if (this.host.sourceMode === 'video' && this.host.visualFxEffect?.active) {
-      this.host.visualFxEffect.adaptPreviewQuality(fps);
-    }
+    if (this.host.sourceMode === 'video')
+      this.host.editor?.visualFx.activeEffect?.adaptPreviewQuality(fps);
     if (
       this.host.imageSettings.performanceMode !== 'auto' ||
       this.autoPerformanceDowngraded
@@ -281,7 +282,7 @@ export class WebcamCamera {
 
       this.stop();
       this.host.isRunning = false;
-      this.host.cancelRenderLoop();
+      this.host.renderer.cancelRenderLoop();
       this.setCameraState('off');
       this.updatePreviewPlaceholder();
       updatePreviewMetrics({ resolution: '-', fps: '-' });
@@ -311,16 +312,15 @@ export class WebcamCamera {
         updateCameraSourceState({ running: true });
 
         const { sourceWidth, sourceHeight } =
-          this.host.getSourceFrameDimensions();
-        this.host.syncPreviewCanvasMetrics(sourceWidth, sourceHeight, true);
+          this.host.renderer.getSourceFrameDimensions();
+        this.host.renderer.syncPreviewCanvasMetrics(
+          sourceWidth,
+          sourceHeight,
+          true,
+        );
 
-        this.host.frameCount = 0;
-        this.host.lastFpsTime = performance.now();
-        if (this.host.isPageVisible) {
-          this.host.scheduleRenderLoop();
-        } else {
-          this.host.animFrameId = null;
-        }
+        this.host.renderer.resetCadence();
+        this.host.renderer.scheduleRenderLoop();
 
         const cfg = this.host.settingsStore.loadObject(STORAGE_KEY);
         const settings = this.manager.getStreamSettings();

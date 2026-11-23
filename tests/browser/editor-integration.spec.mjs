@@ -51,6 +51,24 @@ test('a corrupt video leaves the editor recoverable', async ({ page }) => {
   await expect(page.locator('#btnExportVideo')).toBeEnabled();
 });
 
+test('transport plays, pauses and seeks within the trim', async ({ page }) => {
+  await openEditor(page);
+  const player = page.locator('#videoElement');
+  const play = page.locator('#btnVideoPlay');
+  await page.locator('#btnVideoEnd').click();
+  const end = await player.evaluate((video) => video.currentTime);
+  expect(end).toBeGreaterThan(0);
+  await play.click();
+  await expect(play.locator('.fa-pause')).toHaveCount(1);
+  expect(await player.evaluate((video) => video.currentTime)).toBeLessThan(end);
+  await play.click();
+  await expect(play.locator('.fa-play')).toHaveCount(1);
+  await page.locator('#btnVideoStart').click();
+  await expect
+    .poll(() => player.evaluate((video) => video.currentTime))
+    .toBe(0);
+});
+
 test('leaving the editor cancels the source probe and revokes its URL', async ({
   page,
 }) => {

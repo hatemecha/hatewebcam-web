@@ -1,5 +1,6 @@
 <script lang="ts">
   import { m } from '../i18n/text.svelte';
+  import { editorState } from './editor-store';
 </script>
 
 <div class="panel-section inspector-adjust-empty" id="inspectorAdjustNoVideo">
@@ -30,10 +31,17 @@
   </div>
 </div>
 <div id="inspectorAdjustmentsHost" class="hidden">
-  <div id="visualFxInspectorHost" class="visual-fx-inspector hidden"></div>
+  <div
+    id="visualFxInspectorHost"
+    class="visual-fx-inspector"
+    class:hidden={!$editorState.visualFxSelected}
+  ></div>
   <div
     class="status-msg visual-fx-status"
+    class:is-active={Boolean($editorState.visualFxStatus)}
     id="visualFxStatus"
     role="status"
-  ></div>
+  >
+    {$editorState.visualFxStatus ? m($editorState.visualFxStatus) : ''}
+  </div>
 </div>

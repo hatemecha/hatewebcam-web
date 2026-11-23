@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { applyRenderLoopMixin } from '../../js/app/render.mjs';
+import { PreviewRenderer } from '../../js/app/preview-renderer.ts';
 import { DEFAULT_IMAGE_SETTINGS } from '../../js/app/constants.ts';
 
 async function openWebcam(page) {
@@ -361,17 +361,16 @@ test('black and white recording keeps moving and produces a playable video', asy
 
 test('simplified recording filters preserve pixel colors', async ({ page }) => {
   const app = { imageSettings: { ...DEFAULT_IMAGE_SETTINGS } };
-  applyRenderLoopMixin(app);
-  app.clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+  const renderer = new PreviewRenderer(app);
   const filters = [];
   for (const blackAndWhite of [false, true]) {
     for (const exposure of [0, 30, -40]) {
       for (const contrast of [100, 140]) {
         Object.assign(app.imageSettings, { blackAndWhite, exposure, contrast });
-        const values = app.getBaseFilterValues();
+        const values = renderer.getBaseFilterValues();
         filters.push({
           original: `brightness(${values.exposureBoost}%) contrast(${values.contrastPercent}%) saturate(${values.saturationPercent}%) grayscale(${values.grayscalePercent}%)`,
-          optimized: app.buildCanvasFilter(),
+          optimized: renderer.buildCanvasFilter(),
         });
       }
     }

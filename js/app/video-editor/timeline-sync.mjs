@@ -253,7 +253,7 @@ export function applyVideoEditorTimelineSyncMixin(proto) {
   proto.syncVideoTimelineEffects = async function (force = false) {
     if (this.sourceMode !== 'video' || !this.editor.source?.file) return;
     this.syncVideoTimelineLookNow({ force });
-    await this.syncVideoTimelineVisualFx?.(force);
+    await this.editor.visualFx?.sync(force);
     await this.syncVideoTimelineDetectors(force);
   };
 

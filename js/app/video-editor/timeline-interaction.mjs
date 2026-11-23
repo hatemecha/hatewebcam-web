@@ -18,7 +18,7 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
     event.preventDefault();
 
     if (this.editorTool === 'trim') {
-      this.seekVideo(this.getTimelineTime(event.clientX));
+      this.editor.transport.seek(this.getTimelineTime(event.clientX));
       return;
     }
 
@@ -31,7 +31,7 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
       return;
     }
 
-    this.seekVideo(this.getTimelineTime(event.clientX));
+    this.editor.transport.seek(this.getTimelineTime(event.clientX));
   };
 
   proto.beginTimelineBoxSelection = function (event) {
@@ -58,7 +58,7 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
       document.removeEventListener('pointerup', end);
       this.timelineSelection?.classList.remove('is-active');
       if (!dragged) {
-        this.seekVideo(this.getTimelineTime(event.clientX));
+        this.editor.transport.seek(this.getTimelineTime(event.clientX));
         this.selectVideoEffect('');
         return;
       }
@@ -384,9 +384,9 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
       return;
     event.preventDefault();
     event.stopPropagation();
-    this.seekVideo(this.getTimelineTime(event.clientX));
+    this.editor.transport.seek(this.getTimelineTime(event.clientX));
     const move = (moveEvent) =>
-      this.seekVideo(this.getTimelineTime(moveEvent.clientX));
+      this.editor.transport.seek(this.getTimelineTime(moveEvent.clientX));
     const end = () => {
       document.removeEventListener('pointermove', move);
       document.removeEventListener('pointerup', end);
@@ -441,17 +441,17 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
     }
     if (event.key === ' ') {
       event.preventDefault();
-      void this.toggleVideoPlayback();
+      void this.editor.transport.toggle();
       return;
     }
     if (event.key === 'ArrowLeft') {
       event.preventDefault();
-      this.jumpVideo(event.shiftKey ? -5 : -0.04);
+      this.editor.transport.jump(event.shiftKey ? -5 : -0.04);
       return;
     }
     if (event.key === 'ArrowRight') {
       event.preventDefault();
-      this.jumpVideo(event.shiftKey ? 5 : 0.04);
+      this.editor.transport.jump(event.shiftKey ? 5 : 0.04);
       return;
     }
     if (event.key.toLowerCase() === 'i') {

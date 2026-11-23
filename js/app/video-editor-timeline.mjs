@@ -176,7 +176,7 @@ export function applyVideoEditorTimelineMixin(proto) {
           console.warn('Detector preload failed:', err);
         }
       }
-      if (isVisualFxClipType(type)) await this.ensureVisualFxEffect?.();
+      if (isVisualFxClipType(type)) await this.editor.visualFx?.ensureEffect();
       this.selectVideoEffect(saved.id);
       void this.syncVideoTimelineEffects(true);
       this.showStatus(
@@ -208,7 +208,7 @@ export function applyVideoEditorTimelineMixin(proto) {
       if (isVisualFxClipType(item.type)) {
         const t = this.videoEl?.currentTime || 0;
         if (t < item.startTime || t >= item.endTime) {
-          void this.seekVideo(
+          void this.editor.transport.seek(
             Math.min(item.endTime - 0.05, item.startTime + 0.05),
           );
         }
@@ -333,7 +333,7 @@ export function applyVideoEditorTimelineMixin(proto) {
         markerEl.setAttribute('aria-label', markerEl.title);
         markerEl.addEventListener('click', (event) => {
           event.stopPropagation();
-          this.seekVideo(marker.time);
+          this.editor.transport.seek(marker.time);
         });
         this.timelineMarkers.appendChild(markerEl);
       });

@@ -6,6 +6,7 @@ export interface RenderProfile {
   detectorInterval: number;
   detectorIntervalMs: number;
   faceAnalysisMaxEdge: number;
+  overlayOnly?: boolean;
   quality: 'fast' | 'low' | 'best';
 }
 
@@ -63,7 +64,7 @@ export interface RenderFrameHost {
     ctx: CanvasRenderingContext2D,
     mode: string,
   ): void;
-  renderSourceFrameBuffer(enhancer: boolean, mode: string): void;
+  renderSourceFrameBuffer(enhancer: boolean, mode: BufferMode): void;
 }
 
 export interface RenderEngineOptions {
@@ -194,7 +195,7 @@ export class RenderEngine {
     enhancer = false,
     app,
   }: {
-    mode?: string;
+    mode?: BufferMode;
     enhancer?: boolean;
     app?: RenderFrameHost;
   } = {}): void {
