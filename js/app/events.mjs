@@ -318,10 +318,11 @@ export function applyEventsMixin(proto) {
   };
 
   proto.bindCameraShellEvents = function () {
-    this.chkFlipV.addEventListener('change', this.onTransformChange.bind(this));
-    this.rotationSelect.addEventListener(
-      'change',
-      this.onTransformChange.bind(this),
+    this.chkFlipV.addEventListener('change', () =>
+      this.camera.onTransformChange(),
+    );
+    this.rotationSelect.addEventListener('change', () =>
+      this.camera.onTransformChange(),
     );
 
     this.canvas.addEventListener('click', this.onCanvasClick.bind(this));
@@ -340,8 +341,7 @@ export function applyEventsMixin(proto) {
       this.cancelPhotoCountdown(false);
       this.stopRecording(false);
       this.clearPendingCapture(true);
-      this.cameraRequest += 1;
-      this.cameraManager.stop();
+      this.camera.stop();
       this.videoSource?.dispose();
       this.visualFxEffect?.dispose?.();
     });

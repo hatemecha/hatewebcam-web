@@ -71,11 +71,14 @@ export function applyProfilesMixin(proto) {
           ...this.imageSettings,
           ...config.display.imageSettings,
         };
-        await this.applyPerformanceMode(this.imageSettings.performanceMode, {
-          restartCamera: false,
-          notify: false,
-          save: false,
-        });
+        await this.camera.applyPerformanceMode(
+          this.imageSettings.performanceMode,
+          {
+            restartCamera: false,
+            notify: false,
+            save: false,
+          },
+        );
         this.updateImageControlsUI();
         this.saveImageSettings();
       }

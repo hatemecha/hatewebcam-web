@@ -29,9 +29,7 @@ export function applyEffectsMixin(proto) {
             this.blobTrackingEffect.setConfig(savedBlobConfig);
           this.blobTrackingEffect.boxColor =
             this.quickDetectorSettings.blobBoxColor;
-          this.applyDetectorPerformanceProfile?.(
-            this.getPerformanceModePreset?.(),
-          );
+          this.camera?.applyDetectorPerformanceProfile();
           this.effectManager.addEffect(this.blobTrackingEffect);
         }
         if (this.blinkDetectionEffect) {
@@ -102,9 +100,7 @@ export function applyEffectsMixin(proto) {
           if (savedFaceConfig)
             this.faceDetectionEffect.setConfig(savedFaceConfig);
           this.applyQuickDetectorSettingsToEffects();
-          this.applyDetectorPerformanceProfile?.(
-            this.getPerformanceModePreset?.(),
-          );
+          this.camera?.applyDetectorPerformanceProfile();
           this.effectManager.addEffect(this.faceDetectionEffect);
         } else {
           this.applyQuickDetectorSettingsToEffects();
@@ -162,9 +158,7 @@ export function applyEffectsMixin(proto) {
           const savedBlinkConfig = this.getSavedEffectConfig('blink');
           if (savedBlinkConfig)
             this.blinkDetectionEffect.setConfig(savedBlinkConfig);
-          this.applyDetectorPerformanceProfile?.(
-            this.getPerformanceModePreset?.(),
-          );
+          this.camera?.applyDetectorPerformanceProfile();
           this.effectManager.addEffect(this.blinkDetectionEffect);
         }
         this.syncBlinkLandmarkSource();

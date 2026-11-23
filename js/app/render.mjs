@@ -242,7 +242,7 @@ export function applyRenderLoopMixin(proto) {
         if (now - this.lastFpsTime >= 1000) {
           updatePreviewMetrics({ fps: `${this.frameCount} FPS` });
           perfDev.gauge('previewFps', this.frameCount);
-          this.handlePreviewFpsSample?.(this.frameCount);
+          this.camera?.handlePreviewFpsSample(this.frameCount);
           this.frameCount = 0;
           this.lastFpsTime = now;
         }

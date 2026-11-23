@@ -22,11 +22,10 @@ export function applyVideoEditorSourceMixin(proto) {
       };
       if (this.isRecording) this.stopRecording(true);
       this.cancelPhotoCountdown(false);
-      this.cameraRequest += 1;
-      this.cameraManager.stop();
+      this.camera.stop();
       this.isRunning = false;
       this.cancelRenderLoop();
-      this.setCameraState('off');
+      this.camera.setCameraState('off');
       this.sourceMode = 'video';
       document.body.classList.add('video-mode');
       updateEditorUiState({ mode: 'video' });
@@ -43,7 +42,7 @@ export function applyVideoEditorSourceMixin(proto) {
       this.videoPlaceholderLoading = false;
       this.clearPreviewCanvas();
       void this.resetVideoTimelineDetectors();
-      this.updatePreviewPlaceholder();
+      this.camera.updatePreviewPlaceholder();
       this.updateVideoEditorUI();
       return;
     }
@@ -59,10 +58,12 @@ export function applyVideoEditorSourceMixin(proto) {
       .forEach((el) => el.classList.remove('hidden'));
     updateShellState({ mode: 'camera' });
     this.publishWebcamPanel?.();
-    this.setCameraPlaceholderMessage('Iniciando cámara automáticamente...');
-    this.updatePreviewPlaceholder();
+    this.camera.setCameraPlaceholderMessage(
+      'Iniciando cámara automáticamente...',
+    );
+    this.camera.updatePreviewPlaceholder();
     void this.restoreWebcamSessionState();
-    void this.toggleCamera(true);
+    void this.camera.toggleCamera(true);
   };
 
   proto.restoreWebcamSessionState = async function () {
@@ -123,9 +124,9 @@ export function applyVideoEditorSourceMixin(proto) {
     if (this.sourceMode === 'video') {
       void this.resetVideoTimelineDetectors();
       this.clearPreviewCanvas();
-      this.updatePreviewPlaceholder();
+      this.camera.updatePreviewPlaceholder();
     } else {
-      this.updatePreviewPlaceholder();
+      this.camera.updatePreviewPlaceholder();
     }
   };
 
@@ -147,7 +148,7 @@ export function applyVideoEditorSourceMixin(proto) {
     }
 
     this.disposeVideoSource();
-    this.showVideoPlaceholderLoading('Leyendo metadata del video...');
+    this.camera.showVideoPlaceholderLoading('Leyendo metadata del video...');
     let signal;
     try {
       const request = this.videoSource.open(file);
@@ -184,7 +185,7 @@ export function applyVideoEditorSourceMixin(proto) {
       this.imageSettings = { ...this.videoBaseImageSettings };
       this.isRunning = true;
       this.videoPlaceholderLoading = false;
-      this.updatePreviewPlaceholder();
+      this.camera.updatePreviewPlaceholder();
       this.videoSeek.max = String(this.videoEl.duration);
       this.videoTrimStart.max = String(this.videoEl.duration);
       this.videoTrimEnd.max = String(this.videoEl.duration);

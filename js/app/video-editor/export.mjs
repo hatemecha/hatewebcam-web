@@ -99,12 +99,12 @@ export function applyVideoEditorExportMixin(proto) {
       if (this.videoExportDiagnostics)
         this.videoExportDiagnostics.textContent = '';
       if (this.sourceMode === 'video') {
-        this.updatePreviewPlaceholder();
+        this.camera.updatePreviewPlaceholder();
       }
       this.updateTimelineHint();
       return;
     }
-    this.updatePreviewPlaceholder();
+    this.camera.updatePreviewPlaceholder();
     this.updateVideoFileMeta?.();
     if (this.videoExportDetails) {
       const preflight = this.buildVideoExportPreflight();

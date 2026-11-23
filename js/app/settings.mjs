@@ -4,11 +4,7 @@ import {
 } from './webcam-settings.ts';
 import { normalizePreviewQuality } from './constants.ts';
 import { translateCurrent } from '../../src/lib/i18n/translate.ts';
-import {
-  getCameraSourceState,
-  resolveCameraDeviceSelection,
-  updateCameraSourceState,
-} from '../../src/lib/webcam/camera-source-bridge.ts';
+import { updateCameraSourceState } from '../../src/lib/webcam/camera-source-bridge.ts';
 import {
   deriveDetectorExtras,
   replaceWebcamPanelState,
@@ -1050,7 +1046,7 @@ export function applyStorageMixin(proto) {
   proto.toggleMirrorQuick = function () {
     this.flipH = !this.flipH;
     if (this.chkMirror) this.chkMirror.checked = this.flipH;
-    this.onTransformChange();
+    this.camera.onTransformChange();
   };
 
   proto.initializeColorPalettes = function () {
@@ -1146,7 +1142,7 @@ export function applyStorageMixin(proto) {
       await this.toggleEffect(type);
     }
 
-    await this.applyPerformanceMode(
+    await this.camera.applyPerformanceMode(
       this.DEFAULT_IMAGE_SETTINGS.performanceMode,
       {
         restartCamera: false,
@@ -1260,23 +1256,5 @@ export function applyStorageMixin(proto) {
     const cfg = this.loadConfig();
     cfg.showAdvancedOptions = nextVisible;
     this.saveConfig(cfg);
-  };
-
-  proto.renderCameraSelectOptions = function (devices, preferredId = null) {
-    const current = getCameraSourceState();
-    updateCameraSourceState(
-      resolveCameraDeviceSelection(
-        devices,
-        preferredId,
-        current.deviceId || this.preferredDeviceId || '',
-      ),
-    );
-    this.preferredDeviceId =
-      getCameraSourceState().deviceId || this.preferredDeviceId;
-  };
-
-  proto.refreshCameraDevices = async function (preferredId = null) {
-    const devices = await this.cameraManager.enumerateDevices();
-    this.renderCameraSelectOptions(devices, preferredId);
   };
 }

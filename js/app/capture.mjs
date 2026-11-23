@@ -394,7 +394,7 @@ export function applyCaptureMixin(proto) {
   };
 
   proto.getPreferredRecordingFps = function () {
-    const sourceFps = Number(this.cameraManager.getStreamSettings().frameRate);
+    const sourceFps = Number(this.camera.getStreamSettings().frameRate);
     return this.clamp(Math.round(sourceFps || this.DEFAULT_CAMERA_FPS), 1, 120);
   };
 

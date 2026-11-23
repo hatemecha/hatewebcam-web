@@ -25,17 +25,15 @@ import {
   PREVIEW_MIN_WIDTH,
   PREVIEW_MIN_HEIGHT,
   COMMON_VIDEO_FPS,
-  PERFORMANCE_MODE_PRESETS,
   normalizePreviewQuality,
   normalizePerformanceMode,
 } from './constants.ts';
-import { CameraManager } from '../core/camera-manager.ts';
 import { EffectManager } from '../effects/effect-manager.ts';
 import { setupDom } from './dom.mjs';
 import { applyStorageMixin } from './settings.mjs';
 import { initializeWebcam } from './init.ts';
 import { applyEventsMixin } from './events.mjs';
-import { applyCameraMixin } from './camera.mjs';
+import { WebcamCamera } from './webcam-camera.ts';
 import { applyEffectsMixin } from './effects.mjs';
 import { applyRenderLoopMixin } from './render.mjs';
 import { applyColorPickMixin } from './color-pick.mjs';
@@ -52,13 +50,9 @@ export class AppController {
       onError: (err) => this.notifyStorageUnavailable(err),
     });
 
-    this.cameraManager = new CameraManager();
-    this.cameraRequest = 0;
+    this.camera = new WebcamCamera(this);
     this.isRunning = false;
-    this.preferredDeviceId = null;
     this.webcamSessionState = null;
-    this.autoPerformanceDowngraded = false;
-    this.lowFpsSampleCount = 0;
 
     this.renderEngine = new RenderEngine();
     this.animFrameId = null;
@@ -157,7 +151,6 @@ export class AppController {
     this.PREVIEW_MIN_WIDTH = PREVIEW_MIN_WIDTH;
     this.PREVIEW_MIN_HEIGHT = PREVIEW_MIN_HEIGHT;
     this.COMMON_VIDEO_FPS = COMMON_VIDEO_FPS;
-    this.PERFORMANCE_MODE_PRESETS = PERFORMANCE_MODE_PRESETS;
     this.normalizePreviewQuality = normalizePreviewQuality;
     this.normalizePerformanceMode = normalizePerformanceMode;
     this.imageSettings = { ...DEFAULT_IMAGE_SETTINGS };
@@ -268,7 +261,6 @@ export class AppController {
 
 applyStorageMixin(AppController.prototype);
 applyEventsMixin(AppController.prototype);
-applyCameraMixin(AppController.prototype);
 applyEffectsMixin(AppController.prototype);
 applyRenderLoopMixin(AppController.prototype);
 applyColorPickMixin(AppController.prototype);

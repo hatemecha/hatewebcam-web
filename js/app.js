@@ -21,7 +21,6 @@ import {
 } from '../src/lib/modals/mount.ts';
 import { mountCameraSource } from '../src/lib/webcam/mount.ts';
 import { mountEffectsControls } from '../src/lib/webcam/effects-mount.ts';
-import { updateCameraSourceState } from '../src/lib/webcam/camera-source-bridge.ts';
 import { mountPreviewMetrics } from '../src/lib/preview/metrics-mount.ts';
 import {
   mountCaptureBar,
@@ -57,7 +56,7 @@ try {
   mountVideoEditor(document.querySelector('#videoEditorTemplateSlot'));
   mountPreviewPlaceholder(document.querySelector('#previewPlaceholderMount'), {
     startCamera: () =>
-      whenControllerReady(() => void controller.toggleCamera(true)),
+      whenControllerReady(() => void controller.camera.toggleCamera(true)),
     chooseVideo: () => document.querySelector('#videoFileInput')?.click(),
   });
   mountCaptureBar(document.querySelector('#captureBarMount'), {
@@ -89,15 +88,14 @@ try {
   );
   mountCameraSource(document.querySelector('#cameraSourceMount'), {
     toggleCamera: () => {
-      whenControllerReady(() => void controller.toggleCamera());
+      whenControllerReady(() => void controller.camera.toggleCamera());
     },
     selectCamera: (deviceId) => {
-      updateCameraSourceState({ deviceId });
-      whenControllerReady(() => void controller.onCameraChange());
+      whenControllerReady(() => void controller.camera.selectCamera(deviceId));
     },
     setPerformanceMode: (mode) => {
       whenControllerReady(() => {
-        void controller.applyPerformanceMode(mode, {
+        void controller.camera.applyPerformanceMode(mode, {
           restartCamera: true,
           notify: true,
         });
@@ -156,14 +154,14 @@ try {
       whenControllerReady(() => {
         controller.flipH = checked;
         if (controller.chkMirror) controller.chkMirror.checked = checked;
-        controller.onTransformChange();
+        controller.camera.onTransformChange();
       });
     },
     setFlipV: (checked) => {
       whenControllerReady(() => {
         controller.flipV = checked;
         if (controller.chkFlipV) controller.chkFlipV.checked = checked;
-        controller.onTransformChange();
+        controller.camera.onTransformChange();
       });
     },
     setRotation: (value) => {
@@ -172,7 +170,7 @@ try {
         if (controller.rotationSelect) {
           controller.rotationSelect.value = String(value);
         }
-        controller.onTransformChange();
+        controller.camera.onTransformChange();
       });
     },
     applyPreset: (name) => {

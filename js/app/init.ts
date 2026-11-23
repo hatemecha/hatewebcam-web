@@ -1,9 +1,7 @@
-import {
-  updateCameraSourceState,
-  type PerformanceMode,
-} from '../../src/lib/webcam/camera-source-bridge.ts';
+import { updateCameraSourceState } from '../../src/lib/webcam/camera-source-bridge.ts';
 import type { ImageSettings } from './constants.ts';
 import type { SettingsStore } from './settings-store.ts';
+import type { WebcamCamera } from './webcam-camera.ts';
 import { loadWebcamSettings } from './webcam-settings.ts';
 
 interface WebcamStartup {
@@ -13,7 +11,14 @@ interface WebcamStartup {
   flipV: boolean;
   rotation: number;
   mobileActivePreset: string | null;
-  preferredDeviceId: string | null;
+  camera: Pick<
+    WebcamCamera,
+    | 'preferredDeviceId'
+    | 'applyPerformanceMode'
+    | 'setCameraState'
+    | 'toggleCamera'
+    | 'refreshCameraDevices'
+  >;
   chkMirror: HTMLInputElement | null;
   chkFlipV: HTMLInputElement | null;
   rotationSelect: HTMLSelectElement | null;
@@ -22,10 +27,6 @@ interface WebcamStartup {
   loadQuickDetectorSettings(config: Record<string, unknown>): void;
   updateQuickDetectorControlsUI(): void;
   loadImageSettings(config: Record<string, unknown>): void;
-  applyPerformanceMode(
-    mode: PerformanceMode,
-    options: { restartCamera: boolean; notify: boolean; save: boolean },
-  ): Promise<void>;
   updateImageControlsUI(): void;
   getMatchingImagePreset(): string | null;
   updateMobilePresetButtons(preset: string | null): void;
@@ -34,10 +35,7 @@ interface WebcamStartup {
   setMobileFxPanelVisible(visible: boolean): void;
   isExportDebugVisible(): boolean;
   updateCaptureButtons(): void;
-  setCameraState(state: 'off'): void;
   restoreActiveDetectors(config: Record<string, unknown>): Promise<void>;
-  toggleCamera(forceStart: boolean): Promise<void>;
-  refreshCameraDevices(deviceId: string | null): Promise<void>;
 }
 
 export async function initializeWebcam(app: WebcamStartup) {
@@ -60,7 +58,7 @@ export async function initializeWebcam(app: WebcamStartup) {
   app.loadQuickDetectorSettings(cfg);
   app.updateQuickDetectorControlsUI();
   app.loadImageSettings(cfg);
-  await app.applyPerformanceMode(app.imageSettings.performanceMode, {
+  await app.camera.applyPerformanceMode(app.imageSettings.performanceMode, {
     restartCamera: false,
     notify: false,
     save: false,
@@ -68,7 +66,7 @@ export async function initializeWebcam(app: WebcamStartup) {
   app.updateImageControlsUI();
   app.mobileActivePreset = app.getMatchingImagePreset();
   app.updateMobilePresetButtons(app.mobileActivePreset);
-  app.preferredDeviceId =
+  app.camera.preferredDeviceId =
     typeof cfg.deviceId === 'string' && cfg.deviceId ? cfg.deviceId : null;
   updateCameraSourceState({
     devices: [],
@@ -83,8 +81,8 @@ export async function initializeWebcam(app: WebcamStartup) {
   if (app.isExportDebugVisible())
     document.body.classList.add('export-debug-visible');
   app.updateCaptureButtons();
-  app.setCameraState('off');
+  app.camera.setCameraState('off');
   void app.restoreActiveDetectors(cfg);
-  void app.toggleCamera(true);
-  void app.refreshCameraDevices(app.preferredDeviceId);
+  void app.camera.toggleCamera(true);
+  void app.camera.refreshCameraDevices(app.camera.preferredDeviceId);
 }

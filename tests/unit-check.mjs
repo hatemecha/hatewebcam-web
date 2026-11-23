@@ -52,7 +52,6 @@ import {
   DEFAULT_IMAGE_SETTINGS,
   PERFORMANCE_MODE_PRESETS,
   TIMELINE_TRACK_COUNT,
-  normalizePerformanceMode,
 } from '../js/app/constants.ts';
 import { EditAssistController } from '../js/app/edit-assist-controller.ts';
 import {
@@ -63,7 +62,7 @@ import {
 import { SettingsStore } from '../js/app/settings-store.ts';
 import { loadWebcamSettings } from '../js/app/webcam-settings.ts';
 import { applyEffectsMixin } from '../js/app/effects.mjs';
-import { applyCameraMixin } from '../js/app/camera.mjs';
+import { WebcamCamera } from '../js/app/webcam-camera.ts';
 import { applyRenderLoopMixin } from '../js/app/render.mjs';
 import { applyLocalvideoeditorMixin } from '../js/app/video-editor.mjs';
 import {
@@ -2027,11 +2026,8 @@ function checkVideoExportTimingAndQuality() {
 
 function checkAutoPerformanceDowngrade() {
   const app = {
+    sourceMode: 'camera',
     imageSettings: { performanceMode: 'auto', previewQuality: 'balanced' },
-    PERFORMANCE_MODE_PRESETS,
-    normalizePerformanceMode,
-    autoPerformanceDowngraded: false,
-    lowFpsSampleCount: 0,
     blobTrackingEffect: { processScale: 0.45, processIntervalMs: 33 },
     faceDetectionEffect: { processIntervalMs: 30 },
     blinkDetectionEffect: { processIntervalMs: 30 },
@@ -2040,12 +2036,18 @@ function checkAutoPerformanceDowngrade() {
     renderEffectConfig() {},
     showStatus() {},
   };
-  applyCameraMixin(app);
-  app.handlePreviewFpsSample(23);
-  app.handlePreviewFpsSample(23);
-  assert.equal(app.autoPerformanceDowngraded, false);
-  app.handlePreviewFpsSample(23);
-  assert.equal(app.autoPerformanceDowngraded, true);
+  const camera = new WebcamCamera(app);
+  camera.handlePreviewFpsSample(23);
+  camera.handlePreviewFpsSample(23);
+  assert.equal(
+    camera.getPerformanceModePreset(),
+    PERFORMANCE_MODE_PRESETS.normal,
+  );
+  camera.handlePreviewFpsSample(23);
+  assert.equal(
+    camera.getPerformanceModePreset(),
+    PERFORMANCE_MODE_PRESETS.performance,
+  );
   assert.deepEqual(PERFORMANCE_MODE_PRESETS.performance.camera, {
     width: 960,
     height: 540,
