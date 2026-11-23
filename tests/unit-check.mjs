@@ -866,7 +866,6 @@ function checkEditAssistManualControls() {
     getSourceFile: () => ({}),
     getTimeline: () => timeline,
     isExporting: () => false,
-    getElements: () => ({}),
     pushHistory() {},
     renderTimeline() {},
     updateTimelineHint() {},
@@ -898,6 +897,21 @@ function checkEditAssistManualControls() {
   controller.clearMarkers();
   assert.equal(timeline.getMarkersBySource('edit-assist').length, 0);
   assert.equal(timeline.getMarkersBySource('user').length, 1);
+}
+
+async function checkEditAssistDiscardsAnalysisAfterSourceReset() {
+  let resolveAnalysis;
+  const controller = new EditAssistController(
+    { getSourceFile: () => ({}) },
+    () => new Promise((resolve) => (resolveAnalysis = resolve)),
+  );
+  const analysis = controller.analyze();
+  assert.equal(controller.isAnalyzing, true);
+  controller.reset();
+  resolveAnalysis({ bpm: 120, confidence: 0.8, beats: [] });
+  await analysis;
+  assert.equal(controller.result, null);
+  assert.equal(controller.isAnalyzing, false);
 }
 
 async function checkMediaAudioExtraction() {
@@ -3160,6 +3174,7 @@ await checkSubjectAnalyzerDiscardsSupersededResults();
 await checkSubjectClipAwaitsEffectBeforeAnalyzer();
 checkAudioTempoAnalyzer();
 checkEditAssistManualControls();
+await checkEditAssistDiscardsAnalysisAfterSourceReset();
 await checkMediaAudioExtraction();
 checkStableExportDefaults();
 checkEditorExportPresets();

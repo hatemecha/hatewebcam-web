@@ -163,6 +163,42 @@ test('editor chrome follows a locale change', async ({ page }) => {
   await expect(page.locator('#videoFileMeta')).toContainText('estimated');
 });
 
+test('Edit Assist restores its settings and edits the marker grid', async ({
+  page,
+}) => {
+  await openEditor(page);
+  await page.locator('#projectFileInput').setInputFiles({
+    name: 'edit-assist.hatewebcam.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(
+      JSON.stringify({
+        version: 2,
+        source: { name: 'subject-init.webm' },
+        timeline: { items: [], markers: [] },
+        editAssist: { bpm: 120, confidence: 0.8, offset: 0, markerStep: 4 },
+      }),
+    ),
+  });
+  await expect(page.locator('#editAssistBpmInput')).toHaveValue('120');
+  await page.locator('#btnEditAssistHalf').click();
+  await expect(page.locator('#editAssistBpmInput')).toHaveValue('60');
+  await page.locator('#btnEditAssistOffsetUp').click();
+  await expect(page.locator('#editAssistOffsetInput')).toHaveValue('10');
+  await page.locator('#btnEditAssistBeat').click();
+  await expect(page.locator('#editAssistDensitySelect')).toHaveValue('1');
+  await expect(
+    page.locator('.timeline-marker[data-source="edit-assist"]').first(),
+  ).toBeVisible();
+  await page.locator('#languageSelect').selectOption('en');
+  await expect(page.locator('#editAssistStatus')).toContainText(
+    'Edit Assist markers created.',
+  );
+  await page.locator('#btnEditAssistClear').click();
+  await expect(
+    page.locator('.timeline-marker[data-source="edit-assist"]'),
+  ).toHaveCount(0);
+});
+
 test('cancelling an export restores the editor', async ({ page }) => {
   test.setTimeout(60_000);
   await openEditor(page);

@@ -3,7 +3,8 @@ import {
   type TempoAnalysis,
   type TempoBeat,
 } from '../audio-tempo-analyzer.ts';
-import { translateCurrent } from '../../src/lib/i18n/translate.ts';
+import type { EditAssistView } from '../../src/lib/editor/edit-assist-panel.ts';
+import type { MessageKey } from '../../src/lib/i18n/catalog.ts';
 export type { TempoAnalysis, TempoBeat } from '../audio-tempo-analyzer.ts';
 
 const DEFAULT_STEP = 4;
@@ -24,33 +25,13 @@ export interface EditAssistTimeline {
   getMarkersBySource?(source: string): { time: number }[];
 }
 
-export interface EditAssistElements {
-  analyzeButton?: HTMLButtonElement | null;
-  beatButton?: HTMLButtonElement | null;
-  every2Button?: HTMLButtonElement | null;
-  every4Button?: HTMLButtonElement | null;
-  every8Button?: HTMLButtonElement | null;
-  halfButton?: HTMLButtonElement | null;
-  doubleButton?: HTMLButtonElement | null;
-  offsetDownButton?: HTMLButtonElement | null;
-  offsetUpButton?: HTMLButtonElement | null;
-  regenerateButton?: HTMLButtonElement | null;
-  clearButton?: HTMLButtonElement | null;
-  bpmInput?: HTMLInputElement | null;
-  offsetInput?: HTMLInputElement | null;
-  densitySelect?: HTMLSelectElement | null;
-  result?: HTMLElement | null;
-  status?: HTMLElement | null;
-}
-
 export interface EditAssistOptions {
   getSourceFile?: () => File | null;
   getTimeline?: () => EditAssistTimeline | null;
   isExporting?: () => boolean;
-  getElements?: () => EditAssistElements;
+  updatePanel?: (view: EditAssistView, actions: EditAssistController) => void;
   pushHistory?: () => void;
   renderTimeline?: () => void;
-  showStatus?: (element: HTMLElement, message: string, type: string) => void;
   updateTimelineHint?: () => void;
 }
 
@@ -70,7 +51,8 @@ export class EditAssistController {
   analyzer: TempoAnalyzer;
   result: TempoAnalysis | null = null;
   isAnalyzing = false;
-  isBound = false;
+  private analysisId = 0;
+  private status: EditAssistView['status'] = null;
   manualBpm = 0;
   offsetMs = 0;
   markerStep = DEFAULT_STEP;
@@ -84,43 +66,9 @@ export class EditAssistController {
     this.analyzer = analyzer;
   }
 
-  bind(): void {
-    if (this.isBound) return;
-    this.isBound = true;
-    const el = this.getElements();
-    el.analyzeButton?.addEventListener('click', () => {
-      void this.analyze();
-    });
-    el.beatButton?.addEventListener('click', () => this.applyMarkers(1));
-    el.every2Button?.addEventListener('click', () => this.applyMarkers(2));
-    el.every4Button?.addEventListener('click', () => this.applyMarkers(4));
-    el.every8Button?.addEventListener('click', () => this.applyMarkers(8));
-    el.halfButton?.addEventListener('click', () => this.scaleBpm(0.5));
-    el.doubleButton?.addEventListener('click', () => this.scaleBpm(2));
-    el.offsetDownButton?.addEventListener('click', () => this.shiftOffset(-10));
-    el.offsetUpButton?.addEventListener('click', () => this.shiftOffset(10));
-    el.regenerateButton?.addEventListener('click', () =>
-      this.applyMarkers(this.markerStep),
-    );
-    el.bpmInput?.addEventListener('change', () => {
-      this.manualBpm = this.normalizeBpm(el.bpmInput?.value);
-      this.syncControls();
-      this.updateUI();
-    });
-    el.offsetInput?.addEventListener('change', () => {
-      this.offsetMs = this.normalizeOffset(el.offsetInput?.value);
-      this.syncControls();
-      this.updateUI();
-    });
-    el.densitySelect?.addEventListener('change', () => {
-      this.markerStep = this.normalizeStep(el.densitySelect?.value);
-      this.syncControls();
-      this.updateUI();
-    });
-    this.updateUI();
-  }
-
   reset(): void {
+    this.analysisId += 1;
+    this.status = null;
     this.result = null;
     this.isAnalyzing = false;
     this.manualBpm = 0;
@@ -128,10 +76,6 @@ export class EditAssistController {
     this.markerStep = DEFAULT_STEP;
     this.generatedAt = 0;
     this.updateUI();
-  }
-
-  getElements(): EditAssistElements {
-    return this.options.getElements?.() ?? {};
   }
 
   get sourceFile(): File | null {
@@ -151,103 +95,75 @@ export class EditAssistController {
   }
 
   updateUI(): void {
-    const el = this.getElements();
-    const loaded = !!this.sourceFile;
-    const hasBeats = !!this.result?.beats?.length && !!this.effectiveBpm;
-    if (el.analyzeButton) {
-      el.analyzeButton.disabled =
-        !loaded || this.isAnalyzing || this.isExporting;
-      el.analyzeButton.innerHTML = this.isAnalyzing
-        ? `<i class="fa-solid fa-spinner fa-spin"></i> ${translateCurrent('Analizando...')}`
-        : `<i class="fa-solid fa-wave-square"></i> ${translateCurrent('Analizar audio')}`;
-    }
-    [
-      el.beatButton,
-      el.every2Button,
-      el.every4Button,
-      el.every8Button,
-      el.halfButton,
-      el.doubleButton,
-      el.offsetDownButton,
-      el.offsetUpButton,
-      el.regenerateButton,
-    ].forEach((button) => {
-      if (button)
-        button.disabled =
-          !loaded || !hasBeats || this.isAnalyzing || this.isExporting;
-    });
-    [el.bpmInput, el.offsetInput, el.densitySelect].forEach((input) => {
-      if (input)
-        input.disabled =
-          !loaded || !this.result || this.isAnalyzing || this.isExporting;
-    });
-    if (el.clearButton) {
-      const count =
-        this.timeline?.getMarkersBySource?.('edit-assist').length ?? 0;
-      el.clearButton.disabled =
-        !loaded || !count || this.isAnalyzing || this.isExporting;
-    }
-    this.syncControls();
-    if (!el.result) return;
-    if (!loaded) {
-      el.result.textContent = translateCurrent(
-        'Importá un video para analizar su audio.',
-      );
-    } else if (this.isAnalyzing) {
-      el.result.textContent = translateCurrent(
-        'Analizando pulsos aproximados...',
-      );
-    } else if (this.result?.bpm) {
-      el.result.textContent = `${translateCurrent('Tempo estimado:')} ${this.result.bpm} BPM ${translateCurrent(' · usado ')}${this.effectiveBpm} BPM · offset ${this.offsetMs} ms ${translateCurrent(' · confianza ')}${translateCurrent(this.formatConfidence(this.result.confidence))}`;
-    } else if (this.result) {
-      el.result.textContent = translateCurrent(
-        'No encontré pulsos claros en el audio.',
-      );
-    } else {
-      // The help text above already explains what the analysis does; repeating
-      // it here filled the status line with the same sentence twice.
-      el.result.textContent = translateCurrent('Sin analizar');
-    }
+    const loaded = this.sourceFile !== null;
+    const available = loaded && !this.isAnalyzing && !this.isExporting;
+    const hasBeats = Boolean(this.result?.beats.length && this.effectiveBpm);
+    const markerCount =
+      this.timeline?.getMarkersBySource?.('edit-assist').length ?? 0;
+    this.options.updatePanel?.(
+      {
+        loaded,
+        analyzing: this.isAnalyzing,
+        canAnalyze: available,
+        canAdjust: available && this.result !== null,
+        canGenerate: available && hasBeats,
+        canClear: available && markerCount > 0,
+        detectedBpm: this.result?.bpm ?? 0,
+        bpm: this.effectiveBpm,
+        offsetMs: this.offsetMs,
+        markerStep: this.markerStep,
+        confidence: this.result?.confidence ?? 0,
+        hasResult: this.result !== null,
+        status: this.status,
+      },
+      this,
+    );
   }
 
-  syncControls(): void {
-    const el = this.getElements();
-    if (el.bpmInput) el.bpmInput.value = String(this.effectiveBpm || '');
-    if (el.offsetInput) el.offsetInput.value = String(this.offsetMs);
-    if (el.densitySelect) el.densitySelect.value = String(this.markerStep);
-    (
-      [
-        [el.beatButton, 1],
-        [el.every2Button, 2],
-        [el.every4Button, 4],
-        [el.every8Button, 8],
-      ] as const
-    ).forEach(([button, step]) => {
-      button?.classList.toggle('is-active', step === this.markerStep);
-    });
+  setBpm(value: number): number {
+    this.manualBpm = this.normalizeBpm(value);
+    this.updateUI();
+    return this.effectiveBpm;
+  }
+
+  setOffset(value: number): number {
+    this.offsetMs = this.normalizeOffset(value);
+    this.updateUI();
+    return this.offsetMs;
+  }
+
+  setMarkerStep(value: number): void {
+    this.markerStep = this.normalizeStep(value);
+    this.updateUI();
   }
 
   async analyze(): Promise<void> {
-    if (!this.sourceFile || this.isAnalyzing) return;
+    const file = this.sourceFile;
+    if (!file || this.isAnalyzing || this.isExporting) return;
+    const analysisId = ++this.analysisId;
     this.isAnalyzing = true;
     this.updateUI();
     try {
-      this.result = await this.analyzer(this.sourceFile);
-      this.manualBpm = this.normalizeBpm(this.result.bpm);
+      const result = await this.analyzer(file);
+      if (analysisId !== this.analysisId) return;
+      this.result = result;
+      this.manualBpm = this.normalizeBpm(result.bpm);
       this.offsetMs = 0;
       this.generatedAt = 0;
-      this.show(
-        this.result.bpm ? 'Audio analizado.' : 'No encontré pulsos claros.',
-        this.result.bpm ? 'success' : 'warning',
-      );
-    } catch (err) {
+      this.status = result.bpm
+        ? { message: 'Audio analizado.', type: 'success' }
+        : { message: 'No encontré pulsos claros.', type: 'warning' };
+    } catch (error) {
+      if (analysisId !== this.analysisId) return;
       this.result = null;
       this.manualBpm = 0;
       this.offsetMs = 0;
-      this.show(this.formatError(err), 'error');
+      this.status = { message: this.formatError(error), type: 'error' };
     } finally {
-      this.isAnalyzing = false;
-      this.updateUI();
+      if (analysisId === this.analysisId) {
+        this.isAnalyzing = false;
+        this.updateUI();
+      }
     }
   }
 
@@ -304,8 +220,12 @@ export class EditAssistController {
     this.generatedAt = Date.now();
     this.options.renderTimeline?.();
     this.options.updateTimelineHint?.();
+    this.status = {
+      message: ' marcadores Edit Assist creados.',
+      type: 'success',
+      count: markers.length,
+    };
     this.updateUI();
-    this.show(`${markers.length} marcadores Edit Assist creados.`, 'success');
   }
 
   clearMarkers(): void {
@@ -319,8 +239,11 @@ export class EditAssistController {
     timeline.clearMarkersBySource('edit-assist');
     this.options.renderTimeline?.();
     this.options.updateTimelineHint?.();
+    this.status = {
+      message: 'Marcadores Edit Assist eliminados.',
+      type: 'success',
+    };
     this.updateUI();
-    this.show('Marcadores Edit Assist eliminados.', 'success');
   }
 
   toJSON(): {
@@ -343,6 +266,7 @@ export class EditAssistController {
   }
 
   loadMetadata(metadata: EditAssistMetadata | null): void {
+    this.reset();
     if (!metadata) return;
     this.result = {
       bpm: Number(metadata.detectedBpm || metadata.bpm) || 0,
@@ -354,11 +278,6 @@ export class EditAssistController {
     this.markerStep = this.normalizeStep(metadata.markerStep);
     this.generatedAt = Number(metadata.generatedAt) || 0;
     this.updateUI();
-  }
-
-  show(message: string, type: string): void {
-    const el = this.getElements();
-    if (el.status) this.options.showStatus?.(el.status, message, type);
   }
 
   normalizeBpm(value: unknown): number {
@@ -378,13 +297,7 @@ export class EditAssistController {
     return [1, 2, 4, 8].includes(step) ? step : DEFAULT_STEP;
   }
 
-  formatConfidence(value: number): string {
-    if (value >= 0.7) return 'alta';
-    if (value >= 0.4) return 'media';
-    return 'baja';
-  }
-
-  formatError(err: unknown): string {
+  private formatError(err: unknown): MessageKey {
     const message =
       err && typeof err === 'object' && 'message' in err
         ? String((err as { message?: unknown }).message)

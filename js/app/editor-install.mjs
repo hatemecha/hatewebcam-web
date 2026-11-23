@@ -6,6 +6,7 @@
  * bootstrap graph is what lets the webcam start without the timeline, export
  * encoder or Visual FX engine.
  */
+import { updateEditAssistPanel } from '../../src/lib/editor/edit-assist-panel.ts';
 import { VideoEditorSession } from './video-editor/session.ts';
 import { applyLocalvideoeditorMixin } from './video-editor.mjs';
 import { applyVisualFxIntegrationMixin } from './visual-fx-integration.mjs';
@@ -27,27 +28,9 @@ export async function installVideoEditor(app) {
     video: app.videoEl,
     formatTime: (seconds) => app.formatDurationDetailed(seconds),
     editAssist: {
-      getElements: () => ({
-        analyzeButton: app.btnEditAssistAnalyze,
-        beatButton: app.btnEditAssistBeat,
-        every2Button: app.btnEditAssistEvery2,
-        every4Button: app.btnEditAssistEvery4,
-        every8Button: app.btnEditAssistEvery8,
-        halfButton: app.btnEditAssistHalf,
-        doubleButton: app.btnEditAssistDouble,
-        offsetDownButton: app.btnEditAssistOffsetDown,
-        offsetUpButton: app.btnEditAssistOffsetUp,
-        regenerateButton: app.btnEditAssistRegenerate,
-        clearButton: app.btnEditAssistClear,
-        bpmInput: app.editAssistBpmInput,
-        offsetInput: app.editAssistOffsetInput,
-        densitySelect: app.editAssistDensitySelect,
-        result: app.editAssistResult,
-        status: app.editAssistStatus,
-      }),
+      updatePanel: updateEditAssistPanel,
       pushHistory: () => app.pushTimelineHistory(),
       renderTimeline: () => app.renderVideoTimeline(),
-      showStatus: (el, message, type) => app.showStatus(el, message, type),
       updateTimelineHint: () => app.updateTimelineHint(),
     },
   });
@@ -56,7 +39,7 @@ export async function installVideoEditor(app) {
   app.bindVideoEditorEvents();
   app.bindTimelinePaletteDrag();
   app.bindEditorSplitters();
-  editor.editAssist.bind();
+  editor.editAssist.updateUI();
   app.updateVideoEditorUI();
   return editor;
 }
