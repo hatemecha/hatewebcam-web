@@ -1,29 +1,70 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
+  import { readable } from 'svelte/store';
   import { m } from '../i18n/text.svelte';
+  import {
+    getPlaceholderState,
+    subscribePlaceholderState,
+    type PreviewPlaceholderActions,
+  } from './placeholder-state';
+
+  let { actions }: { actions: PreviewPlaceholderActions } = $props();
+  const placeholder = readable(
+    getPlaceholderState(),
+    subscribePlaceholderState,
+  );
+  const camera = $derived($placeholder.camera);
+  const focusRequest = $derived($placeholder.focusRequest);
+  let cameraAction: HTMLButtonElement | undefined = $state();
+
+  $effect(() => {
+    if (focusRequest) untrack(() => cameraAction?.focus());
+  });
 </script>
 
-<div class="preview-placeholder" id="previewPlaceholder">
+<div
+  class="preview-placeholder"
+  class:hidden={$placeholder.view === 'hidden'}
+  class:is-solid={$placeholder.view === 'video' ||
+    $placeholder.view === 'loading'}
+  id="previewPlaceholder"
+>
   <div
     class="preview-placeholder-view preview-placeholder-camera"
+    class:hidden={$placeholder.view !== 'camera'}
     id="previewPlaceholderCamera"
+    data-state={camera.state}
     role="status"
     aria-live="polite"
     aria-atomic="true"
   >
-    <i class="fa-solid fa-video fa-2x" id="cameraStateIcon" aria-hidden="true"
+    <i
+      class="fa-solid {camera.icon} fa-2x"
+      id="cameraStateIcon"
+      aria-hidden="true"
     ></i>
-    <!-- svelte-ignore a11y_missing_content -->
-    <h2 class="camera-state-title" id="cameraStateTitle"></h2>
-    <p class="camera-state-message" id="previewPlaceholderCameraMessage"></p>
-    <p class="camera-state-hint hidden" id="cameraStateHint"></p>
+    <h2 class="camera-state-title" id="cameraStateTitle">{m(camera.title)}</h2>
+    <p class="camera-state-message" id="previewPlaceholderCameraMessage">
+      {m($placeholder.cameraMessage ?? camera.message)}
+    </p>
+    <p
+      class="camera-state-hint"
+      class:hidden={!camera.hint}
+      id="cameraStateHint"
+    >
+      {camera.hint ? m(camera.hint) : ''}
+    </p>
     <button
       type="button"
       class="btn primary camera-state-action"
+      class:hidden={!camera.action}
       id="btnCameraStateAction"
-      aria-label={m('Encender cámara')}
+      aria-label={m(camera.action ?? 'Encender cámara')}
+      bind:this={cameraAction}
+      onclick={() => actions.startCamera()}
     >
       <i class="fa-solid fa-play" aria-hidden="true"></i>
-      <span></span>
+      <span>{camera.action ? m(camera.action) : ''}</span>
     </button>
     <p class="empty-state-footer">
       <i class="fa-solid fa-lock" aria-hidden="true"></i>
@@ -31,7 +72,8 @@
     </p>
   </div>
   <div
-    class="preview-placeholder-view preview-placeholder-video hidden"
+    class="preview-placeholder-view preview-placeholder-video"
+    class:hidden={$placeholder.view !== 'video'}
     id="previewPlaceholderVideo"
   >
     <div class="preview-import-card">
@@ -53,6 +95,7 @@
         type="button"
         class="btn primary preview-import-btn"
         id="btnPreviewImportVideo"
+        onclick={() => actions.chooseVideo()}
       >
         {m('Importar video')}
       </button>
@@ -62,10 +105,13 @@
     </div>
   </div>
   <div
-    class="preview-placeholder-view preview-placeholder-loading hidden"
+    class="preview-placeholder-view preview-placeholder-loading"
+    class:hidden={$placeholder.view !== 'loading'}
     id="previewPlaceholderLoading"
   >
     <i class="fa-solid fa-spinner fa-spin fa-2x" aria-hidden="true"></i>
-    <div id="previewPlaceholderLoadingMessage"></div>
+    <div id="previewPlaceholderLoadingMessage">
+      {m($placeholder.loadingMessage)}
+    </div>
   </div>
 </div>

@@ -1,3 +1,5 @@
+import type { MessageKey } from '../../src/lib/i18n/catalog.ts';
+
 export type CameraUiState =
   | 'off'
   | 'requesting'
@@ -10,10 +12,10 @@ export type CameraUiState =
   | 'unknown';
 
 export interface CameraStateCopy {
-  title: string;
-  message: string;
-  action?: string;
-  hint?: string;
+  title: MessageKey;
+  message: MessageKey;
+  action?: MessageKey;
+  hint?: MessageKey;
   icon: string;
 }
 

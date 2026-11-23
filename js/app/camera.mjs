@@ -1,4 +1,7 @@
-import { translateCurrent } from '../../src/lib/i18n/translate.ts';
+import {
+  getPlaceholderState,
+  updatePlaceholderState,
+} from '../../src/lib/preview/placeholder-state.ts';
 import { updatePreviewMetrics } from '../../src/lib/preview/metrics-state.ts';
 import {
   getCameraSourceState,
@@ -24,31 +27,13 @@ export function applyCameraMixin(proto) {
     const changed = this.cameraUiStateKey !== stateKey;
     this.cameraUiStateKey = stateKey;
     this.cameraUiState = state;
-    this.placeholderCamera?.setAttribute('data-state', state);
-    if (this.cameraStateTitle)
-      this.cameraStateTitle.textContent = translateCurrent(view.title);
-    this.setCameraPlaceholderMessage(translateCurrent(view.message));
-    if (this.cameraStateHint) {
-      this.cameraStateHint.textContent = view.hint
-        ? translateCurrent(view.hint)
-        : '';
-      this.cameraStateHint.classList.toggle('hidden', !view.hint);
-    }
-    if (this.cameraStateIcon) {
-      this.cameraStateIcon.className = `fa-solid ${view.icon} fa-2x`;
-    }
-    if (this.btnCameraStateAction) {
-      this.btnCameraStateAction.classList.toggle('hidden', !view.action);
-      const label = this.btnCameraStateAction.querySelector('span');
-      if (label) {
-        label.textContent = view.action ? translateCurrent(view.action) : '';
-        this.btnCameraStateAction.setAttribute(
-          'aria-label',
-          translateCurrent(view.action || 'Encender cámara'),
-        );
-      }
-      if (focus && changed && view.action) this.btnCameraStateAction.focus();
-    }
+    updatePlaceholderState({
+      camera: view,
+      cameraMessage: null,
+      ...(focus && changed && view.action
+        ? { focusRequest: getPlaceholderState().focusRequest + 1 }
+        : {}),
+    });
     if (
       this.sourceMode !== 'video' &&
       state !== 'running' &&
@@ -60,75 +45,34 @@ export function applyCameraMixin(proto) {
   };
 
   proto.setCameraPlaceholderMessage = function (message) {
-    if (this.placeholderCameraMessage) {
-      this.placeholderCameraMessage.textContent = translateCurrent(message);
-      return;
-    }
-    if (!this.placeholder) return;
-    const msg = this.placeholder.querySelector(
-      '#previewPlaceholderCameraMessage, .preview-placeholder-camera div',
-    );
-    if (msg) msg.textContent = translateCurrent(message);
-  };
-
-  proto.setVideoPlaceholderLoadingMessage = function (message) {
-    if (this.placeholderLoadingMessage) {
-      this.placeholderLoadingMessage.textContent = translateCurrent(message);
-    }
+    updatePlaceholderState({ cameraMessage: message });
   };
 
   proto.updatePreviewPlaceholder = function () {
-    if (!this.placeholder) return;
     const inVideoMode = this.sourceMode === 'video';
-    const hasVideo = !!this.videoSource?.file;
-    const isLoading = !!this.videoPlaceholderLoading;
-    const showPlaceholder = inVideoMode ? !hasVideo : !this.isRunning;
+    const isLoading = this.videoPlaceholderLoading;
+    const showVideoPlaceholder =
+      inVideoMode && (isLoading || !this.videoSource?.file);
+    const cameraIdle = !inVideoMode && !this.isRunning;
+    const view = showVideoPlaceholder
+      ? isLoading
+        ? 'loading'
+        : 'video'
+      : cameraIdle
+        ? 'camera'
+        : 'hidden';
 
-    this.placeholder.classList.toggle('hidden', !showPlaceholder);
-    this.placeholder.classList.toggle(
-      'is-solid',
-      inVideoMode && showPlaceholder,
-    );
-    this.previewWrapper?.classList.toggle(
-      'is-empty',
-      inVideoMode && showPlaceholder,
-    );
-    this.previewWrapper?.classList.toggle(
-      'is-camera-idle',
-      !inVideoMode && !this.isRunning,
-    );
-
-    if (this.placeholderCamera) {
-      this.placeholderCamera.classList.toggle('hidden', inVideoMode);
-    }
-    if (this.placeholderVideo) {
-      this.placeholderVideo.classList.toggle(
-        'hidden',
-        !inVideoMode || hasVideo || isLoading,
-      );
-    }
-    if (this.placeholderLoading) {
-      this.placeholderLoading.classList.toggle(
-        'hidden',
-        !inVideoMode || hasVideo || !isLoading,
-      );
-    }
-
-    if (inVideoMode && showPlaceholder) {
-      this.clearPreviewCanvas?.();
-    }
+    updatePlaceholderState({ view });
+    this.previewWrapper?.classList.toggle('is-empty', showVideoPlaceholder);
+    this.previewWrapper?.classList.toggle('is-camera-idle', cameraIdle);
+    if (showVideoPlaceholder) this.clearPreviewCanvas?.();
   };
 
   proto.showVideoPlaceholderLoading = function (
     message = 'Leyendo metadata del video...',
   ) {
     this.videoPlaceholderLoading = true;
-    this.setVideoPlaceholderLoadingMessage(message);
-    this.updatePreviewPlaceholder();
-  };
-
-  proto.hideVideoPlaceholderLoading = function () {
-    this.videoPlaceholderLoading = false;
+    updatePlaceholderState({ loadingMessage: message });
     this.updatePreviewPlaceholder();
   };
 

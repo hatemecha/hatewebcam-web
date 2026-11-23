@@ -89,11 +89,6 @@ export function applyEventsMixin(proto) {
     this.btnChooseVideo.addEventListener('click', () =>
       this.videoFileInput.click(),
     );
-    if (this.btnPreviewImportVideo) {
-      this.btnPreviewImportVideo.addEventListener('click', () =>
-        this.videoFileInput.click(),
-      );
-    }
     this.videoFileInput.addEventListener('change', () => {
       const [file] = this.videoFileInput.files || [];
       if (file) void this.importVideoFile(file);
@@ -323,9 +318,6 @@ export function applyEventsMixin(proto) {
   };
 
   proto.bindCameraShellEvents = function () {
-    this.btnCameraStateAction?.addEventListener('click', () => {
-      void this.toggleCamera(true);
-    });
     this.chkFlipV.addEventListener('change', this.onTransformChange.bind(this));
     this.rotationSelect.addEventListener(
       'change',

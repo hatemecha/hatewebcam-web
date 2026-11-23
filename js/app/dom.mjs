@@ -10,17 +10,6 @@ export function setupDom(app) {
   app.ctx =
     app.canvas.getContext('2d', { alpha: false }) ||
     app.canvas.getContext('2d');
-  app.placeholder = $('#previewPlaceholder');
-  app.placeholderCamera = $('#previewPlaceholderCamera');
-  app.placeholderVideo = $('#previewPlaceholderVideo');
-  app.placeholderLoading = $('#previewPlaceholderLoading');
-  app.placeholderCameraMessage = $('#previewPlaceholderCameraMessage');
-  app.cameraStateTitle = $('#cameraStateTitle');
-  app.cameraStateHint = $('#cameraStateHint');
-  app.cameraStateIcon = $('#cameraStateIcon');
-  app.btnCameraStateAction = $('#btnCameraStateAction');
-  app.placeholderLoadingMessage = $('#previewPlaceholderLoadingMessage');
-  app.btnPreviewImportVideo = $('#btnPreviewImportVideo');
   app.resolutionInfo = $('#resolutionInfo');
   app.fpsInfo = $('#fpsInfo');
   app.effectsInfo = $('#effectsInfo');

@@ -57,6 +57,7 @@ test('permission denied is explained and recoverable in the preview', async ({
   );
   await expect(page.locator('#cameraStateHint')).toContainText('permisos');
   await expect(page.locator('#btnCameraStateAction')).toHaveText(/Reintentar/);
+  await expect(page.locator('#btnCameraStateAction')).toBeFocused();
   await expect(page.locator('#previewPlaceholderCamera')).toHaveAttribute(
     'role',
     'status',

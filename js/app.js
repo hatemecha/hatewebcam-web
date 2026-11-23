@@ -55,7 +55,11 @@ function markControllerReady() {
 try {
   mountSkipLink(document.querySelector('#skipLinkMount'));
   mountVideoEditor(document.querySelector('#videoEditorTemplateSlot'));
-  mountPreviewPlaceholder(document.querySelector('#previewPlaceholderMount'));
+  mountPreviewPlaceholder(document.querySelector('#previewPlaceholderMount'), {
+    startCamera: () =>
+      whenControllerReady(() => void controller.toggleCamera(true)),
+    chooseVideo: () => document.querySelector('#videoFileInput')?.click(),
+  });
   mountCaptureBar(document.querySelector('#captureBarMount'), {
     takePhoto: () => {
       whenControllerReady(() => controller.requestPhotoCapture());
@@ -293,9 +297,6 @@ try {
   markControllerReady();
   const refreshLocalizedUi = () => {
     controller.renderEffectConfig?.();
-    if (controller.cameraUiState) {
-      controller.setCameraState(controller.cameraUiState);
-    }
     controller.updateEffectsInfo?.(true);
     controller.updateVideoEditorUI?.();
     controller.updateEditorExportControls?.();
