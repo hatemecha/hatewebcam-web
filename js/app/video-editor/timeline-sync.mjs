@@ -40,7 +40,8 @@ export function applyVideoEditorTimelineSyncMixin(proto) {
     if (checkbox.checked !== shouldEnable) {
       checkbox.checked = shouldEnable;
       const wasSuppressed = !!this.suppressEffectSideEffects;
-      this.suppressEffectSideEffects = wasSuppressed || !!this.isVideoExporting;
+      this.suppressEffectSideEffects =
+        wasSuppressed || !!this.videoExportSession?.active;
       try {
         await this.toggleEffect(type);
       } finally {

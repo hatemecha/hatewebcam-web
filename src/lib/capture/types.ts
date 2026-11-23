@@ -1,11 +1,15 @@
 import type { DetectorKind, FaceVisualKind } from '../webcam/types';
 
-export interface MobileHudAdapter {
+export interface CaptureBarAdapter {
+  takePhoto(): void;
+  toggleRecording(): void;
+  setCaptureTimer(seconds: number): void;
+}
+
+export interface MobileHudAdapter extends CaptureBarAdapter {
   toggleEffects(): void;
   closeEffects(): void;
   toggleMirror(): void;
-  takePhoto(): void;
-  toggleRecording(): void;
   toggleDetector(type: DetectorKind, checked: boolean): void;
   pickColor(): void;
   setBlobColor(color: string): void;
@@ -14,7 +18,6 @@ export interface MobileHudAdapter {
   setFaceLabel(value: string): void;
   commitFaceLabel(value: string): void;
   applyPreset(name: string): void;
-  setCaptureTimer(seconds: number): void;
 }
 
 export interface CaptureModalAdapter {

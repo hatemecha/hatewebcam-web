@@ -55,19 +55,6 @@ type CtxKey =
   | 'captureFxCtx'
   | 'recordingFxCtx';
 
-export interface LegacyRenderAccessors {
-  recordingCanvas?: HTMLCanvasElement | null;
-  recordingCtx?: CanvasRenderingContext2D | null;
-  recordingEnhancerCanvas?: HTMLCanvasElement | null;
-  recordingEnhancerCtx?: CanvasRenderingContext2D | null;
-  postFxCanvas?: HTMLCanvasElement | null;
-  postFxCtx?: CanvasRenderingContext2D | null;
-  captureFxCanvas?: HTMLCanvasElement | null;
-  captureFxCtx?: CanvasRenderingContext2D | null;
-  recordingFxCanvas?: HTMLCanvasElement | null;
-  recordingFxCtx?: CanvasRenderingContext2D | null;
-}
-
 export interface RenderFrameHost {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
@@ -100,90 +87,6 @@ export class RenderEngine {
     createCanvas = () => document.createElement('canvas'),
   }: RenderEngineOptions = {}) {
     this.createCanvas = createCanvas;
-  }
-
-  attachLegacyAccessors(target: LegacyRenderAccessors): void {
-    const define = <K extends keyof LegacyRenderAccessors>(
-      key: K,
-      get: () => LegacyRenderAccessors[K],
-      set: (value: LegacyRenderAccessors[K]) => void,
-    ) => {
-      Object.defineProperty(target, key, {
-        configurable: true,
-        get,
-        set,
-      });
-    };
-    define(
-      'recordingCanvas',
-      () => this.recordingCanvas,
-      (value) => {
-        this.recordingCanvas = value ?? null;
-      },
-    );
-    define(
-      'recordingCtx',
-      () => this.recordingCtx,
-      (value) => {
-        this.recordingCtx = value ?? null;
-      },
-    );
-    define(
-      'recordingEnhancerCanvas',
-      () => this.recordingEnhancerCanvas,
-      (value) => {
-        this.recordingEnhancerCanvas = value ?? null;
-      },
-    );
-    define(
-      'recordingEnhancerCtx',
-      () => this.recordingEnhancerCtx,
-      (value) => {
-        this.recordingEnhancerCtx = value ?? null;
-      },
-    );
-    define(
-      'postFxCanvas',
-      () => this.postFxCanvas,
-      (value) => {
-        this.postFxCanvas = value ?? null;
-      },
-    );
-    define(
-      'postFxCtx',
-      () => this.postFxCtx,
-      (value) => {
-        this.postFxCtx = value ?? null;
-      },
-    );
-    define(
-      'captureFxCanvas',
-      () => this.captureFxCanvas,
-      (value) => {
-        this.captureFxCanvas = value ?? null;
-      },
-    );
-    define(
-      'captureFxCtx',
-      () => this.captureFxCtx,
-      (value) => {
-        this.captureFxCtx = value ?? null;
-      },
-    );
-    define(
-      'recordingFxCanvas',
-      () => this.recordingFxCanvas,
-      (value) => {
-        this.recordingFxCanvas = value ?? null;
-      },
-    );
-    define(
-      'recordingFxCtx',
-      () => this.recordingFxCtx,
-      (value) => {
-        this.recordingFxCtx = value ?? null;
-      },
-    );
   }
 
   getProfile(mode: string = 'preview'): RenderProfile {

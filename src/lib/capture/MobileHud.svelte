@@ -139,7 +139,7 @@
           id="selMobileCaptureTimer"
           aria-label={m('Temporizador de foto')}
           disabled={chrome.lockCaptureSettings}
-          value={panel.image.captureTimerSeconds}
+          value={String(panel.image.captureTimerSeconds)}
           onchange={(event) => adapter.setCaptureTimer(numberValue(event))}
         >
           <option value="0">{m('Sin temporizador')}</option>

@@ -7,7 +7,7 @@ import { translateCurrent } from '../../../src/lib/i18n/translate.ts';
 export function applyVideoEditorSourceMixin(proto) {
   proto.applySourceMode = async function (mode) {
     if (mode === this.sourceMode) return;
-    if (this.isVideoExporting) return;
+    if (this.videoExportSession?.active) return;
 
     if (mode === 'video') {
       this.webcamSessionState = {
@@ -96,7 +96,7 @@ export function applyVideoEditorSourceMixin(proto) {
   };
 
   proto.disposeVideoSource = function () {
-    if (this.isVideoExporting) this.cancelVideoExport();
+    if (this.videoExportSession?.active) this.cancelVideoExport();
     this.videoEl.pause();
     this.cancelRenderLoop();
     this.isRunning = false;

@@ -61,11 +61,11 @@ export function applyVideoEditorExportMixin(proto) {
       typeof VideoFrame !== 'undefined';
     updateEditorUiState({
       hasSource: loaded,
-      exporting: !!this.isVideoExporting,
+      exporting: !!this.videoExportSession?.active,
       canExport,
     });
     updateShellState({
-      exportEnabled: canExport && !this.isVideoExporting,
+      exportEnabled: canExport && !this.videoExportSession?.active,
     });
     if (this.btnChooseVideo) {
       const label = translateCurrent(
@@ -150,11 +150,12 @@ export function applyVideoEditorExportMixin(proto) {
     if (this.editorExportPresetSelect) {
       this.editorExportPresetSelect.value =
         this.imageSettings.editorExportPreset || 'balanced';
-      this.editorExportPresetSelect.disabled = this.isVideoExporting;
+      this.editorExportPresetSelect.disabled = this.videoExportSession?.active;
     }
     if (this.chkExperimentalExportFeatures) {
       this.chkExperimentalExportFeatures.checked = experimental;
-      this.chkExperimentalExportFeatures.disabled = this.isVideoExporting;
+      this.chkExperimentalExportFeatures.disabled =
+        this.videoExportSession?.active;
     }
     if (this.editorExperimentalExportGroup) {
       this.editorExperimentalExportGroup.classList.toggle(
@@ -173,12 +174,12 @@ export function applyVideoEditorExportMixin(proto) {
       this.editorExportFormatSelect.value =
         this.imageSettings.editorExportFormat;
       this.editorExportFormatSelect.disabled =
-        !experimental || effectsOnly || this.isVideoExporting;
+        !experimental || effectsOnly || this.videoExportSession?.active;
     }
     if (this.chkEditorCopyAudio) {
       this.chkEditorCopyAudio.checked = !!this.imageSettings.editorCopyAudio;
       this.chkEditorCopyAudio.disabled =
-        !experimental || effectsOnly || this.isVideoExporting;
+        !experimental || effectsOnly || this.videoExportSession?.active;
     }
     if (this.effectsExportChromaGroup) {
       this.effectsExportChromaGroup.classList.toggle('hidden', !effectsOnly);
@@ -187,7 +188,7 @@ export function applyVideoEditorExportMixin(proto) {
       this.effectsExportChromaSelect.value =
         this.imageSettings.effectsExportChroma;
       this.effectsExportChromaSelect.disabled =
-        !effectsOnly || this.isVideoExporting;
+        !effectsOnly || this.videoExportSession?.active;
     }
   };
 
@@ -351,7 +352,7 @@ export function applyVideoEditorExportMixin(proto) {
   };
 
   proto.toggleVideoPlayback = async function () {
-    if (!this.videoSourceFile || this.isVideoExporting) return;
+    if (!this.videoSourceFile || this.videoExportSession?.active) return;
     if (this.videoEl.paused) {
       const end = this.getVideoPlayableEnd(this.videoTimeline.trimEnd);
       if (
@@ -378,7 +379,7 @@ export function applyVideoEditorExportMixin(proto) {
   };
 
   proto.seekVideo = function (time) {
-    if (!this.videoSourceFile || this.isVideoExporting) return;
+    if (!this.videoSourceFile || this.videoExportSession?.active) return;
     const previous = this.videoEl.currentTime || 0;
     const next = this.clampVideoSeekTime(time);
     if (this.visualFxEffect?.active && next !== previous) {
@@ -404,7 +405,7 @@ export function applyVideoEditorExportMixin(proto) {
       exportMeta.mode || this.imageSettings.editorExportMode || 'full';
     this.updateVideoExportProgress(
       frameIndex,
-      this.videoExportTotalFrames || 0,
+      this.videoExportSession.totalFrames || 0,
       fps,
       { stage: frameIndex === 0 ? 'seek' : 'decode', time, force: true },
     );
@@ -415,19 +416,19 @@ export function applyVideoEditorExportMixin(proto) {
         await this.reuseCurrentVideoExportFrame();
         this.updateVideoExportProgress(
           frameIndex,
-          this.videoExportTotalFrames || 0,
+          this.videoExportSession.totalFrames || 0,
           fps,
           {
             stage: 'frame-reuse',
             time,
             force: true,
-            note: `frames_reutilizados:${this.videoExportSkippedFrames || 0}`,
+            note: `frames_reutilizados:${this.videoExportSession.skippedFrames || 0}`,
           },
         );
       } else {
         this.updateVideoExportProgress(
           frameIndex,
-          this.videoExportTotalFrames || 0,
+          this.videoExportSession.totalFrames || 0,
           fps,
           {
             stage: 'seek-retry',
@@ -445,7 +446,7 @@ export function applyVideoEditorExportMixin(proto) {
     if (exportMode === 'full') {
       this.updateVideoExportProgress(
         frameIndex,
-        this.videoExportTotalFrames || 0,
+        this.videoExportSession.totalFrames || 0,
         fps,
         { stage: 'look', time },
       );
@@ -453,7 +454,7 @@ export function applyVideoEditorExportMixin(proto) {
     }
     this.updateVideoExportProgress(
       frameIndex,
-      this.videoExportTotalFrames || 0,
+      this.videoExportSession.totalFrames || 0,
       fps,
       { stage: 'detectors', time },
     );
@@ -468,15 +469,15 @@ export function applyVideoEditorExportMixin(proto) {
     }
     this.updateVideoExportProgress(
       frameIndex,
-      this.videoExportTotalFrames || 0,
+      this.videoExportSession.totalFrames || 0,
       fps,
       { stage: 'canvas', time },
     );
     if (exportMode === 'effects-chroma') {
       this.ensureRecordingCanvas();
       this.renderEffectsOnlyFrame(
-        this.recordingCanvas,
-        this.recordingCtx,
+        this.renderEngine.recordingCanvas,
+        this.renderEngine.recordingCtx,
         exportMeta.chromaColor ||
           getEditorChromaColor(this.imageSettings.effectsExportChroma),
         'export',
@@ -487,7 +488,7 @@ export function applyVideoEditorExportMixin(proto) {
         'export',
       );
     }
-    this.videoExportLastRenderedFrameIndex = frameIndex;
+    this.videoExportSession.lastRenderedFrameIndex = frameIndex;
   };
 
   proto.updateVideoExportProgress = function (done, total, fps, meta = {}) {
@@ -496,11 +497,11 @@ export function applyVideoEditorExportMixin(proto) {
     const force = !!meta.force || done >= total || meta.stage === 'error';
     if (
       !force &&
-      this.videoExportLastUiUpdate &&
-      now - this.videoExportLastUiUpdate < 250
+      this.videoExportSession.lastUiUpdate &&
+      now - this.videoExportSession.lastUiUpdate < 250
     )
       return;
-    this.videoExportLastUiUpdate = now;
+    this.videoExportSession.lastUiUpdate = now;
     const safeTotal = Math.max(1, Number(total) || 1);
     const safeDone = this.clamp(Number(done) || 0, 0, safeTotal);
     const progress = safeDone / safeTotal;
@@ -515,8 +516,8 @@ export function applyVideoEditorExportMixin(proto) {
             meta.time ??
             this.videoTimeline.trimStart +
               Math.max(0, safeDone - 1) / Math.max(1, Number(fps) || 1),
-          width: this.recordingCanvas?.width || 0,
-          height: this.recordingCanvas?.height || 0,
+          width: this.renderEngine.recordingCanvas?.width || 0,
+          height: this.renderEngine.recordingCanvas?.height || 0,
           queueSize: meta.queueSize || 0,
           note: meta.note || '',
         })
@@ -549,7 +550,7 @@ export function applyVideoEditorExportMixin(proto) {
     const totalFrames = preflight.totalFrames;
     this.ensureRecordingCanvas();
     this.formatExportDebugInfo = formatExportDebugInfo;
-    this.videoExportTotalFrames = totalFrames;
+    this.videoExportSession.totalFrames = totalFrames;
     const bitrate = preflight.bitrate;
     const diagnosis =
       this.videoExportDiagnosis ||
@@ -566,14 +567,14 @@ export function applyVideoEditorExportMixin(proto) {
     const baseName =
       this.videoSourceFile.name.replace(/\.[^.]+$/, '') || 'hatewebcam-video';
     const suffix = mode === 'effects-chroma' ? 'efectos-chroma' : 'editado';
-    this.videoExportFileName = `${baseName}-${suffix}.${diagnosis.extension || 'webm'}`;
+    this.videoExportSession.fileName = `${baseName}-${suffix}.${diagnosis.extension || 'webm'}`;
 
     await this.prepareSequentialVideoExport(start);
 
     return encodeCanvasSequence({
-      canvas: this.recordingCanvas,
-      width: this.recordingCanvas.width,
-      height: this.recordingCanvas.height,
+      canvas: this.renderEngine.recordingCanvas,
+      width: this.renderEngine.recordingCanvas.width,
+      height: this.renderEngine.recordingCanvas.height,
       fps,
       totalFrames,
       duration: end - start,
@@ -590,21 +591,24 @@ export function applyVideoEditorExportMixin(proto) {
         this.renderVideoExportFrame(frameIndex, fps, meta),
       onProgress: (done, total, meta) =>
         this.updateVideoExportProgress(done, total, fps, meta),
-      shouldCancel: () => !this.isVideoExporting,
+      shouldCancel: () => !this.videoExportSession?.active,
     });
   };
 
   proto.finalizeVideoExportBlob = async function (blob) {
     if (
       blob?.exportInfo?.extension &&
-      !this.videoExportFileName.endsWith(`.${blob.exportInfo.extension}`)
-    ) {
-      this.videoExportFileName = this.videoExportFileName.replace(
-        /\.[^.]+$/,
+      !this.videoExportSession.fileName.endsWith(
         `.${blob.exportInfo.extension}`,
-      );
+      )
+    ) {
+      this.videoExportSession.fileName =
+        this.videoExportSession.fileName.replace(
+          /\.[^.]+$/,
+          `.${blob.exportInfo.extension}`,
+        );
     }
-    this.downloadBlob(blob, this.videoExportFileName);
+    this.downloadBlob(blob, this.videoExportSession.fileName);
     this.showStatus(
       this.videoEditorStatus,
       'Exportación terminada y guardada.',
@@ -621,7 +625,7 @@ export function applyVideoEditorExportMixin(proto) {
       titleState: 'success',
       progress: 1,
       help: 'El archivo se descargó a tu equipo.',
-      summary: `${this.videoExportFileName} · ${this.formatBytes(blob.size)}${audioNote} · descarga iniciada`,
+      summary: `${this.videoExportSession.fileName} · ${this.formatBytes(blob.size)}${audioNote} · descarga iniciada`,
       showCancel: false,
       showClose: true,
     });
@@ -629,7 +633,7 @@ export function applyVideoEditorExportMixin(proto) {
   };
 
   proto.startVideoExport = async function () {
-    if (!this.videoSourceFile || this.isVideoExporting) return;
+    if (!this.videoSourceFile || this.videoExportSession?.active) return;
     if (typeof HTMLCanvasElement === 'undefined') {
       this.showStatus(
         this.videoEditorStatus,
@@ -723,7 +727,7 @@ export function applyVideoEditorExportMixin(proto) {
       this.updateVideoEditorUI();
       this.cancelRenderLoop();
       if ('wakeLock' in navigator) {
-        this.videoExportWakeLock = await navigator.wakeLock
+        this.videoExportSession.wakeLock = await navigator.wakeLock
           .request('screen')
           .catch(() => null);
       }
@@ -796,7 +800,7 @@ export function applyVideoEditorExportMixin(proto) {
     this.videoExportRecoveredSource = true;
     this.updateVideoExportProgress(
       0,
-      this.videoExportTotalFrames || 0,
+      this.videoExportSession.totalFrames || 0,
       this.getVideoExportFps(),
       {
         stage: 'source-reload',
@@ -891,7 +895,8 @@ export function applyVideoEditorExportMixin(proto) {
   };
 
   proto.reuseCurrentVideoExportFrame = async function () {
-    this.videoExportSkippedFrames = (this.videoExportSkippedFrames || 0) + 1;
+    this.videoExportSession.skippedFrames =
+      (this.videoExportSession.skippedFrames || 0) + 1;
   };
 
   proto.playVideoUntilExportTime = function (targetTime, tolerance) {
@@ -921,7 +926,7 @@ export function applyVideoEditorExportMixin(proto) {
       };
       const tick = () => {
         frameCallbackId = null;
-        if (!this.isVideoExporting) {
+        if (!this.videoExportSession?.active) {
           fail(new Error('export_cancelled'));
           return;
         }
@@ -977,8 +982,8 @@ export function applyVideoEditorExportMixin(proto) {
   };
 
   proto.cancelVideoExport = async function (showMessage = true) {
-    if (!this.isVideoExporting) return;
-    this.isVideoExporting = false;
+    if (!this.videoExportSession?.active) return;
+    this.videoExportSession.stop();
     this.videoEl.pause();
     this.videoEl.playbackRate =
       this.videoExportPlayback?.originalPlaybackRate || 1;
@@ -1036,11 +1041,13 @@ export function applyVideoEditorExportMixin(proto) {
           ? {
               debug: this.formatExportDebugInfo({
                 stage: 'error',
-                done: Math.round(ratio * (this.videoExportTotalFrames || 0)),
-                total: this.videoExportTotalFrames || 0,
+                done: Math.round(
+                  ratio * (this.videoExportSession.totalFrames || 0),
+                ),
+                total: this.videoExportSession.totalFrames || 0,
                 fps: this.getVideoExportFps(),
-                width: this.recordingCanvas?.width || 0,
-                height: this.recordingCanvas?.height || 0,
+                width: this.renderEngine.recordingCanvas?.width || 0,
+                height: this.renderEngine.recordingCanvas?.height || 0,
               }),
             }
           : {}),
@@ -1050,7 +1057,7 @@ export function applyVideoEditorExportMixin(proto) {
 
   proto.cleanupVideoExport = function (keepModal = false) {
     this.videoExportSession.stop();
-    this.videoExportFileName = '';
+    this.videoExportSession.fileName = '';
     this.videoExportDiagnosis = null;
     this.videoExportPreflight = null;
     this.videoExportRecoveredSource = false;
@@ -1062,13 +1069,12 @@ export function applyVideoEditorExportMixin(proto) {
       this.videoExportPlayback = null;
     }
     if (!keepModal) {
-      this.videoExportTotalFrames = 0;
-      this.videoExportLastRenderedFrameIndex = -1;
-      this.videoExportSeekFallback = false;
-      this.videoExportSkippedFrames = 0;
+      this.videoExportSession.totalFrames = 0;
+      this.videoExportSession.lastRenderedFrameIndex = -1;
+      this.videoExportSession.seekFallback = false;
+      this.videoExportSession.skippedFrames = 0;
       this.exportProgressRatio = 0;
       patchExportModalState({ open: false, progress: 0, titleState: 'idle' });
-      this.deactivateModalFocusTrap(this.videoExportModal);
     }
     void this.videoExportSession.releaseWakeLock();
     this.updateVideoEditorUI();
@@ -1078,9 +1084,8 @@ export function applyVideoEditorExportMixin(proto) {
   };
 
   proto.closeVideoExportModal = function () {
-    if (this.isVideoExporting) return;
+    if (this.videoExportSession?.active) return;
     this.exportProgressRatio = 0;
     patchExportModalState({ open: false, progress: 0 });
-    this.deactivateModalFocusTrap(this.videoExportModal);
   };
 }

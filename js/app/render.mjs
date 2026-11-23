@@ -157,7 +157,7 @@ export function applyRenderLoopMixin(proto) {
   };
 
   proto.scheduleRenderLoop = function () {
-    if (this.isVideoExporting) return;
+    if (this.videoExportSession?.active) return;
     const useVideoFrame =
       typeof this.videoEl.requestVideoFrameCallback === 'function' &&
       !(this.sourceMode === 'video' && this.videoEl.paused);
@@ -185,7 +185,7 @@ export function applyRenderLoopMixin(proto) {
     if (
       this.sourceMode !== 'video' ||
       !this.videoEl?.paused ||
-      this.isVideoExporting
+      this.videoExportSession?.active
     )
       return;
     this.cancelRenderLoop();
@@ -193,7 +193,7 @@ export function applyRenderLoopMixin(proto) {
   };
 
   proto.renderLoop = function () {
-    if (!this.isRunning || this.isVideoExporting) {
+    if (!this.isRunning || this.videoExportSession?.active) {
       this.animFrameId = null;
       return;
     }

@@ -64,6 +64,36 @@ test('webcam boot defers the editor chunk until video mode', async ({
   await expect(page.locator('#videoTimeline')).toHaveCount(1);
 });
 
+test('a pending editor load honors the most recent mode choice', async ({
+  page,
+}) => {
+  let resolveRequest;
+  const requested = new Promise((resolve) => {
+    resolveRequest = resolve;
+  });
+  let release;
+  const unblocked = new Promise((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/assets/editor-install-*.js', async (route) => {
+    resolveRequest();
+    await unblocked;
+    await route.continue();
+  });
+  await page.goto('/');
+  const webcam = page.getByRole('tab', { name: /webcam/i });
+  const video = page.getByRole('tab', { name: /video/i });
+  await video.click();
+  await requested;
+  await webcam.click();
+  const editorResponse = page.waitForResponse('**/assets/editor-install-*.js');
+  release();
+  await (await editorResponse).finished();
+  await expect(webcam).toHaveAttribute('aria-selected', 'true');
+  await video.click();
+  await expect(page.locator('#btnPreviewImportVideo')).toBeVisible();
+});
+
 test('video empty state stays usable on a narrow screen', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');

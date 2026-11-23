@@ -1,5 +1,11 @@
 <script lang="ts">
   import { m } from '../i18n/text.svelte';
+  import { webcamPanel } from '../webcam/panel-store';
+  import { captureChrome } from './session-store';
+  import type { CaptureBarAdapter } from './types';
+
+  let { adapter }: { adapter: CaptureBarAdapter } = $props();
+  const chrome = $derived($captureChrome);
 </script>
 
 <div class="preview-console-footer webcam-only">
@@ -7,7 +13,14 @@
     <label class="capture-timer-field" for="captureTimerSelect">
       <span class="capture-timer-label">{m('Temporizador')}</span>
       <span class="select-wrapper capture-timer-select">
-        <select id="captureTimerSelect" aria-label={m('Temporizador de foto')}>
+        <select
+          id="captureTimerSelect"
+          aria-label={m('Temporizador de foto')}
+          value={String($webcamPanel.image.captureTimerSeconds)}
+          disabled={chrome.lockCaptureSettings}
+          onchange={(event) =>
+            adapter.setCaptureTimer(Number(event.currentTarget.value))}
+        >
           <option value="0">0 s</option>
           <option value="5">5 s</option>
           <option value="10">10 s</option>
@@ -25,14 +38,44 @@
         type="button"
         class="photo-shutter"
         id="btnTakePhoto"
-        aria-label={m('Sacar foto')}
-      ></button>
+        aria-label={m(
+          chrome.countdownActive
+            ? 'Cancelar temporizador de foto'
+            : 'Sacar foto',
+        )}
+        disabled={(!chrome.cameraRunning ||
+          chrome.recording ||
+          chrome.previewOpen) &&
+          !chrome.countdownActive}
+        onclick={() => adapter.takePhoto()}
+      >
+        <span
+          class="photo-shutter-core"
+          class:is-cancel={chrome.countdownActive}
+          aria-hidden="true"
+        >
+          {#if chrome.countdownActive}<i class="fa-solid fa-xmark"></i>{/if}
+        </span>
+        <span class="capture-action-label"
+          >{m(chrome.countdownActive ? 'Cancelar' : 'Foto')}</span
+        >
+      </button>
       <button
         type="button"
         class="record-trigger"
+        class:recording={chrome.recording}
         id="btnRecord"
         aria-label={m('Grabar video')}
-      ></button>
+        disabled={(!chrome.cameraRunning && !chrome.recording) ||
+          chrome.previewOpen ||
+          chrome.countdownActive}
+        onclick={() => adapter.toggleRecording()}
+      >
+        <span class="record-trigger-core" aria-hidden="true"></span>
+        <span class="capture-action-label"
+          >{m(chrome.recording ? 'Detener' : 'Grabar')}</span
+        >
+      </button>
     </div>
   </div>
   <div class="preview-status-bar">

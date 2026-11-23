@@ -43,7 +43,6 @@ import { applyEffectConfigUIMixin } from './effect-config.mjs';
 import { applyUIHelpersMixin } from './ui-helpers.mjs';
 import { applyProfilesMixin } from './profiles.mjs';
 import { applyCaptureMixin } from './capture.mjs';
-import { applyModalfocusmanagementMixin } from './modal-focus.mjs';
 import { SettingsStore } from './settings-store.ts';
 import { RenderEngine } from './render-engine.ts';
 
@@ -67,7 +66,6 @@ export class AppController {
     this.frameCount = 0;
     this.lastFpsTime = performance.now();
     this.previewScale = 1;
-    this.renderEngine.attachLegacyAccessors(this);
 
     this.effectManager = new EffectManager();
     this.blobTrackingEffect = null;
@@ -100,6 +98,7 @@ export class AppController {
     this.isPhotoCountdownActive = false;
 
     this.sourceMode = 'camera';
+    this.requestedSourceMode = 'camera';
     this.videoObjectUrl = '';
     this.videoSourceFile = null;
     this.videoPlaceholderLoading = false;
@@ -130,7 +129,6 @@ export class AppController {
     this.videoExportRecoveredSource = false;
     this.videoExportPlayback = null;
 
-    this.modalFocusState = new WeakMap();
     this.colorPickMode = false;
     this.flipH = false;
     this.flipV = false;
@@ -172,27 +170,49 @@ export class AppController {
    */
   async installVideoEditor() {
     if (!this._editorInstallPromise) {
-      this._editorInstallPromise = import('./editor-install.mjs').then(
-        ({ installVideoEditor }) => installVideoEditor(this),
-      );
+      this._editorInstallPromise = import('./editor-install.mjs')
+        .then(({ installVideoEditor }) => installVideoEditor(this))
+        .catch((error) => {
+          this._editorInstallPromise = null;
+          console.error('Error loading the video editor:', error);
+          this.showStatus(
+            this.captureStatus,
+            'No se pudo abrir el editor. Volvé a intentarlo.',
+            'error',
+          );
+          return null;
+        });
     }
-    await this._editorInstallPromise;
-    return this;
+    return this._editorInstallPromise;
   }
 
   async setSourceMode(mode) {
-    if (mode === this.sourceMode || this.isVideoExporting) return;
-    if (mode === 'video') await this.installVideoEditor();
+    if (this.videoExportSession?.active) return;
+    this.requestedSourceMode = mode;
+    if (mode === this.sourceMode) return;
+    if (mode === 'video') {
+      if (
+        !(await this.installVideoEditor()) ||
+        this.requestedSourceMode !== mode
+      )
+        return;
+    }
     return this.applySourceMode?.(mode);
   }
 
   async importVideoFile(file) {
-    await this.installVideoEditor();
+    if (this.requestedSourceMode === 'video') {
+      await this.setSourceMode('video');
+    }
+    if (this.sourceMode !== 'video') return;
     return this.loadVideoFile(file);
   }
 
   async importEditorProjectFile(file) {
-    await this.installVideoEditor();
+    if (this.requestedSourceMode === 'video') {
+      await this.setSourceMode('video');
+    }
+    if (this.sourceMode !== 'video') return;
     return this.loadEditorProjectFile(file);
   }
 
@@ -231,9 +251,7 @@ export class AppController {
       !this.canvas ||
       !this.ctx ||
       !this.btnToggleCamera ||
-      !this.cameraSelect ||
-      !this.btnTakePhoto ||
-      !this.btnRecord
+      !this.cameraSelect
     ) {
       throw new Error(
         'HateWebcam: faltan elementos base del DOM para iniciar la app.',
@@ -261,4 +279,3 @@ applyEffectConfigUIMixin(AppController.prototype);
 applyUIHelpersMixin(AppController.prototype);
 applyProfilesMixin(AppController.prototype);
 applyCaptureMixin(AppController.prototype);
-applyModalfocusmanagementMixin(AppController.prototype);

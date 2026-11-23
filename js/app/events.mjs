@@ -85,12 +85,6 @@ export function applyEventsMixin(proto) {
     document.addEventListener('hatewebcam:localechange', () => {
       this.syncMirrorControls();
     });
-    this.btnWebcamMode.addEventListener('click', () =>
-      this.setSourceMode('camera'),
-    );
-    this.btnVideoMode.addEventListener('click', () =>
-      this.setSourceMode('video'),
-    );
     // File selection must never be lost while the lazy editor chunk loads.
     this.btnChooseVideo.addEventListener('click', () =>
       this.videoFileInput.click(),
@@ -132,16 +126,6 @@ export function applyEventsMixin(proto) {
         }
       });
     }
-    this.videoFileInput.addEventListener('change', () => {
-      const [file] = this.videoFileInput.files || [];
-      if (file) void this.importVideoFile(file);
-      this.videoFileInput.value = '';
-    });
-    this.projectFileInput?.addEventListener('change', () => {
-      const [file] = this.projectFileInput.files || [];
-      if (file) void this.importEditorProjectFile(file);
-      this.projectFileInput.value = '';
-    });
     this.btnVideoStart.addEventListener('click', () =>
       this.seekVideo(this.videoTimeline.trimStart),
     );
@@ -350,13 +334,6 @@ export function applyEventsMixin(proto) {
 
     this.canvas.addEventListener('click', this.onCanvasClick.bind(this));
 
-    if (this.btnTakePhoto)
-      this.btnTakePhoto.addEventListener(
-        'click',
-        this.requestPhotoCapture.bind(this),
-      );
-    if (this.btnRecord)
-      this.btnRecord.addEventListener('click', this.toggleRecording.bind(this));
     window.addEventListener('keydown', this.onGlobalKeyDown.bind(this));
     document.addEventListener(
       'visibilitychange',
@@ -380,7 +357,7 @@ export function applyEventsMixin(proto) {
 
   proto.onVisibilityChange = function () {
     this.isPageVisible = document.visibilityState !== 'hidden';
-    if (this.isVideoExporting) return;
+    if (this.videoExportSession?.active) return;
     if (!this.isRunning) return;
 
     if (!this.isPageVisible) {

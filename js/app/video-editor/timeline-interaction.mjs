@@ -3,7 +3,11 @@ import { translateCurrent } from '../../../src/lib/i18n/translate.ts';
 /** @param {import('../controller.mjs').AppController} proto */
 export function applyVideoEditorTimelineInteractionMixin(proto) {
   proto.beginTimelineSelection = function (event) {
-    if (!this.videoSourceFile || this.isVideoExporting || event.button !== 0)
+    if (
+      !this.videoSourceFile ||
+      this.videoExportSession?.active ||
+      event.button !== 0
+    )
       return;
     if (
       event.target.closest(
@@ -104,7 +108,7 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
   proto.beginTrimDrag = function (event, edge) {
     if (
       !this.videoSourceFile ||
-      this.isVideoExporting ||
+      this.videoExportSession?.active ||
       this.editorTool !== 'trim'
     )
       return;
@@ -153,7 +157,11 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
   };
 
   proto.beginTimelineDrag = function (event, item, element) {
-    if (!this.videoSourceFile || this.isVideoExporting || event.button !== 0)
+    if (
+      !this.videoSourceFile ||
+      this.videoExportSession?.active ||
+      event.button !== 0
+    )
       return;
     event.preventDefault();
     event.stopPropagation();
@@ -276,7 +284,7 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
     if (
       this.editorTool !== 'cut' ||
       !this.videoSourceFile ||
-      this.isVideoExporting ||
+      this.videoExportSession?.active ||
       !this.timelineCutGuide
     ) {
       this.hideTimelineCutGuide();
@@ -293,7 +301,7 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
   };
 
   proto.splitAllEffectsAtMarkers = function () {
-    if (!this.videoSourceFile || this.isVideoExporting) return;
+    if (!this.videoSourceFile || this.videoExportSession?.active) return;
     const times = Array.from(
       new Set(
         (this.videoTimeline.markers || [])
@@ -366,7 +374,11 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
   };
 
   proto.beginPlayheadDrag = function (event) {
-    if (!this.videoSourceFile || this.isVideoExporting || event.button !== 0)
+    if (
+      !this.videoSourceFile ||
+      this.videoExportSession?.active ||
+      event.button !== 0
+    )
       return;
     event.preventDefault();
     event.stopPropagation();
@@ -382,7 +394,7 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
   };
 
   proto.handleVideoEditorKeydown = function (event) {
-    if (this.sourceMode !== 'video' || this.isVideoExporting) return;
+    if (this.sourceMode !== 'video' || this.videoExportSession?.active) return;
     const tag = event.target.tagName;
     if (
       tag === 'INPUT' ||

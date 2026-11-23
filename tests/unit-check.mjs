@@ -1268,7 +1268,7 @@ function checkSplitAllEffectsAtMarkers() {
   const app = {
     videoTimeline: timeline,
     videoSourceFile: {},
-    isVideoExporting: false,
+    videoExportSession: { active: false },
     selectedVideoEffectId: '',
     selectedVideoEffectIds: new Set(),
     timelineHistorySuspended: false,
@@ -1306,7 +1306,7 @@ async function checkSequentialExportAdvance() {
         pauseCalls += 1;
       },
     },
-    isVideoExporting: true,
+    videoExportSession: { active: true },
     seekCalls: 0,
     playCalls: 0,
     waitCalls: 0,
@@ -1339,7 +1339,7 @@ async function checkSequentialExportAdvance() {
     'sequential export should not wait for an extra frame after every step',
   );
   assert.equal(
-    app.videoExportSkippedFrames,
+    app.videoExportSession.skippedFrames,
     1,
     'overshot frames should be reused instead of forcing a late seek',
   );
@@ -1363,7 +1363,7 @@ async function checkSequentialExportAdvance() {
 async function checkExportPlaybackPausesAtTarget() {
   let pauseCalls = 0;
   const app = {
-    isVideoExporting: true,
+    videoExportSession: { active: true },
     videoExportPlayback: { playbackRate: 4 },
     videoEl: {
       currentTime: 1,
@@ -1429,7 +1429,7 @@ async function checkExportSeekFallsBackWhenSeekedIsMissing() {
 async function checkExportPrepareRecoversDecodeFailure() {
   const app = {
     videoSourceFile: {},
-    videoExportTotalFrames: 10,
+    videoExportSession: { totalFrames: 10 },
     videoExportRecoveredSource: false,
     videoEl: {
       currentTime: 0,
@@ -1463,7 +1463,7 @@ function checkVideoSeekAvoidsExactDuration() {
   let scheduled = 0;
   const app = {
     videoSourceFile: {},
-    isVideoExporting: false,
+    videoExportSession: { active: false },
     videoTimeline: { trimStart: 0, trimEnd: 10, duration: 10 },
     videoEl: {
       duration: 10,
@@ -1513,7 +1513,7 @@ function checkPausedVideoPreviewUsesAnimationFrame() {
       frameCount: 0,
       isPageVisible: true,
       isRunning: true,
-      isVideoExporting: false,
+      videoExportSession: { active: false },
       lastFpsTime: performance.now(),
       sourceMode: 'video',
       videoTimeline: { trimEnd: 10, duration: 10 },
@@ -1593,7 +1593,7 @@ async function checkVideoPlaybackRestartsFromEnd() {
   let scheduled = 0;
   const app = {
     videoSourceFile: {},
-    isVideoExporting: false,
+    videoExportSession: { active: false },
     animFrameId: 77,
     videoTimeline: { trimStart: 0, trimEnd: 10, duration: 10 },
     videoEl: {
@@ -1662,7 +1662,6 @@ async function checkExportPlaybackRateRestores() {
     videoSourceFile: null,
     updateVideoEditorUI() {},
     updateVideoTransport() {},
-    deactivateModalFocusTrap() {},
     waitForExportVideoFrame: async () => {},
   };
   applyLocalvideoeditorMixin(app);
@@ -1692,7 +1691,7 @@ async function checkExportTimelineDetectorToggleIsQuiet() {
   const calls = [];
   const effect = {};
   const app = {
-    isVideoExporting: true,
+    videoExportSession: { active: true },
     chkBlobTracking: { checked: true },
     chkFaceDetection: { checked: false },
     chkBlinkDetection: { checked: false },
@@ -2158,9 +2157,11 @@ async function checkEffectsOnlyExportSkipsBaseRender() {
       effectsExportChroma: 'green',
       qualityEnhancer: true,
     },
-    videoExportTotalFrames: 1,
-    recordingCanvas: { width: 100, height: 100 },
-    recordingCtx: {},
+    videoExportSession: { totalFrames: 1 },
+    renderEngine: {
+      recordingCanvas: { width: 100, height: 100 },
+      recordingCtx: {},
+    },
     progressCalls: [],
     lookCalls: 0,
     baseRenderCalls: 0,
@@ -2221,7 +2222,7 @@ async function checkExportFrameProgressThrottlesInnerStages() {
       editorExportMode: 'full',
       qualityEnhancer: false,
     },
-    videoExportTotalFrames: 10,
+    videoExportSession: { totalFrames: 10 },
     updateVideoExportProgress(done, total, fps, meta) {
       calls.push(meta);
     },

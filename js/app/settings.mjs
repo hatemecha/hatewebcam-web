@@ -886,10 +886,6 @@ export function applyStorageMixin(proto) {
         this.imageSettings.performanceMode,
       ),
     });
-    if (this.captureTimerSelect)
-      this.captureTimerSelect.value = String(
-        this.imageSettings.captureTimerSeconds,
-      );
     if (this.chkQualityEnhancer)
       this.chkQualityEnhancer.checked = !!this.imageSettings.qualityEnhancer;
     if (this.chkShutterSound)
@@ -1108,22 +1104,11 @@ export function applyStorageMixin(proto) {
         this.saveImageSettings();
       });
     }
-
-    if (this.captureTimerSelect) {
-      this.captureTimerSelect.addEventListener('change', (e) => {
-        this.setCaptureTimerSeconds(e.target.value);
-      });
-    }
   };
 
   proto.setCaptureTimerSeconds = function (value) {
     this.imageSettings.captureTimerSeconds =
       this.normalizeCaptureTimerSeconds(value);
-    if (this.captureTimerSelect) {
-      this.captureTimerSelect.value = String(
-        this.imageSettings.captureTimerSeconds,
-      );
-    }
     this.publishWebcamPanel();
     this.saveImageSettings();
   };

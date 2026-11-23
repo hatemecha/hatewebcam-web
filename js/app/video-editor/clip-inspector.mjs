@@ -442,7 +442,7 @@ export function applyVideoEditorClipInspectorMixin(proto) {
           if (
             this.suppressPaletteClick ||
             !this.videoSourceFile ||
-            this.isVideoExporting ||
+            this.videoExportSession?.active ||
             chip.disabled
           )
             return;
@@ -455,7 +455,7 @@ export function applyVideoEditorClipInspectorMixin(proto) {
         chip.addEventListener('pointerdown', (event) => {
           if (
             !this.videoSourceFile ||
-            this.isVideoExporting ||
+            this.videoExportSession?.active ||
             event.button !== 0 ||
             chip.disabled
           )

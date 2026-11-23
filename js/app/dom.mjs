@@ -32,8 +32,6 @@ export function setupDom(app) {
   app.detectorChipBlob = $('#detectorChipBlob');
   app.detectorChipFace = $('#detectorChipFace');
   app.detectorChipBlink = $('#detectorChipBlink');
-  app.btnWebcamMode = $('#btnWebcamMode');
-  app.btnVideoMode = $('#btnVideoMode');
   app.videoFileInput = $('#videoFileInput');
   app.projectFileInput = $('#projectFileInput');
   app.btnChooseVideo = $('#btnChooseVideo');
@@ -98,14 +96,12 @@ export function setupDom(app) {
   app.editAssistDensitySelect = $('#editAssistDensitySelect');
   app.editAssistResult = $('#editAssistResult');
   app.editAssistStatus = $('#editAssistStatus');
-  app.videoExportModal = $('#videoExportModal');
   app.videoExportTitle = $('#videoExportTitle');
   app.videoExportSummary = $('#videoExportSummary');
   app.videoExportHelp = $('#videoExportHelp');
   app.videoExportProgress = $('#videoExportProgress');
   app.videoExportDebug = $('#videoExportDebug');
   app.btnExportVideo = $('#btnExportVideo');
-  app.btnHeaderExportVideo = $('#btnHeaderExportVideo');
   app.btnCancelVideoExport = $('#btnCancelVideoExport');
   app.btnCloseVideoExportModal = $('#btnCloseVideoExportModal');
   app.btnToolSelect = $('#btnToolSelect');
@@ -149,10 +145,7 @@ export function setupDom(app) {
   app.btnToggleCamera = $('#btnToggleCamera');
   app.cameraSelect = $('#cameraSelect');
   app.performanceModeSelect = $('#performanceModeSelect');
-  app.btnTakePhoto = $('#btnTakePhoto');
-  app.btnRecord = $('#btnRecord');
   app.captureStatus = $('#captureStatus');
-  app.captureTimerSelect = $('#captureTimerSelect');
   app.sldJpegQuality = $('#sldJpegQuality');
   app.valJpegQuality = $('#valJpegQuality');
   app.videoFormatSelect = $('#videoFormatSelect');
@@ -162,7 +155,6 @@ export function setupDom(app) {
   app.valQualityEnhancerStrength = $('#valQualityEnhancerStrength');
   app.qualityEnhancerStrengthGroup = $('#qualityEnhancerStrengthGroup');
 
-  app.capturePreviewModal = $('#capturePreviewModal');
   app.capturePreviewTitle = $('#capturePreviewTitle');
   app.capturePreviewFilename = $('#capturePreviewFilename');
   app.capturePreviewImage = $('#capturePreviewImage');

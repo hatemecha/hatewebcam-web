@@ -521,6 +521,7 @@ export const englishMessages = {
   Foto: 'Photo',
   Personalizado: 'Custom',
   Grabar: 'Record',
+  Detener: 'Stop',
   Temporizador: 'Timer',
   Intensidad: 'Strength',
   Configuración: 'Configuration',
@@ -600,6 +601,8 @@ export const englishMessages = {
   'Proyecto restaurado con el video reimportado':
     'Project restored with the imported video',
   'No se pudo cargar el proyecto.': 'The project could not be loaded.',
+  'No se pudo abrir el editor. Volvé a intentarlo.':
+    'The editor could not be opened. Try again.',
   'No se pudo guardar el look del clip:': 'The clip look could not be saved:',
   'No se pudo actualizar el clip seleccionado:':
     'The selected clip could not be updated:',

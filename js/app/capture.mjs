@@ -353,47 +353,14 @@ export function applyCaptureMixin(proto) {
     const lockCaptureSettings =
       this.isRecording || previewOpen || this.isPhotoCountdownActive;
 
-    if (this.btnTakePhoto) {
-      this.btnTakePhoto.disabled =
-        (!this.isRunning || this.isRecording || previewOpen) &&
-        !this.isPhotoCountdownActive;
-      this.btnTakePhoto.innerHTML = this.isPhotoCountdownActive
-        ? `<span class="photo-shutter-core is-cancel" aria-hidden="true"><i class="fa-solid fa-xmark"></i></span><span class="capture-action-label">${translateCurrent('Cancelar')}</span>`
-        : `<span class="photo-shutter-core" aria-hidden="true"></span><span class="capture-action-label">${translateCurrent('Foto')}</span>`;
-      this.btnTakePhoto.setAttribute(
-        'aria-label',
-        translateCurrent(
-          this.isPhotoCountdownActive
-            ? 'Cancelar temporizador de foto'
-            : 'Sacar foto',
-        ),
-      );
-    }
-    if (this.btnRecord)
-      this.btnRecord.disabled =
-        (!this.isRunning && !this.isRecording) ||
-        previewOpen ||
-        this.isPhotoCountdownActive;
     if (this.videoFormatSelect)
       this.videoFormatSelect.disabled = lockCaptureSettings;
     if (this.sldJpegQuality) this.sldJpegQuality.disabled = lockCaptureSettings;
-    if (this.captureTimerSelect)
-      this.captureTimerSelect.disabled = lockCaptureSettings;
     if (this.chkQualityEnhancer)
       this.chkQualityEnhancer.disabled = lockCaptureSettings;
     if (this.sldQualityEnhancerStrength) {
       this.sldQualityEnhancerStrength.disabled =
         lockCaptureSettings || !this.imageSettings.qualityEnhancer;
-    }
-
-    if (this.btnRecord) {
-      if (this.isRecording) {
-        this.btnRecord.classList.add('recording');
-        this.btnRecord.innerHTML = `<span class="record-trigger-core" aria-hidden="true"></span><span class="capture-action-label">${translateCurrent('Detener')}</span>`;
-      } else {
-        this.btnRecord.classList.remove('recording');
-        this.btnRecord.innerHTML = `<span class="record-trigger-core" aria-hidden="true"></span><span class="capture-action-label">${translateCurrent('Grabar')}</span>`;
-      }
     }
 
     if (previewOpen) this.mobileFxOpen = false;
@@ -419,12 +386,12 @@ export function applyCaptureMixin(proto) {
       recordingHeight = this.videoExportPreflight.height;
     }
     this.renderEngine.ensureRecordingCanvas(recordingWidth, recordingHeight);
-    return this.recordingCanvas;
+    return this.renderEngine.recordingCanvas;
   };
 
   proto.ensureRecordingEnhancerBuffer = function (width, height) {
     this.renderEngine.ensureRecordingEnhancerBuffer(width, height);
-    return this.recordingEnhancerCanvas;
+    return this.renderEngine.recordingEnhancerCanvas;
   };
 
   proto.getPreferredRecordingFps = function () {
@@ -594,34 +561,39 @@ export function applyCaptureMixin(proto) {
     if (this.videoEl.readyState < 2) return;
 
     this.ensureRecordingCanvas();
-    if (!this.recordingCanvas || !this.recordingCtx) return;
+    if (!this.renderEngine.recordingCanvas || !this.renderEngine.recordingCtx)
+      return;
 
-    this.renderProcessedFrame(this.recordingCanvas, this.recordingCtx, mode);
+    this.renderProcessedFrame(
+      this.renderEngine.recordingCanvas,
+      this.renderEngine.recordingCtx,
+      mode,
+    );
 
     if (applyQualityEnhancer && this.imageSettings.qualityEnhancer) {
       const enhancerBuffer = this.ensureRecordingEnhancerBuffer(
-        this.recordingCanvas.width,
-        this.recordingCanvas.height,
+        this.renderEngine.recordingCanvas.width,
+        this.renderEngine.recordingCanvas.height,
       );
-      if (this.recordingEnhancerCtx) {
-        this.recordingEnhancerCtx.clearRect(
+      if (this.renderEngine.recordingEnhancerCtx) {
+        this.renderEngine.recordingEnhancerCtx.clearRect(
           0,
           0,
           enhancerBuffer.width,
           enhancerBuffer.height,
         );
-        this.recordingEnhancerCtx.drawImage(
-          this.recordingCanvas,
+        this.renderEngine.recordingEnhancerCtx.drawImage(
+          this.renderEngine.recordingCanvas,
           0,
           0,
           enhancerBuffer.width,
           enhancerBuffer.height,
         );
         this.drawEnhancedFrameToContext(
-          this.recordingCtx,
+          this.renderEngine.recordingCtx,
           enhancerBuffer,
-          this.recordingCanvas.width,
-          this.recordingCanvas.height,
+          this.renderEngine.recordingCanvas.width,
+          this.renderEngine.recordingCanvas.height,
           this.imageSettings.qualityEnhancerStrength,
           mode === 'export',
         );
@@ -631,13 +603,13 @@ export function applyCaptureMixin(proto) {
 
   proto.blitProcessedFrameToPreview = function () {
     if (
-      !this.recordingCanvas ||
-      this.recordingCanvas.width === 0 ||
+      !this.renderEngine.recordingCanvas ||
+      this.renderEngine.recordingCanvas.width === 0 ||
       this.canvas.width === 0
     )
       return;
     this.ctx.drawImage(
-      this.recordingCanvas,
+      this.renderEngine.recordingCanvas,
       0,
       0,
       this.canvas.width,
@@ -879,8 +851,8 @@ export function applyCaptureMixin(proto) {
       this.recordingChunks = [];
       this.ensureRecordingCanvas();
       if (
-        this.recordingCanvas.width === 0 ||
-        this.recordingCanvas.height === 0
+        this.renderEngine.recordingCanvas.width === 0 ||
+        this.renderEngine.recordingCanvas.height === 0
       ) {
         this.showStatus(
           this.captureStatus,
@@ -894,13 +866,15 @@ export function applyCaptureMixin(proto) {
       this.copyFrameToRecordingCanvas();
       this.currentRecordingFps = this.getPreferredRecordingFps();
       this.currentRecordingBitrate = this.getRecommendedVideoBitrate(
-        this.recordingCanvas.width,
-        this.recordingCanvas.height,
+        this.renderEngine.recordingCanvas.width,
+        this.renderEngine.recordingCanvas.height,
         this.currentRecordingFps,
       );
       const session = this.ensureRecordingSession();
       session.start({
-        stream: this.recordingCanvas.captureStream(this.currentRecordingFps),
+        stream: this.renderEngine.recordingCanvas.captureStream(
+          this.currentRecordingFps,
+        ),
         mimeType: recordingProfile.mimeType,
         extension: recordingProfile.extension,
         videoBitsPerSecond: this.currentRecordingBitrate,
@@ -920,11 +894,11 @@ export function applyCaptureMixin(proto) {
           const durationSec = this.lastRecordingDurationSec;
           this.lastRecordingDurationSec = 0;
           if (!result) return;
-          const recordedWidth = this.recordingCanvas
-            ? this.recordingCanvas.width
+          const recordedWidth = this.renderEngine.recordingCanvas
+            ? this.renderEngine.recordingCanvas.width
             : this.canvas.width;
-          const recordedHeight = this.recordingCanvas
-            ? this.recordingCanvas.height
+          const recordedHeight = this.renderEngine.recordingCanvas
+            ? this.renderEngine.recordingCanvas.height
             : this.canvas.height;
           this.openCapturePreview({
             kind: 'video',
@@ -1097,7 +1071,6 @@ export function applyCaptureMixin(proto) {
   proto.closeCapturePreview = function (showDiscardStatus) {
     if (!this.capturePreviewOpen) return;
     this.capturePreviewOpen = false;
-    this.deactivateModalFocusTrap(this.capturePreviewModal);
     this.clearPendingCapture(false);
     this.updateCaptureButtons();
 

@@ -56,7 +56,17 @@ try {
   mountSkipLink(document.querySelector('#skipLinkMount'));
   mountVideoEditor(document.querySelector('#videoEditorTemplateSlot'));
   mountPreviewPlaceholder(document.querySelector('#previewPlaceholderMount'));
-  mountCaptureBar(document.querySelector('#captureBarMount'));
+  mountCaptureBar(document.querySelector('#captureBarMount'), {
+    takePhoto: () => {
+      whenControllerReady(() => controller.requestPhotoCapture());
+    },
+    toggleRecording: () => {
+      whenControllerReady(() => controller.toggleRecording());
+    },
+    setCaptureTimer: (seconds) => {
+      whenControllerReady(() => controller.setCaptureTimerSeconds(seconds));
+    },
+  });
   mountAppHeader(
     document.querySelector('#appHeaderMount'),
     {

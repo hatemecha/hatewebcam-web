@@ -49,9 +49,11 @@ export function applyVideoEditorTimelineChromeMixin(proto) {
 
   proto.updateEditorHistoryButtons = function () {
     updateEditorUiState({
-      canUndo: !!this.editorHistory?.canUndo && !this.isVideoExporting,
-      canRedo: !!this.editorHistory?.canRedo && !this.isVideoExporting,
-      exporting: !!this.isVideoExporting,
+      canUndo:
+        !!this.editorHistory?.canUndo && !this.videoExportSession?.active,
+      canRedo:
+        !!this.editorHistory?.canRedo && !this.videoExportSession?.active,
+      exporting: !!this.videoExportSession?.active,
     });
   };
 

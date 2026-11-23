@@ -2,11 +2,14 @@ import { mount } from 'svelte';
 import CaptureBar from './CaptureBar.svelte';
 import CaptureStatusChrome from './CaptureStatusChrome.svelte';
 import MobileHud from './MobileHud.svelte';
-import type { MobileHudAdapter } from './types';
+import type { CaptureBarAdapter, MobileHudAdapter } from './types';
 
-export function mountCaptureBar(target: HTMLElement | null) {
+export function mountCaptureBar(
+  target: HTMLElement | null,
+  adapter: CaptureBarAdapter,
+) {
   if (!target) throw new Error('Capture bar mount point is missing');
-  return mount(CaptureBar, { target });
+  return mount(CaptureBar, { target, props: { adapter } });
 }
 
 export function mountCaptureChrome(target: HTMLElement | null) {

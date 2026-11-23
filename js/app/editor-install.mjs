@@ -22,11 +22,10 @@ import { applyVisualFxLabMixin } from './visual-fx-lab.mjs';
 export async function installVideoEditor(app) {
   if (app._editorInstalled) return app;
 
-  const proto = Object.getPrototypeOf(app);
-  applyLocalvideoeditorMixin(proto);
-  applyVisualFxIntegrationMixin(proto);
-  applyVisualFxUIMixin(proto);
-  applyVisualFxLabMixin(proto);
+  applyLocalvideoeditorMixin(app);
+  applyVisualFxIntegrationMixin(app);
+  applyVisualFxUIMixin(app);
+  applyVisualFxLabMixin(app);
 
   app.videoTimeline = new VideoTimeline();
   app.editorHistory = new EditorHistory();
@@ -36,7 +35,7 @@ export async function installVideoEditor(app) {
   app.editAssist = new EditAssistController({
     getSourceFile: () => app.videoSourceFile,
     getTimeline: () => app.videoTimeline,
-    isExporting: () => app.isVideoExporting,
+    isExporting: () => app.videoExportSession?.active,
     getElements: () => ({
       analyzeButton: app.btnEditAssistAnalyze,
       beatButton: app.btnEditAssistBeat,
@@ -61,7 +60,6 @@ export async function installVideoEditor(app) {
     updateTimelineHint: () => app.updateTimelineHint(),
   });
   app.videoExportSession = new VideoExportSession();
-  app.videoExportSession.attachLegacyAccessors(app);
 
   app._editorInstalled = true;
   app.bindVideoEditorEvents();
