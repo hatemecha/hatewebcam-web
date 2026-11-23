@@ -3,7 +3,7 @@
 // evolve a persistent drift field, quantize into a palette, and upscale.
 // The only *variable* part of the graph is the per-system state pass,
 // defined in systems.mjs.
-import { GLSL_LIB } from './glsl.mjs';
+import { GLSL_LIB } from './glsl.ts';
 
 // SOURCE -> INGEST. A supersampled box downsample into working resolution;
 // this is the GPU doing real anti-aliased minification, not a naive nearest

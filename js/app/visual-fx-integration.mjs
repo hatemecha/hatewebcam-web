@@ -3,8 +3,8 @@ import {
   createDefaultVisualConfig,
   migrateProjectToV2,
   normalizeVisualConfig,
-} from '../visual-fx/config.mjs';
-import { VISUAL_SYSTEM_LABELS } from '../visual-fx/config.mjs';
+} from '../visual-fx/config.ts';
+import { VISUAL_SYSTEM_LABELS } from '../visual-fx/config.ts';
 import { resolveSubjectAssetUrls } from '../subject/mediapipe-paths.ts';
 import { isVisualFxClipType } from '../editor/timeline-clip-types.ts';
 
@@ -13,7 +13,7 @@ export function applyVisualFxIntegrationMixin(proto) {
   proto.ensureVisualFxEffect = async function () {
     if (this.visualFxEffect) return this.visualFxEffect;
     if (this._visualFxLoadPromise) return this._visualFxLoadPromise;
-    this._visualFxLoadPromise = import('../visual-fx/effect.mjs')
+    this._visualFxLoadPromise = import('../visual-fx/effect.ts')
       .then(({ VisualFxEffect }) => {
         this.visualFxEffect = new VisualFxEffect({
           analyzer: {

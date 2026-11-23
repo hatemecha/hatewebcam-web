@@ -69,7 +69,7 @@ import {
   createDefaultVisualConfig,
   migrateProjectToV2,
   normalizeVisualConfig,
-} from '../js/visual-fx/config.mjs';
+} from '../js/visual-fx/config.ts';
 import { SubjectMotionAnalyzer } from '../js/subject/subject-motion.ts';
 import { createSeededRandom, seededInt } from '../js/subject/subject-prng.ts';
 import { applyVisualFxIntegrationMixin } from '../js/app/visual-fx-integration.mjs';

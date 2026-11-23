@@ -1,4 +1,4 @@
-import { VISUAL_SYSTEM_LABELS } from '../visual-fx/config.mjs';
+import { VISUAL_SYSTEM_LABELS } from '../visual-fx/config.ts';
 import { isVisualFxClipType } from '../editor/timeline-clip-types.ts';
 import { translateCurrent } from '../../src/lib/i18n/translate.ts';
 

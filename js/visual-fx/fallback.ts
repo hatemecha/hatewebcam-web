@@ -2,10 +2,12 @@
 // reduced approximation of the GPU graph (no separate control-field/drift
 // buffers), built from the same macro language so a system still reads as
 // "the same instrument, less detailed" rather than a different effect.
-const clamp01 = (v) => Math.max(0, Math.min(1, v));
-const lerp = (a, b, t) => a + (b - a) * clamp01(t);
+import type { VisualConfig } from './config.ts';
 
-function hash(x, y, seed) {
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+const lerp = (a: number, b: number, t: number) => a + (b - a) * clamp01(t);
+
+function hash(x: number, y: number, seed: number) {
   const s = Math.sin(x * 127.1 + y * 311.7 + seed) * 43758.5453;
   return s - Math.floor(s);
 }
@@ -14,13 +16,13 @@ const SYSTEM_SPIN = { recursive: 1, flow: 0, pixelfield: 0, trace: 0.3 };
 const SYSTEM_GRID = { recursive: 0, flow: 0.3, pixelfield: 1, trace: 0.2 };
 
 export function processCompatiblePixels(
-  source,
-  config,
-  time,
-  delta,
-  hasHistory,
-  work,
-  previous,
+  source: HTMLCanvasElement,
+  config: VisualConfig,
+  time: number,
+  delta: number,
+  hasHistory: boolean,
+  work: HTMLCanvasElement,
+  previous: HTMLCanvasElement | null,
 ) {
   const { system, macros, seed } = config;
   const maxWidth = system === 'pixelfield' ? 160 : 240;
@@ -30,6 +32,7 @@ export function processCompatiblePixels(
     Math.round((work.width * source.height) / source.width),
   );
   const ctx = work.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return source;
   const { width: w, height: h } = work;
 
   const cellBase =

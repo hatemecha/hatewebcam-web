@@ -25,27 +25,65 @@ import {
   detectFloatRenderTarget,
   PingPong,
   renderToTarget,
-} from './gl.mjs';
-import { VERTEX_SHADER } from './glsl.mjs';
+  type RenderTarget,
+  type VisualGL,
+} from './gl.ts';
+import type { VisualConfig, VisualSystem, VisualTuning } from './config.ts';
+import { VERTEX_SHADER } from './glsl.ts';
 import {
   INGEST_FRAGMENT,
   CONTROL_FIELD_FRAGMENT,
   FIELD_FRAGMENT,
   PALETTE_FRAGMENT,
   BLIT_FRAGMENT,
-} from './passes.mjs';
+} from './passes.ts';
 import {
   SYSTEM_RENDER,
   getWorkingResolution,
   computeSharedUniforms,
   computeFieldUniforms,
   computePaletteUniforms,
-} from './systems.mjs';
+} from './systems.ts';
+
+interface PipelineBuffers {
+  width: number;
+  height: number;
+  ingest: PingPong;
+  control: PingPong;
+  field: PingPong;
+  history: PingPong;
+  palette: RenderTarget;
+}
+
+interface PipelineFrame {
+  config: VisualConfig;
+  time: number;
+  delta: number;
+  hasHistory: boolean;
+  canvasWidth: number;
+  canvasHeight: number;
+}
 
 export class VisualFxPipeline {
-  constructor(gl, isWebGL2) {
-    this.gl = gl;
-    this.isWebGL2 = isWebGL2;
+  private readonly quad: WebGLBuffer;
+  private readonly float: ReturnType<typeof detectFloatRenderTarget>;
+  private readonly programs;
+  private readonly statePrograms = new Map<
+    VisualSystem,
+    ReturnType<typeof createProgram>
+  >();
+  private readonly rawSource: WebGLTexture;
+  private topologyKey = '';
+  private buffers: PipelineBuffers | null = null;
+  private currentSystem: VisualSystem = 'recursive';
+  private hasHistory = false;
+  private sourceWidth = 0;
+  private sourceHeight = 0;
+
+  constructor(
+    private readonly gl: VisualGL,
+    private readonly isWebGL2: boolean,
+  ) {
     this.quad = createQuad(gl);
     this.float = detectFloatRenderTarget(gl, isWebGL2);
     this.programs = {
@@ -55,32 +93,31 @@ export class VisualFxPipeline {
       palette: createProgram(gl, VERTEX_SHADER, PALETTE_FRAGMENT),
       blit: createProgram(gl, VERTEX_SHADER, BLIT_FRAGMENT),
     };
-    this.statePrograms = new Map();
-    this.rawSource = gl.createTexture();
+    const rawSource = gl.createTexture();
+    if (!rawSource)
+      throw new Error('Visual FX source texture allocation failed');
+    this.rawSource = rawSource;
     gl.bindTexture(gl.TEXTURE_2D, this.rawSource);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    this.topologyKey = '';
-    this.buffers = null;
   }
 
-  getStateProgram(system) {
-    if (!this.statePrograms.has(system)) {
+  getStateProgram(system: VisualSystem) {
+    let program = this.statePrograms.get(system);
+    if (!program) {
       const src = SYSTEM_RENDER[system].fragment;
-      this.statePrograms.set(
-        system,
-        createProgram(this.gl, VERTEX_SHADER, src),
-      );
+      program = createProgram(this.gl, VERTEX_SHADER, src);
+      this.statePrograms.set(system, program);
     }
-    return this.statePrograms.get(system);
+    return program;
   }
 
   // (Re)allocate every working-resolution buffer. Called only when the
   // topology key changes (system or a topology-flagged tuning value) or on
   // an explicit reset - never on a plain macro/slider change.
-  allocate(system, workWidth, workHeight) {
+  allocate(system: VisualSystem, workWidth: number, workHeight: number) {
     const gl = this.gl;
     this.disposeBuffers();
     const historyFilter =
@@ -136,7 +173,12 @@ export class VisualFxPipeline {
 
   // Ensures buffers match the requested topology; returns true if a fresh
   // (empty) simulation was allocated, false if the existing one was kept.
-  ensureTopology(system, tuning, sourceWidth, sourceHeight) {
+  ensureTopology(
+    system: VisualSystem,
+    tuning: VisualTuning,
+    sourceWidth: number,
+    sourceHeight: number,
+  ) {
     const { width, height } = getWorkingResolution(
       system,
       tuning,
@@ -163,7 +205,11 @@ export class VisualFxPipeline {
     this.hasHistory = false;
   }
 
-  uploadSource(sourceImage, sourceWidth, sourceHeight) {
+  uploadSource(
+    sourceImage: TexImageSource,
+    sourceWidth: number,
+    sourceHeight: number,
+  ) {
     const gl = this.gl;
     gl.bindTexture(gl.TEXTURE_2D, this.rawSource);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
@@ -179,10 +225,18 @@ export class VisualFxPipeline {
     this.sourceHeight = sourceHeight;
   }
 
-  render({ config, time, delta, hasHistory, canvasWidth, canvasHeight }) {
+  render({
+    config,
+    time,
+    delta,
+    hasHistory,
+    canvasWidth,
+    canvasHeight,
+  }: PipelineFrame) {
     const gl = this.gl;
     const { system, macros, tuning } = config;
     const buf = this.buffers;
+    if (!buf) return;
     const texel = [1 / buf.width, 1 / buf.height];
     const shared = computeSharedUniforms(system, macros);
     const fieldU = computeFieldUniforms(system, macros);
@@ -330,7 +384,11 @@ export class VisualFxPipeline {
   readDebugBuffers() {
     if (!this.buffers) return null;
     const gl = this.gl;
-    const readFramebuffer = (framebuffer, width, height) => {
+    const readFramebuffer = (
+      framebuffer: WebGLFramebuffer | null,
+      width: number,
+      height: number,
+    ) => {
       gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
       const pixels = new Uint8Array(width * height * 4);
       gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
@@ -339,6 +397,7 @@ export class VisualFxPipeline {
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
       const imageData = ctx.createImageData(width, height);
       // WebGL reads bottom-up; flip rows so the debug view matches the
       // preview orientation. Alpha is forced opaque - several buffers use
@@ -357,7 +416,7 @@ export class VisualFxPipeline {
       ctx.putImageData(imageData, 0, 0);
       return canvas;
     };
-    const read = (target) =>
+    const read = (target: RenderTarget | null) =>
       target
         ? readFramebuffer(target.framebuffer, target.width, target.height)
         : null;

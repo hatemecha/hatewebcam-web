@@ -1,7 +1,7 @@
-import { createGLContext } from './gl.mjs';
-import { VisualFxPipeline } from './pipeline.mjs';
-import { visualConfigTopologyKey } from './config.mjs';
-import { processCompatiblePixels } from './fallback.mjs';
+import { createGLContext, type VisualGL } from './gl.ts';
+import { VisualFxPipeline } from './pipeline.ts';
+import { visualConfigTopologyKey, type VisualConfig } from './config.ts';
+import { processCompatiblePixels } from './fallback.ts';
 
 // Public renderer: owns the GPU pipeline's lifetime and decides when a
 // running simulation must restart. Two independent things can force a
@@ -16,12 +16,18 @@ import { processCompatiblePixels } from './fallback.mjs';
 // Playback pause/seek/source-change call `reset()` explicitly; that is the
 // only other way state disappears.
 export class VisualRenderer {
-  constructor() {
-    this.lastTime = null;
-    this.key = '';
-    this.topologyKey = '';
-    this.failed = false;
-  }
+  private lastTime: number | null = null;
+  private key = '';
+  private topologyKey = '';
+  failed = false;
+  private lastConfigFingerprint = '';
+  private output: HTMLCanvasElement | null = null;
+  private previous: HTMLCanvasElement | null = null;
+  private gl: VisualGL | null = null;
+  private pipeline: VisualFxPipeline | null = null;
+  private scratch: HTMLCanvasElement | null = null;
+  private pixelWork: HTMLCanvasElement | null = null;
+  private fallbackHistory: HTMLCanvasElement | null = null;
 
   reset() {
     this.lastTime = null;
@@ -40,10 +46,15 @@ export class VisualRenderer {
       return;
     }
     this.gl = context.gl;
-    this.pipeline = new VisualFxPipeline(this.gl, context.isWebGL2);
+    this.pipeline = new VisualFxPipeline(context.gl, context.isWebGL2);
   }
 
-  render(source, config, time, key = '') {
+  render(
+    source: HTMLCanvasElement,
+    config: VisualConfig,
+    time: number,
+    key = '',
+  ): HTMLCanvasElement {
     if (!this.output) {
       try {
         this.initialize();
@@ -51,12 +62,15 @@ export class VisualRenderer {
         this.failed = true;
       }
     }
+    const output = this.output;
+    const previous = this.previous;
+    if (!output || !previous) return source;
     const { width, height } = source;
     const identity = `${key}:${width}:${height}`;
     if (
       identity !== this.key ||
-      time < this.lastTime ||
-      time - this.lastTime > 0.25
+      (this.lastTime !== null &&
+        (time < this.lastTime || time - this.lastTime > 0.25))
     )
       this.reset();
     // A paused preview re-renders the *same* media time whenever a macro or
@@ -67,33 +81,34 @@ export class VisualRenderer {
       this.lastTime === time &&
       identity === this.key &&
       configFingerprint === this.lastConfigFingerprint;
-    if (unchanged) return this.failed ? this.previous : this.output;
+    if (unchanged) return this.failed ? previous : output;
     const delta =
       this.lastTime === null ? 1 : Math.max(0.01, (time - this.lastTime) * 30);
     const hasHistory = this.lastTime !== null;
     this.key = identity;
     this.lastConfigFingerprint = configFingerprint;
 
-    if (this.previous.width !== width || this.previous.height !== height) {
-      this.previous.width = width;
-      this.previous.height = height;
-      this.output.width = width;
-      this.output.height = height;
+    if (previous.width !== width || previous.height !== height) {
+      previous.width = width;
+      previous.height = height;
+      output.width = width;
+      output.height = height;
     }
     if (!this.failed && this.gl?.isContextLost()) {
       this.failed = true;
       this.reset();
     }
-    if (this.failed)
-      return this.fallback(source, config, time, delta, hasHistory);
+    const pipeline = this.pipeline;
+    if (this.failed || !pipeline)
+      return this.fallback(source, config, time, delta, hasHistory, previous);
 
     const topologyKey = visualConfigTopologyKey(config);
     if (topologyKey !== this.topologyKey) {
       this.topologyKey = topologyKey;
-      this.pipeline.ensureTopology(config.system, config.tuning, width, height);
+      pipeline.ensureTopology(config.system, config.tuning, width, height);
     }
-    this.pipeline.uploadSource(source, width, height);
-    this.pipeline.render({
+    pipeline.uploadSource(source, width, height);
+    pipeline.render({
       config,
       time,
       delta,
@@ -102,10 +117,17 @@ export class VisualRenderer {
       canvasHeight: height,
     });
     this.lastTime = time;
-    return this.output;
+    return output;
   }
 
-  fallback(source, config, time, delta, hasHistory) {
+  private fallback(
+    source: HTMLCanvasElement,
+    config: VisualConfig,
+    time: number,
+    delta: number,
+    hasHistory: boolean,
+    previous: HTMLCanvasElement,
+  ) {
     const { width, height } = source;
     this.scratch ||= document.createElement('canvas');
     this.pixelWork ||= document.createElement('canvas');
@@ -125,21 +147,23 @@ export class VisualRenderer {
       this.fallbackHistory,
     );
     const scratchCtx = this.scratch.getContext('2d');
+    if (!scratchCtx) return source;
     scratchCtx.imageSmoothingEnabled = false;
     scratchCtx.clearRect(0, 0, width, height);
     scratchCtx.drawImage(processed, 0, 0, width, height);
 
     this.fallbackHistory.width = processed.width;
     this.fallbackHistory.height = processed.height;
-    this.fallbackHistory.getContext('2d').drawImage(processed, 0, 0);
+    this.fallbackHistory.getContext('2d')?.drawImage(processed, 0, 0);
 
-    this.previous.width = width;
-    this.previous.height = height;
-    const target = this.previous.getContext('2d');
+    previous.width = width;
+    previous.height = height;
+    const target = previous.getContext('2d');
+    if (!target) return source;
     target.clearRect(0, 0, width, height);
     target.drawImage(this.scratch, 0, 0);
     this.lastTime = time;
-    return this.previous;
+    return previous;
   }
 
   // Dev FX Lab only: intermediate GPU buffers as small canvases.
@@ -154,6 +178,8 @@ export class VisualRenderer {
     this.output = null;
     this.previous = null;
     this.gl = null;
+    this.topologyKey = '';
+    this.failed = false;
     this.reset();
   }
 }

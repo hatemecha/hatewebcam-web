@@ -6,11 +6,12 @@
 // mask compositing, unrelated to the system's own state), four macro dials
 // that always mean the same thing, and a small per-system tuning set that
 // the "Tuning" drawer reveals. Everything here is intentionally small: the
-// renderer maps macros/tuning onto many internal uniforms (see systems.mjs),
+// renderer maps macros/tuning onto many internal uniforms (see systems.ts),
 // but the saved/serialized shape stays flat and readable.
 
-const clamp01 = (v) => Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0));
-const clamp = (v, min, max) =>
+const clamp01 = (v: number) =>
+  Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0));
+const clamp = (v: number, min: number, max: number) =>
   Math.max(min, Math.min(max, Number.isFinite(v) ? v : min));
 
 // Four systems. No "gallery of filters" - each is a distinct signal graph.
@@ -33,7 +34,21 @@ export const VISUAL_SYSTEMS = Object.freeze({
     hint: 'Bordes y movimiento quedan como rastro cuando la imagen se va.',
   }),
 });
-export const VISUAL_SYSTEM_IDS = Object.freeze(Object.keys(VISUAL_SYSTEMS));
+export type VisualSystem = keyof typeof VISUAL_SYSTEMS;
+export type VisualTarget = 'all' | 'person' | 'background';
+export const VISUAL_SYSTEM_IDS = Object.freeze(
+  Object.keys(VISUAL_SYSTEMS) as VisualSystem[],
+);
+
+interface TuningField {
+  key: string;
+  label: string;
+  min: number;
+  max: number;
+  default: number;
+  step?: number;
+  topology?: boolean;
+}
 
 // Curated per-system starting points. These are NOT 0.5 everywhere - a
 // system should already feel intentional at its defaults.
@@ -68,7 +83,9 @@ const DEFAULT_MACROS = Object.freeze({
 // system reach the "Tuning" drawer. `topology: true` means changing this
 // value changes buffer shape/graph and must reset the running simulation;
 // everything else (macros, and non-topology tuning) is state-safe.
-export const TUNING_SCHEMA = Object.freeze({
+export const TUNING_SCHEMA: Readonly<
+  Record<VisualSystem, readonly TuningField[]>
+> = Object.freeze({
   recursive: Object.freeze([
     {
       key: 'grain',
@@ -138,7 +155,7 @@ const MACRO_KEYS = Object.freeze([
   'memory',
   'structure',
   'movement',
-]);
+] as const);
 export const MACRO_LABELS = Object.freeze({
   intensity: 'Intensidad',
   memory: 'Memoria',
@@ -146,7 +163,19 @@ export const MACRO_LABELS = Object.freeze({
   movement: 'Movimiento',
 });
 
-const legacySystemMap = Object.freeze({
+export type VisualMacros = Record<(typeof MACRO_KEYS)[number], number>;
+export type VisualTuning = Record<string, number>;
+
+export interface VisualConfig {
+  version: 4;
+  system: VisualSystem;
+  target: VisualTarget;
+  seed: number;
+  macros: VisualMacros;
+  tuning: VisualTuning;
+}
+
+const legacySystemMap: Readonly<Record<string, VisualSystem>> = Object.freeze({
   feedback: 'recursive',
   echo: 'recursive',
   ghost: 'recursive',
@@ -164,27 +193,30 @@ const legacySystemMap = Object.freeze({
   'signal-map': 'trace',
 });
 
-function resolveSystem(raw) {
-  if (Object.hasOwn(VISUAL_SYSTEMS, raw)) return raw;
+function resolveSystem(raw: unknown): VisualSystem {
+  if (typeof raw !== 'string') return 'recursive';
+  if (Object.hasOwn(VISUAL_SYSTEMS, raw)) return raw as VisualSystem;
   if (Object.hasOwn(legacySystemMap, raw)) return legacySystemMap[raw];
   return 'recursive';
 }
 
-function normalizeMacros(system, raw) {
+function normalizeMacros(system: VisualSystem, raw: unknown): VisualMacros {
   const defaults = DEFAULT_MACROS[system];
-  const out = {};
+  const out: VisualMacros = { ...defaults };
+  const values = configRecord(raw);
   for (const key of MACRO_KEYS) {
-    const value = raw && typeof raw === 'object' ? raw[key] : undefined;
+    const value = values[key];
     out[key] = clamp01(typeof value === 'number' ? value : defaults[key]);
   }
   return out;
 }
 
-function normalizeTuning(system, raw) {
+function normalizeTuning(system: VisualSystem, raw: unknown): VisualTuning {
   const schema = TUNING_SCHEMA[system];
-  const out = {};
+  const out: VisualTuning = {};
+  const values = configRecord(raw);
   for (const field of schema) {
-    const value = raw && typeof raw === 'object' ? raw[field.key] : undefined;
+    const value = values[field.key];
     const step = field.step || 0;
     let v =
       typeof value === 'number' && Number.isFinite(value)
@@ -200,7 +232,9 @@ function normalizeTuning(system, raw) {
 // A compact key describing everything that requires a fresh simulation.
 // Target is intentionally excluded: masking is external compositing and
 // must not disturb the running system underneath it.
-export function visualConfigTopologyKey(config) {
+export function visualConfigTopologyKey(
+  config: Pick<VisualConfig, 'system' | 'tuning'>,
+) {
   const schema = TUNING_SCHEMA[config.system] || [];
   const topo = schema
     .filter((field) => field.topology)
@@ -209,12 +243,15 @@ export function visualConfigTopologyKey(config) {
   return `${config.system}|${topo}`;
 }
 
-export function normalizeVisualConfig(raw = {}) {
-  raw = raw && typeof raw === 'object' ? raw : {};
+function configRecord(raw: unknown): Record<string, unknown> {
+  return raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+}
+
+export function normalizeVisualConfig(value?: unknown): VisualConfig {
+  const raw = configRecord(value);
   const system = resolveSystem(raw.system ?? raw.preset);
-  const target = ['all', 'person', 'background'].includes(raw.target)
-    ? raw.target
-    : 'all';
+  const target =
+    raw.target === 'person' || raw.target === 'background' ? raw.target : 'all';
   const seed = Math.round(
     clamp(
       Number.isFinite(Number(raw.seed)) ? Number(raw.seed) : 18412,
@@ -242,7 +279,10 @@ export function normalizeVisualConfig(raw = {}) {
 export const createDefaultVisualConfig = (system = 'recursive') =>
   normalizeVisualConfig({ system });
 
-export function applyVisualSystem(config, system) {
+export function applyVisualSystem(
+  config: Pick<VisualConfig, 'seed' | 'target'> | null,
+  system: unknown,
+) {
   return normalizeVisualConfig({
     system,
     seed: config?.seed,
@@ -254,8 +294,10 @@ export const VISUAL_SYSTEM_LABELS = Object.fromEntries(
   Object.entries(VISUAL_SYSTEMS).map(([id, s]) => [id, s.label]),
 );
 
-export function migrateProjectToV2(project) {
-  if (!project || ![1, 2].includes(project.version))
+export function migrateProjectToV2<
+  T extends { version?: unknown; timeline?: object },
+>(project: T | null) {
+  if (!project || (project.version !== 1 && project.version !== 2))
     throw new Error('invalid_project');
-  return { ...project, version: 2, timeline: { ...project.timeline } };
+  return { ...project, version: 2 as const, timeline: { ...project.timeline } };
 }

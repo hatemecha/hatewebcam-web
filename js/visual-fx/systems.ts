@@ -2,10 +2,11 @@
 // (the actual TOP-network-equivalent for that system) and the curated,
 // non-linear mapping from macros/tuning onto its internal uniforms.
 // This is the only place "creative direction" and "shader code" meet.
-import { GLSL_LIB } from './glsl.mjs';
+import { GLSL_LIB } from './glsl.ts';
+import type { VisualMacros, VisualSystem, VisualTuning } from './config.ts';
 
-const clamp01 = (v) => Math.max(0, Math.min(1, v));
-const lerp = (a, b, t) => a + (b - a) * clamp01(t);
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+const lerp = (a: number, b: number, t: number) => a + (b - a) * clamp01(t);
 
 // Shared by every state-pass shader: a cheap 5-tap blur used as "erosion" -
 // each feedback iteration can soften the carried image instead of ever
@@ -43,17 +44,29 @@ const PIXEL_TIERS = [
   [128, 72],
 ];
 
-function tierFor(list, grain) {
+function tierFor(list: number[][], grain: number) {
   const index = Math.round(clamp01(grain) * (list.length - 1));
   return list[index];
 }
 
-export const SYSTEM_RENDER = Object.freeze({
-  recursive: {
-    resolutionTiers: TIERS,
-    historyFilter: 'LINEAR',
-    fieldScaleFreq: 2.1,
-    fragment: `${STATE_LIB}
+interface SystemRender {
+  resolutionTiers: number[][];
+  historyFilter: 'LINEAR' | 'NEAREST';
+  fieldScaleFreq: number;
+  fragment: string;
+  tuningToUniforms(
+    macros: VisualMacros,
+    tuning: VisualTuning,
+  ): Record<string, number>;
+}
+
+export const SYSTEM_RENDER: Readonly<Record<VisualSystem, SystemRender>> =
+  Object.freeze({
+    recursive: {
+      resolutionTiers: TIERS,
+      historyFilter: 'LINEAR',
+      fieldScaleFreq: 2.1,
+      fragment: `${STATE_LIB}
 uniform float uSpin;
 void main() {
   vec3 field = texture2D(uField, vUv).xyz;
@@ -70,17 +83,17 @@ void main() {
   vec3 outc = mix(src, injected, mem * uHasHistory);
   gl_FragColor = vec4(clamp(outc, 0.0, 1.0), 1.0);
 }`,
-    tuningToUniforms(macros, tuning) {
-      return {
-        uSpin: lerp(0.35, 2.1, macros.movement) * lerp(0.5, 1.6, tuning.spin),
-      };
+      tuningToUniforms(macros: VisualMacros, tuning: VisualTuning) {
+        return {
+          uSpin: lerp(0.35, 2.1, macros.movement) * lerp(0.5, 1.6, tuning.spin),
+        };
+      },
     },
-  },
-  flow: {
-    resolutionTiers: TIERS,
-    historyFilter: 'LINEAR',
-    fieldScaleFreq: 3.2,
-    fragment: `${STATE_LIB}
+    flow: {
+      resolutionTiers: TIERS,
+      historyFilter: 'LINEAR',
+      fieldScaleFreq: 3.2,
+      fragment: `${STATE_LIB}
 uniform float uTurbulence;
 void main() {
   vec3 field = texture2D(uField, vUv).xyz;
@@ -96,15 +109,15 @@ void main() {
   vec3 outc = mix(src, merged, mem * uHasHistory);
   gl_FragColor = vec4(clamp(outc, 0.0, 1.0), 1.0);
 }`,
-    tuningToUniforms(macros, tuning) {
-      return { uTurbulence: lerp(0.2, 1.3, tuning.turbulence) };
+      tuningToUniforms(_macros: VisualMacros, tuning: VisualTuning) {
+        return { uTurbulence: lerp(0.2, 1.3, tuning.turbulence) };
+      },
     },
-  },
-  pixelfield: {
-    resolutionTiers: PIXEL_TIERS,
-    historyFilter: 'NEAREST',
-    fieldScaleFreq: 1.8,
-    fragment: `${STATE_LIB}
+    pixelfield: {
+      resolutionTiers: PIXEL_TIERS,
+      historyFilter: 'NEAREST',
+      fieldScaleFreq: 1.8,
+      fragment: `${STATE_LIB}
 uniform float uJitter;
 void main() {
   vec3 field = texture2D(uField, vUv).xyz;
@@ -120,15 +133,15 @@ void main() {
   vec3 outc = mix(src, merged, mem * uHasHistory);
   gl_FragColor = vec4(clamp(outc, 0.0, 1.0), 1.0);
 }`,
-    tuningToUniforms(macros, tuning) {
-      return { uJitter: lerp(0.15, 1.4, tuning.jitter) };
+      tuningToUniforms(_macros: VisualMacros, tuning: VisualTuning) {
+        return { uJitter: lerp(0.15, 1.4, tuning.jitter) };
+      },
     },
-  },
-  trace: {
-    resolutionTiers: TIERS,
-    historyFilter: 'LINEAR',
-    fieldScaleFreq: 2.6,
-    fragment: `${STATE_LIB}
+    trace: {
+      resolutionTiers: TIERS,
+      historyFilter: 'LINEAR',
+      fieldScaleFreq: 2.6,
+      fragment: `${STATE_LIB}
 uniform float uPersistBias;
 void main() {
   vec3 field = texture2D(uField, vUv).xyz;
@@ -150,17 +163,17 @@ void main() {
   vec3 outc = mix(traceAccum, src, uInjection * 0.6);
   gl_FragColor = vec4(clamp(outc, 0.0, 1.0), 1.0);
 }`,
-    tuningToUniforms(macros, tuning) {
-      return { uPersistBias: lerp(0.3, 1.3, tuning.persistBias) };
+      tuningToUniforms(_macros: VisualMacros, tuning: VisualTuning) {
+        return { uPersistBias: lerp(0.3, 1.3, tuning.persistBias) };
+      },
     },
-  },
-});
+  });
 
 export function getWorkingResolution(
-  system,
-  tuning,
-  sourceWidth,
-  sourceHeight,
+  system: VisualSystem,
+  tuning: VisualTuning,
+  sourceWidth: number,
+  sourceHeight: number,
 ) {
   const render = SYSTEM_RENDER[system];
   const [baseW] = tierFor(render.resolutionTiers, tuning.grain);
@@ -177,7 +190,10 @@ export function getWorkingResolution(
 // The shared, non-topology part of the macro mapping: injection/memory/
 // erosion/displace mean the same conceptual thing in every system, only
 // their exact curve differs slightly per system's character.
-export function computeSharedUniforms(system, macros) {
+export function computeSharedUniforms(
+  system: VisualSystem,
+  macros: VisualMacros,
+) {
   const memoryCeil =
     system === 'flow' || system === 'pixelfield' ? 0.985 : 0.994;
   return {
@@ -190,7 +206,10 @@ export function computeSharedUniforms(system, macros) {
   };
 }
 
-export function computeFieldUniforms(system, macros) {
+export function computeFieldUniforms(
+  system: VisualSystem,
+  macros: VisualMacros,
+) {
   const render = SYSTEM_RENDER[system];
   return {
     uSpeed: lerp(0.02, 0.14, macros.movement),
@@ -205,7 +224,10 @@ export function computeFieldUniforms(system, macros) {
 // Palette pass uniforms. `tuning.palette` (0..4) overrides the system's
 // curated default when the user opens Tuning; levels/curve/dither follow
 // the `structure` macro so "structure" reliably means "more defined".
-const DEFAULT_TONES = {
+type ColorTone = readonly [number, number, number];
+const DEFAULT_TONES: Readonly<
+  Record<VisualSystem, readonly [ColorTone, ColorTone]>
+> = {
   recursive: [
     [0.02, 0.02, 0.03],
     [0.94, 0.93, 0.9],
@@ -224,7 +246,11 @@ const DEFAULT_TONES = {
   ],
 };
 
-export function computePaletteUniforms(system, macros, tuning) {
+export function computePaletteUniforms(
+  system: VisualSystem,
+  macros: VisualMacros,
+  tuning: VisualTuning,
+) {
   const levelsFloor = system === 'pixelfield' ? 2.5 : 3;
   const levelsCeil = system === 'pixelfield' ? 9 : 15;
   const [toneA, toneB] = DEFAULT_TONES[system];

@@ -5,8 +5,8 @@ import {
   VISUAL_SYSTEMS,
   applyVisualSystem,
   visualConfigTopologyKey,
-} from '../js/visual-fx/config.mjs';
-import { VisualFxEffect, maskStaleBudgetSec } from '../js/visual-fx/effect.mjs';
+} from '../js/visual-fx/config.ts';
+import { VisualFxEffect, maskStaleBudgetSec } from '../js/visual-fx/effect.ts';
 import { applyVisualFxIntegrationMixin } from '../js/app/visual-fx-integration.mjs';
 import { VideoTimeline } from '../js/editor/video-timeline.ts';
 

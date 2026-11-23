@@ -5,8 +5,29 @@
 // WebGL2 (WebGL2 keeps ES 1.00 shader compatibility as long as no ES3-only
 // feature is used), which lets the whole pipeline share one shader set.
 
-export function createGLContext(canvas) {
-  const attrs = {
+export type VisualGL = WebGLRenderingContext | WebGL2RenderingContext;
+
+interface FramebufferDestination {
+  framebuffer: WebGLFramebuffer | null;
+  width: number;
+  height: number;
+}
+
+export interface RenderTarget extends FramebufferDestination {
+  texture: WebGLTexture;
+  framebuffer: WebGLFramebuffer;
+}
+
+interface TargetOptions {
+  filter?: number;
+  type?: number;
+  internalFormat?: number;
+}
+
+export function createGLContext(
+  canvas: HTMLCanvasElement,
+): { gl: VisualGL; isWebGL2: boolean } | null {
+  const attrs: WebGLContextAttributes = {
     alpha: true,
     antialias: false,
     depth: false,
@@ -14,15 +35,19 @@ export function createGLContext(canvas) {
     preserveDrawingBuffer: true,
     premultipliedAlpha: true,
   };
-  const gl2 = canvas.getContext('webgl2', attrs);
+  const gl2 = canvas.getContext(
+    'webgl2',
+    attrs,
+  ) as WebGL2RenderingContext | null;
   if (gl2) return { gl: gl2, isWebGL2: true };
-  const gl1 = canvas.getContext('webgl', attrs);
+  const gl1 = canvas.getContext('webgl', attrs) as WebGLRenderingContext | null;
   if (gl1) return { gl: gl1, isWebGL2: false };
   return null;
 }
 
-export function compileShader(gl, type, source) {
+export function compileShader(gl: VisualGL, type: number, source: string) {
   const shader = gl.createShader(type);
+  if (!shader) throw new Error('Visual FX shader allocation failed');
   gl.shaderSource(shader, source);
   gl.compileShader(shader);
   if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
@@ -33,10 +58,25 @@ export function compileShader(gl, type, source) {
   return shader;
 }
 
-export function createProgram(gl, vertexSource, fragmentSource) {
+export function createProgram(
+  gl: VisualGL,
+  vertexSource: string,
+  fragmentSource: string,
+) {
   const vs = compileShader(gl, gl.VERTEX_SHADER, vertexSource);
-  const fs = compileShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
+  let fs: WebGLShader;
+  try {
+    fs = compileShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
+  } catch (error) {
+    gl.deleteShader(vs);
+    throw error;
+  }
   const program = gl.createProgram();
+  if (!program) {
+    gl.deleteShader(vs);
+    gl.deleteShader(fs);
+    throw new Error('Visual FX program allocation failed');
+  }
   gl.attachShader(program, vs);
   gl.attachShader(program, fs);
   gl.bindAttribLocation(program, 0, 'position');
@@ -48,20 +88,21 @@ export function createProgram(gl, vertexSource, fragmentSource) {
     gl.deleteProgram(program);
     throw new Error(`Visual FX program link error: ${log}`);
   }
-  const uniforms = new Map();
+  const uniforms = new Map<string, WebGLUniformLocation | null>();
   return {
     program,
-    uniform(name) {
+    uniform(name: string) {
       if (!uniforms.has(name))
         uniforms.set(name, gl.getUniformLocation(program, name));
-      return uniforms.get(name);
+      return uniforms.get(name) ?? null;
     },
   };
 }
 
 // Fullscreen triangle-pair, shared by every pass. `position` is attribute 0.
-export function createQuad(gl) {
+export function createQuad(gl: VisualGL) {
   const buffer = gl.createBuffer();
+  if (!buffer) throw new Error('Visual FX quad allocation failed');
   gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
   gl.bufferData(
     gl.ARRAY_BUFFER,
@@ -71,7 +112,7 @@ export function createQuad(gl) {
   return buffer;
 }
 
-export function bindQuad(gl, buffer) {
+export function bindQuad(gl: VisualGL, buffer: WebGLBuffer) {
   gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
   gl.enableVertexAttribArray(0);
   gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
@@ -81,11 +122,11 @@ export function bindQuad(gl, buffer) {
 // Only used for signal buffers (control field / drift field) where 8-bit
 // leaky integration visibly bands. Color buffers keep UNSIGNED_BYTE, which
 // is universally renderable and already good enough for a final image.
-export function detectFloatRenderTarget(gl, isWebGL2) {
-  let type = gl.UNSIGNED_BYTE;
-  let internalFormat = gl.RGBA;
+export function detectFloatRenderTarget(gl: VisualGL, isWebGL2: boolean) {
+  let type: number = gl.UNSIGNED_BYTE;
+  let internalFormat: number = gl.RGBA;
   try {
-    if (isWebGL2) {
+    if (isWebGL2 && 'RGBA16F' in gl) {
       const ext = gl.getExtension('EXT_color_buffer_float');
       if (ext) {
         type = gl.HALF_FLOAT;
@@ -137,13 +178,20 @@ export function detectFloatRenderTarget(gl, isWebGL2) {
 }
 
 // A single render target: texture + framebuffer, fixed size.
-export function createTarget(gl, isWebGL2, width, height, options = {}) {
+export function createTarget(
+  gl: VisualGL,
+  isWebGL2: boolean,
+  width: number,
+  height: number,
+  options: TargetOptions = {},
+): RenderTarget {
   const {
     filter = gl.LINEAR,
     type = gl.UNSIGNED_BYTE,
     internalFormat,
   } = options;
   const texture = gl.createTexture();
+  if (!texture) throw new Error('Visual FX texture allocation failed');
   gl.bindTexture(gl.TEXTURE_2D, texture);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
@@ -174,6 +222,10 @@ export function createTarget(gl, isWebGL2, width, height, options = {}) {
       null,
     );
   const framebuffer = gl.createFramebuffer();
+  if (!framebuffer) {
+    gl.deleteTexture(texture);
+    throw new Error('Visual FX framebuffer allocation failed');
+  }
   gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
   gl.framebufferTexture2D(
     gl.FRAMEBUFFER,
@@ -186,7 +238,7 @@ export function createTarget(gl, isWebGL2, width, height, options = {}) {
   return { texture, framebuffer, width, height };
 }
 
-export function destroyTarget(gl, target) {
+export function destroyTarget(gl: VisualGL, target: RenderTarget | null) {
   if (!target) return;
   gl.deleteTexture(target.texture);
   gl.deleteFramebuffer(target.framebuffer);
@@ -197,11 +249,24 @@ export function destroyTarget(gl, target) {
 // target about to be written this frame. Call `advance()` once the write
 // completes so next frame's `current()` returns the fresh content.
 export class PingPong {
-  constructor(gl, isWebGL2, width, height, options = {}) {
-    this.gl = gl;
+  private readonly a: RenderTarget;
+  private readonly b: RenderTarget;
+  private flag = false;
+
+  constructor(
+    private readonly gl: VisualGL,
+    isWebGL2: boolean,
+    width: number,
+    height: number,
+    options: TargetOptions = {},
+  ) {
     this.a = createTarget(gl, isWebGL2, width, height, options);
-    this.b = createTarget(gl, isWebGL2, width, height, options);
-    this.flag = false;
+    try {
+      this.b = createTarget(gl, isWebGL2, width, height, options);
+    } catch (error) {
+      destroyTarget(gl, this.a);
+      throw error;
+    }
   }
   current() {
     return this.flag ? this.b : this.a;
@@ -218,7 +283,11 @@ export class PingPong {
   }
 }
 
-export function renderToTarget(gl, target, draw) {
+export function renderToTarget(
+  gl: VisualGL,
+  target: FramebufferDestination | null,
+  draw: () => void,
+) {
   gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
   gl.viewport(
     0,

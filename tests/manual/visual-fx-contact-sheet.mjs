@@ -19,8 +19,8 @@ await page.goto(BASE + '/');
 
 const result = await page.evaluate(
   async ({ systems, frameSamples }) => {
-    const { VisualFxEffect } = await import('/js/visual-fx/effect.mjs');
-    const { normalizeVisualConfig } = await import('/js/visual-fx/config.mjs');
+    const { VisualFxEffect } = await import('/js/visual-fx/effect.ts');
+    const { normalizeVisualConfig } = await import('/js/visual-fx/config.ts');
 
     const source = document.createElement('canvas');
     source.width = 320;

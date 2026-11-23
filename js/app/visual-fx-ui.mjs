@@ -5,7 +5,7 @@ import {
   PALETTE_OPTIONS,
   MACRO_LABELS,
   normalizeVisualConfig,
-} from '../visual-fx/config.mjs';
+} from '../visual-fx/config.ts';
 import { isVisualFxClipType } from '../editor/timeline-clip-types.ts';
 
 // Compact instrument panel: a system picker, "Aplicar a", four curated

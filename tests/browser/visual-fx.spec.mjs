@@ -28,9 +28,9 @@ async function loadEngine(page) {
   await page.goto('/');
   await page.evaluate(async () => {
     const { VisualFxEffect } =
-      await import('/__visual-test/js/visual-fx/effect.mjs');
+      await import('/__visual-test/js/visual-fx/effect.ts');
     const { normalizeVisualConfig, VISUAL_SYSTEM_IDS } =
-      await import('/__visual-test/js/visual-fx/config.mjs');
+      await import('/__visual-test/js/visual-fx/config.ts');
     window.visualTest = {
       VisualFxEffect,
       normalizeVisualConfig,
