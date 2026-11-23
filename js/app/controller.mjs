@@ -28,6 +28,10 @@ import {
   normalizePreviewQuality,
   normalizePerformanceMode,
 } from './constants.ts';
+import {
+  PhotoCountdown,
+  RecordingSession,
+} from '../../src/lib/capture/media-sessions.ts';
 import { EffectManager } from '../effects/effect-manager.ts';
 import { setupDom } from './dom.mjs';
 import { applyStorageMixin } from './settings.mjs';
@@ -73,23 +77,11 @@ export class AppController {
     this.saveQuickDetectorSettingsTimer = null;
     this.saveEffectSettingsTimer = null;
 
-    this.mediaRecorder = null;
-    this.recordingStream = null;
-    this.recordingChunks = [];
-    this.isRecording = false;
-    this.recordingStartTs = 0;
-    this.recordingTimer = null;
-    this.currentRecordingMimeType = '';
-    this.currentRecordingExt = 'webm';
-    this.currentRecordingBitrate = 6_000_000;
-    this.currentRecordingFps = 30;
+    this.recordingSession = new RecordingSession();
+    this.photoCountdown = new PhotoCountdown();
     this.pendingCapture = null;
-    this.lastRecordingDurationSec = 0;
     this.photoPreviewRenderToken = 0;
     this.previewPhotoEnhancerDebounceId = null;
-    this.photoCountdownTimer = null;
-    this.photoCountdownRemaining = 0;
-    this.isPhotoCountdownActive = false;
 
     this.sourceMode = 'camera';
     this.requestedSourceMode = 'camera';

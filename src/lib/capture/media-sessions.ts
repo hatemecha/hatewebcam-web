@@ -2,6 +2,7 @@ export interface RecordingResult {
   blob: Blob;
   mimeType: string;
   extension: string;
+  durationSec: number;
 }
 
 export interface RecordingStart {
@@ -29,6 +30,8 @@ export class RecordingSession {
   private mimeType = '';
   private extension = 'webm';
   private onStopped: ((result: RecordingResult | null) => void) | null = null;
+  private startedAt: number | null = null;
+  private stoppedAt: number | null = null;
 
   constructor(
     private readonly createRecorder: RecorderFactory = (stream, options) =>
@@ -43,6 +46,22 @@ export class RecordingSession {
     return this.stream;
   }
 
+  get active(): boolean {
+    return this.startedAt !== null && this.stoppedAt === null;
+  }
+
+  get elapsedSeconds(): number {
+    if (this.startedAt === null) return 0;
+    return Math.max(
+      0,
+      ((this.stoppedAt ?? Date.now()) - this.startedAt) / 1000,
+    );
+  }
+
+  get format(): string {
+    return this.extension;
+  }
+
   start(input: RecordingStart): void {
     this.dispose();
     this.discardOnStop = false;
@@ -51,60 +70,60 @@ export class RecordingSession {
     this.extension = input.extension;
     this.stream = input.stream;
     this.onStopped = input.onStopped;
-    this.recorder = this.createRecorder(input.stream, {
-      mimeType: input.mimeType,
-      videoBitsPerSecond: input.videoBitsPerSecond,
-    });
-    const requested = this.recorder;
-    requested.ondataavailable = (event) => {
-      if (event.data && event.data.size > 0) this.chunks.push(event.data);
-    };
-    requested.onstop = () => {
-      const savedChunks = this.discardOnStop ? [] : this.chunks.slice();
-      const savedType = this.mimeType;
-      const savedExtension = this.extension;
-      const notify = this.onStopped;
-      this.chunks = [];
-      this.releaseStream();
-      this.recorder = null;
-      this.onStopped = null;
-      this.clearTimer();
-      const result =
-        savedChunks.length > 0
-          ? {
-              blob: new Blob(savedChunks, { type: savedType || 'video/webm' }),
-              mimeType: savedType || 'video/webm',
-              extension: savedExtension,
-            }
-          : null;
-      notify?.(result);
-    };
-    requested.start(input.timesliceMs ?? 250);
-    this.timer = setInterval(() => input.onTick(), input.tickMs ?? 1000);
+    try {
+      const requested = this.createRecorder(input.stream, {
+        mimeType: input.mimeType,
+        videoBitsPerSecond: input.videoBitsPerSecond,
+      });
+      this.recorder = requested;
+      requested.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) this.chunks.push(event.data);
+      };
+      requested.onstop = () => {
+        const mimeType = this.mimeType || 'video/webm';
+        const result =
+          !this.discardOnStop && this.chunks.length
+            ? {
+                blob: new Blob(this.chunks, { type: mimeType }),
+                mimeType,
+                extension: this.extension,
+                durationSec: this.elapsedSeconds,
+              }
+            : null;
+        const notify = this.onStopped;
+        this.dispose();
+        notify?.(result);
+      };
+      requested.start(input.timesliceMs ?? 250);
+      this.startedAt = Date.now();
+      this.timer = setInterval(input.onTick, input.tickMs ?? 1000);
+    } catch (error) {
+      this.dispose();
+      throw error;
+    }
   }
 
   stop(save: boolean): void {
-    this.discardOnStop = !save;
+    if (!this.recorder) return;
+    this.discardOnStop ||= !save;
+    this.stoppedAt ??= Date.now();
     this.clearTimer();
-    if (this.recorder && this.recorder.state !== 'inactive') {
-      this.recorder.stop();
-      return;
-    }
-    this.releaseStream();
-    this.recorder = null;
-    this.chunks = [];
+    if (this.recorder.state !== 'inactive') this.recorder.stop();
   }
 
   dispose(): void {
     this.discardOnStop = true;
     this.clearTimer();
-    if (this.recorder && this.recorder.state !== 'inactive') {
+    if (this.recorder) {
       this.recorder.onstop = null;
-      this.recorder.stop();
+      this.recorder.ondataavailable = null;
+      if (this.recorder.state !== 'inactive') this.recorder.stop();
     }
     this.recorder = null;
     this.chunks = [];
     this.onStopped = null;
+    this.startedAt = null;
+    this.stoppedAt = null;
     this.releaseStream();
   }
 

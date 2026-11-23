@@ -106,7 +106,7 @@ export function applyEffectsMixin(proto) {
           this.applyQuickDetectorSettingsToEffects();
         }
         this.syncBlinkLandmarkSource();
-        if (!quiet && !this.isRecording) {
+        if (!quiet && !this.recordingSession?.active) {
           setTimeout(() => this.hideStatus(this.captureStatus), 1200);
         }
       } else {
@@ -169,7 +169,7 @@ export function applyEffectsMixin(proto) {
         } else {
           this.blinkDetectionEffect.setBlinkCallback(null);
         }
-        if (!quiet && !this.isRecording) {
+        if (!quiet && !this.recordingSession?.active) {
           setTimeout(() => this.hideStatus(this.captureStatus), 1200);
         }
       } else {

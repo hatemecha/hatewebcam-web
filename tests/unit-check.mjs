@@ -3493,6 +3493,26 @@ function checkCaptureSessions() {
   discarded.mediaRecorder.ondataavailable?.({ data: new Blob(['no']) });
   discarded.stop(false);
   assert.equal(discardedResult, null);
+
+  let released = 0;
+  const failed = new RecordingSession(() => {
+    throw new Error('recorder unavailable');
+  });
+  assert.throws(
+    () =>
+      failed.start({
+        stream: { getTracks: () => [{ stop: () => released++ }] },
+        mimeType: 'video/webm',
+        extension: 'webm',
+        videoBitsPerSecond: 1000,
+        onTick() {},
+        onStopped() {},
+      }),
+    /recorder unavailable/,
+  );
+  assert.equal(released, 1);
+  assert.equal(failed.mediaStream, null);
+  assert.equal(failed.active, false);
 }
 
 function listSvelteFiles(dir) {

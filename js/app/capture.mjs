@@ -1,7 +1,3 @@
-import {
-  PhotoCountdown,
-  RecordingSession,
-} from '../../src/lib/capture/media-sessions.ts';
 import { translateCurrent } from '../../src/lib/i18n/translate.ts';
 import {
   patchCaptureChromeState,
@@ -26,31 +22,27 @@ export function applyCaptureMixin(proto) {
   };
 
   proto.publishCaptureChrome = function () {
-    const seconds =
-      this.isRecording && this.recordingStartTs
-        ? Math.max(0, Math.floor((Date.now() - this.recordingStartTs) / 1000))
-        : 0;
-    const format =
-      (this.currentRecordingExt || 'webm').toUpperCase() === 'WEBM'
-        ? 'WebM'
-        : 'MP4';
+    const seconds = Math.floor(this.recordingSession.elapsedSeconds);
+    const format = this.recordingSession.format === 'webm' ? 'WebM' : 'MP4';
     patchCaptureChromeState({
       cameraRunning: !!this.isRunning,
-      recording: !!this.isRecording,
-      countdownActive: !!this.isPhotoCountdownActive,
-      countdownRemaining: this.photoCountdownRemaining || 0,
-      countdownTotal: this.photoCountdownTotal || 0,
+      recording: !!this.recordingSession.active,
+      countdownActive: !!this.photoCountdown.active,
+      countdownRemaining: this.photoCountdown.remaining || 0,
+      countdownTotal: this.photoCountdown.total || 0,
       previewOpen: !!this.capturePreviewOpen,
       mobileFxOpen: !!this.mobileFxOpen,
-      recordingTime: this.isRecording ? this.formatDuration(seconds) : '00:00',
-      recordingFormat: this.isRecording ? format : 'WebM',
+      recordingTime: this.recordingSession.active
+        ? this.formatDuration(seconds)
+        : '00:00',
+      recordingFormat: this.recordingSession.active ? format : 'WebM',
       flashToken: this.captureFlashToken || 0,
       blobEnabled: !!this.chkBlobTracking?.checked,
       faceEnabled: !!this.chkFaceDetection?.checked,
       lockCaptureSettings: !!(
-        this.isRecording ||
+        this.recordingSession.active ||
         this.capturePreviewOpen ||
-        this.isPhotoCountdownActive
+        this.photoCountdown.active
       ),
       lockDetectors: !!this.capturePreviewOpen,
     });
@@ -236,24 +228,8 @@ export function applyCaptureMixin(proto) {
     }
   };
 
-  proto.ensurePhotoCountdown = function () {
-    if (!this.photoCountdownSession) {
-      this.photoCountdownSession = new PhotoCountdown();
-    }
-    return this.photoCountdownSession;
-  };
-
-  proto.updateCaptureCountdownUI = function () {
-    this.publishCaptureChrome();
-  };
-
   proto.cancelPhotoCountdown = function (showMessage = true) {
-    this.ensurePhotoCountdown().cancel();
-    const wasActive = this.isPhotoCountdownActive;
-    this.isPhotoCountdownActive = false;
-    this.photoCountdownRemaining = 0;
-    this.photoCountdownTotal = 0;
-    this.updateCaptureCountdownUI();
+    const wasActive = this.photoCountdown.cancel();
     this.updateCaptureButtons();
 
     if (showMessage && wasActive) {
@@ -292,17 +268,10 @@ export function applyCaptureMixin(proto) {
   };
 
   proto.startPhotoCountdown = function (seconds) {
-    this.cancelPhotoCountdown(false);
-    this.isPhotoCountdownActive = true;
-    this.photoCountdownRemaining = seconds;
-    this.photoCountdownTotal = seconds;
-    this.ensurePhotoCountdown().start(
+    this.photoCountdown.start(
       seconds,
       (remaining) => {
-        this.photoCountdownRemaining = remaining;
-        this.photoCountdownTotal = seconds;
-        this.isPhotoCountdownActive = true;
-        this.updateCaptureCountdownUI();
+        this.publishCaptureChrome();
         this.showStatus(
           this.captureStatus,
           translateCurrent('Foto en {seconds} segundos', {
@@ -312,14 +281,10 @@ export function applyCaptureMixin(proto) {
         );
       },
       () => {
-        this.isPhotoCountdownActive = false;
-        this.photoCountdownRemaining = 0;
-        this.updateCaptureCountdownUI();
         this.updateCaptureButtons();
         void this.takePhoto();
       },
     );
-    this.updateCaptureCountdownUI();
     this.updateCaptureButtons();
     this.showStatus(
       this.captureStatus,
@@ -330,7 +295,7 @@ export function applyCaptureMixin(proto) {
 
   proto.requestPhotoCapture = function () {
     this.armShutterSound();
-    if (this.isPhotoCountdownActive) {
+    if (this.photoCountdown.active) {
       this.cancelPhotoCountdown(true);
       return;
     }
@@ -350,7 +315,7 @@ export function applyCaptureMixin(proto) {
   proto.updateCaptureButtons = function () {
     const previewOpen = this.isCapturePreviewOpen();
     const lockCaptureSettings =
-      this.isRecording || previewOpen || this.isPhotoCountdownActive;
+      this.recordingSession.active || previewOpen || this.photoCountdown.active;
 
     if (this.videoFormatSelect)
       this.videoFormatSelect.disabled = lockCaptureSettings;
@@ -651,7 +616,7 @@ export function applyCaptureMixin(proto) {
   };
 
   proto.toggleRecording = function () {
-    if (this.isRecording) {
+    if (this.recordingSession.active) {
       this.stopRecording(true);
     } else {
       this.startRecording();
@@ -705,17 +670,9 @@ export function applyCaptureMixin(proto) {
     }
   };
 
-  proto.ensureRecordingSession = function () {
-    if (!this.recordingSession) this.recordingSession = new RecordingSession();
-    return this.recordingSession;
-  };
-
-  proto.updateRecordingHud = function () {
-    this.publishCaptureChrome();
-  };
-
   proto.startRecording = function () {
-    if (this.isPhotoCountdownActive) {
+    if (this.recordingSession.mediaRecorder) return;
+    if (this.photoCountdown.active) {
       this.showStatus(
         this.captureStatus,
         'Cancelá el temporizador antes de grabar',
@@ -759,12 +716,9 @@ export function applyCaptureMixin(proto) {
     }
 
     try {
-      this.recordingChunks = [];
-      this.ensureRecordingCanvas();
-      if (
-        this.renderEngine.recordingCanvas.width === 0 ||
-        this.renderEngine.recordingCanvas.height === 0
-      ) {
+      const canvas = this.ensureRecordingCanvas();
+      const { width, height } = canvas;
+      if (width === 0 || height === 0) {
         this.showStatus(
           this.captureStatus,
           'Esperá un momento y reintentá la grabación',
@@ -772,59 +726,33 @@ export function applyCaptureMixin(proto) {
         );
         return;
       }
-      this.currentRecordingMimeType = recordingProfile.mimeType;
-      this.currentRecordingExt = recordingProfile.extension;
       this.copyFrameToRecordingCanvas();
-      this.currentRecordingFps = this.getPreferredRecordingFps();
-      this.currentRecordingBitrate = this.getRecommendedVideoBitrate(
-        this.renderEngine.recordingCanvas.width,
-        this.renderEngine.recordingCanvas.height,
-        this.currentRecordingFps,
-      );
-      const session = this.ensureRecordingSession();
-      session.start({
-        stream: this.renderEngine.recordingCanvas.captureStream(
-          this.currentRecordingFps,
-        ),
+      const fps = this.getPreferredRecordingFps();
+      const bitrate = this.getRecommendedVideoBitrate(width, height, fps);
+      const { qualityEnhancer, qualityEnhancerStrength } = this.imageSettings;
+      this.recordingSession.start({
+        stream: canvas.captureStream(fps),
         mimeType: recordingProfile.mimeType,
         extension: recordingProfile.extension,
-        videoBitsPerSecond: this.currentRecordingBitrate,
-        onTick: () => {
-          if (this.isRecording) this.updateRecordingHud();
-        },
+        videoBitsPerSecond: bitrate,
+        onTick: () => this.publishCaptureChrome(),
         onStopped: (result) => {
-          this.mediaRecorder = null;
-          this.recordingStream = null;
-          this.recordingChunks = [];
-          const savedFps = this.currentRecordingFps;
-          const savedBitrate = this.currentRecordingBitrate;
-          this.currentRecordingMimeType = '';
-          this.currentRecordingExt = 'webm';
-          this.currentRecordingBitrate = 6000000;
-          this.currentRecordingFps = 30;
-          const durationSec = this.lastRecordingDurationSec;
-          this.lastRecordingDurationSec = 0;
+          this.updateCaptureButtons();
           if (!result) return;
-          const recordedWidth = this.renderEngine.recordingCanvas
-            ? this.renderEngine.recordingCanvas.width
-            : this.canvas.width;
-          const recordedHeight = this.renderEngine.recordingCanvas
-            ? this.renderEngine.recordingCanvas.height
-            : this.canvas.height;
           this.openCapturePreview({
             kind: 'video',
             blob: result.blob,
             filename: `hatewebcam-record-${this.timestamp()}.${result.extension}`,
             meta: {
-              width: recordedWidth,
-              height: recordedHeight,
+              width,
+              height,
               size: result.blob.size,
               format: result.extension.toUpperCase(),
-              durationSec,
-              fps: savedFps,
-              bitrate: savedBitrate,
-              enhanced: !!this.imageSettings.qualityEnhancer,
-              enhancerStrength: this.imageSettings.qualityEnhancerStrength,
+              durationSec: result.durationSec,
+              fps,
+              bitrate,
+              enhanced: qualityEnhancer,
+              enhancerStrength: qualityEnhancerStrength,
             },
           });
           this.showStatus(
@@ -834,20 +762,8 @@ export function applyCaptureMixin(proto) {
           );
         },
       });
-      this.mediaRecorder = session.mediaRecorder;
-      this.recordingStream = session.mediaStream;
-      if (recordingProfile.fallbackMessage) {
-        this.showStatus(
-          this.captureStatus,
-          recordingProfile.fallbackMessage,
-          'info',
-        );
-      }
-      this.isRecording = true;
-      this.recordingStartTs = Date.now();
-      this.updateRecordingHud();
       const effectiveFormat =
-        this.currentRecordingExt.toUpperCase() === 'WEBM' ? 'WebM' : 'MP4';
+        recordingProfile.extension === 'webm' ? 'WebM' : 'MP4';
       this.showStatus(
         this.captureStatus,
         recordingProfile.fallbackMessage
@@ -868,34 +784,12 @@ export function applyCaptureMixin(proto) {
         'No se pudo iniciar la grabación',
         'error',
       );
-      this.isRecording = false;
-      this.recordingSession?.dispose();
-      this.recordingStream = null;
-      this.mediaRecorder = null;
-      this.currentRecordingMimeType = '';
-      this.currentRecordingExt = 'webm';
-      this.currentRecordingBitrate = 6000000;
-      this.currentRecordingFps = 30;
-      this.lastRecordingDurationSec = 0;
-      this.updateRecordingHud();
       this.updateCaptureButtons();
     }
   };
 
   proto.stopRecording = function (saveFile) {
-    if (!this.isRecording && !this.mediaRecorder) return;
-    this.isRecording = false;
-    if (saveFile && this.recordingStartTs > 0) {
-      this.lastRecordingDurationSec = Math.max(
-        0,
-        (Date.now() - this.recordingStartTs) / 1000,
-      );
-    } else {
-      this.lastRecordingDurationSec = 0;
-    }
-    this.recordingStartTs = 0;
-    this.updateRecordingHud();
-    this.updateCaptureButtons();
+    if (!this.recordingSession.mediaRecorder) return;
     this.showStatus(
       this.captureStatus,
       saveFile
@@ -903,17 +797,8 @@ export function applyCaptureMixin(proto) {
         : 'Grabación cancelada.',
       'info',
     );
-    this.recordingSession?.stop(!!saveFile);
-    this.mediaRecorder = this.recordingSession?.mediaRecorder || null;
-    this.recordingStream = this.recordingSession?.mediaStream || null;
-    if (!saveFile) {
-      this.recordingChunks = [];
-      this.currentRecordingMimeType = '';
-      this.currentRecordingExt = 'webm';
-      this.currentRecordingBitrate = 6000000;
-      this.currentRecordingFps = 30;
-      this.lastRecordingDurationSec = 0;
-    }
+    this.recordingSession.stop(saveFile);
+    this.updateCaptureButtons();
   };
 
   proto.openCapturePreview = function (capture) {

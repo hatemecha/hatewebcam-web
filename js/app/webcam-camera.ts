@@ -39,7 +39,7 @@ interface WebcamCameraHost {
   videoPlaceholderLoading: boolean;
   isRunning: boolean;
   isPageVisible: boolean;
-  isRecording: boolean;
+  recordingSession: { active: boolean };
   frameCount: number;
   lastFpsTime: number;
   animFrameId: number | null;
@@ -272,7 +272,7 @@ export class WebcamCamera {
   async toggleCamera(forceStart = false) {
     if (this.host.sourceMode !== 'camera') return;
     if (this.host.isRunning && !forceStart) {
-      if (this.host.isRecording) this.host.stopRecording(true);
+      if (this.host.recordingSession.active) this.host.stopRecording(true);
       this.host.cancelPhotoCountdown(false);
 
       this.stop();

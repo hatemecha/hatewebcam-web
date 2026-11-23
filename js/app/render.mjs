@@ -224,7 +224,7 @@ export function applyRenderLoopMixin(proto) {
 
         const frameStart = perfDev.mark();
         try {
-          if (this.isRecording) {
+          if (this.recordingSession?.active) {
             this.renderSourceFrameBuffer(true);
             this.blitProcessedFrameToPreview();
           } else {

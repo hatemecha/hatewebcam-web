@@ -339,7 +339,7 @@ export function applyEventsMixin(proto) {
 
     window.addEventListener('beforeunload', () => {
       this.cancelPhotoCountdown(false);
-      this.stopRecording(false);
+      this.recordingSession.dispose();
       this.clearPendingCapture(true);
       this.camera.stop();
       this.editor?.source.dispose();
