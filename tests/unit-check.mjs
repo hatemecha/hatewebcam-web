@@ -77,22 +77,22 @@ import {
   SubjectMask,
   normalizeMaskBuffer,
   smoothMaskTemporal,
-} from '../js/subject/subject-mask.mjs';
+} from '../js/subject/subject-mask.ts';
 import {
   buildLocalMotionRegions,
   getMotionAt,
   getStrongestMotionRegion,
-} from '../js/subject/subject-local-motion.mjs';
+} from '../js/subject/subject-local-motion.ts';
 import {
   mapNormToCanvas,
   mapNormToSubjectSpace,
   getVideoDrawMetrics,
-} from '../js/subject/subject-frame-map.mjs';
-import { SubjectAnalysisCache } from '../js/subject/subject-cache.mjs';
+} from '../js/subject/subject-frame-map.ts';
+import { SubjectAnalysisCache } from '../js/subject/subject-cache.ts';
 import {
   SUBJECT_ANALYSIS_STATUS,
   SubjectAnalyzer,
-} from '../js/subject/subject-analyzer.mjs';
+} from '../js/subject/subject-analyzer.ts';
 import { resolveSubjectAssetUrls } from '../js/subject/mediapipe-paths.ts';
 import {
   estimateTempoFromSamples,

@@ -1,12 +1,26 @@
-import { SubjectMotionAnalyzer } from './subject-motion.ts';
+import {
+  SubjectMotionAnalyzer,
+  type computeBoundingBox,
+} from './subject-motion.ts';
 import {
   normalizeMaskBuffer,
   smoothMaskTemporal,
   SubjectMask,
-} from './subject-mask.mjs';
-import { buildLocalMotionRegions } from './subject-local-motion.mjs';
-import { SubjectAnalysisCache } from './subject-cache.mjs';
+} from './subject-mask.ts';
+import {
+  buildLocalMotionRegions,
+  type MotionRegions,
+} from './subject-local-motion.ts';
+import { SubjectAnalysisCache, type SubjectSample } from './subject-cache.ts';
 import { perfDev } from '../app/perf-dev.ts';
+import type { RenderProfile } from '../app/render-engine.ts';
+import type { SubjectAssets } from './mediapipe-paths.ts';
+import type {
+  AnalyzeSubjectRequest,
+  SegmentationSource,
+  SubjectWorkerRequest,
+  SubjectWorkerResponse,
+} from './subject-worker-protocol.ts';
 
 export const SUBJECT_ANALYSIS_STATUS = Object.freeze({
   idle: 'idle',
@@ -20,41 +34,89 @@ export const SUBJECT_ANALYSIS_STATUS = Object.freeze({
   simplified: 'simplified',
 });
 
+type SubjectStatus =
+  (typeof SUBJECT_ANALYSIS_STATUS)[keyof typeof SUBJECT_ANALYSIS_STATUS];
+type AnalysisProfile = Partial<
+  Pick<RenderProfile, 'detectorIntervalMs' | 'quality'>
+>;
+type AnalysisSource = HTMLVideoElement | HTMLCanvasElement | ImageBitmap;
+type AnalysisMetadata = Omit<AnalyzeSubjectRequest, 'bitmap' | 'type'>;
+
+type SubjectAnalyzerOptions = NonNullable<
+  ConstructorParameters<typeof SubjectMotionAnalyzer>[0]
+> & {
+  cache?: ConstructorParameters<typeof SubjectAnalysisCache>[0];
+  inferenceIntervalMs?: number;
+  analysisScale?: number;
+  maskWidth?: number;
+  assetUrls?: SubjectAssets;
+};
+
+export interface AnalyzedSubjectFrame extends SubjectSample {
+  mask: SubjectMask | null;
+  regions: MotionRegions;
+  segmentationSource: SegmentationSource | 'unknown';
+  simplified: boolean;
+}
+
+interface WorkerListeners {
+  worker: Worker;
+  onMessage(event: MessageEvent<SubjectWorkerResponse>): void;
+  onError(event: ErrorEvent): void;
+  onMessageError(): void;
+}
+
+interface ResultWaiter {
+  resolve(value: AnalyzedSubjectFrame | null): void;
+  reject(error: unknown): void;
+  timeoutId: ReturnType<typeof setTimeout>;
+}
+
 export class SubjectAnalyzer {
-  constructor(options = {}) {
+  readonly motionAnalyzer: SubjectMotionAnalyzer;
+  readonly cache: SubjectAnalysisCache;
+  worker: Worker | null = null;
+  ready = false;
+  status: SubjectStatus = SUBJECT_ANALYSIS_STATUS.idle;
+  statusMessage = '';
+  lastFrame: AnalyzedSubjectFrame | null = null;
+  lastMask: SubjectMask | null = null;
+  previousMask: SubjectMask | null = null;
+  lastInferenceTs = 0;
+  lastTimestampMs = 0;
+  inferenceIntervalMs: number;
+  analysisScale: number;
+  maskWidth: number;
+  _requestId = 0;
+  _busy = false;
+  _pendingBitmap: ImageBitmap | null = null;
+  _pendingMeta: AnalysisMetadata | null = null;
+  _loadPromise: Promise<boolean> | null = null;
+  _initCleanup: (() => void) | null = null;
+  _rejectInit: ((error: unknown) => void) | null = null;
+  _workerListeners: WorkerListeners | null = null;
+  _resultWaiters = new Map<number, ResultWaiter>();
+  _generation = 0;
+  _disposed = false;
+  _dispatchTs = 0;
+  assetUrls: SubjectAssets | null;
+  segmentationSource: SegmentationSource | 'unknown' = 'none';
+  useSimplifiedMode = false;
+  baseAnalysisScale: number;
+  baseInferenceIntervalMs: number;
+  adaptiveQuality = 1;
+  runtimeQuality = 1;
+  _analyzeErrors = 0;
+
+  constructor(options: SubjectAnalyzerOptions = {}) {
     this.motionAnalyzer = new SubjectMotionAnalyzer(options);
     this.cache = new SubjectAnalysisCache(options.cache || {});
-    this.worker = null;
-    this.ready = false;
-    this.status = SUBJECT_ANALYSIS_STATUS.idle;
-    this.statusMessage = '';
-    this.lastFrame = null;
-    this.lastMask = null;
-    this.previousMask = null;
-    this.lastInferenceTs = 0;
-    this.lastTimestampMs = 0;
     this.inferenceIntervalMs = options.inferenceIntervalMs ?? 80;
     this.analysisScale = options.analysisScale ?? 0.5;
     this.maskWidth = options.maskWidth ?? 256;
-    this._requestId = 0;
-    this._busy = false;
-    this._pendingBitmap = null;
-    this._pendingMeta = null;
-    this._loadPromise = null;
-    this._initCleanup = null;
-    this._rejectInit = null;
-    this._workerListeners = null;
-    this._resultWaiters = new Map();
-    this._generation = 0;
-    this._disposed = false;
     this.assetUrls = options.assetUrls || null;
-    this.segmentationSource = 'none';
-    this.useSimplifiedMode = false;
     this.baseAnalysisScale = options.analysisScale ?? 0.5;
     this.baseInferenceIntervalMs = options.inferenceIntervalMs ?? 80;
-    this.adaptiveQuality = 1;
-    this.runtimeQuality = 1;
-    this._analyzeErrors = 0;
   }
 
   getStatusLabel() {
@@ -88,7 +150,7 @@ export class SubjectAnalyzer {
     this.status = SUBJECT_ANALYSIS_STATUS.preparing;
     this.statusMessage = '';
     const generation = this._generation;
-    const loadPromise = this.#initWorker(generation)
+    const loadPromise = this.#initWorker(generation, this.assetUrls)
       .then(() => {
         if (generation !== this._generation || this._disposed) {
           throw new Error('subject_analyzer_disposed');
@@ -113,12 +175,12 @@ export class SubjectAnalyzer {
     return loadPromise;
   }
 
-  #initWorker(generation) {
+  #initWorker(generation: number, assets: SubjectAssets): Promise<boolean> {
     return new Promise((resolve, reject) => {
-      let worker;
+      let worker: Worker;
       try {
         // Keep new URL inline so Vite bundles the module Worker in production.
-        worker = new Worker(new URL('./subject-worker.mjs', import.meta.url), {
+        worker = new Worker(new URL('./subject-worker.ts', import.meta.url), {
           type: 'module',
         });
       } catch (error) {
@@ -149,21 +211,21 @@ export class SubjectAnalyzer {
         this.#attachWorkerListeners(worker, generation);
         resolve(true);
       };
-      const fail = (error) => {
+      const fail = (error: unknown) => {
         if (settled) return;
         settled = true;
         cleanup();
         reject(error instanceof Error ? error : new Error(String(error)));
       };
-      const onMessage = (event) => {
-        const message = event.data || {};
-        if (message.type === 'ready') {
+      const onMessage = (event: MessageEvent<SubjectWorkerResponse>) => {
+        const message = event.data;
+        if (message?.type === 'ready') {
           succeed();
-        } else if (message.type === 'error') {
+        } else if (message?.type === 'error') {
           fail(new Error(message.message || 'worker_init_failed'));
         }
       };
-      const onError = (event) => {
+      const onError = (event: ErrorEvent) => {
         event.preventDefault?.();
         fail(event.error || new Error(event.message || 'subject_worker_error'));
       };
@@ -177,21 +239,21 @@ export class SubjectAnalyzer {
       try {
         worker.postMessage({
           type: 'init',
-          assets: this.assetUrls,
+          assets,
           maskWidth: Math.round(this.maskWidth * this.runtimeQuality),
-        });
+        } satisfies SubjectWorkerRequest);
       } catch (error) {
         fail(error);
       }
     });
   }
 
-  #attachWorkerListeners(worker, generation) {
-    const onMessage = (event) => {
+  #attachWorkerListeners(worker: Worker, generation: number) {
+    const onMessage = (event: MessageEvent<SubjectWorkerResponse>) => {
       if (generation !== this._generation || this.worker !== worker) return;
       this.#handleWorkerMessage(event.data);
     };
-    const onError = (event) => {
+    const onError = (event: ErrorEvent) => {
       if (generation !== this._generation || this.worker !== worker) return;
       event.preventDefault?.();
       this.#handleWorkerFailure(
@@ -208,7 +270,7 @@ export class SubjectAnalyzer {
     this._workerListeners = { worker, onMessage, onError, onMessageError };
   }
 
-  #handleWorkerFailure(error) {
+  #handleWorkerFailure(error: unknown) {
     console.error('Subject worker error:', error);
     this.#destroyWorker();
     this.ready = false;
@@ -238,7 +300,7 @@ export class SubjectAnalyzer {
     this.ready = false;
   }
 
-  setProfile(profile = {}) {
+  setProfile(profile: AnalysisProfile = {}) {
     if (profile.detectorIntervalMs === 0) {
       this.baseInferenceIntervalMs = 0;
     } else if (profile.quality === 'low') {
@@ -274,7 +336,7 @@ export class SubjectAnalyzer {
     );
   }
 
-  reset(options = {}) {
+  reset(options: { hard?: boolean } = {}) {
     this.motionAnalyzer.reset();
     this.lastFrame = null;
     this.lastMask = null;
@@ -288,7 +350,7 @@ export class SubjectAnalyzer {
     this._pendingMeta = null;
     this.#rejectResultWaiters(new Error('subject_analysis_reset'));
     this._analyzeErrors = 0;
-    this.worker?.postMessage({ type: 'reset' });
+    this.worker?.postMessage({ type: 'reset' } satisfies SubjectWorkerRequest);
     if (options.hard) {
       this._generation += 1;
       const rejectInit = this._rejectInit;
@@ -306,7 +368,11 @@ export class SubjectAnalyzer {
     this._disposed = true;
   }
 
-  async analyze(source, timestampMs, renderProfile = null) {
+  async analyze(
+    source: AnalysisSource | null,
+    timestampMs: number,
+    renderProfile: AnalysisProfile | null = null,
+  ): Promise<AnalyzedSubjectFrame | null> {
     if (!source) return this.lastFrame;
     if (renderProfile) this.setProfile(renderProfile);
 
@@ -354,19 +420,30 @@ export class SubjectAnalyzer {
     }
 
     try {
-      const width = source.videoWidth || source.width || 640;
-      const height = source.videoHeight || source.height || 480;
+      const width =
+        ('videoWidth' in source && source.videoWidth) || source.width || 640;
+      const height =
+        ('videoHeight' in source && source.videoHeight) || source.height || 480;
       // `analysisScale` already folds in the adaptive-quality factor (see
       // #recomputeRuntimeQuality). Multiplying by `runtimeQuality` again
       // here squared the quality factor - at quality 0.6 the analysis image
       // shrank to 0.36x instead of 0.6x, which could make MediaPipe lose
       // the person entirely under load. `runtimeQuality` is applied exactly
       // once, via `analysisScale`.
+      const requestBeforeCapture = this._requestId;
       const bitmap = await createImageBitmap(source, {
         resizeWidth: Math.max(1, Math.round(width * this.analysisScale)),
         resizeHeight: Math.max(1, Math.round(height * this.analysisScale)),
         resizeQuality: 'low',
       });
+      if (
+        this._disposed ||
+        requestBeforeCapture !== this._requestId ||
+        !this.worker
+      ) {
+        bitmap.close();
+        return this.lastFrame;
+      }
       perfDev.gauge(
         'subjectAnalysisResolution',
         `${bitmap.width}x${bitmap.height}`,
@@ -380,8 +457,6 @@ export class SubjectAnalyzer {
         timestampMs: Math.max(0, Math.round(timestampMs || 0)),
         width: bitmap.width,
         height: bitmap.height,
-        sourceWidth: width,
-        sourceHeight: height,
       };
       const resultPromise = waitForResult
         ? this.#waitForResult(requestId)
@@ -397,7 +472,13 @@ export class SubjectAnalyzer {
   }
 
   _dispatchPending() {
-    if (!this.worker || !this._pendingBitmap || this._busy) return;
+    if (
+      !this.worker ||
+      !this._pendingBitmap ||
+      !this._pendingMeta ||
+      this._busy
+    )
+      return;
     this._busy = true;
     this.status = SUBJECT_ANALYSIS_STATUS.analyzing;
     const meta = this._pendingMeta;
@@ -415,7 +496,7 @@ export class SubjectAnalyzer {
           width: meta.width,
           height: meta.height,
           bitmap,
-        },
+        } satisfies SubjectWorkerRequest,
         [bitmap],
       );
     } catch (error) {
@@ -425,8 +506,8 @@ export class SubjectAnalyzer {
     }
   }
 
-  #handleWorkerMessage(message = {}) {
-    if (message.type === 'result') {
+  #handleWorkerMessage(message?: SubjectWorkerResponse) {
+    if (message?.type === 'result') {
       this._busy = false;
       this._analyzeErrors = 0;
       if (this._dispatchTs) {
@@ -480,14 +561,13 @@ export class SubjectAnalyzer {
           wristVelocities: frame.wristVelocities,
           headVelocity: frame.headVelocity,
           confidence: frame.confidence,
-          regions: frame.regions,
         });
       }
       this.#settleResultWaiter(message.id, null, this.lastFrame);
       this._dispatchPending();
       return;
     }
-    if (message.type === 'error') {
+    if (message?.type === 'error') {
       this._busy = false;
       console.error('Subject worker error:', message.message);
       this.#settleResultWaiter(
@@ -511,7 +591,7 @@ export class SubjectAnalyzer {
     }
   }
 
-  #waitForResult(requestId) {
+  #waitForResult(requestId: number): Promise<AnalyzedSubjectFrame | null> {
     return new Promise((resolve, reject) => {
       const timeoutId = setTimeout(() => {
         this._resultWaiters.delete(requestId);
@@ -521,7 +601,12 @@ export class SubjectAnalyzer {
     });
   }
 
-  #settleResultWaiter(requestId, error = null, value = null) {
+  #settleResultWaiter(
+    requestId: number | undefined,
+    error: unknown = null,
+    value: AnalyzedSubjectFrame | null = null,
+  ) {
+    if (requestId === undefined) return;
     const waiter = this._resultWaiters.get(requestId);
     if (!waiter) return;
     clearTimeout(waiter.timeoutId);
@@ -530,13 +615,16 @@ export class SubjectAnalyzer {
     else waiter.resolve(value);
   }
 
-  #rejectResultWaiters(error) {
+  #rejectResultWaiters(error: unknown) {
     for (const [requestId] of this._resultWaiters) {
       this.#settleResultWaiter(requestId, error);
     }
   }
 
-  #finalizeFrame(frame, mask) {
+  #finalizeFrame(
+    frame: SubjectSample,
+    mask: SubjectMask | null,
+  ): AnalyzedSubjectFrame {
     const regions = buildLocalMotionRegions(frame);
     return {
       ...frame,
@@ -548,7 +636,10 @@ export class SubjectAnalyzer {
   }
 }
 
-function bboxFallbackMask(bbox, width = 256) {
+function bboxFallbackMask(
+  bbox: NonNullable<ReturnType<typeof computeBoundingBox>>,
+  width = 256,
+) {
   const height = Math.max(1, Math.round(width * 1.2));
   const data = new Uint8Array(width * height);
   const x0 = Math.floor(bbox.minX * width);

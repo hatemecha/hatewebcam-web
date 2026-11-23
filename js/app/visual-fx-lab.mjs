@@ -1,9 +1,9 @@
-import { getStrongestMotionRegion } from '../subject/subject-local-motion.mjs';
+import { getStrongestMotionRegion } from '../subject/subject-local-motion.ts';
 import {
   mapNormToCanvas,
   mapNormToSubjectSpace,
   withSubjectVideoTransform,
-} from '../subject/subject-frame-map.mjs';
+} from '../subject/subject-frame-map.ts';
 
 function isFxLabEnabled() {
   try {

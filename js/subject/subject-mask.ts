@@ -1,4 +1,5 @@
 /** Person mask processing at reduced resolution (typically 256–320px wide). */
+import type { computeBoundingBox, SubjectPoint } from './subject-motion.ts';
 
 const DEFAULT_MASK_OPTIONS = Object.freeze({
   threshold: 0.42,
@@ -8,21 +9,24 @@ const DEFAULT_MASK_OPTIONS = Object.freeze({
   smoothAlpha: 0.55,
 });
 
-function clampRange(value, min, max) {
+function clampRange(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
 export class SubjectMask {
-  constructor(width, height, data) {
-    this.width = width;
-    this.height = height;
-    this.data =
-      data instanceof Uint8Array
-        ? data
-        : new Uint8Array(data || width * height);
-    this.coverage = 0;
-    this.bounds = null;
-    this.contour = [];
+  readonly data: Uint8Array;
+  coverage = 0;
+  bounds: ReturnType<typeof computeBoundingBox> = null;
+  contour: SubjectPoint[] = [];
+
+  constructor(
+    readonly width: number,
+    readonly height: number,
+    data?: Uint8Array | number[] | ArrayBuffer | null,
+  ) {
+    if (data instanceof Uint8Array) this.data = data;
+    else
+      this.data = data ? new Uint8Array(data) : new Uint8Array(width * height);
     this.#recomputeMeta();
   }
 
@@ -59,7 +63,7 @@ export class SubjectMask {
     this.contour = extractContour(data, width, height);
   }
 
-  sampleMask(nx, ny) {
+  sampleMask(nx: number, ny: number) {
     const x = clampRange(Math.floor(nx * this.width), 0, this.width - 1);
     const y = clampRange(Math.floor(ny * this.height), 0, this.height - 1);
     return this.data[y * this.width + x] / 255;
@@ -73,11 +77,12 @@ export class SubjectMask {
     return this.bounds;
   }
 
-  toCanvas(targetCanvas = null) {
+  toCanvas(targetCanvas: HTMLCanvasElement | null = null) {
     const canvas = targetCanvas || document.createElement('canvas');
     canvas.width = this.width;
     canvas.height = this.height;
     const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('subject_mask_canvas_unavailable');
     const imageData = ctx.createImageData(this.width, this.height);
     for (let i = 0; i < this.data.length; i++) {
       const v = this.data[i];
@@ -91,7 +96,12 @@ export class SubjectMask {
   }
 }
 
-export function normalizeMaskBuffer(raw, width, height, options = {}) {
+export function normalizeMaskBuffer(
+  raw: ArrayLike<number> | null,
+  width: number,
+  height: number,
+  options: Partial<Record<keyof typeof DEFAULT_MASK_OPTIONS, number>> = {},
+) {
   const opts = { ...DEFAULT_MASK_OPTIONS, ...options };
   const size = width * height;
   const out = new Uint8Array(size);
@@ -109,7 +119,11 @@ export function normalizeMaskBuffer(raw, width, height, options = {}) {
   return new SubjectMask(width, height, out);
 }
 
-export function smoothMaskTemporal(current, previous, alpha = 0.55) {
+export function smoothMaskTemporal(
+  current: SubjectMask,
+  previous: SubjectMask | null,
+  alpha = 0.55,
+): SubjectMask {
   if (!current?.data?.length) return previous || current;
   if (!previous?.data?.length || previous.width !== current.width) {
     return current;
@@ -124,7 +138,10 @@ export function smoothMaskTemporal(current, previous, alpha = 0.55) {
   return new SubjectMask(current.width, current.height, data);
 }
 
-export function packMaskFromMediaPipe(mask, targetWidth = 256) {
+export function packMaskFromMediaPipe(
+  mask: (CanvasImageSource & { width: number; height: number }) | null,
+  targetWidth = 256,
+) {
   if (!mask) return null;
   const srcW = mask.width || 0;
   const srcH = mask.height || 0;
@@ -134,6 +151,7 @@ export function packMaskFromMediaPipe(mask, targetWidth = 256) {
   canvas.width = targetWidth;
   canvas.height = targetH;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return null;
   try {
     ctx.drawImage(mask, 0, 0, targetWidth, targetH);
   } catch {
@@ -147,7 +165,19 @@ export function packMaskFromMediaPipe(mask, targetWidth = 256) {
   return normalizeMaskBuffer(out, targetWidth, targetH);
 }
 
-export function pickRandomMaskPoint(mask, seed, clipId, index, rng) {
+export function pickRandomMaskPoint(
+  mask: SubjectMask | null,
+  seed: number,
+  clipId: string,
+  index: number,
+  rng?: (
+    seed: number,
+    clipId: string,
+    index: number,
+    attempt: number,
+    axis: 'x' | 'y',
+  ) => number,
+) {
   if (!mask?.data?.length || !mask.bounds) return null;
   const random = rng || (() => Math.random());
   const bounds = mask.bounds;
@@ -168,7 +198,12 @@ export function pickRandomMaskPoint(mask, seed, clipId, index, rng) {
     : null;
 }
 
-function dilateMask(data, width, height, radius = 1) {
+function dilateMask(
+  data: Uint8Array,
+  width: number,
+  height: number,
+  radius = 1,
+) {
   const copy = new Uint8Array(data);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -185,7 +220,12 @@ function dilateMask(data, width, height, radius = 1) {
   }
 }
 
-function erodeMask(data, width, height, radius = 1) {
+function erodeMask(
+  data: Uint8Array,
+  width: number,
+  height: number,
+  radius = 1,
+) {
   const copy = new Uint8Array(data);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -209,7 +249,12 @@ function erodeMask(data, width, height, radius = 1) {
   }
 }
 
-function featherMask(data, width, height, amount = 0.08) {
+function featherMask(
+  data: Uint8Array,
+  width: number,
+  height: number,
+  amount = 0.08,
+) {
   const radius = Math.max(1, Math.round(amount * 10));
   const blurred = boxBlur(data, width, height, radius);
   for (let i = 0; i < data.length; i++) {
@@ -217,7 +262,12 @@ function featherMask(data, width, height, amount = 0.08) {
   }
 }
 
-function boxBlur(data, width, height, radius) {
+function boxBlur(
+  data: Uint8Array,
+  width: number,
+  height: number,
+  radius: number,
+) {
   const out = new Uint8Array(data.length);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -237,7 +287,7 @@ function boxBlur(data, width, height, radius) {
   return out;
 }
 
-function extractContour(data, width, height) {
+function extractContour(data: Uint8Array, width: number, height: number) {
   const points = [];
   const step = Math.max(2, Math.round(Math.min(width, height) / 64));
   for (let y = step; y < height - step; y += step) {

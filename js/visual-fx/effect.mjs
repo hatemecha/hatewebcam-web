@@ -1,8 +1,8 @@
-import { SubjectAnalyzer } from '../subject/subject-analyzer.mjs';
+import { SubjectAnalyzer } from '../subject/subject-analyzer.ts';
 import {
   drawSubjectMask,
   getVideoDrawMetrics,
-} from '../subject/subject-frame-map.mjs';
+} from '../subject/subject-frame-map.ts';
 import { normalizeVisualConfig, visualConfigTopologyKey } from './config.mjs';
 import { VisualRenderer } from './renderer.mjs';
 import { perfDev } from '../app/perf-dev.ts';

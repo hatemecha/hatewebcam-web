@@ -1,27 +1,47 @@
 /** Compact temporal cache for subject analysis samples. */
+import type { SubjectMask } from './subject-mask.ts';
+import type { MotionRegions } from './subject-local-motion.ts';
+import type { SubjectWorkerFrame } from './subject-worker-protocol.ts';
+
+export type SubjectSample = Pick<SubjectWorkerFrame, 'timestamp'> &
+  Partial<SubjectWorkerFrame> & {
+    mask?: SubjectMask | null;
+    regions?: MotionRegions;
+    interpolated?: boolean;
+  };
+
+interface SubjectCacheOptions {
+  sourceKey?: string;
+  duration?: number;
+  sampleHz?: number;
+}
 
 const ANALYSIS_VERSION = 2;
 const DEFAULT_SAMPLE_HZ = 12;
 const MAX_SAMPLES = 9000;
 
-function clampRange(value, min, max) {
+function clampRange(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function lerp(a, b, t) {
+function lerp(a: number, b: number, t: number) {
   return a + (b - a) * t;
 }
 
 export class SubjectAnalysisCache {
-  constructor(options = {}) {
+  sourceKey: string;
+  duration: number;
+  sampleHz: number;
+  samples: SubjectSample[] = [];
+  progress = 0;
+  ready = false;
+  running = false;
+  version = ANALYSIS_VERSION;
+
+  constructor(options: SubjectCacheOptions = {}) {
     this.sourceKey = options.sourceKey || '';
     this.duration = options.duration || 0;
     this.sampleHz = options.sampleHz || DEFAULT_SAMPLE_HZ;
-    this.samples = [];
-    this.progress = 0;
-    this.ready = false;
-    this.running = false;
-    this.version = ANALYSIS_VERSION;
   }
 
   invalidate(sourceKey = '') {
@@ -34,7 +54,7 @@ export class SubjectAnalysisCache {
     this.sourceKey = sourceKey || this.sourceKey;
   }
 
-  isValidFor(sourceKey, duration) {
+  isValidFor(sourceKey: string, duration: number) {
     return (
       this.sourceKey === sourceKey &&
       Math.abs(this.duration - duration) < 0.5 &&
@@ -42,7 +62,7 @@ export class SubjectAnalysisCache {
     );
   }
 
-  addSample(sample) {
+  addSample(sample: SubjectSample) {
     if (!sample || !Number.isFinite(sample.timestamp)) return;
     const last = this.samples[this.samples.length - 1];
     // Samples store timestamps in milliseconds; sampleHz is frames per second.
@@ -75,7 +95,7 @@ export class SubjectAnalysisCache {
     return '';
   }
 
-  getAt(timestampSec) {
+  getAt(timestampSec: number): SubjectSample | null {
     if (!this.samples.length) return null;
     const t = timestampSec * 1000;
     if (t <= this.samples[0].timestamp) return this.samples[0];
@@ -106,8 +126,13 @@ export class SubjectAnalysisCache {
     };
   }
 
-  static fromJSON(payload) {
-    const cache = new SubjectAnalysisCache(payload);
+  static fromJSON(
+    payload:
+      | (SubjectCacheOptions & { samples?: SubjectSample[] })
+      | null
+      | undefined,
+  ) {
+    const cache = new SubjectAnalysisCache(payload ?? undefined);
     cache.samples = Array.isArray(payload?.samples) ? payload.samples : [];
     cache.ready = cache.samples.length > 0;
     cache.progress = cache.ready ? 1 : 0;
@@ -115,7 +140,11 @@ export class SubjectAnalysisCache {
   }
 }
 
-function interpolateSamples(a, b, alpha) {
+function interpolateSamples(
+  a: SubjectSample,
+  b: SubjectSample,
+  alpha: number,
+): SubjectSample {
   if (!a) return b;
   if (!b) return a;
   const landmarks = (a.landmarks || []).map((point, index) => {

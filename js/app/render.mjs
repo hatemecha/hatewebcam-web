@@ -1,6 +1,6 @@
 import { updatePreviewMetrics } from '../../src/lib/preview/metrics-state.ts';
 import { WebGLFilterRenderer } from './webgl-filter-renderer.ts';
-import { metricsFromApp } from '../subject/subject-frame-map.mjs';
+import { metricsFromApp } from '../subject/subject-frame-map.ts';
 import { perfDev } from './perf-dev.ts';
 
 /** @param {import('./controller.mjs').AppController} proto */

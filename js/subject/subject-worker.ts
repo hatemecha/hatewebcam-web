@@ -2,28 +2,43 @@ import {
   FilesetResolver,
   PoseLandmarker,
   ImageSegmenter,
+  type MPMask,
 } from '@mediapipe/tasks-vision';
-import { SubjectMotionAnalyzer } from './subject-motion.ts';
+import { SubjectMotionAnalyzer, type PoseLandmark } from './subject-motion.ts';
+import type { SubjectAssets } from './mediapipe-paths.ts';
+import type {
+  AnalyzeSubjectRequest,
+  SegmentationSource,
+  SubjectWorkerRequest,
+  SubjectWorkerResponse,
+  SubjectWorkerResult,
+} from './subject-worker-protocol.ts';
 
-let poseLandmarker = null;
-let imageSegmenter = null;
-let motionAnalyzer = new SubjectMotionAnalyzer();
-let analysisCanvas = null;
-let analysisCtx = null;
+const worker = self as DedicatedWorkerGlobalScope;
+let poseLandmarker: PoseLandmarker | null = null;
+let imageSegmenter: ImageSegmenter | null = null;
+const motionAnalyzer = new SubjectMotionAnalyzer();
+let analysisCanvas: OffscreenCanvas | null = null;
+let analysisCtx: OffscreenCanvasRenderingContext2D | null = null;
 let maskTargetWidth = 256;
 let busy = false;
-let pending = null;
+let pending: AnalyzeSubjectRequest | null = null;
 let lastTimestampMs = 0;
-let assetUrls = null;
-let segmenterLoadPromise = null;
+let assetUrls: SubjectAssets | null = null;
+let segmenterLoadPromise: Promise<ImageSegmenter | null> | null = null;
 let segmenterUnavailable = false;
 
-self.onmessage = async (event) => {
-  const message = event.data || {};
+function post(message: SubjectWorkerResponse, transfer: Transferable[] = []) {
+  worker.postMessage(message, transfer);
+}
+
+worker.onmessage = async (event: MessageEvent<SubjectWorkerRequest>) => {
+  const message = event.data;
+  if (!message) return;
   try {
     if (message.type === 'init') {
       await ensureModels(message.assets, message.maskWidth || 256);
-      self.postMessage({ type: 'ready', segmenter: !!imageSegmenter });
+      post({ type: 'ready', segmenter: !!imageSegmenter });
       return;
     }
     if (message.type === 'reset') {
@@ -31,7 +46,7 @@ self.onmessage = async (event) => {
       pending = null;
       motionAnalyzer.reset();
       lastTimestampMs = 0;
-      self.postMessage({ type: 'reset' });
+      post({ type: 'reset' });
       return;
     }
     if (message.type === 'analyze') {
@@ -40,24 +55,24 @@ self.onmessage = async (event) => {
     }
     if (message.type === 'dispose') {
       disposeModels();
-      self.postMessage({ type: 'disposed' });
+      post({ type: 'disposed' });
       return;
     }
   } catch (error) {
     if (message.type === 'init') disposeModels();
-    message.bitmap?.close?.();
-    self.postMessage({
+    if (message.type === 'analyze') message.bitmap.close();
+    post({
       type: 'error',
-      id: message.id,
-      message: error?.message || 'worker_error',
+      id: message.type === 'analyze' ? message.id : undefined,
+      message: error instanceof Error ? error.message : 'worker_error',
     });
   }
 };
 
-async function ensureModels(assets, width) {
+async function ensureModels(assets: SubjectAssets, width: number) {
   maskTargetWidth = width || 256;
   if (poseLandmarker) return;
-  const { wasmBaseUrl, poseModelUrl, segmenterModelUrl } = assets || {};
+  const { wasmBaseUrl, poseModelUrl, segmenterModelUrl } = assets;
   if (!wasmBaseUrl || !poseModelUrl || !segmenterModelUrl) {
     throw new Error('subject_asset_urls_missing');
   }
@@ -79,10 +94,11 @@ async function ensureImageSegmenter() {
   if (imageSegmenter) return imageSegmenter;
   if (segmenterUnavailable || !assetUrls) return null;
   if (segmenterLoadPromise) return segmenterLoadPromise;
+  const assets = assetUrls;
   segmenterLoadPromise = (async () => {
     try {
       const vision = await FilesetResolver.forVisionTasks(
-        assetUrls.wasmBaseUrl,
+        assets.wasmBaseUrl,
         true,
       );
       // The module loader is stateful. A distinct URL re-runs its factory for
@@ -90,7 +106,7 @@ async function ensureImageSegmenter() {
       vision.wasmLoaderPath += '?subject-task=image-segmenter';
       imageSegmenter = await ImageSegmenter.createFromOptions(vision, {
         baseOptions: {
-          modelAssetPath: assetUrls.segmenterModelUrl,
+          modelAssetPath: assets.segmenterModelUrl,
           delegate: 'CPU',
         },
         runningMode: 'IMAGE',
@@ -126,7 +142,7 @@ function disposeModels() {
   segmenterUnavailable = false;
 }
 
-function queueAnalyze(message) {
+function queueAnalyze(message: AnalyzeSubjectRequest) {
   pending?.bitmap?.close?.();
   pending = message;
   if (busy) return;
@@ -140,14 +156,14 @@ async function runPending() {
   pending = null;
   try {
     const result = await analyzeFrame(message);
-    const transfers = [];
+    const transfers: Transferable[] = [];
     if (result.maskBuffer) transfers.push(result.maskBuffer);
-    self.postMessage({ type: 'result', ...result }, transfers);
+    post({ type: 'result', ...result }, transfers);
   } catch (error) {
-    self.postMessage({
+    post({
       type: 'error',
       id: message.id,
-      message: error?.message || 'analyze_failed',
+      message: error instanceof Error ? error.message : 'analyze_failed',
     });
   } finally {
     busy = false;
@@ -155,7 +171,9 @@ async function runPending() {
   }
 }
 
-async function analyzeFrame(message) {
+async function analyzeFrame(
+  message: AnalyzeSubjectRequest,
+): Promise<SubjectWorkerResult> {
   const { id, timestampMs, width, height, bitmap } = message;
   if (!poseLandmarker || !bitmap) {
     bitmap?.close?.();
@@ -164,6 +182,7 @@ async function analyzeFrame(message) {
 
   const canvas = ensureCanvas(width, height);
   try {
+    if (!analysisCtx) throw new Error('subject_canvas_unavailable');
     analysisCtx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   } finally {
     bitmap.close?.();
@@ -176,7 +195,7 @@ async function analyzeFrame(message) {
   lastTimestampMs = ts;
 
   const poseResult = poseLandmarker.detect(canvas);
-  const pose = poseResult?.landmarks?.[0] || null;
+  const pose: PoseLandmark[] | null = poseResult?.landmarks?.[0] || null;
   const confidence = pose?.length
     ? pose.reduce(
         (sum, point) => sum + (point.visibility ?? point.presence ?? 0),
@@ -193,10 +212,10 @@ async function analyzeFrame(message) {
 
   const frame = motionAnalyzer.analyze(landmarks || null, ts, confidence);
 
-  let maskBuffer = null;
+  let maskBuffer: ArrayBuffer | null = null;
   let maskWidth = 0;
   let maskHeight = 0;
-  let segmentationSource = 'none';
+  let segmentationSource: SegmentationSource = 'none';
 
   try {
     const poseMask = poseResult?.segmentationMasks?.[0];
@@ -263,7 +282,7 @@ async function analyzeFrame(message) {
   };
 }
 
-function ensureCanvas(width, height) {
+function ensureCanvas(width: number, height: number) {
   const scale = Math.min(1, maskTargetWidth / Math.max(width, 1));
   const w = Math.max(1, Math.round(width * scale));
   const h = Math.max(1, Math.round(height * scale));
@@ -280,12 +299,12 @@ function ensureCanvas(width, height) {
   return analysisCanvas;
 }
 
-function packMaskFromMpMask(mask, targetWidth) {
+function packMaskFromMpMask(mask: MPMask, targetWidth: number) {
   const srcW = mask?.width || 0;
   const srcH = mask?.height || 0;
   if (!srcW || !srcH) return null;
 
-  let src = null;
+  let src: Uint8Array | null = null;
   if (typeof mask.hasUint8Array === 'function' && mask.hasUint8Array()) {
     src = mask.getAsUint8Array();
   } else if (

@@ -1,4 +1,5 @@
 /** Local body motion regions derived from pose landmarks. */
+import type { SubjectMotionFrame, SubjectPoint } from './subject-motion.ts';
 
 const REGION_DEFS = Object.freeze({
   head: { joints: [0, 1, 2, 3, 4], radius: 0.08 },
@@ -13,7 +14,19 @@ const REGION_DEFS = Object.freeze({
   rightLeg: { joints: [24, 26, 28], radius: 0.08 },
 });
 
-function avgPoint(points) {
+export interface MotionRegion {
+  name: string;
+  position: SubjectPoint;
+  velocity: SubjectPoint;
+  speed: number;
+  direction: number;
+  influenceRadius: number;
+  confidence: number;
+}
+
+export type MotionRegions = Record<string, MotionRegion>;
+
+function avgPoint(points: readonly SubjectPoint[]) {
   if (!points.length) return { x: 0.5, y: 0.5 };
   const sum = points.reduce(
     (acc, point) => ({ x: acc.x + point.x, y: acc.y + point.y }),
@@ -22,18 +35,23 @@ function avgPoint(points) {
   return { x: sum.x / points.length, y: sum.y / points.length };
 }
 
-function clampRange(value, min, max) {
+function clampRange(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-export function buildLocalMotionRegions(frame) {
+export function buildLocalMotionRegions(
+  frame: Partial<
+    Pick<SubjectMotionFrame, 'landmarks' | 'jointVelocities'>
+  > | null,
+): MotionRegions {
   if (!frame?.landmarks?.length) return {};
-  const regions = {};
+  const landmarks = frame.landmarks;
+  const regions: MotionRegions = {};
   const velocities = frame.jointVelocities || [];
 
   Object.entries(REGION_DEFS).forEach(([name, def]) => {
     const points = def.joints
-      .map((index) => frame.landmarks[index])
+      .map((index) => landmarks[index])
       .filter((point) => point && (point.visibility ?? 1) > 0.3);
     if (!points.length) return;
 
@@ -67,20 +85,34 @@ export function buildLocalMotionRegions(frame) {
   return regions;
 }
 
-export function getStrongestMotionRegion(regions = {}) {
-  let best = null;
+export function getStrongestMotionRegion(
+  regions: MotionRegions = {},
+): MotionRegion | null {
+  let best: MotionRegion | null = null;
   Object.values(regions).forEach((region) => {
     if (!best || region.speed > best.speed) best = region;
   });
   return best;
 }
 
-export function getJointMotion(regions, name) {
+export function getJointMotion(
+  regions: MotionRegions | null | undefined,
+  name: string,
+) {
   return regions?.[name] || null;
 }
 
-export function getMotionAt(regions, nx, ny) {
-  let best = { speed: 0, direction: 0, region: null };
+export function getMotionAt(
+  regions: MotionRegions | null | undefined,
+  nx: number,
+  ny: number,
+) {
+  let best: {
+    speed: number;
+    direction: number;
+    region: string | null;
+    velocity?: SubjectPoint;
+  } = { speed: 0, direction: 0, region: null };
   Object.values(regions || {}).forEach((region) => {
     const dx = nx - region.position.x;
     const dy = ny - region.position.y;
@@ -100,7 +132,11 @@ export function getMotionAt(regions, nx, ny) {
   return best;
 }
 
-export function sampleInfluence(regions, nx, ny) {
+export function sampleInfluence(
+  regions: MotionRegions | null | undefined,
+  nx: number,
+  ny: number,
+) {
   const motion = getMotionAt(regions, nx, ny);
   return motion.speed;
 }

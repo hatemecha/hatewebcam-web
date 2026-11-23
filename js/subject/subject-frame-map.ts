@@ -1,4 +1,16 @@
 /** Shared mapping from MediaPipe normalized coords to preview canvas space. */
+import type { SubjectMask } from './subject-mask.ts';
+
+interface VideoDrawOptions {
+  canvasWidth: number;
+  canvasHeight: number;
+  sourceWidth: number;
+  sourceHeight: number;
+  effectiveRotation?: number;
+  flipH?: boolean;
+  flipV?: boolean;
+  useCover?: boolean;
+}
 
 export function getVideoDrawMetrics({
   canvasWidth,
@@ -9,7 +21,7 @@ export function getVideoDrawMetrics({
   flipH = false,
   flipV = false,
   useCover = false,
-}) {
+}: VideoDrawOptions) {
   const rotated = effectiveRotation === 90 || effectiveRotation === 270;
   const orientedWidth = rotated ? sourceHeight : sourceWidth;
   const orientedHeight = rotated ? sourceWidth : sourceHeight;
@@ -36,9 +48,15 @@ export function getVideoDrawMetrics({
   };
 }
 
-export function mapNormToOriented(normX, normY, metrics) {
-  let x = metrics.flipH ? 1 - normX : normX;
-  let y = metrics.flipV ? 1 - normY : normY;
+export type VideoDrawMetrics = ReturnType<typeof getVideoDrawMetrics>;
+
+export function mapNormToOriented(
+  normX: number,
+  normY: number,
+  metrics: VideoDrawMetrics,
+) {
+  const x = metrics.flipH ? 1 - normX : normX;
+  const y = metrics.flipV ? 1 - normY : normY;
   const rot = ((metrics.effectiveRotation % 360) + 360) % 360;
   if (rot === 90) return { x: 1 - y, y: x };
   if (rot === 180) return { x: 1 - x, y: 1 - y };
@@ -46,7 +64,11 @@ export function mapNormToOriented(normX, normY, metrics) {
   return { x, y };
 }
 
-export function mapNormToCanvas(normX, normY, metrics) {
+export function mapNormToCanvas(
+  normX: number,
+  normY: number,
+  metrics: VideoDrawMetrics,
+) {
   let x = (normX - 0.5) * metrics.drawWidth;
   let y = (normY - 0.5) * metrics.drawHeight;
   if (metrics.flipH) x *= -1;
@@ -61,14 +83,25 @@ export function mapNormToCanvas(normX, normY, metrics) {
   };
 }
 
-export function mapNormToSubjectSpace(normX, normY, metrics) {
+export function mapNormToSubjectSpace(
+  normX: number,
+  normY: number,
+  metrics: VideoDrawMetrics,
+) {
   return {
     x: (normX - 0.5) * metrics.drawWidth,
     y: (normY - 0.5) * metrics.drawHeight,
   };
 }
 
-export function withSubjectVideoTransform(ctx, metrics, drawFn) {
+export function withSubjectVideoTransform(
+  ctx: CanvasRenderingContext2D,
+  metrics: VideoDrawMetrics,
+  drawFn: (
+    context: CanvasRenderingContext2D,
+    metrics: VideoDrawMetrics,
+  ) => void,
+) {
   ctx.save();
   ctx.translate(metrics.canvasWidth / 2, metrics.canvasHeight / 2);
   if (metrics.effectiveRotation !== 0) {
@@ -81,17 +114,22 @@ export function withSubjectVideoTransform(ctx, metrics, drawFn) {
   ctx.restore();
 }
 
-let _maskScratch = null;
-let _maskScratchCtx = null;
-let _maskScratchImageData = null;
+let _maskScratch: HTMLCanvasElement | null = null;
+let _maskScratchCtx: CanvasRenderingContext2D | null = null;
+let _maskScratchImageData: ImageData | null = null;
 
-function ensureMaskScratch(width, height) {
+function ensureMaskScratch(width: number, height: number) {
   if (typeof document === 'undefined') return null;
   if (!_maskScratch) {
     _maskScratch = document.createElement('canvas');
     _maskScratchCtx = _maskScratch.getContext('2d');
   }
-  if (_maskScratch.width !== width || _maskScratch.height !== height) {
+  if (!_maskScratchCtx) return null;
+  if (
+    !_maskScratchImageData ||
+    _maskScratch.width !== width ||
+    _maskScratch.height !== height
+  ) {
     _maskScratch.width = width;
     _maskScratch.height = height;
     // Reallocated only when the mask's own resolution changes (rare - it
@@ -102,14 +140,14 @@ function ensureMaskScratch(width, height) {
 }
 
 export function drawSubjectMask(
-  ctx,
-  mask,
-  metrics,
+  ctx: CanvasRenderingContext2D,
+  mask: Pick<SubjectMask, 'data' | 'width' | 'height'> | null,
+  metrics: VideoDrawMetrics | null,
   { offsetX = 0, offsetY = 0 } = {},
 ) {
   if (!mask?.data?.length || !metrics) return;
   const temp = ensureMaskScratch(mask.width, mask.height);
-  if (!temp || !_maskScratchCtx) return;
+  if (!temp || !_maskScratchCtx || !_maskScratchImageData) return;
   const tempCtx = _maskScratchCtx;
   const imageData = _maskScratchImageData;
   for (let index = 0; index < mask.data.length; index++) {
@@ -138,7 +176,22 @@ export function drawSubjectMask(
   ctx.restore();
 }
 
-export function metricsFromApp(app, canvas, mode = 'preview') {
+interface FrameMetricsSource {
+  getSourceFrameDimensions(): { sourceWidth: number; sourceHeight: number };
+  getEffectiveRotationDegrees(
+    sourceWidth: number,
+    sourceHeight: number,
+  ): number;
+  isMobileViewport?(): boolean;
+  getEffectiveFlipH?(): boolean;
+  flipV?: boolean;
+}
+
+export function metricsFromApp(
+  app: FrameMetricsSource,
+  canvas: HTMLCanvasElement,
+  mode = 'preview',
+) {
   const { sourceWidth, sourceHeight } = app.getSourceFrameDimensions();
   const effectiveRotation = app.getEffectiveRotationDegrees(
     sourceWidth,
