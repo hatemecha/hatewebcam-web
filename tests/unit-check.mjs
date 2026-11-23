@@ -44,8 +44,8 @@ import {
 import { VideoTimeline } from '../js/editor/video-timeline.ts';
 import { EditorHistory } from '../js/editor/editor-history.ts';
 import { BlobTracking } from '../js/effects/blob-tracking.ts';
-import { BlinkDetection } from '../js/effects/blink-detection.mjs';
-import { FaceDetection } from '../js/effects/face-detection.mjs';
+import { BlinkDetection } from '../js/effects/blink-detection.ts';
+import { FaceDetection } from '../js/effects/face-detection.ts';
 import { RENDER_PROFILES } from '../js/app/render-engine.ts';
 import { calculateTimelineTickInterval } from '../js/app/timeline-view.ts';
 import {
@@ -98,7 +98,7 @@ import { resolveSubjectAssetUrls } from '../js/subject/mediapipe-paths.ts';
 import {
   estimateTempoFromSamples,
   extractMediaAudioSamples,
-} from '../js/audio-tempo-analyzer.mjs';
+} from '../js/audio-tempo-analyzer.ts';
 import {
   getShellState,
   subscribeShellState,

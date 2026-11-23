@@ -1,50 +1,76 @@
 import { perfDev } from '../app/perf-dev.ts';
-import { createFaceMesh, prepareFaceMeshInput } from './face-mesh-client.ts';
+import type { RenderProfile } from '../app/render-engine.ts';
+import {
+  faceFlagsFromVisualMode,
+  faceVisualModeFromFlags,
+} from '../app/webcam-settings.ts';
+import type {
+  FaceLandmark,
+  FaceMeshResults,
+} from '../workers/face-mesh-protocol.ts';
+import {
+  createFaceMesh,
+  isFaceMeshLoaded,
+  prepareFaceMeshInput,
+  type FaceFrameBuffer,
+} from './face-mesh-client.ts';
+
+type FaceMeasurement = ReturnType<FaceDetection['_measureFace']>;
+type FaceRect = NonNullable<ReturnType<FaceDetection['_getFaceRect']>>;
+
+interface TrackedFace extends FaceMeasurement {
+  id: number;
+  lastSeenTs: number;
+  missedFrames: number;
+}
+
+type DetectorRenderProfile = Partial<RenderProfile> & { overlayOnly?: boolean };
 
 /**
  * FaceDetection — MediaPipe Face Mesh-based face detection
  * Draws bounding boxes around detected faces, accounting for canvas transforms
  */
 export class FaceDetection {
+  faceMesh: ReturnType<typeof createFaceMesh> | null = null;
+  ready = false;
+  initError: unknown = null;
+  _processing = false;
+  _lastProcessTs = 0;
+  _inferenceStartTs = 0;
+
+  // Visualization
+  boxColor = '#ff2222';
+  boxThickness = 2;
+  labelText = 'CARA';
+  labelSize = 12;
+  showLandmarks = false;
+  maxFaces = 2;
+  processIntervalMs = 30;
+  boxSmoothing = 0.5;
+  showBox = true;
+  showBlur = false;
+  pixelationCellSize = 14;
+  censorPaddingPercent = 18;
+  detectionHoldMs = 280;
+  matchDistanceMultiplier = 1.9;
+  sameFaceOverlapRatio = 0.62;
+  sameFaceCenterRatio = 0.38;
+
+  // Transform awareness — set by app.js
+  flipH = false;
+  flipV = false;
+  rotationDeg = 0;
+
+  // Latest results
+  _faces: TrackedFace[] = [];
+  _nextFaceId = 1;
+  _pixelCanvas = document.createElement('canvas');
+  _pixelCtx = this._pixelCanvas.getContext('2d', {
+    willReadFrequently: true,
+  });
+  _analysisFrame: FaceFrameBuffer = { canvas: null, ctx: null };
+
   constructor() {
-    this.faceMesh = null;
-    this.ready = false;
-    this.initError = null;
-    this._processing = false;
-    this._lastProcessTs = 0;
-
-    // Visualization
-    this.boxColor = '#ff2222';
-    this.boxThickness = 2;
-    this.labelText = 'CARA';
-    this.labelSize = 12;
-    this.showLandmarks = false;
-    this.maxFaces = 2;
-    this.processIntervalMs = 30;
-    this.boxSmoothing = 0.5;
-    this.showBox = true;
-    this.showBlur = false;
-    this.pixelationCellSize = 14;
-    this.censorPaddingPercent = 18;
-    this.detectionHoldMs = 280;
-    this.matchDistanceMultiplier = 1.9;
-    this.sameFaceOverlapRatio = 0.62;
-    this.sameFaceCenterRatio = 0.38;
-
-    // Transform awareness — set by app.js
-    this.flipH = false;
-    this.flipV = false;
-    this.rotationDeg = 0;
-
-    // Latest results
-    this._faces = [];
-    this._nextFaceId = 1;
-    this._pixelCanvas = document.createElement('canvas');
-    this._pixelCtx = this._pixelCanvas.getContext('2d', {
-      willReadFrequently: true,
-    });
-    this._analysisFrame = { canvas: null, ctx: null };
-
     this._initMediaPipe();
   }
 
@@ -89,17 +115,13 @@ export class FaceDetection {
 
   _initMediaPipe() {
     try {
-      if (typeof FaceMesh === 'undefined') {
+      if (!isFaceMeshLoaded()) {
         console.warn('MediaPipe FaceMesh not loaded.');
         return;
       }
 
-      const faceMeshBaseUrl =
-        globalThis.HATEWEBCAM_MEDIAPIPE_FACE_MESH_BASE_URL ||
-        'vendor/mediapipe/face_mesh';
-      this.faceMesh = createFaceMesh({
-        locateFile: (file) => `${faceMeshBaseUrl}/${file}`,
-      });
+      const mesh = createFaceMesh();
+      this.faceMesh = mesh;
 
       this.faceMesh.setOptions({
         maxNumFaces: this.maxFaces,
@@ -108,15 +130,19 @@ export class FaceDetection {
         minTrackingConfidence: 0.5,
       });
 
-      this.faceMesh.onResults((results) => this._onResults(results));
+      mesh.onResults((results) => {
+        if (this.faceMesh === mesh) this._onResults(results);
+      });
 
-      this.faceMesh
+      mesh
         .initialize()
         .then(() => {
+          if (this.faceMesh !== mesh) return;
           this.ready = true;
           this.initError = null;
         })
         .catch((e) => {
+          if (this.faceMesh !== mesh) return;
           this.initError = e;
           console.error('FaceDetection init error:', e);
         });
@@ -126,7 +152,7 @@ export class FaceDetection {
     }
   }
 
-  _onResults(results) {
+  _onResults(results: FaceMeshResults) {
     this._processing = false;
     if (this._inferenceStartTs) {
       perfDev.record(
@@ -137,8 +163,8 @@ export class FaceDetection {
     }
     const now = performance.now();
     const previousFaces = this._faces.slice();
-    const reusedFaceIds = new Set();
-    const nextFaces = [];
+    const reusedFaceIds = new Set<number>();
+    const nextFaces: TrackedFace[] = [];
 
     if (results.multiFaceLandmarks) {
       for (const landmarks of results.multiFaceLandmarks) {
@@ -178,9 +204,9 @@ export class FaceDetection {
   /**
    * Transform normalized coordinates accounting for flips + rotation.
    */
-  _mapPoint(normX, normY) {
-    let x = this.flipH ? 1 - normX : normX;
-    let y = this.flipV ? 1 - normY : normY;
+  _mapPoint(normX: number, normY: number) {
+    const x = this.flipH ? 1 - normX : normX;
+    const y = this.flipV ? 1 - normY : normY;
     const rot = ((this.rotationDeg % 360) + 360) % 360;
 
     if (rot === 90) {
@@ -195,31 +221,15 @@ export class FaceDetection {
     return { x, y };
   }
 
-  _normalizeVisualMode(value) {
-    const normalized = String(value || '')
-      .trim()
-      .toLowerCase();
-    if (
-      normalized === 'box' ||
-      normalized === 'hybrid' ||
-      normalized === 'pixelate'
-    ) {
-      return normalized;
-    }
-    return 'box';
-  }
-
-  _applyVisualMode(value) {
-    const mode = this._normalizeVisualMode(value);
-    this.showBox = mode === 'box' || mode === 'hybrid';
-    this.showBlur = mode === 'pixelate' || mode === 'hybrid';
+  _applyVisualMode(value: unknown) {
+    const { showBox, showBlur } = faceFlagsFromVisualMode(value);
+    this.showBox = showBox;
+    this.showBlur = showBlur;
     this._ensureVisualEnabled();
   }
 
   _getVisualMode() {
-    if (this.showBox && this.showBlur) return 'hybrid';
-    if (this.showBlur) return 'pixelate';
-    return 'box';
+    return faceVisualModeFromFlags(this.showBox, this.showBlur);
   }
 
   _ensureVisualEnabled() {
@@ -236,7 +246,7 @@ export class FaceDetection {
     return this.showBlur;
   }
 
-  _measureFace(landmarks) {
+  _measureFace(landmarks: FaceLandmark[]) {
     let minX = 1,
       maxX = 0,
       minY = 1,
@@ -263,8 +273,12 @@ export class FaceDetection {
     };
   }
 
-  _findMatchingFace(face, previousFaces, reusedFaceIds) {
-    let bestFace = null;
+  _findMatchingFace(
+    face: FaceMeasurement,
+    previousFaces: TrackedFace[],
+    reusedFaceIds: Set<number>,
+  ) {
+    let bestFace: TrackedFace | null = null;
     let bestDistance = Infinity;
 
     for (const prevFace of previousFaces) {
@@ -292,7 +306,11 @@ export class FaceDetection {
     return bestFace;
   }
 
-  _stabilizeFace(face, prevFace, now) {
+  _stabilizeFace(
+    face: FaceMeasurement,
+    prevFace: TrackedFace | null,
+    now: number,
+  ): TrackedFace {
     let stabilized = { ...face };
 
     if (prevFace) {
@@ -311,17 +329,19 @@ export class FaceDetection {
       stabilized.centerY = stabilized.minY + stabilized.height / 2;
     }
 
-    stabilized.id = prevFace ? prevFace.id : this._nextFaceId++;
-    stabilized.lastSeenTs = now;
-    stabilized.missedFrames = 0;
-    return stabilized;
+    return {
+      ...stabilized,
+      id: prevFace ? prevFace.id : this._nextFaceId++,
+      lastSeenTs: now,
+      missedFrames: 0,
+    };
   }
 
-  _getFaceArea(face) {
+  _getFaceArea(face: FaceMeasurement) {
     return Math.max(0, face.width || 0) * Math.max(0, face.height || 0);
   }
 
-  _getFaceIntersection(faceA, faceB) {
+  _getFaceIntersection(faceA: FaceMeasurement, faceB: FaceMeasurement) {
     const minX = Math.max(faceA.minX || 0, faceB.minX || 0);
     const minY = Math.max(faceA.minY || 0, faceB.minY || 0);
     const maxX = Math.min(faceA.maxX || 0, faceB.maxX || 0);
@@ -331,7 +351,7 @@ export class FaceDetection {
     return width * height;
   }
 
-  _isSameFaceCandidate(faceA, faceB) {
+  _isSameFaceCandidate(faceA: FaceMeasurement, faceB: FaceMeasurement) {
     const areaA = this._getFaceArea(faceA);
     const areaB = this._getFaceArea(faceB);
     if (areaA <= 0 || areaB <= 0) return false;
@@ -360,7 +380,7 @@ export class FaceDetection {
     );
   }
 
-  _pickPreferredFace(faceA, faceB) {
+  _pickPreferredFace(faceA: TrackedFace, faceB: TrackedFace) {
     const missedA = faceA.missedFrames || 0;
     const missedB = faceB.missedFrames || 0;
     if (missedA !== missedB) return missedA < missedB ? faceA : faceB;
@@ -376,7 +396,7 @@ export class FaceDetection {
     return (faceA.id || 0) <= (faceB.id || 0) ? faceA : faceB;
   }
 
-  _dedupeFaces(faces) {
+  _dedupeFaces(faces: TrackedFace[]) {
     if (!Array.isArray(faces) || faces.length <= 1)
       return Array.isArray(faces) ? faces.slice() : [];
 
@@ -384,7 +404,7 @@ export class FaceDetection {
       const preferred = this._pickPreferredFace(a, b);
       return preferred === a ? -1 : 1;
     });
-    const uniqueFaces = [];
+    const uniqueFaces: TrackedFace[] = [];
 
     for (const face of orderedFaces) {
       const duplicateIndex = uniqueFaces.findIndex((candidate) =>
@@ -405,9 +425,9 @@ export class FaceDetection {
   }
 
   _getFaceRect(
-    face,
-    canvasWidth,
-    canvasHeight,
+    face: FaceMeasurement,
+    canvasWidth: number,
+    canvasHeight: number,
     paddingPercent = this.censorPaddingPercent,
   ) {
     const p1 = this._mapPoint(face.minX, face.minY);
@@ -435,7 +455,11 @@ export class FaceDetection {
     return { x: px, y: py, width: pw, height: ph };
   }
 
-  _pixelateRegion(ctx, canvas, rect) {
+  _pixelateRegion(
+    ctx: CanvasRenderingContext2D,
+    canvas: HTMLCanvasElement,
+    rect: FaceRect | null,
+  ) {
     if (!this._pixelCtx || !rect) return;
 
     const { x, y, width, height } = rect;
@@ -482,7 +506,7 @@ export class FaceDetection {
     ctx.restore();
   }
 
-  _drawFaceBox(ctx, rect) {
+  _drawFaceBox(ctx: CanvasRenderingContext2D, rect: FaceRect) {
     const { x, y, width, height } = rect;
 
     ctx.strokeStyle = this.boxColor;
@@ -505,8 +529,19 @@ export class FaceDetection {
     ctx.textBaseline = 'alphabetic';
   }
 
-  processFrame(ctx, canvas, video, renderProfile = null) {
-    if (this.ready && !this._processing && video && video.readyState >= 2) {
+  processFrame(
+    ctx: CanvasRenderingContext2D,
+    canvas: HTMLCanvasElement,
+    video: HTMLVideoElement,
+    renderProfile: DetectorRenderProfile | null = null,
+  ) {
+    if (
+      this.ready &&
+      this.faceMesh &&
+      !this._processing &&
+      video &&
+      video.readyState >= 2
+    ) {
       const now = performance.now();
       const processIntervalMs = Math.max(
         0,
@@ -587,7 +622,7 @@ export class FaceDetection {
     };
   }
 
-  setConfig(config) {
+  setConfig(config: Partial<FaceDetectionConfig>) {
     if (config.boxColor) this.boxColor = config.boxColor;
     if (config.boxThickness != null) this.boxThickness = config.boxThickness;
     if (config.labelText != null)
@@ -649,13 +684,13 @@ export class FaceDetection {
     }
   }
 
-  _normalizeLabel(value) {
+  _normalizeLabel(value: unknown) {
     const label = String(value || '').trim();
     if (!label) return 'CARA';
     return label.slice(0, 28);
   }
 
-  _normalizeLabelSize(value) {
+  _normalizeLabelSize(value: unknown) {
     const size = Math.round(Number(value) || 12);
     return Math.max(8, Math.min(32, size));
   }
@@ -664,3 +699,5 @@ export class FaceDetection {
     this._faces = [];
   }
 }
+
+export type FaceDetectionConfig = ReturnType<FaceDetection['getConfig']>;

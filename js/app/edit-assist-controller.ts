@@ -1,18 +1,12 @@
-import { analyzeAudioTempo } from '../audio-tempo-analyzer.mjs';
+import {
+  analyzeAudioTempo,
+  type TempoAnalysis,
+  type TempoBeat,
+} from '../audio-tempo-analyzer.ts';
 import { translateCurrent } from '../../src/lib/i18n/translate.ts';
+export type { TempoAnalysis, TempoBeat } from '../audio-tempo-analyzer.ts';
 
 const DEFAULT_STEP = 4;
-
-export interface TempoBeat {
-  time: number;
-  strength: number;
-}
-
-export interface TempoAnalysis {
-  bpm: number;
-  confidence: number;
-  beats: TempoBeat[];
-}
 
 export interface EditAssistMarker {
   time: number;
@@ -84,7 +78,7 @@ export class EditAssistController {
 
   constructor(
     options: EditAssistOptions,
-    analyzer: TempoAnalyzer = analyzeAudioTempo as TempoAnalyzer,
+    analyzer: TempoAnalyzer = analyzeAudioTempo,
   ) {
     this.options = options;
     this.analyzer = analyzer;

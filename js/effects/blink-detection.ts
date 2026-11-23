@@ -1,46 +1,62 @@
 import { perfDev } from '../app/perf-dev.ts';
-import { createFaceMesh, prepareFaceMeshInput } from './face-mesh-client.ts';
+import type { RenderProfile } from '../app/render-engine.ts';
+import type {
+  FaceLandmark,
+  FaceMeshResults,
+} from '../workers/face-mesh-protocol.ts';
+import type { FaceDetection } from './face-detection.ts';
+import {
+  createFaceMesh,
+  isFaceMeshLoaded,
+  prepareFaceMeshInput,
+  type FaceFrameBuffer,
+} from './face-mesh-client.ts';
+
+type LandmarkSource = Pick<FaceDetection, 'getPrimaryFaceLandmarks'>;
+type BlinkCallback = (eye: 'left' | 'right' | 'both' | 'none') => void;
 
 /**
  * BlinkDetection — MediaPipe Face Mesh blink detection
  * Port of the Python BlinkDetection effect
  */
 export class BlinkDetection {
-  constructor(options = {}) {
-    // MediaPipe Face Mesh
-    this.faceMesh = null;
-    this.ready = false;
-    this.initError = null;
-    this.initPromise = null;
+  // MediaPipe Face Mesh
+  faceMesh: ReturnType<typeof createFaceMesh> | null = null;
+  ready = false;
+  initError: unknown = null;
+  initPromise: Promise<void> | null = null;
+  landmarkSource: LandmarkSource | null;
+
+  // EAR landmark indices (same as Python version)
+  LEFT_EYE_EAR = [33, 133, 159, 145];
+  RIGHT_EYE_EAR = [362, 263, 386, 374];
+
+  // State
+  eyeArThreshold = 0.22;
+  leftBlinkDetected = false;
+  rightBlinkDetected = false;
+  showDebug = true;
+  feedbackColor = '#ff2222';
+  processIntervalMs = 30;
+  minClosedFrames = 1;
+  _earSmoothing = 0.35;
+
+  // Callback
+  blinkCallback: BlinkCallback | null = null;
+
+  // Latest landmarks for overlay drawing
+  _latestLandmarks: FaceLandmark[] | null = null;
+  _faceMeshProcessing = false;
+  _lastProcessTs = 0;
+  _leftEarSmooth = 1;
+  _rightEarSmooth = 1;
+  _leftClosedFrames = 0;
+  _rightClosedFrames = 0;
+  _lastBlinkTs = 0;
+  _analysisFrame: FaceFrameBuffer = { canvas: null, ctx: null };
+
+  constructor(options: { landmarkSource?: LandmarkSource | null } = {}) {
     this.landmarkSource = options.landmarkSource || null;
-
-    // EAR landmark indices (same as Python version)
-    this.LEFT_EYE_EAR = [33, 133, 159, 145];
-    this.RIGHT_EYE_EAR = [362, 263, 386, 374];
-
-    // State
-    this.eyeArThreshold = 0.22;
-    this.leftBlinkDetected = false;
-    this.rightBlinkDetected = false;
-    this.showDebug = true;
-    this.feedbackColor = '#ff2222';
-    this.processIntervalMs = 30;
-    this.minClosedFrames = 1;
-    this._earSmoothing = 0.35;
-
-    // Callback
-    this.blinkCallback = null;
-
-    // Latest landmarks for overlay drawing
-    this._latestLandmarks = null;
-    this._faceMeshProcessing = false;
-    this._lastProcessTs = 0;
-    this._leftEarSmooth = 1;
-    this._rightEarSmooth = 1;
-    this._leftClosedFrames = 0;
-    this._rightClosedFrames = 0;
-    this._lastBlinkTs = 0;
-    this._analysisFrame = { canvas: null, ctx: null };
 
     if (this.landmarkSource) {
       this.ready = true;
@@ -69,21 +85,15 @@ export class BlinkDetection {
 
   _initMediaPipe() {
     try {
-      if (typeof FaceMesh === 'undefined') {
+      if (!isFaceMeshLoaded()) {
         console.warn(
           'MediaPipe FaceMesh not loaded. Blink detection disabled.',
         );
         return;
       }
 
-      const faceMeshBaseUrl =
-        globalThis.HATEWEBCAM_MEDIAPIPE_FACE_MESH_BASE_URL ||
-        'vendor/mediapipe/face_mesh';
-      this.faceMesh = createFaceMesh({
-        locateFile: (file) => {
-          return `${faceMeshBaseUrl}/${file}`;
-        },
-      });
+      const mesh = createFaceMesh();
+      this.faceMesh = mesh;
 
       this.faceMesh.setOptions({
         maxNumFaces: 1,
@@ -92,18 +102,20 @@ export class BlinkDetection {
         minTrackingConfidence: 0.5,
       });
 
-      this.faceMesh.onResults((results) => {
-        this._onFaceMeshResults(results);
+      mesh.onResults((results) => {
+        if (this.faceMesh === mesh) this._onFaceMeshResults(results);
       });
 
       // Send a dummy frame to initialize
-      this.initPromise = this.faceMesh
+      this.initPromise = mesh
         .initialize()
         .then(() => {
+          if (this.faceMesh !== mesh) return;
           this.ready = true;
           this.initError = null;
         })
         .catch((e) => {
+          if (this.faceMesh !== mesh) return;
           this.initError = e;
           console.error('FaceMesh init error:', e);
         });
@@ -113,7 +125,7 @@ export class BlinkDetection {
     }
   }
 
-  _onFaceMeshResults(results) {
+  _onFaceMeshResults(results: FaceMeshResults) {
     this._faceMeshProcessing = false;
 
     if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
@@ -167,9 +179,12 @@ export class BlinkDetection {
     }
   }
 
-  _calculateEar(eyeIndices, landmarks) {
+  _calculateEar(
+    eyeIndices: readonly number[],
+    landmarks: readonly FaceLandmark[],
+  ) {
     const points = eyeIndices.map((i) => landmarks[i]);
-    if (points.length < 4) return 1.0;
+    if (points.length < 4 || points.some((point) => !point)) return 1.0;
 
     // Vertical distance
     const A = Math.sqrt(
@@ -208,7 +223,7 @@ export class BlinkDetection {
     }
   }
 
-  setLandmarkSource(source) {
+  setLandmarkSource(source: LandmarkSource | null) {
     this.landmarkSource = source || null;
     if (this.landmarkSource) {
       this._disposeOwnFaceMesh();
@@ -216,13 +231,15 @@ export class BlinkDetection {
       return;
     }
 
-    if (!this.faceMesh && typeof FaceMesh !== 'undefined') {
+    if (!this.faceMesh && isFaceMeshLoaded()) {
       this.ready = false;
       this._initMediaPipe();
     }
   }
 
-  _processExternalLandmarks(renderProfile = null) {
+  _processExternalLandmarks(
+    renderProfile: Partial<RenderProfile> | null = null,
+  ) {
     const profileInterval = Math.max(
       0,
       Math.round(
@@ -257,7 +274,12 @@ export class BlinkDetection {
    * Process frame — sends to MediaPipe for async processing
    * Drawing is done from cached results
    */
-  processFrame(ctx, canvas, video, renderProfile = null) {
+  processFrame(
+    _ctx: CanvasRenderingContext2D,
+    _canvas: HTMLCanvasElement,
+    video: HTMLVideoElement,
+    renderProfile: Partial<RenderProfile> | null = null,
+  ) {
     const processIntervalMs = Math.max(
       0,
       Math.round(
@@ -281,6 +303,7 @@ export class BlinkDetection {
     // Send frame to MediaPipe (throttled)
     if (
       this.ready &&
+      this.faceMesh &&
       !this._faceMeshProcessing &&
       video &&
       video.readyState >= 2
@@ -307,11 +330,11 @@ export class BlinkDetection {
     }
   }
 
-  setBlinkCallback(callback) {
+  setBlinkCallback(callback: BlinkCallback | null) {
     this.blinkCallback = callback;
   }
 
-  setFeedbackColor(hexColor) {
+  setFeedbackColor(hexColor: string) {
     this.feedbackColor = hexColor;
   }
 
@@ -325,7 +348,7 @@ export class BlinkDetection {
     };
   }
 
-  setConfig(config) {
+  setConfig(config: Partial<BlinkDetectionConfig>) {
     if (config.eyeArThreshold != null)
       this.eyeArThreshold = config.eyeArThreshold;
     if (config.showDebug != null) this.showDebug = config.showDebug;
@@ -360,3 +383,5 @@ export class BlinkDetection {
     this._lastBlinkTs = 0;
   }
 }
+
+export type BlinkDetectionConfig = ReturnType<BlinkDetection['getConfig']>;

@@ -1,3 +1,4 @@
+import { MEDIAPIPE_FACE_MESH_BASE_URL } from '../app/constants.ts';
 import type {
   FaceMesh,
   FaceMeshOptions,
@@ -10,19 +11,24 @@ import type {
 
 type FaceSource = HTMLVideoElement | HTMLCanvasElement;
 
-interface FaceFrameBuffer {
+export interface FaceFrameBuffer {
   canvas: HTMLCanvasElement | null;
   ctx: CanvasRenderingContext2D | null;
 }
 
 const environment = globalThis as typeof globalThis & {
   HATEWEBCAM_FACE_MESH_WORKER?: boolean;
+  HATEWEBCAM_MEDIAPIPE_FACE_MESH_BASE_URL?: string;
   FaceMesh?: new (options: FaceMeshOptions) => FaceMesh<FaceSource>;
 };
 
 function mainThreadMesh(options: FaceMeshOptions): FaceMesh<FaceSource> {
   if (!environment.FaceMesh) throw new Error('face_mesh_unavailable');
   return new environment.FaceMesh(options);
+}
+
+export function isFaceMeshLoaded() {
+  return typeof environment.FaceMesh === 'function';
 }
 
 function getFrameSize(source: FaceSource) {
@@ -70,7 +76,15 @@ export function prepareFaceMeshInput(
 // but this vendored FaceMesh build leaves its GL context undefined in workers
 // (`Cannot read properties of undefined (reading 'canvas')`). Keep the API
 // seam so we can switch backends later without touching detectors again.
-export function createFaceMesh(options: FaceMeshOptions): FaceMesh<FaceSource> {
+export function createFaceMesh(
+  options?: FaceMeshOptions,
+): FaceMesh<FaceSource> {
+  if (!options) {
+    const base =
+      environment.HATEWEBCAM_MEDIAPIPE_FACE_MESH_BASE_URL ||
+      MEDIAPIPE_FACE_MESH_BASE_URL;
+    options = { locateFile: (file) => `${base}/${file}` };
+  }
   if (environment.HATEWEBCAM_FACE_MESH_WORKER === true) {
     if (
       typeof Worker !== 'undefined' &&

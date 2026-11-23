@@ -2,7 +2,69 @@ const MEDIABUNNY_URL = '../vendor/mediabunny/mediabunny.min.mjs?v=1.49.0-local';
 const DEFAULT_MIN_BPM = 60;
 const DEFAULT_MAX_BPM = 180;
 
-function normalizeOptions(options = {}) {
+export interface TempoBeat {
+  time: number;
+  strength: number;
+}
+
+export interface TempoAnalysis {
+  bpm: number;
+  confidence: number;
+  beats: TempoBeat[];
+}
+
+interface TempoEstimate extends TempoAnalysis {
+  duration: number;
+}
+
+interface Onset extends TempoBeat {
+  index: number;
+  value: number;
+}
+
+interface AudioSample {
+  numberOfChannels: number;
+  numberOfFrames: number;
+  sampleRate: number;
+  allocationSize(options: { planeIndex: number; format: 'f32' }): number;
+  copyTo(
+    data: Float32Array,
+    options: { planeIndex: number; format: 'f32' },
+  ): void;
+  close?(): void;
+}
+
+interface AudioTrack {
+  canDecode?(): Promise<boolean>;
+}
+
+interface AudioInput {
+  canRead?(): Promise<boolean>;
+  getPrimaryAudioTrack(): Promise<AudioTrack | null>;
+  dispose?(): void;
+}
+
+interface AudioMediaModule {
+  ALL_FORMATS: readonly object[];
+  Input: new (options: {
+    source: object;
+    formats: readonly object[];
+  }) => AudioInput;
+  BlobSource: new (file: Blob) => object;
+  AudioSampleSink: new (track: AudioTrack) => {
+    samples(start: number, end: number): AsyncIterable<AudioSample>;
+  };
+}
+
+interface TempoOptions {
+  minBpm?: number;
+  maxBpm?: number;
+  start?: number;
+  end?: number;
+  mediaModule?: AudioMediaModule;
+}
+
+function normalizeOptions(options: TempoOptions = {}) {
   const minBpm = Math.max(30, Number(options.minBpm) || DEFAULT_MIN_BPM);
   const maxBpm = Math.min(
     240,
@@ -11,7 +73,7 @@ function normalizeOptions(options = {}) {
   return { minBpm, maxBpm };
 }
 
-function getChannelMix(audioBuffer) {
+function getChannelMix(audioBuffer: AudioBuffer) {
   const channels = Math.max(1, audioBuffer.numberOfChannels || 1);
   const length = audioBuffer.length || 0;
   const samples = new Float32Array(length);
@@ -23,13 +85,13 @@ function getChannelMix(audioBuffer) {
   return samples;
 }
 
-function appendChunk(chunks, chunk) {
+function appendChunk(chunks: Float32Array[], chunk: Float32Array) {
   if (!chunk.length) return 0;
   chunks.push(chunk);
   return chunk.length;
 }
 
-function concatChunks(chunks, totalLength) {
+function concatChunks(chunks: Float32Array[], totalLength: number) {
   const samples = new Float32Array(totalLength);
   let offset = 0;
   for (const chunk of chunks) {
@@ -39,7 +101,7 @@ function concatChunks(chunks, totalLength) {
   return samples;
 }
 
-function audioSampleToMono(sample) {
+function audioSampleToMono(sample: AudioSample) {
   const channels = Math.max(1, sample.numberOfChannels || 1);
   const frames = Math.max(0, sample.numberOfFrames || 0);
   if (!frames) return new Float32Array();
@@ -57,14 +119,15 @@ function audioSampleToMono(sample) {
   return mono;
 }
 
-function normalizeBpm(value, minBpm, maxBpm) {
+function normalizeBpm(value: number, minBpm: number, maxBpm: number) {
   let bpm = Number(value) || 0;
+  if (bpm <= 0 || !Number.isFinite(bpm)) return 0;
   while (bpm < minBpm) bpm *= 2;
   while (bpm > maxBpm) bpm /= 2;
   return bpm >= minBpm && bpm <= maxBpm ? bpm : 0;
 }
 
-function median(values) {
+function median(values: number[]) {
   if (!values.length) return 0;
   const sorted = [...values].sort((a, b) => a - b);
   const middle = Math.floor(sorted.length / 2);
@@ -73,10 +136,10 @@ function median(values) {
     : (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
-function findOnsets(samples, sampleRate) {
+function findOnsets(samples: Float32Array, sampleRate: number): Onset[] {
   const frameSize = 1024;
   const hopSize = 512;
-  const energies = [];
+  const energies: number[] = [];
   for (let start = 0; start + frameSize <= samples.length; start += hopSize) {
     let sum = 0;
     for (let index = start; index < start + frameSize; index++)
@@ -95,7 +158,7 @@ function findOnsets(samples, sampleRate) {
 
   const threshold = floor + (peak - floor) * 0.35;
   const minGapFrames = Math.max(1, Math.round((sampleRate * 0.18) / hopSize));
-  const onsets = [];
+  const onsets: Onset[] = [];
   for (let index = 1; index < flux.length - 1; index++) {
     const value = flux[index];
     if (value < threshold || value < flux[index - 1] || value < flux[index + 1])
@@ -113,8 +176,12 @@ function findOnsets(samples, sampleRate) {
   return onsets;
 }
 
-function estimateBpmFromOnsets(onsets, minBpm, maxBpm) {
-  const bins = new Map();
+function estimateBpmFromOnsets(
+  onsets: Onset[],
+  minBpm: number,
+  maxBpm: number,
+) {
+  const bins = new Map<number, number>();
   for (let index = 0; index < onsets.length; index++) {
     for (
       let next = index + 1;
@@ -148,14 +215,18 @@ function estimateBpmFromOnsets(onsets, minBpm, maxBpm) {
   return { bpm: bestBpm, score: bestScore, totalScore };
 }
 
-function buildBeatGrid(onsets, duration, bpm) {
+function buildBeatGrid(
+  onsets: Onset[],
+  duration: number,
+  bpm: number,
+): TempoBeat[] {
   if (!bpm || !onsets.length) return [];
   const period = 60 / bpm;
   let start = onsets[0].time;
   while (start - period >= 0) start -= period;
-  const beats = [];
+  const beats: TempoBeat[] = [];
   for (let time = start; time <= duration + 0.001; time += period) {
-    const nearest = onsets.reduce(
+    const nearest = onsets.reduce<{ delta: number; onset: Onset | null }>(
       (best, onset) => {
         const delta = Math.abs(onset.time - time);
         return delta < best.delta ? { delta, onset } : best;
@@ -173,7 +244,11 @@ function buildBeatGrid(onsets, duration, bpm) {
   return beats;
 }
 
-export function estimateTempoFromSamples(samples, sampleRate, options = {}) {
+export function estimateTempoFromSamples(
+  samples: ArrayLike<number> | null,
+  sampleRate: number,
+  options: TempoOptions = {},
+): TempoEstimate {
   const { minBpm, maxBpm } = normalizeOptions(options);
   const data =
     samples instanceof Float32Array ? samples : new Float32Array(samples || []);
@@ -205,7 +280,10 @@ export function estimateTempoFromSamples(samples, sampleRate, options = {}) {
   };
 }
 
-export function estimateTempoFromAudioBuffer(audioBuffer, options = {}) {
+export function estimateTempoFromAudioBuffer(
+  audioBuffer: AudioBuffer,
+  options: TempoOptions = {},
+) {
   return estimateTempoFromSamples(
     getChannelMix(audioBuffer),
     audioBuffer.sampleRate,
@@ -213,9 +291,12 @@ export function estimateTempoFromAudioBuffer(audioBuffer, options = {}) {
   );
 }
 
-export async function extractMediaAudioSamples(file, options = {}) {
+export async function extractMediaAudioSamples(
+  file: Blob | null,
+  options: TempoOptions = {},
+) {
   if (!file) throw new Error('audio_file_unavailable');
-  const mediabunny =
+  const mediabunny: AudioMediaModule =
     options.mediaModule || (await import(/* @vite-ignore */ MEDIABUNNY_URL));
   const { Input, BlobSource, ALL_FORMATS, AudioSampleSink } = mediabunny;
   const input = new Input({
@@ -231,12 +312,13 @@ export async function extractMediaAudioSamples(file, options = {}) {
       throw new Error('audio_track_undecodable');
 
     const sink = new AudioSampleSink(track);
-    const chunks = [];
+    const chunks: Float32Array[] = [];
     let totalLength = 0;
     let sampleRate = 0;
-    const end = Number.isFinite(options.end)
-      ? options.end
-      : Number.POSITIVE_INFINITY;
+    const end =
+      options.end !== undefined && Number.isFinite(options.end)
+        ? options.end
+        : Number.POSITIVE_INFINITY;
     for await (const sample of sink.samples(
       Math.max(0, Number(options.start) || 0),
       end,
@@ -255,13 +337,21 @@ export async function extractMediaAudioSamples(file, options = {}) {
   }
 }
 
-export async function analyzeAudioTempoWithAudioContext(file, options = {}) {
+export async function analyzeAudioTempoWithAudioContext(
+  file: Blob | null,
+  options: TempoOptions = {},
+) {
   const AudioContextImpl =
-    globalThis.AudioContext || globalThis.webkitAudioContext;
+    globalThis.AudioContext ||
+    (
+      globalThis as typeof globalThis & {
+        webkitAudioContext?: typeof AudioContext;
+      }
+    ).webkitAudioContext;
   if (!AudioContextImpl) throw new Error('audio_context_unavailable');
   if (!file?.arrayBuffer) throw new Error('audio_file_unavailable');
 
-  let context = null;
+  let context: AudioContext | null = null;
   try {
     context = new AudioContextImpl();
     const data = await file.arrayBuffer();
@@ -275,7 +365,10 @@ export async function analyzeAudioTempoWithAudioContext(file, options = {}) {
   }
 }
 
-export async function analyzeAudioTempo(file, options = {}) {
+export async function analyzeAudioTempo(
+  file: Blob | null,
+  options: TempoOptions = {},
+): Promise<TempoEstimate> {
   try {
     const { samples, sampleRate } = await extractMediaAudioSamples(
       file,

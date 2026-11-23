@@ -1,6 +1,6 @@
 import { BlobTracking } from '../effects/blob-tracking.ts';
-import { FaceDetection } from '../effects/face-detection.mjs';
-import { BlinkDetection } from '../effects/blink-detection.mjs';
+import { FaceDetection } from '../effects/face-detection.ts';
+import { BlinkDetection } from '../effects/blink-detection.ts';
 
 import { translateCurrent } from '../../src/lib/i18n/translate.ts';
 import { updateDetectorChip as updateDetectorChipState } from '../../src/lib/preview/preview-bridge.ts';
