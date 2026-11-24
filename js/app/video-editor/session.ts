@@ -82,6 +82,8 @@ export class VideoEditorSession {
   }
 
   dispose(): void {
+    this.exportSession.stop();
+    void this.exportSession.releaseWakeLock();
     this.transport.dispose();
     this.source.dispose();
     this.visualFx.dispose();

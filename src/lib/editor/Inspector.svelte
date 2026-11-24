@@ -4,6 +4,9 @@
   import ProjectPanel from './ProjectPanel.svelte';
   import ClipInspector from './ClipInspector.svelte';
   import AdjustPanel from './AdjustPanel.svelte';
+  import type { ProjectActions } from './editor-state';
+
+  let { projects }: { projects: ProjectActions } = $props();
 </script>
 
 <aside
@@ -59,7 +62,7 @@
     id="timelineClipboardStatus"
   ></div>
   <div class="video-inspector-panels">
-    <ProjectPanel />
+    <ProjectPanel {projects} />
     <div
       class="video-inspector-panel"
       class:is-active={$editorState.inspectorTab === 'effect'}

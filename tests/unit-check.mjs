@@ -72,6 +72,7 @@ import { normalizeLookClipConfig } from '../js/app/video-editor/look-config.ts';
 import { VideoTransport } from '../js/app/video-editor/transport.ts';
 import { EditorProjects } from '../js/app/video-editor/projects.ts';
 import { PreviewRenderer } from '../js/app/preview-renderer.ts';
+import { applyEditorExportPreset } from '../js/app/export-settings.ts';
 import { applyLocalvideoeditorMixin } from '../js/app/video-editor.mjs';
 import {
   createDefaultVisualConfig,
@@ -980,23 +981,17 @@ function checkStableExportDefaults() {
 }
 
 function checkEditorExportPresets() {
-  const app = {
-    imageSettings: { ...DEFAULT_IMAGE_SETTINGS },
-    preferences: { updateImageControlsUI() {}, saveImageSettings() {} },
-    updateVideoEditorUI() {},
-  };
-  applyLocalvideoeditorMixin(app);
-  app.updateVideoEditorUI = () => {};
-  app.applyEditorExportPreset('experimental-mp4');
-  assert.equal(app.imageSettings.editorExportPreset, 'experimental-mp4');
-  assert.equal(app.imageSettings.experimentalExportFeatures, true);
-  assert.equal(app.imageSettings.editorExportFormat, 'mp4');
-  assert.equal(app.imageSettings.editorCopyAudio, true);
+  const imageSettings = { ...DEFAULT_IMAGE_SETTINGS };
+  applyEditorExportPreset(imageSettings, 'experimental-mp4');
+  assert.equal(imageSettings.editorExportPreset, 'experimental-mp4');
+  assert.equal(imageSettings.experimentalExportFeatures, true);
+  assert.equal(imageSettings.editorExportFormat, 'mp4');
+  assert.equal(imageSettings.editorCopyAudio, true);
 
-  app.applyEditorExportPreset('chroma');
-  assert.equal(app.imageSettings.editorExportMode, 'effects-chroma');
-  assert.equal(app.imageSettings.editorExportFormat, 'webm');
-  assert.equal(app.imageSettings.editorCopyAudio, false);
+  applyEditorExportPreset(imageSettings, 'chroma');
+  assert.equal(imageSettings.editorExportMode, 'effects-chroma');
+  assert.equal(imageSettings.editorExportFormat, 'webm');
+  assert.equal(imageSettings.editorCopyAudio, false);
 }
 
 function checkTimelineClipSnappingHelper() {

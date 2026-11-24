@@ -37,7 +37,6 @@ interface ShellCommands {
   startVideoExport?(): Promise<void>;
   cancelVideoExport?(): void;
   closeVideoExportModal?(): void;
-  updateEditorExportControls?(): void;
   updateAdjustmentsContext?(): void;
   updateAdjustmentsClipStatus?(): void;
 }
@@ -68,6 +67,22 @@ try {
   mountSkipLink(document.querySelector<HTMLElement>('#skipLinkMount'));
   mountVideoEditor(
     document.querySelector<HTMLElement>('#videoEditorTemplateSlot'),
+    {
+      loadVideo: (file) =>
+        whenControllerReady(() => void controller.importVideoFile(file)),
+      loadProject: (file) =>
+        whenControllerReady(
+          () => void controller.importEditorProjectFile(file),
+        ),
+      saveProject: () =>
+        whenControllerReady(() => controller.editor?.projects.save()),
+      startExport: () =>
+        whenControllerReady(() => void controller.startVideoExport?.()),
+      setExportSetting: (setting, value) =>
+        whenControllerReady(() =>
+          controller.preferences.setExportSetting(setting, value),
+        ),
+    },
   );
   mountPreviewPlaceholder(
     document.querySelector<HTMLElement>('#previewPlaceholderMount'),
@@ -350,12 +365,12 @@ try {
       },
     },
   );
-  await controller.start();
+  const lifecycle = await controller.start();
   markControllerReady();
   const refreshLocalizedUi = () => {
+    if (lifecycle.signal.aborted) return;
     controller.detectors.updateInfo?.(true);
     controller.updateVideoEditorUI?.();
-    controller.updateEditorExportControls?.();
     controller._adjustClipStatusKey = '';
     controller.updateAdjustmentsContext?.();
     controller.updateAdjustmentsClipStatus?.();
@@ -367,10 +382,11 @@ try {
     controller.capture?.publishCaptureChrome();
     updateShellState({ locale: getLocale() });
   };
-  subscribeLocale(() => {
+  const unsubscribeLocale = subscribeLocale(() => {
     refreshLocalizedUi();
     requestAnimationFrame(refreshLocalizedUi);
   });
+  lifecycle.signal.addEventListener('abort', unsubscribeLocale, { once: true });
 } catch (err) {
   console.error(err);
   document.body.innerHTML = `

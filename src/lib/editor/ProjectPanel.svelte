@@ -3,6 +3,20 @@
   import { editorState } from './editor-store';
   import EditAssistPanel from './EditAssistPanel.svelte';
   import ExportPanel from './ExportPanel.svelte';
+  import type { ProjectActions } from './editor-state';
+
+  let { projects }: { projects: ProjectActions } = $props();
+  let videoInput: HTMLInputElement;
+  let projectInput: HTMLInputElement;
+  const importLabel = $derived(
+    m($editorState.hasSource ? 'Cambiar video' : 'Importar video'),
+  );
+
+  function consumeFile(input: HTMLInputElement, load: (_file: File) => void) {
+    const file = input.files?.[0];
+    input.value = '';
+    if (file) load(file);
+  }
 </script>
 
 <div
@@ -15,14 +29,29 @@
 >
   <div class="panel-section video-import-section">
     <div class="section-title">{m('Archivo de video')}</div>
-    <div class="help-text" id="videoProjectHelp"></div>
-    <input type="file" id="videoFileInput" accept="video/*" class="hidden" />
+    <div class="help-text" id="videoProjectHelp">
+      {m(
+        $editorState.hasSource
+          ? 'Reemplazá el video o exportá cuando termines.'
+          : 'Importá un archivo local. MP4, WebM o MOV si el navegador lo soporta.',
+      )}
+    </div>
+    <input
+      type="file"
+      id="videoFileInput"
+      accept="video/*"
+      class="hidden"
+      bind:this={videoInput}
+      onchange={(event) => consumeFile(event.currentTarget, projects.loadVideo)}
+    />
     <button
       type="button"
       class="btn primary"
       id="btnChooseVideo"
-      aria-label={m('Importar video')}
-    ></button>
+      aria-label={importLabel}
+      onclick={() => videoInput.click()}
+      ><i class="fa-solid fa-folder-open"></i> {importLabel}</button
+    >
     <div class="video-import-formats" aria-hidden="true">
       <span>MP4</span>
       <span>WebM</span>
@@ -38,6 +67,9 @@
       id="projectFileInput"
       accept=".hatewebcam.json,application/json"
       class="hidden"
+      bind:this={projectInput}
+      onchange={(event) =>
+        consumeFile(event.currentTarget, projects.loadProject)}
     />
     <div class="video-import-divider" aria-hidden="true"></div>
     <div class="video-project-resume">
@@ -54,6 +86,7 @@
         class="btn"
         id="btnSaveProject"
         disabled={!$editorState.hasSource || $editorState.exporting}
+        onclick={() => projects.saveProject()}
       >
         <i class="fa-solid fa-floppy-disk"></i>
         {m('Guardar proyecto')}
@@ -63,6 +96,7 @@
         class="btn"
         id="btnLoadProject"
         disabled={$editorState.exporting}
+        onclick={() => projectInput.click()}
       >
         <i class="fa-solid fa-file-import"></i>
         {m('Cargar proyecto')}
@@ -95,7 +129,7 @@
       <div class="spacer-8"></div>
       <EditAssistPanel />
       <div class="spacer-8"></div>
-      <ExportPanel />
+      <ExportPanel {projects} />
     </div>
   </div>
 </div>

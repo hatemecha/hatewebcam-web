@@ -5,6 +5,9 @@
   import EffectPalette from './EffectPalette.svelte';
   import Timeline from './Timeline.svelte';
   import Inspector from './Inspector.svelte';
+  import type { ProjectActions } from './editor-state';
+
+  let { projects }: { projects: ProjectActions } = $props();
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -48,4 +51,4 @@
   aria-valuenow="50"
   tabindex="0"
 ></div>
-<Inspector />
+<Inspector {projects} />

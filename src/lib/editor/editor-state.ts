@@ -4,9 +4,44 @@
  * editor-store.ts.
  */
 import type { MessageKey } from '../i18n/catalog.ts';
+import {
+  DEFAULT_IMAGE_SETTINGS,
+  type ImageSettings,
+} from '../../../js/app/constants.ts';
 
 export type SourceMode = 'camera' | 'video';
 export type InspectorTab = 'project' | 'effect' | 'adjust';
+
+export interface ProjectActions {
+  loadVideo(file: File): void;
+  loadProject(file: File): void;
+  saveProject(): void;
+  startExport(): void;
+  setExportSetting(setting: ExportSetting, value: string | boolean): void;
+}
+
+const exportFields = [
+  'editorExportPreset',
+  'editorExportMode',
+  'editorExportFormat',
+  'editorCopyAudio',
+  'experimentalExportFeatures',
+  'effectsExportChroma',
+] as const;
+
+export type ExportSetting = (typeof exportFields)[number];
+type ExportSettings = Pick<ImageSettings, ExportSetting>;
+
+function readExportSettings(settings: ImageSettings): ExportSettings {
+  return {
+    editorExportPreset: settings.editorExportPreset,
+    editorExportMode: settings.editorExportMode,
+    editorExportFormat: settings.editorExportFormat,
+    editorCopyAudio: settings.editorCopyAudio,
+    experimentalExportFeatures: settings.experimentalExportFeatures,
+    effectsExportChroma: settings.effectsExportChroma,
+  };
+}
 
 export interface EditorUiState {
   mode: SourceMode;
@@ -14,6 +49,9 @@ export interface EditorUiState {
   sourceDetails: string;
   exporting: boolean;
   canExport: boolean;
+  exportSettings: ExportSettings;
+  exportDetails: string;
+  exportDiagnostics: string;
   canUndo: boolean;
   canRedo: boolean;
   inspectorTab: InspectorTab;
@@ -27,6 +65,9 @@ let state: EditorUiState = {
   sourceDetails: '',
   exporting: false,
   canExport: false,
+  exportSettings: readExportSettings(DEFAULT_IMAGE_SETTINGS),
+  exportDetails: '',
+  exportDiagnostics: '',
   canUndo: false,
   canRedo: false,
   inspectorTab: 'project',
@@ -38,6 +79,12 @@ const listeners = new Set<(next: EditorUiState) => void>();
 
 export function getEditorUiState(): EditorUiState {
   return state;
+}
+
+export function updateExportSettings(settings: ImageSettings): void {
+  if (exportFields.some((key) => state.exportSettings[key] !== settings[key])) {
+    updateEditorUiState({ exportSettings: readExportSettings(settings) });
+  }
 }
 
 export function updateEditorUiState(patch: Partial<EditorUiState>): void {

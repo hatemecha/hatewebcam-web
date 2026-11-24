@@ -87,37 +87,10 @@ export function applyEventsMixin(proto) {
     bind(this.timelineSplitter, 'horizontal');
   };
 
-  proto.bindEvents = function () {
-    document.addEventListener('hatewebcam:localechange', () => {
-      this.preferences.syncMirrorControls();
-    });
-    // File selection must never be lost while the lazy editor chunk loads.
-    this.btnChooseVideo.addEventListener('click', () =>
-      this.videoFileInput.click(),
-    );
-    this.videoFileInput.addEventListener('change', () => {
-      const [file] = this.videoFileInput.files || [];
-      if (file) void this.importVideoFile(file);
-      this.videoFileInput.value = '';
-    });
-    this.projectFileInput?.addEventListener('change', () => {
-      const [file] = this.projectFileInput.files || [];
-      if (file) void this.importEditorProjectFile(file);
-      this.projectFileInput.value = '';
-    });
-    this.bindCameraShellEvents();
-  };
-
   // Editor-only listeners are attached when the lazy editor chunk loads.
   proto.bindVideoEditorEvents = function () {
     if (this._videoEditorEventsBound) return;
     this._videoEditorEventsBound = true;
-    this.btnSaveProject?.addEventListener('click', () =>
-      this.editor.projects.save(),
-    );
-    this.btnLoadProject?.addEventListener('click', () =>
-      this.projectFileInput?.click(),
-    );
     if (this.videoEffectType) {
       this.videoEffectType.addEventListener('change', () => {
         this.updateEffectTrackHighlight();
@@ -172,9 +145,6 @@ export function applyEventsMixin(proto) {
       'click',
       this.deleteSelectedVideoEffect.bind(this),
     );
-    this.btnExportVideo.addEventListener('click', () => {
-      void this.startVideoExport();
-    });
     if (this.btnToolSelect)
       this.btnToolSelect.addEventListener('click', () =>
         this.setEditorTool('select'),
@@ -297,47 +267,5 @@ export function applyEventsMixin(proto) {
     this.timelineTrimEndHandle.addEventListener('pointerdown', (event) =>
       this.beginTrimDrag(event, 'end'),
     );
-  };
-
-  proto.bindCameraShellEvents = function () {
-    this.canvas.addEventListener('click', (event) =>
-      this.colorPicker.sample(event),
-    );
-
-    window.addEventListener('keydown', (event) =>
-      this.capture.onGlobalKeyDown(event),
-    );
-    document.addEventListener(
-      'visibilitychange',
-      this.onVisibilityChange.bind(this),
-    );
-    window.addEventListener('resize', () => {
-      this.preferences.syncMobileViewportState();
-      this.renderer.requestPreviewRefresh(true);
-    });
-
-    window.addEventListener('beforeunload', () => {
-      this.renderer.dispose();
-      this.capture.dispose();
-      this.detectors.dispose();
-      this.camera.stop();
-      this.editor?.dispose();
-    });
-  };
-
-  proto.onVisibilityChange = function () {
-    this.isPageVisible = document.visibilityState !== 'hidden';
-    if (this.editor?.exportSession.active) return;
-    if (!this.isRunning) return;
-
-    if (!this.isPageVisible) {
-      this.renderer.cancelRenderLoop();
-      return;
-    }
-
-    if (!this.renderer.hasPendingFrame) {
-      this.renderer.resetCadence();
-      this.renderer.scheduleRenderLoop();
-    }
   };
 }

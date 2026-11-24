@@ -80,32 +80,13 @@ export function applyVideoEditorExportMixin(proto) {
     updateShellState({
       exportEnabled: canExport && !this.editor.exportSession?.active,
     });
-    if (this.btnChooseVideo) {
-      const label = translateCurrent(
-        loaded ? 'Cambiar video' : 'Importar video',
-      );
-      this.btnChooseVideo.innerHTML = `<i class="fa-solid fa-folder-open"></i> ${label}`;
-      this.btnChooseVideo.setAttribute('aria-label', label);
-    }
-    if (this.videoProjectHelp) {
-      this.videoProjectHelp.textContent = translateCurrent(
-        loaded
-          ? 'Reemplazá el video o exportá cuando termines.'
-          : 'Importá un archivo local. MP4, WebM o MOV si el navegador lo soporta.',
-      );
-    }
     this.updateVideoEffectInspector();
-    this.updateEditorExportControls();
     this.updateAdjustmentsPanelState();
     this.updateEditorHistoryButtons();
     this.editor.editAssist?.updateUI();
     if (!loaded) {
-      if (this.videoExportDetails)
-        this.videoExportDetails.textContent = translateCurrent(
-          'Importá un video para habilitar la exportación.',
-        );
-      if (this.videoExportDiagnostics)
-        this.videoExportDiagnostics.textContent = '';
+      this.exportDiagnosticsRequest = (this.exportDiagnosticsRequest ?? 0) + 1;
+      updateEditorUiState({ exportDetails: '', exportDiagnostics: '' });
       if (this.sourceMode === 'video') {
         this.camera.updatePreviewPlaceholder();
       }
@@ -113,7 +94,7 @@ export function applyVideoEditorExportMixin(proto) {
       return;
     }
     this.camera.updatePreviewPlaceholder();
-    if (this.videoExportDetails) {
+    {
       const preflight = this.buildVideoExportPreflight();
       const modeLabel = translateCurrent(
         preflight?.mode === 'effects-chroma'
@@ -138,127 +119,12 @@ export function applyVideoEditorExportMixin(proto) {
       const exportLabel = canExport
         ? `${formatLabel} · ${modeLabel} · ${audioLabel}`
         : translateCurrent('WebCodecs no disponible');
-      this.videoExportDetails.textContent = `${this.formatVideoExportPreflight(preflight)} · ${exportLabel}`;
+      updateEditorUiState({
+        exportDetails: `${this.formatVideoExportPreflight(preflight)} · ${exportLabel}`,
+      });
     }
     void this.refreshVideoExportDiagnostics();
     this.updateTimelineHint();
-  };
-
-  proto.updateEditorExportControls = function () {
-    const effectsOnly =
-      this.imageSettings.editorExportMode === 'effects-chroma';
-    const experimental = !!this.imageSettings.experimentalExportFeatures;
-    if (!experimental) {
-      this.imageSettings.editorExportFormat = 'webm';
-      this.imageSettings.editorCopyAudio = false;
-    }
-    if (this.videoExportModeSelect)
-      this.videoExportModeSelect.value = this.imageSettings.editorExportMode;
-    if (this.editorExportPresetSelect) {
-      this.editorExportPresetSelect.value =
-        this.imageSettings.editorExportPreset || 'balanced';
-      this.editorExportPresetSelect.disabled =
-        this.editor.exportSession?.active;
-    }
-    if (this.chkExperimentalExportFeatures) {
-      this.chkExperimentalExportFeatures.checked = experimental;
-      this.chkExperimentalExportFeatures.disabled =
-        this.editor.exportSession?.active;
-    }
-    if (this.editorExperimentalExportGroup) {
-      this.editorExperimentalExportGroup.classList.toggle(
-        'hidden',
-        !experimental,
-      );
-    }
-    if (this.editorStableExportDetails) {
-      this.editorStableExportDetails.textContent = translateCurrent(
-        effectsOnly
-          ? 'Estable: WebM · solo efectos chroma'
-          : 'Estable: WebM · sin audio',
-      );
-    }
-    if (this.editorExportFormatSelect) {
-      this.editorExportFormatSelect.value =
-        this.imageSettings.editorExportFormat;
-      this.editorExportFormatSelect.disabled =
-        !experimental || effectsOnly || this.editor.exportSession?.active;
-    }
-    if (this.chkEditorCopyAudio) {
-      this.chkEditorCopyAudio.checked = !!this.imageSettings.editorCopyAudio;
-      this.chkEditorCopyAudio.disabled =
-        !experimental || effectsOnly || this.editor.exportSession?.active;
-    }
-    if (this.effectsExportChromaGroup) {
-      this.effectsExportChromaGroup.classList.toggle('hidden', !effectsOnly);
-    }
-    if (this.effectsExportChromaSelect) {
-      this.effectsExportChromaSelect.value =
-        this.imageSettings.effectsExportChroma;
-      this.effectsExportChromaSelect.disabled =
-        !effectsOnly || this.editor.exportSession?.active;
-    }
-  };
-
-  proto.applyEditorExportPreset = function (preset) {
-    const value = [
-      'fast',
-      'balanced',
-      'high',
-      'chroma',
-      'experimental-mp4',
-    ].includes(preset)
-      ? preset
-      : 'balanced';
-    const presets = {
-      fast: {
-        editorExportMode: 'full',
-        experimentalExportFeatures: false,
-        editorExportFormat: 'webm',
-        editorCopyAudio: false,
-        qualityEnhancer: false,
-        qualityEnhancerStrength: 20,
-      },
-      balanced: {
-        editorExportMode: 'full',
-        experimentalExportFeatures: false,
-        editorExportFormat: 'webm',
-        editorCopyAudio: false,
-        qualityEnhancer: false,
-        qualityEnhancerStrength: 35,
-      },
-      high: {
-        editorExportMode: 'full',
-        experimentalExportFeatures: false,
-        editorExportFormat: 'webm',
-        editorCopyAudio: false,
-        qualityEnhancer: true,
-        qualityEnhancerStrength: 55,
-      },
-      chroma: {
-        editorExportMode: 'effects-chroma',
-        experimentalExportFeatures: false,
-        editorExportFormat: 'webm',
-        editorCopyAudio: false,
-        effectsExportChroma: 'green',
-        qualityEnhancer: false,
-        qualityEnhancerStrength: 35,
-      },
-      'experimental-mp4': {
-        editorExportMode: 'full',
-        experimentalExportFeatures: true,
-        editorExportFormat: 'mp4',
-        editorCopyAudio: true,
-        qualityEnhancer: false,
-        qualityEnhancerStrength: 35,
-      },
-    };
-    Object.assign(this.imageSettings, presets[value], {
-      editorExportPreset: value,
-    });
-    this.preferences.updateImageControlsUI();
-    this.updateVideoEditorUI();
-    this.preferences.saveImageSettings();
   };
 
   proto.formatVideoExportDiagnosis = function (diagnosis, bitrate) {
@@ -295,7 +161,9 @@ export function applyVideoEditorExportMixin(proto) {
   };
 
   proto.refreshVideoExportDiagnostics = async function () {
-    if (!this.videoExportDiagnostics || !this.editor.source?.file) return null;
+    const request = (this.exportDiagnosticsRequest =
+      (this.exportDiagnosticsRequest ?? 0) + 1);
+    if (!this.editor.source?.file) return null;
     const preflight = this.buildVideoExportPreflight();
     if (!preflight) return null;
     const diagnosis = await diagnoseVideoExportSupport({
@@ -307,10 +175,10 @@ export function applyVideoEditorExportMixin(proto) {
       mode: preflight.mode,
       copyAudio: preflight.copyAudio,
     });
-    this.videoExportDiagnostics.textContent = `${this.formatVideoExportDiagnosis(
-      diagnosis,
-      preflight.bitrate,
-    )} · ${translateCurrent(preflight.risk.recommendation)}`;
+    if (request !== this.exportDiagnosticsRequest) return null;
+    updateEditorUiState({
+      exportDiagnostics: `${this.formatVideoExportDiagnosis(diagnosis, preflight.bitrate)} · ${translateCurrent(preflight.risk.recommendation)}`,
+    });
     return diagnosis;
   };
 
@@ -579,15 +447,13 @@ export function applyVideoEditorExportMixin(proto) {
       const preflight = this.buildVideoExportPreflight();
       if (!preflight) throw new Error('video_export_preflight_missing');
       this.videoExportPreflight = preflight;
-      if (this.videoExportDetails) {
-        this.videoExportDetails.textContent =
-          this.formatVideoExportPreflight(preflight);
-      }
+      updateEditorUiState({
+        exportDetails: this.formatVideoExportPreflight(preflight),
+      });
       if (preflight.blocked) {
-        if (this.videoExportDiagnostics) {
-          this.videoExportDiagnostics.textContent =
-            preflight.risk.recommendation;
-        }
+        updateEditorUiState({
+          exportDiagnostics: translateCurrent(preflight.risk.recommendation),
+        });
         this.showStatus(
           this.videoEditorStatus,
           'Exportación bloqueada por riesgo de memoria. Reducí duración o usá Rápido/Balanceado.',
@@ -607,12 +473,9 @@ export function applyVideoEditorExportMixin(proto) {
         copyAudio: preflight.copyAudio,
       });
       this.videoExportDiagnosis = diagnosis;
-      if (this.videoExportDiagnostics) {
-        this.videoExportDiagnostics.textContent = `${this.formatVideoExportDiagnosis(
-          diagnosis,
-          preflight.bitrate,
-        )} · ${preflight.risk.recommendation}`;
-      }
+      updateEditorUiState({
+        exportDiagnostics: `${this.formatVideoExportDiagnosis(diagnosis, preflight.bitrate)} · ${translateCurrent(preflight.risk.recommendation)}`,
+      });
       if (!diagnosis.supported) {
         this.showStatus(
           this.videoEditorStatus,

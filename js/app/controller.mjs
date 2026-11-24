@@ -47,6 +47,7 @@ import { PreviewRenderer } from './preview-renderer.ts';
 import { ColorPicker } from './color-pick.ts';
 import { WebcamProfiles } from './webcam-profiles.ts';
 import { WebcamCapture } from './webcam-capture.ts';
+import { bindWebcamEvents } from './webcam-events.ts';
 import { downloadBlob, hideStatus, showStatus } from './feedback.ts';
 import {
   formatBytes,
@@ -268,12 +269,14 @@ export class AppController {
   async start() {
     this.dom = readAppDom();
     Object.assign(this, this.dom);
-    // Bind DOM events before the first await so a fast user (or a slow CI
-    // worker) cannot lose clicks and file selections while settings load.
-    // Init still publishes the initial UI state after this.
-    this.bindEvents();
-    this.preferences.bindImageControlEvents();
-    await initializeWebcam(this);
+    const lifecycle = bindWebcamEvents(this);
+    try {
+      await initializeWebcam(this);
+      return lifecycle;
+    } catch (error) {
+      lifecycle.dispose();
+      throw error;
+    }
   }
 }
 

@@ -22,6 +22,11 @@ import {
   type ImageSettings,
 } from './constants.ts';
 import { translateCurrent } from '../../src/lib/i18n/translate.ts';
+import {
+  updateExportSettings,
+  type ExportSetting,
+} from '../../src/lib/editor/editor-state.ts';
+import { applyEditorExportPreset } from './export-settings.ts';
 import { updateCameraSourceState } from '../../src/lib/webcam/camera-source-bridge.ts';
 import {
   deriveDetectorExtras,
@@ -157,8 +162,6 @@ interface PreferencesHost {
   mobileFxOpen: boolean;
   updateVideoEffectInspector(): void;
   updateVideoEditorUI(): void;
-  updateEditorExportControls?(): void;
-  applyEditorExportPreset?(preset: string): void;
   getSelectedVideoEffectItem?(): TimelineItem | null;
   snapshotVideoEffectConfig?(type: string): Record<string, unknown>;
   syncLookClipConfigNow?(): void;
@@ -556,30 +559,12 @@ export class WebcamPreferences {
   }
 
   updateImageControlsUI() {
-    if (this.host.dom.editorExportPresetSelect)
-      this.host.dom.editorExportPresetSelect.value =
-        this.host.imageSettings.editorExportPreset;
-    if (this.host.dom.videoExportModeSelect)
-      this.host.dom.videoExportModeSelect.value =
-        this.host.imageSettings.editorExportMode;
-    if (this.host.dom.editorExportFormatSelect)
-      this.host.dom.editorExportFormatSelect.value =
-        this.host.imageSettings.editorExportFormat;
-    if (this.host.dom.chkEditorCopyAudio)
-      this.host.dom.chkEditorCopyAudio.checked =
-        !!this.host.imageSettings.editorCopyAudio;
-    if (this.host.dom.chkExperimentalExportFeatures)
-      this.host.dom.chkExperimentalExportFeatures.checked =
-        !!this.host.imageSettings.experimentalExportFeatures;
-    if (this.host.dom.effectsExportChromaSelect)
-      this.host.dom.effectsExportChromaSelect.value =
-        this.host.imageSettings.effectsExportChroma;
     updateCameraSourceState({
       performanceMode: normalizePerformanceMode(
         this.host.imageSettings.performanceMode,
       ),
     });
-    this.host.updateEditorExportControls?.();
+    updateExportSettings(this.host.imageSettings);
     this.mobileActivePreset = this.getMatchingImagePreset();
     this.publishWebcamPanel();
   }
@@ -731,60 +716,44 @@ export class WebcamPreferences {
     this.applyFaceVisualFlags(showBox, showBlur);
   }
 
-  bindImageControlEvents() {
-    const {
-      editorExportPresetSelect,
-      editorExportFormatSelect,
-      videoExportModeSelect,
-      chkEditorCopyAudio,
-      chkExperimentalExportFeatures,
-      effectsExportChromaSelect,
-    } = this.host.dom;
-    videoExportModeSelect?.addEventListener('change', () => {
-      this.host.imageSettings.editorExportMode = oneOf(
-        videoExportModeSelect.value,
-        ['full', 'effects-chroma'],
-        'full',
-      );
-      this.host.updateEditorExportControls?.();
-      this.host.updateVideoEditorUI();
-      this.saveImageSettings();
-    });
-    editorExportPresetSelect?.addEventListener('change', () =>
-      this.host.applyEditorExportPreset?.(editorExportPresetSelect.value),
-    );
-    editorExportFormatSelect?.addEventListener('change', () => {
-      this.host.imageSettings.editorExportFormat = oneOf(
-        editorExportFormatSelect.value,
-        ['auto', 'mp4', 'webm'],
-        'webm',
-      );
-      this.host.updateVideoEditorUI();
-      this.saveImageSettings();
-    });
-    chkExperimentalExportFeatures?.addEventListener('change', () => {
-      this.host.imageSettings.experimentalExportFeatures =
-        chkExperimentalExportFeatures.checked;
-      if (!chkExperimentalExportFeatures.checked) {
-        this.host.imageSettings.editorExportFormat = 'webm';
-        this.host.imageSettings.editorCopyAudio = false;
-      }
-      this.host.updateVideoEditorUI();
-      this.saveImageSettings();
-    });
-    chkEditorCopyAudio?.addEventListener('change', () => {
-      this.host.imageSettings.editorCopyAudio = chkEditorCopyAudio.checked;
-      this.host.updateVideoEditorUI();
-      this.saveImageSettings();
-    });
-    effectsExportChromaSelect?.addEventListener('change', () => {
-      this.host.imageSettings.effectsExportChroma = oneOf(
-        effectsExportChromaSelect.value,
-        ['green', 'blue'],
-        'green',
-      );
-      this.saveImageSettings();
-    });
+  setExportSetting(setting: ExportSetting, value: string | boolean) {
+    if (this.host.editor?.exportSession.active) return;
+    const image = this.host.imageSettings;
+    switch (setting) {
+      case 'editorExportPreset':
+        applyEditorExportPreset(image, String(value));
+        break;
+      case 'editorExportMode':
+        image.editorExportMode = oneOf(
+          value,
+          ['full', 'effects-chroma'],
+          'full',
+        );
+        break;
+      case 'editorExportFormat':
+        image.editorExportFormat = oneOf(
+          value,
+          ['auto', 'mp4', 'webm'],
+          'webm',
+        );
+        break;
+      case 'experimentalExportFeatures':
+        image.experimentalExportFeatures = value === true;
+        break;
+      case 'editorCopyAudio':
+        image.editorCopyAudio = value === true;
+        break;
+      case 'effectsExportChroma':
+        image.effectsExportChroma = oneOf(value, ['green', 'blue'], 'green');
+        break;
+    }
+    if (!image.experimentalExportFeatures) {
+      image.editorExportFormat = 'webm';
+      image.editorCopyAudio = false;
+    }
+    this.updateImageControlsUI();
+    this.host.updateVideoEditorUI();
+    this.saveImageSettings();
   }
 
   setCaptureTimerSeconds(value: unknown) {
