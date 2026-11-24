@@ -180,6 +180,21 @@ test('specific-color detection exposes an editable target color', async ({
   await expect(page.locator('#cfgTargetColorStatus')).toContainText(
     'Color objetivo actualizado.',
   );
+  await page.locator('#btnAdvancedHsv').click();
+  await page.locator('#sldHMin').fill('20');
+  await expect(page.locator('#valHMin')).toHaveText('20');
+  await page.locator('input[name="detMode"][value="lights"]').check();
+  await expect(targetColor).toBeHidden();
+  await page.locator('input[name="detMode"][value="manual"]').check();
+  await expect(targetColor).toHaveValue('#2a7fff');
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const settings = JSON.parse(localStorage.getItem('hatewebcam_config'));
+        return settings?.effectSettings?.blob?.hsvMin?.[0];
+      }),
+    )
+    .toBe(20);
 });
 
 test('boot failure shows a visible error', async ({ page }) => {

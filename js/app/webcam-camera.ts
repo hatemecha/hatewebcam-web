@@ -67,7 +67,6 @@ interface WebcamCameraHost {
   flipH: boolean;
   flipV: boolean;
   rotation: number;
-  renderEffectConfig(): void;
   showStatus(element: HTMLElement | null, message: string, type: Status): void;
   hideStatus(element: HTMLElement | null): void;
   preferences: Pick<
@@ -196,7 +195,6 @@ export class WebcamCamera {
     if (this.host.detectors.blink) {
       this.host.detectors.blink.processIntervalMs = profile.detectorIntervalMs;
     }
-    this.host.renderEffectConfig();
   }
 
   private applyPerformanceProfileSettings(

@@ -265,7 +265,6 @@ export function applyVideoEditorClipInspectorMixin(proto) {
     }
     this.preferences.syncQuickDetectorSettingsFromEffects();
     this.preferences.updateQuickDetectorControlsUI();
-    this.renderEffectConfig();
   };
 
   proto.commitSelectedEffectTiming = function (options = {}) {

@@ -1,45 +1,59 @@
 import type { WebcamPreferences } from './webcam-preferences.ts';
 import type { BlobTracking } from '../effects/blob-tracking.ts';
-import { hideStatus, showStatus } from './feedback.ts';
+import {
+  setColorPickFeedback,
+  type ColorPickTarget,
+} from '../../src/lib/webcam/color-pick-feedback.ts';
 
 interface ColorPickHost {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
   detectors: { blob: Pick<BlobTracking, 'setColorFromPixel'> | null };
-  colorPickStatus: HTMLElement | null;
-  sourceMode: 'camera' | 'video';
-  preferences: Pick<WebcamPreferences, 'saveActiveEffectSettings'>;
-  renderEffectConfig(): void;
+  preferences: Pick<
+    WebcamPreferences,
+    | 'saveActiveEffectSettings'
+    | 'scheduleSyncSelectedClipConfig'
+    | 'publishWebcamPanel'
+  >;
 }
 
 export class ColorPicker {
-  private active = false;
+  private target: ColorPickTarget | null = null;
+  private resetFeedback: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private readonly host: ColorPickHost) {}
 
-  start(status = this.host.colorPickStatus): void {
+  start(target: ColorPickTarget = 'quick'): void {
+    this.cancel();
     if (!this.host.detectors.blob) {
-      showStatus(
-        status,
-        'Primero activá "Detectar objetos por color"',
-        'warning',
-      );
+      setColorPickFeedback(target, {
+        message: 'Primero activá "Detectar objetos por color"',
+        type: 'warning',
+      });
       return;
     }
-    this.active = true;
+    this.target = target;
     this.host.canvas.classList.add('color-pick-mode');
-    showStatus(status, 'Hacé click en el video para elegir un color', 'info');
+    setColorPickFeedback(target, {
+      message: 'Hacé click en el video para elegir un color',
+      type: 'info',
+    });
   }
 
   cancel(): void {
-    this.active = false;
+    if (this.resetFeedback !== null) clearTimeout(this.resetFeedback);
+    this.resetFeedback = null;
+    setColorPickFeedback('quick', null);
+    setColorPickFeedback('advanced', null);
+    this.target = null;
     this.host.canvas.classList.remove('color-pick-mode');
   }
 
   sample(event: MouseEvent): void {
     const { canvas, ctx, detectors } = this.host;
     const blob = detectors.blob;
-    if (!this.active || !blob) return;
+    const target = this.target;
+    if (!target || !blob) return;
 
     const rect = canvas.getBoundingClientRect();
     const x = Math.round(
@@ -74,17 +88,15 @@ export class ColorPicker {
     );
     this.cancel();
     this.host.preferences.saveActiveEffectSettings();
-    this.host.renderEffectConfig();
-
-    const status =
-      this.host.sourceMode === 'video'
-        ? document.querySelector<HTMLElement>('#cfgTargetColorStatus')
-        : this.host.colorPickStatus;
-    showStatus(
-      status,
-      'Color seleccionado. Ya podés mover el objeto.',
-      'success',
-    );
-    setTimeout(() => hideStatus(status), 2500);
+    this.host.preferences.scheduleSyncSelectedClipConfig();
+    this.host.preferences.publishWebcamPanel();
+    setColorPickFeedback(target, {
+      message: 'Color seleccionado. Ya podés mover el objeto.',
+      type: 'success',
+    });
+    this.resetFeedback = setTimeout(() => {
+      this.resetFeedback = null;
+      setColorPickFeedback(target, null);
+    }, 2500);
   }
 }

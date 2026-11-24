@@ -32,7 +32,6 @@ import { mountVideoEditor } from '../src/lib/editor/mount.ts';
 import { hideStatus } from './app/feedback.ts';
 
 interface ShellCommands {
-  renderEffectConfig(): void;
   _adjustClipStatusKey: string;
   openAdjustmentsForContext?(context: string): void;
   startVideoExport?(): Promise<void>;
@@ -163,9 +162,15 @@ try {
           controller.preferences.setFaceVisualChecked(kind, checked),
         );
       },
-      pickColor: () => {
-        whenControllerReady(() => controller.colorPicker.start());
+      pickColor: (target) => {
+        whenControllerReady(() => controller.colorPicker.start(target));
       },
+      setDetectorOptions: (...update) =>
+        whenControllerReady(() =>
+          controller.preferences.setDetectorOptions(...update),
+        ),
+      setTargetColor: (color) =>
+        whenControllerReady(() => controller.preferences.setTargetColor(color)),
       toggleAdvanced: () => {
         whenControllerReady(() =>
           controller.preferences.toggleAdvancedOptions(),
@@ -348,7 +353,6 @@ try {
   await controller.start();
   markControllerReady();
   const refreshLocalizedUi = () => {
-    controller.renderEffectConfig?.();
     controller.detectors.updateInfo?.(true);
     controller.updateVideoEditorUI?.();
     controller.updateEditorExportControls?.();

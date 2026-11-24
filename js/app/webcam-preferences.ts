@@ -5,6 +5,7 @@ import {
   normalizeCaptureTimerSeconds,
   normalizeFaceVisualFlags,
   normalizeFaceLabel,
+  normalizeHexColor,
   oneOf,
   readImageSettings,
   readQuickDetectorSettings,
@@ -27,7 +28,11 @@ import {
   replaceWebcamPanelState,
   type ImagePresetName,
 } from '../../src/lib/webcam/panel-state.ts';
-import type { FaceVisualKind } from '../../src/lib/webcam/types.ts';
+import type {
+  DetectorUpdate,
+  FaceVisualKind,
+} from '../../src/lib/webcam/types.ts';
+import { setColorPickFeedback } from '../../src/lib/webcam/color-pick-feedback.ts';
 import type { TimelineItem } from '../editor/video-timeline.ts';
 import type { Detectors } from './detectors.ts';
 import type { readAppDom } from './dom.ts';
@@ -129,14 +134,6 @@ function isImageNumberControl(value: string): value is ImageNumberControl {
   return imageNumberControls.includes(value);
 }
 
-interface FaceOptions {
-  updateUI?: boolean;
-  renderConfig?: boolean;
-  updateInfo?: boolean;
-  saveQuick?: boolean;
-  saveEffect?: boolean;
-}
-
 interface PreferencesHost {
   dom: ReturnType<typeof readAppDom>;
   sourceMode: 'camera' | 'video';
@@ -158,7 +155,6 @@ interface PreferencesHost {
   rotation: number;
   isRunning: boolean;
   mobileFxOpen: boolean;
-  renderEffectConfig(): void;
   updateVideoEffectInspector(): void;
   updateVideoEditorUI(): void;
   updateEditorExportControls?(): void;
@@ -194,6 +190,9 @@ export class WebcamPreferences {
   publishWebcamPanel() {
     const image = this.host.imageSettings;
     const quick = this.host.quickDetectorSettings;
+    const { blob, face, blink } = this.host.detectors;
+    const blobConfig = blob?.getConfig();
+    const faceConfig = face?.getConfig();
     const faceFlags = normalizeFaceVisualFlags(quick);
     const selectedEffect =
       this.host.sourceMode === 'video'
@@ -224,6 +223,28 @@ export class WebcamPreferences {
         blink: this.host.detectors.selection.blink,
         faceBusy: this.host.detectors.busy.face,
         blinkBusy: this.host.detectors.busy.blink,
+      },
+      detectorOptions: {
+        blob: blobConfig
+          ? {
+              ...blobConfig,
+              boxColor: normalizeHexColor(
+                blobConfig.boxColor,
+                quick.blobBoxColor,
+              ),
+              targetColor: normalizeHexColor(blobConfig.targetColor, '#00c853'),
+            }
+          : null,
+        face: faceConfig
+          ? {
+              ...faceConfig,
+              boxColor: normalizeHexColor(
+                faceConfig.boxColor,
+                quick.faceBoxColor,
+              ),
+            }
+          : null,
+        blink: blink?.getConfig() ?? null,
       },
       ...extras,
       blobColor: quick.blobBoxColor || '#ff2222',
@@ -298,11 +319,7 @@ export class WebcamPreferences {
     return faceVisualModeFromFlags(showBox, showBlur);
   }
 
-  applyFaceVisualFlags(
-    showBox: boolean,
-    showBlur: boolean,
-    options: FaceOptions = {},
-  ) {
+  private applyFaceVisualFlags(showBox: boolean, showBlur: boolean) {
     const normalized = normalizeFaceVisualFlags({
       faceShowBox: showBox,
       faceShowBlur: showBlur,
@@ -313,11 +330,10 @@ export class WebcamPreferences {
       this.host.detectors.face.showBox = normalized.showBox;
       this.host.detectors.face.showBlur = normalized.showBlur;
     }
-    if (options.updateUI !== false) this.updateQuickDetectorControlsUI();
-    if (options.renderConfig !== false) this.host.renderEffectConfig();
-    if (options.updateInfo !== false) this.host.detectors.updateInfo();
-    if (options.saveQuick !== false) this.scheduleSaveQuickDetectorSettings();
-    if (options.saveEffect !== false) this.scheduleSaveActiveEffectSettings();
+    this.updateQuickDetectorControlsUI();
+    this.host.detectors.updateInfo();
+    this.scheduleSaveQuickDetectorSettings();
+    this.scheduleSaveActiveEffectSettings();
     if (this.host.sourceMode === 'video') this.scheduleSyncSelectedClipConfig();
   }
 
@@ -373,38 +389,10 @@ export class WebcamPreferences {
     }, 120);
   }
 
-  syncAdvancedQuickInputs() {
-    const advBlobColorInput =
-      document.querySelector<HTMLInputElement>('#inpBoxColor');
-    const advBlobColorSwatch =
-      document.querySelector<HTMLElement>('#boxColorSwatch');
-    const advFaceColorInput =
-      document.querySelector<HTMLInputElement>('#inpFaceColor');
-    const advFaceColorSwatch =
-      document.querySelector<HTMLElement>('#faceColorSwatch');
-    const advFaceLabelInput =
-      document.querySelector<HTMLInputElement>('#inpFaceLabel');
-
-    if (advBlobColorInput)
-      advBlobColorInput.value = this.host.quickDetectorSettings.blobBoxColor;
-    if (advBlobColorSwatch)
-      advBlobColorSwatch.style.background =
-        this.host.quickDetectorSettings.blobBoxColor;
-    if (advFaceColorInput)
-      advFaceColorInput.value = this.host.quickDetectorSettings.faceBoxColor;
-    if (advFaceColorSwatch)
-      advFaceColorSwatch.style.background =
-        this.host.quickDetectorSettings.faceBoxColor;
-    if (advFaceLabelInput && document.activeElement !== advFaceLabelInput) {
-      advFaceLabelInput.value = this.host.quickDetectorSettings.faceLabelText;
-    }
-  }
-
   updateQuickDetectorControlsUI() {
     const faceFlags = normalizeFaceVisualFlags(this.host.quickDetectorSettings);
     this.host.quickDetectorSettings.faceShowBox = faceFlags.showBox;
     this.host.quickDetectorSettings.faceShowBlur = faceFlags.showBlur;
-    this.syncAdvancedQuickInputs();
     this.host.capture.updateCaptureButtons();
     this.host.updateVideoEffectInspector();
     this.host.updateVideoEditorUI();
@@ -663,6 +651,45 @@ export class WebcamPreferences {
     this.scheduleSaveActiveEffectSettings();
   }
 
+  setDetectorOptions(...[kind, options]: DetectorUpdate) {
+    const { blob, face, blink } = this.host.detectors;
+    switch (kind) {
+      case 'blob':
+        blob?.setConfig(options);
+        break;
+      case 'face':
+        if (face) {
+          face.setConfig(options);
+          if (
+            options.pixelationCellSize !== undefined ||
+            options.censorPaddingPercent !== undefined
+          ) {
+            this.host.quickDetectorSettings.facePixelationCellSize =
+              face.pixelationCellSize;
+            this.host.quickDetectorSettings.faceCensorPaddingPercent =
+              face.censorPaddingPercent;
+            this.scheduleSaveQuickDetectorSettings();
+          }
+        }
+        break;
+      case 'blink':
+        blink?.setConfig(options);
+        break;
+    }
+    this.publishWebcamPanel();
+    this.scheduleSaveActiveEffectSettings();
+  }
+
+  setTargetColor(color: string) {
+    if (!this.host.detectors.blob?.setColorFromHex(color)) return;
+    setColorPickFeedback('advanced', {
+      message: 'Color objetivo actualizado.',
+      type: 'success',
+    });
+    this.publishWebcamPanel();
+    this.scheduleSaveActiveEffectSettings();
+  }
+
   setQuickFaceColor(color: string) {
     this.host.quickDetectorSettings.faceBoxColor = color;
     if (this.host.detectors.face) this.host.detectors.face.boxColor = color;
@@ -677,7 +704,6 @@ export class WebcamPreferences {
     if (this.host.detectors.face) this.host.detectors.face.labelText = next;
     this.scheduleSaveQuickDetectorSettings();
     this.scheduleSaveActiveEffectSettings();
-    this.syncAdvancedQuickInputs?.();
     this.publishWebcamPanel();
   }
 
@@ -688,7 +714,6 @@ export class WebcamPreferences {
       this.host.detectors.face.labelText = normalized;
     this.saveQuickDetectorSettings();
     this.saveActiveEffectSettings();
-    this.syncAdvancedQuickInputs?.();
     this.publishWebcamPanel();
   }
 
@@ -811,7 +836,6 @@ export class WebcamPreferences {
 
     this.host.detectors.dispose();
     this.host.detectors.updateInfo(true);
-    this.host.renderEffectConfig();
 
     await this.host.camera.applyPerformanceMode(
       DEFAULT_IMAGE_SETTINGS.performanceMode,

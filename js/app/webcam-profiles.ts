@@ -27,7 +27,6 @@ interface ProfilesHost {
   detectors: Detectors;
   camera: WebcamCamera;
   preferences: WebcamPreferences;
-  renderEffectConfig(): void;
 }
 
 export class WebcamProfiles {
@@ -126,7 +125,6 @@ export class WebcamProfiles {
     preferences.applyQuickDetectorSettingsToEffects();
     preferences.updateQuickDetectorControlsUI();
     preferences.saveQuickDetectorSettings();
-    this.host.renderEffectConfig();
     this.announce(translateCurrent('"{name}" cargado', { name }), 'success');
   }
 

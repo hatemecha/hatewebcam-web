@@ -32,7 +32,6 @@ interface DetectorHost {
     | 'saveActiveEffectSettings'
     | 'publishWebcamPanel'
   >;
-  renderEffectConfig(): void;
 }
 
 export class Detectors {
@@ -81,7 +80,6 @@ export class Detectors {
     if (!quiet) {
       this.host.preferences.syncQuickDetectorSettingsFromEffects();
       this.host.preferences.saveActiveEffectSettings();
-      this.host.renderEffectConfig();
       this.updateInfo();
       this.saveActivation();
     }

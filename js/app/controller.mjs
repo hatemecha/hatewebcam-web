@@ -45,7 +45,6 @@ import { WebcamCamera } from './webcam-camera.ts';
 import { Detectors } from './detectors.ts';
 import { PreviewRenderer } from './preview-renderer.ts';
 import { ColorPicker } from './color-pick.ts';
-import { applyEffectConfigUIMixin } from './effect-config.mjs';
 import { WebcamProfiles } from './webcam-profiles.ts';
 import { WebcamCapture } from './webcam-capture.ts';
 import { downloadBlob, hideStatus, showStatus } from './feedback.ts';
@@ -279,4 +278,3 @@ export class AppController {
 }
 
 applyEventsMixin(AppController.prototype);
-applyEffectConfigUIMixin(AppController.prototype);

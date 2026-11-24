@@ -67,6 +67,7 @@ export const englishMessages = {
   'Un color específico': 'A specific color',
   'Color objetivo actualizado.': 'Target color updated.',
   'Color objetivo': 'Target color',
+  Tolerancia: 'Tolerance',
   'Color a detectar': 'Color to detect',
   'Elegir en el video': 'Pick from video',
   'Si la detección es demasiado estricta, subí este valor. Si detecta demasiado, bajalo.':
@@ -94,6 +95,8 @@ export const englishMessages = {
   'Activá recuadro, blur/pixelado o ambos a la vez sobre cada cara detectada.':
     'Enable a box, blur/pixelation, or both on every detected face.',
   'Máximo de caras a detectar': 'Maximum faces to detect',
+  'Ej: Cliente VIP': 'E.g. VIP client',
+  'Margen extra de censura (%)': 'Extra censor padding (%)',
   'Tamaño del pixelado': 'Pixelation size',
   'Menos suavizado y menos retención responden más rápido. Si vibra demasiado, subilos un poco.':
     'Less smoothing and hold respond faster. Raise them slightly if detection jitters.',

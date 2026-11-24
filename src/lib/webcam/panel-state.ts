@@ -1,3 +1,5 @@
+import type { DetectorKind, DetectorOptions } from './types.ts';
+
 export type WebcamSourceMode = 'camera' | 'video';
 export type ImagePresetName = 'natural' | 'vivid' | 'cinema' | 'bw';
 
@@ -35,6 +37,7 @@ export interface WebcamPanelState {
     faceBusy: boolean;
     blinkBusy: boolean;
   };
+  detectorOptions: { [K in DetectorKind]: DetectorOptions[K] | null };
   showBlobExtras: boolean;
   showFaceExtras: boolean;
   showFaceBoxVisuals: boolean;
@@ -97,6 +100,7 @@ const initialState: WebcamPanelState = {
     blinkBusy: false,
   },
   showBlobExtras: false,
+  detectorOptions: { blob: null, face: null, blink: null },
   showFaceExtras: false,
   showFaceBoxVisuals: true,
   blobColor: '#ff2222',
@@ -115,9 +119,19 @@ let state: WebcamPanelState = cloneState(initialState);
 const listeners = new Set<(value: WebcamPanelState) => void>();
 
 function cloneState(value: WebcamPanelState): WebcamPanelState {
+  const { blob, face, blink } = value.detectorOptions;
   return {
     ...value,
     detectors: { ...value.detectors },
+    detectorOptions: {
+      blob: blob && {
+        ...blob,
+        hsvMin: [...blob.hsvMin],
+        hsvMax: [...blob.hsvMax],
+      },
+      face: face && { ...face },
+      blink: blink && { ...blink },
+    },
     image: { ...value.image },
     orientation: { ...value.orientation },
     profiles: [...value.profiles],

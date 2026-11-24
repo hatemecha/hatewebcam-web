@@ -2,6 +2,8 @@
   import { m } from '../i18n/text.svelte.ts';
   import { isMessageKey } from '../i18n/translate.ts';
   import { captureChrome } from '../capture/session-store';
+  import AdvancedDetectorOptions from './AdvancedDetectorOptions.svelte';
+  import { colorPickFeedback } from './color-pick-feedback.ts';
   import { PALETTE_COLORS } from './panel-state';
   import { webcamPanel } from './panel-store';
   import type { WebcamControlsAdapter } from './types';
@@ -264,11 +266,15 @@
           (color) => adapter.setBlobColor(color),
         )}
         <div
-          class="status-msg hidden"
+          class={['status-msg', $colorPickFeedback.quick?.type ?? 'hidden']}
           id="colorPickStatus"
           role="status"
           aria-live="polite"
-        ></div>
+        >
+          {#if $colorPickFeedback.quick}{text(
+              $colorPickFeedback.quick.message,
+            )}{/if}
+        </div>
       </div>
     </div>
   </div>
@@ -320,6 +326,10 @@
               type="checkbox"
               id="chkFaceShowBox"
               checked={panel.faceShowBox}
+              onclick={(event) => {
+                if (!event.currentTarget.checked && !panel.faceShowBlur)
+                  event.preventDefault();
+              }}
               onchange={(event) =>
                 adapter.setFaceVisual('box', checkedValue(event))}
             />
@@ -330,6 +340,10 @@
               type="checkbox"
               id="chkFaceShowBlur"
               checked={panel.faceShowBlur}
+              onclick={(event) => {
+                if (!event.currentTarget.checked && !panel.faceShowBox)
+                  event.preventDefault();
+              }}
               onchange={(event) =>
                 adapter.setFaceVisual('blur', checkedValue(event))}
             />
@@ -726,30 +740,12 @@
     </button>
   </div>
 
-  <div
-    id="effectConfigBlob"
-    class={[
-      'adjust-context-group',
-      { 'is-active': !panel.contextual || panel.adjustContext === 'blob' },
-    ]}
-    data-adjust-context="blob"
-  ></div>
-  <div
-    id="effectConfigFace"
-    class={[
-      'adjust-context-group',
-      { 'is-active': !panel.contextual || panel.adjustContext === 'face' },
-    ]}
-    data-adjust-context="face"
-  ></div>
-  <div
-    id="effectConfigBlink"
-    class={[
-      'adjust-context-group',
-      { 'is-active': !panel.contextual || panel.adjustContext === 'blink' },
-    ]}
-    data-adjust-context="blink"
-  ></div>
+  <AdvancedDetectorOptions
+    options={panel.detectorOptions}
+    {adapter}
+    contextual={panel.contextual}
+    context={panel.adjustContext}
+  />
 
   <div class={['panel-section', 'adjust-webcam-only', { hidden: videoMode }]}>
     <div class="section-title">

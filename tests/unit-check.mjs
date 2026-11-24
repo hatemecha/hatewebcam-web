@@ -1837,9 +1837,6 @@ async function checkExportTimelineDetectorToggleIsQuiet() {
     saveActiveEffectSettings() {
       calls.push('save-settings');
     },
-    renderEffectConfig() {
-      calls.push('render-config');
-    },
     updateEffectsInfo() {
       calls.push('effects-info');
     },
@@ -2069,7 +2066,6 @@ function checkAutoPerformanceDowngrade() {
     },
     preferences: { updateImageControlsUI() {} },
     renderer: { requestPreviewRefresh() {} },
-    renderEffectConfig() {},
     showStatus() {},
   };
   const camera = new WebcamCamera(app);
@@ -3645,14 +3641,6 @@ function checkMessages() {
       if (!Object.prototype.hasOwnProperty.call(englishMessages, line)) {
         missing.push(`${file}: ${line}`);
       }
-    }
-  }
-  const effectConfig = readFileSync('js/app/effect-config.mjs', 'utf8');
-  for (const match of effectConfig.matchAll(
-    /'([^'\n]*[áéíóúñÁÉÍÓÚÑ¿¡][^'\n]*)'/g,
-  )) {
-    if (!Object.prototype.hasOwnProperty.call(englishMessages, match[1])) {
-      missing.push(`js/app/effect-config.mjs: ${match[1]}`);
     }
   }
   assert.deepEqual(missing, []);
