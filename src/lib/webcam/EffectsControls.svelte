@@ -1,6 +1,7 @@
 <script lang="ts">
   import { m } from '../i18n/text.svelte.ts';
   import { isMessageKey } from '../i18n/translate.ts';
+  import { captureChrome } from '../capture/session-store';
   import { PALETTE_COLORS } from './panel-state';
   import { webcamPanel } from './panel-store';
   import type { WebcamControlsAdapter } from './types';
@@ -477,6 +478,7 @@
       panel.image.jpegQuality,
       `${panel.image.jpegQuality}%`,
       'jpegQuality',
+      $captureChrome.lockCaptureSettings,
     )}
     <div class="slider-label photo-only">
       <span>{m('Formato de grabación')}</span>
@@ -485,6 +487,7 @@
       <select
         id="videoFormatSelect"
         value={panel.image.videoFormat}
+        disabled={$captureChrome.lockCaptureSettings}
         onchange={(event) =>
           adapter.setVideoFormat(
             (event.currentTarget as HTMLSelectElement).value,
@@ -501,6 +504,7 @@
         type="checkbox"
         id="chkQualityEnhancer"
         checked={panel.image.qualityEnhancer}
+        disabled={$captureChrome.lockCaptureSettings}
         onchange={(event) => adapter.setQualityEnhancer(checkedValue(event))}
       />
       <span>{m('Mejorador de calidad opcional')}</span>
@@ -527,7 +531,7 @@
         panel.image.qualityEnhancerStrength,
         `${panel.image.qualityEnhancerStrength}%`,
         'qualityEnhancerStrength',
-        !panel.image.qualityEnhancer,
+        $captureChrome.lockCaptureSettings || !panel.image.qualityEnhancer,
       )}
     </div>
     <div class="help-text section-note photo-only">

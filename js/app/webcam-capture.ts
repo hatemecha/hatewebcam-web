@@ -19,6 +19,7 @@ import {
 import { DEFAULT_CAMERA_FPS, type ImageSettings } from './constants.ts';
 import { downloadBlob, hideStatus, showStatus } from './feedback.ts';
 import type { VideoEditorSession } from './video-editor/session.ts';
+import type { Detectors } from './detectors.ts';
 import type { PreviewRenderer } from './preview-renderer.ts';
 import type { BufferMode, RenderEngine } from './render-engine.ts';
 import type { WebcamCamera } from './webcam-camera.ts';
@@ -60,17 +61,11 @@ interface CaptureHost {
   isRunning: boolean;
   mobileFxOpen: boolean;
   captureStatus: HTMLElement | null;
-  chkBlobTracking: HTMLInputElement | null;
-  chkFaceDetection: HTMLInputElement | null;
-  videoFormatSelect: HTMLSelectElement | null;
-  sldJpegQuality: HTMLInputElement | null;
-  chkQualityEnhancer: HTMLInputElement | null;
-  sldQualityEnhancerStrength: HTMLInputElement | null;
+  detectors: Pick<Detectors, 'selection'>;
   imageSettings: ImageSettings;
   camera: Pick<WebcamCamera, 'getStreamSettings'>;
   renderEngine: RenderEngine;
   videoExportPreflight: { width: number; height: number; fps: number } | null;
-  videoSourceAverageBitrate: number;
   renderer: Pick<
     PreviewRenderer,
     | 'getSourceFrameDimensions'
@@ -128,8 +123,8 @@ export class WebcamCapture {
         : '00:00',
       recordingFormat: this.recordingSession.active ? format : 'WebM',
       flashToken: this.captureFlashToken || 0,
-      blobEnabled: !!this.host.chkBlobTracking?.checked,
-      faceEnabled: !!this.host.chkFaceDetection?.checked,
+      blobEnabled: this.host.detectors.selection.blob,
+      faceEnabled: this.host.detectors.selection.face,
       lockCaptureSettings: !!(
         this.recordingSession.active ||
         this.pendingCapture ||
@@ -399,20 +394,6 @@ export class WebcamCapture {
 
   updateCaptureButtons() {
     const previewOpen = this.pendingCapture !== null;
-    const lockCaptureSettings =
-      this.recordingSession.active || previewOpen || this.photoCountdown.active;
-
-    if (this.host.videoFormatSelect)
-      this.host.videoFormatSelect.disabled = lockCaptureSettings;
-    if (this.host.sldJpegQuality)
-      this.host.sldJpegQuality.disabled = lockCaptureSettings;
-    if (this.host.chkQualityEnhancer)
-      this.host.chkQualityEnhancer.disabled = lockCaptureSettings;
-    if (this.host.sldQualityEnhancerStrength) {
-      this.host.sldQualityEnhancerStrength.disabled =
-        lockCaptureSettings || !this.host.imageSettings.qualityEnhancer;
-    }
-
     if (previewOpen) this.host.mobileFxOpen = false;
     this.publishCaptureChrome();
   }
@@ -465,7 +446,7 @@ export class WebcamCapture {
       height,
       fps,
       qualityEnhancer: !!this.host.imageSettings.qualityEnhancer,
-      sourceAverageBitrate: this.host.videoSourceAverageBitrate,
+      sourceAverageBitrate: 0,
       defaultFps: DEFAULT_CAMERA_FPS,
     });
   }

@@ -91,7 +91,7 @@ export class BlobTracking {
     this._workerBusy = false;
   }
 
-  getDetectionSummary() {
+  getDetectionSummary(): { status: 'detected' | 'searching'; count: number } {
     const count = this._trackedBlobs.length;
     return { status: count > 0 ? 'detected' : 'searching', count };
   }

@@ -2,7 +2,10 @@
 export function applyEventsMixin(proto) {
   proto.bindEditorSplitters = function () {
     const root = document.documentElement;
-    const savedLayout = this.loadJsonStorage('hatewebcam-editor-layout', {});
+    const savedLayout = this.preferences.loadJsonStorage(
+      'hatewebcam-editor-layout',
+      {},
+    );
     const applySize = (axis, size) => {
       const horizontal = axis === 'horizontal';
       const min = horizontal ? 240 : 250;
@@ -18,7 +21,7 @@ export function applyEventsMixin(proto) {
     };
     const saveSize = (axis, value) => {
       savedLayout[axis] = value;
-      this.saveJsonStorage('hatewebcam-editor-layout', savedLayout);
+      this.preferences.saveJsonStorage('hatewebcam-editor-layout', savedLayout);
     };
     const bind = (splitter, axis) => {
       if (!splitter) return;
@@ -74,7 +77,10 @@ export function applyEventsMixin(proto) {
             ? '--editor-timeline-h'
             : '--editor-inspector-w',
         );
-        this.saveJsonStorage('hatewebcam-editor-layout', savedLayout);
+        this.preferences.saveJsonStorage(
+          'hatewebcam-editor-layout',
+          savedLayout,
+        );
       });
     };
     bind(this.inspectorSplitter, 'vertical');
@@ -83,7 +89,7 @@ export function applyEventsMixin(proto) {
 
   proto.bindEvents = function () {
     document.addEventListener('hatewebcam:localechange', () => {
-      this.syncMirrorControls();
+      this.preferences.syncMirrorControls();
     });
     // File selection must never be lost while the lazy editor chunk loads.
     this.btnChooseVideo.addEventListener('click', () =>
@@ -294,13 +300,6 @@ export function applyEventsMixin(proto) {
   };
 
   proto.bindCameraShellEvents = function () {
-    this.chkFlipV.addEventListener('change', () =>
-      this.camera.onTransformChange(),
-    );
-    this.rotationSelect.addEventListener('change', () =>
-      this.camera.onTransformChange(),
-    );
-
     this.canvas.addEventListener('click', (event) =>
       this.colorPicker.sample(event),
     );
@@ -313,13 +312,14 @@ export function applyEventsMixin(proto) {
       this.onVisibilityChange.bind(this),
     );
     window.addEventListener('resize', () => {
-      this.syncMobileViewportState();
+      this.preferences.syncMobileViewportState();
       this.renderer.requestPreviewRefresh(true);
     });
 
     window.addEventListener('beforeunload', () => {
       this.renderer.dispose();
       this.capture.dispose();
+      this.detectors.dispose();
       this.camera.stop();
       this.editor?.dispose();
     });

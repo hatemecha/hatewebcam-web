@@ -17,7 +17,7 @@ export function applyVideoEditorClipboardMixin(proto) {
     this.renderVideoTimeline();
     this.updateVideoEffectInspector();
     this.updateAdjustmentsPanelState();
-    void this.syncVideoTimelineEffects(true);
+    void this.editor?.timelineEffects.sync(true);
   };
 
   proto.copySelectedVideoEffects = function (cut = false) {
@@ -71,7 +71,7 @@ export function applyVideoEditorClipboardMixin(proto) {
       this.updateTimelineClipboardStatus(
         `Ajustes pegados en ${applied} clip${applied === 1 ? '' : 's'}.`,
       );
-      void this.syncVideoTimelineEffects(true);
+      void this.editor?.timelineEffects.sync(true);
       return;
     }
 
@@ -111,7 +111,7 @@ export function applyVideoEditorClipboardMixin(proto) {
       this.renderVideoTimeline();
       this.updateVideoEffectInspector();
       this.updateTimelineClipboardStatus(`Clips pegados: ${newIds.length}.`);
-      void this.syncVideoTimelineEffects(true);
+      void this.editor?.timelineEffects.sync(true);
     } catch (err) {
       if (snapshot && this.editor.history) {
         this.editor.history.restore(this.editor.timeline, snapshot);

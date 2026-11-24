@@ -28,7 +28,11 @@
       <span>WebM</span>
       <span>MOV</span>
     </div>
-    <div class="video-file-meta mono" id="videoFileMeta"></div>
+    <div class="video-file-meta mono" id="videoFileMeta">
+      {$editorState.sourceDetails
+        ? `${$editorState.sourceDetails} ${m('estimado')}`
+        : m('Ningún archivo cargado')}
+    </div>
     <input
       type="file"
       id="projectFileInput"

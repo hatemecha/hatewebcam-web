@@ -11,6 +11,7 @@ export type InspectorTab = 'project' | 'effect' | 'adjust';
 export interface EditorUiState {
   mode: SourceMode;
   hasSource: boolean;
+  sourceDetails: string;
   exporting: boolean;
   canExport: boolean;
   canUndo: boolean;
@@ -23,6 +24,7 @@ export interface EditorUiState {
 let state: EditorUiState = {
   mode: 'camera',
   hasSource: false,
+  sourceDetails: '',
   exporting: false,
   canExport: false,
   canUndo: false,

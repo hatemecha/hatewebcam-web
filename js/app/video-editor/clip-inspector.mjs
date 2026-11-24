@@ -2,13 +2,10 @@ import { createDefaultVisualConfig } from '../../visual-fx/config.ts';
 import { isVisualFxClipType } from '../../editor/timeline-clip-types.ts';
 import { translateCurrent } from '../../../src/lib/i18n/translate.ts';
 
-const VIDEO_EFFECT_AUTOMATION_MODES = new Set([
-  'fixed',
-  'beat-pulse',
-  'fade-in',
-  'fade-out',
-  'alternate-beat',
-]);
+import {
+  normalizeClipAutomation,
+  normalizeLookClipConfig,
+} from './look-config.ts';
 
 /** @param {import('../controller.mjs').AppController} proto */
 export function applyVideoEditorClipInspectorMixin(proto) {
@@ -102,7 +99,7 @@ export function applyVideoEditorClipInspectorMixin(proto) {
         this.adjustClipStatus.classList.remove('is-live');
         this.adjustClipStatusText = '';
         this.adjustClipVisible = false;
-        this.publishWebcamPanel?.();
+        this.preferences?.publishWebcamPanel();
       }
       return;
     }
@@ -120,7 +117,7 @@ export function applyVideoEditorClipInspectorMixin(proto) {
     this.adjustClipStatus.textContent = this.adjustClipStatusText;
     this.adjustClipStatus.classList.toggle('is-live', active);
     this.adjustClipStatus.classList.remove('hidden');
-    this.publishWebcamPanel?.();
+    this.preferences?.publishWebcamPanel();
   };
 
   proto.updateAdjustmentsPanelState = function () {
@@ -157,30 +154,8 @@ export function applyVideoEditorClipInspectorMixin(proto) {
     if (isVisualFx) this.editor.visualFx?.updateInspector();
   };
 
-  proto.normalizeLookClipConfig = function (config = {}) {
-    const merged = { ...this.DEFAULT_IMAGE_SETTINGS, ...config };
-    return {
-      blackAndWhite: !!merged.blackAndWhite,
-      exposure: this.clamp(parseInt(merged.exposure, 10) || 0, -100, 100),
-      shadows: this.clamp(parseInt(merged.shadows, 10) || 0, -100, 100),
-      highlights: this.clamp(parseInt(merged.highlights, 10) || 0, -100, 100),
-      contrast: this.clamp(parseInt(merged.contrast, 10) || 100, 50, 180),
-      saturation: this.clamp(this.toFiniteInt(merged.saturation, 100), 0, 200),
-      temperature: this.clamp(parseInt(merged.temperature, 10) || 0, -100, 100),
-      detail: this.clamp(parseInt(merged.detail, 10) || 0, -100, 100),
-      sharpness: this.clamp(parseInt(merged.sharpness, 10) || 0, 0, 100),
-      automation: this.normalizeClipAutomation(merged.automation),
-    };
-  };
-
-  proto.normalizeClipAutomation = function (mode) {
-    return VIDEO_EFFECT_AUTOMATION_MODES.has(mode) ? mode : 'fixed';
-  };
-
   proto.getSelectedAutomationMode = function () {
-    return this.normalizeClipAutomation(
-      this.videoEffectAutomationSelect?.value,
-    );
+    return normalizeClipAutomation(this.videoEffectAutomationSelect?.value);
   };
 
   proto.syncLookClipConfigNow = function () {
@@ -216,27 +191,27 @@ export function applyVideoEditorClipInspectorMixin(proto) {
         ...lookSettings
       } = this.imageSettings;
       return {
-        ...this.normalizeLookClipConfig(lookSettings),
+        ...normalizeLookClipConfig(lookSettings),
         automation: this.getSelectedAutomationMode(),
       };
     }
     if (type === 'blob') {
-      const config = this.blobTrackingEffect
-        ? this.blobTrackingEffect.getConfig()
+      const config = this.detectors.blob
+        ? this.detectors.blob.getConfig()
         : {
             boxColor: this.quickDetectorSettings.blobBoxColor,
           };
       return { ...config, automation: this.getSelectedAutomationMode() };
     }
     if (type === 'face') {
-      const config = this.faceDetectionEffect
-        ? this.faceDetectionEffect.getConfig()
+      const config = this.detectors.face
+        ? this.detectors.face.getConfig()
         : {
             boxColor: this.quickDetectorSettings.faceBoxColor,
             labelText: this.quickDetectorSettings.faceLabelText,
             showBox: this.quickDetectorSettings.faceShowBox,
             showBlur: this.quickDetectorSettings.faceShowBlur,
-            visualMode: this.getFaceVisualMode(),
+            visualMode: this.preferences.getFaceVisualMode(),
             pixelationCellSize:
               this.quickDetectorSettings.facePixelationCellSize,
             censorPaddingPercent:
@@ -248,9 +223,7 @@ export function applyVideoEditorClipInspectorMixin(proto) {
       return createDefaultVisualConfig('recursive');
     }
     return {
-      ...(this.blinkDetectionEffect
-        ? this.blinkDetectionEffect.getConfig()
-        : {}),
+      ...(this.detectors.blink ? this.detectors.blink.getConfig() : {}),
       automation: this.getSelectedAutomationMode(),
     };
   };
@@ -274,26 +247,24 @@ export function applyVideoEditorClipInspectorMixin(proto) {
         ...lookSettings
       } = item.config;
       this.imageSettings = { ...this.imageSettings, ...lookSettings };
-      this.updateImageControlsUI();
-      this.saveImageSettings();
+      this.preferences.updateImageControlsUI();
+      this.preferences.saveImageSettings();
       return;
     }
     if (item.type === 'blob') {
-      if (this.blobTrackingEffect)
-        this.blobTrackingEffect.setConfig(item.config);
+      if (this.detectors.blob) this.detectors.blob.setConfig(item.config);
       else this.applyClipConfigToQuickSettings(item);
     } else if (item.type === 'face') {
-      if (this.faceDetectionEffect)
-        this.faceDetectionEffect.setConfig(item.config);
+      if (this.detectors.face) this.detectors.face.setConfig(item.config);
       else this.applyClipConfigToQuickSettings(item);
-    } else if (item.type === 'blink' && this.blinkDetectionEffect) {
-      this.blinkDetectionEffect.setConfig(item.config);
+    } else if (item.type === 'blink' && this.detectors.blink) {
+      this.detectors.blink.setConfig(item.config);
     } else if (isVisualFxClipType(item.type)) {
       this.editor.visualFx?.setEffectConfig(item.config);
       this.editor.visualFx?.updateInspector();
     }
-    this.syncQuickDetectorSettingsFromEffects();
-    this.updateQuickDetectorControlsUI();
+    this.preferences.syncQuickDetectorSettingsFromEffects();
+    this.preferences.updateQuickDetectorControlsUI();
     this.renderEffectConfig();
   };
 
@@ -320,7 +291,7 @@ export function applyVideoEditorClipInspectorMixin(proto) {
       if (options.pushHistory) this.pushTimelineHistory();
       this.editor.timeline.upsert({ ...item, startTime, endTime });
       this.renderVideoTimeline();
-      void this.syncVideoTimelineEffects(true);
+      void this.editor?.timelineEffects.sync(true);
     } catch (err) {
       this.showStatus(this.videoEditorStatus, err.message, 'error');
       this.selectVideoEffect(item.id);
@@ -599,7 +570,7 @@ export function applyVideoEditorClipInspectorMixin(proto) {
     }
     if (this.videoEffectAutomationSelect) {
       this.videoEffectAutomationSelect.disabled = !editing;
-      this.videoEffectAutomationSelect.value = this.normalizeClipAutomation(
+      this.videoEffectAutomationSelect.value = normalizeClipAutomation(
         item?.config?.automation,
       );
     }

@@ -1,13 +1,14 @@
+import type { WebcamPreferences } from './webcam-preferences.ts';
 import type { BlobTracking } from '../effects/blob-tracking.ts';
 import { hideStatus, showStatus } from './feedback.ts';
 
 interface ColorPickHost {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
-  blobTrackingEffect: Pick<BlobTracking, 'setColorFromPixel'> | null;
+  detectors: { blob: Pick<BlobTracking, 'setColorFromPixel'> | null };
   colorPickStatus: HTMLElement | null;
   sourceMode: 'camera' | 'video';
-  saveActiveEffectSettings(): void;
+  preferences: Pick<WebcamPreferences, 'saveActiveEffectSettings'>;
   renderEffectConfig(): void;
 }
 
@@ -17,7 +18,7 @@ export class ColorPicker {
   constructor(private readonly host: ColorPickHost) {}
 
   start(status = this.host.colorPickStatus): void {
-    if (!this.host.blobTrackingEffect) {
+    if (!this.host.detectors.blob) {
       showStatus(
         status,
         'Primero activá "Detectar objetos por color"',
@@ -36,8 +37,9 @@ export class ColorPicker {
   }
 
   sample(event: MouseEvent): void {
-    const { blobTrackingEffect, canvas, ctx } = this.host;
-    if (!this.active || !blobTrackingEffect) return;
+    const { canvas, ctx, detectors } = this.host;
+    const blob = detectors.blob;
+    if (!this.active || !blob) return;
 
     const rect = canvas.getBoundingClientRect();
     const x = Math.round(
@@ -65,13 +67,13 @@ export class ColorPicker {
       blue += pixels[index + 2];
     }
     const pixelCount = pixels.length / 4;
-    blobTrackingEffect.setColorFromPixel(
+    blob.setColorFromPixel(
       Math.round(red / pixelCount),
       Math.round(green / pixelCount),
       Math.round(blue / pixelCount),
     );
     this.cancel();
-    this.host.saveActiveEffectSettings();
+    this.host.preferences.saveActiveEffectSettings();
     this.host.renderEffectConfig();
 
     const status =

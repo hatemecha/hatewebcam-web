@@ -15,7 +15,7 @@ export function applyVideoEditorInspectorShellMixin(proto) {
       },
     });
     this.renderVideoTimeline();
-    void this.syncVideoTimelineEffects(true);
+    void this.editor?.timelineEffects.sync(true);
   };
 
   proto.updateTimelineClipboardStatus = function (message = '') {
@@ -32,15 +32,15 @@ export function applyVideoEditorInspectorShellMixin(proto) {
       this.inspectorAdjustmentsHost.appendChild(this.effectsControlsSlot);
     }
     this.effectsControlsSlot.classList.add('is-contextual');
-    this.publishWebcamPanel?.();
-    this.setAdvancedOptionsVisible(true);
+    this.preferences?.publishWebcamPanel();
+    this.preferences.setAdvancedOptionsVisible(true);
     this.updateAdjustmentsPanelState();
   };
 
   proto.unmountVideoEffectsControls = function () {
     if (!this.effectsControlsSlot || !this.controlPanel) return;
     this.effectsControlsSlot.classList.remove('is-contextual');
-    this.publishWebcamPanel?.();
+    this.preferences?.publishWebcamPanel();
     delete this.effectsControlsSlot.dataset.adjustContext;
     this.adjustContextNav?.classList.add('hidden');
     this.effectsControlsSlot
@@ -53,8 +53,8 @@ export function applyVideoEditorInspectorShellMixin(proto) {
       .forEach((label) => {
         label.classList.remove('is-active');
       });
-    const cfg = this.loadConfig();
-    this.setAdvancedOptionsVisible(!!cfg.showAdvancedOptions);
+    const cfg = this.preferences.loadConfig();
+    this.preferences.setAdvancedOptionsVisible(!!cfg.showAdvancedOptions);
     const sourceSection = this.controlPanel.querySelector('#sourcePanel');
     if (
       sourceSection &&
@@ -108,7 +108,7 @@ export function applyVideoEditorInspectorShellMixin(proto) {
       this.adjustContextHelp.textContent = translateCurrent(help);
     }
     this.updateAdjustmentsClipStatus();
-    this.publishWebcamPanel?.();
+    this.preferences?.publishWebcamPanel();
     if (options.syncEffectType && this.videoEffectType) {
       this.videoEffectType.value = options.effectType || context;
       this.updateEffectTrackHighlight();

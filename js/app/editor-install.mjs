@@ -23,6 +23,7 @@ export async function installVideoEditor(app) {
 
   const editor = new VideoEditorSession({
     video: app.videoEl,
+    sourceHost: app,
     formatTime: (seconds) => app.formatDurationDetailed(seconds),
     editAssist: {
       updatePanel: updateEditAssistPanel,
@@ -31,7 +32,6 @@ export async function installVideoEditor(app) {
       updateTimelineHint: () => app.updateTimelineHint(),
     },
     projects: {
-      getSourceFps: () => app.videoSourceFps,
       getImageSettings: () => app.imageSettings,
       showStatus: (message, type) =>
         app.showStatus(app.videoEditorStatus, message, type),
@@ -44,11 +44,11 @@ export async function installVideoEditor(app) {
           app.videoTrimStart.value = String(editor.timeline.trimStart);
         if (app.videoTrimEnd)
           app.videoTrimEnd.value = String(editor.timeline.trimEnd);
-        app.updateImageControlsUI();
+        app.preferences.updateImageControlsUI();
         app.updateTimelineClipboardStatus();
         app.renderVideoTimeline();
         app.updateVideoEditorUI();
-        if (editor.source.file) void app.syncVideoTimelineEffects(true);
+        if (editor.source.file) void app.editor?.timelineEffects.sync(true);
       },
     },
     visualFx: {
@@ -75,7 +75,7 @@ export async function installVideoEditor(app) {
         editor.visualFx.activeEffect?.onSeek();
       },
       onSeeked: () => {
-        void app.syncVideoTimelineEffects();
+        void app.editor?.timelineEffects.sync();
         app.renderer.refreshPausedVideoPreview();
       },
       onPlayFailure: () =>

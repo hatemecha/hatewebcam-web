@@ -77,7 +77,10 @@ export class BlinkDetection {
     this.reset();
   }
 
-  getDetectionSummary() {
+  getDetectionSummary(): {
+    status: 'error' | 'detected' | 'active';
+    detected: boolean;
+  } {
     if (this.initError) return { status: 'error', detected: false };
     const detected = performance.now() - this._lastBlinkTs < 900;
     return { status: detected ? 'detected' : 'active', detected };

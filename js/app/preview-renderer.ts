@@ -4,12 +4,9 @@ import { WebGLFilterRenderer } from './webgl-filter-renderer.ts';
 import { getVideoDrawMetrics as calculateVideoDrawMetrics } from '../subject/subject-frame-map.ts';
 import { perfDev } from './perf-dev.ts';
 
-import type { EffectManager } from '../effects/effect-manager.ts';
-import type { BlobTracking } from '../effects/blob-tracking.ts';
-import type { FaceDetection } from '../effects/face-detection.ts';
-import type { BlinkDetection } from '../effects/blink-detection.ts';
 import type { PreviewQualityPreset } from '../preview-metrics.ts';
 import type { VideoEditorSession } from './video-editor/session.ts';
+import type { Detectors } from './detectors.ts';
 import type { WebcamCamera } from './webcam-camera.ts';
 import type { WebcamCapture } from './webcam-capture.ts';
 import type { BufferMode, RenderEngine } from './render-engine.ts';
@@ -31,7 +28,6 @@ interface PreviewRenderHost {
   isRunning: boolean;
   isPageVisible: boolean;
   renderEngine: RenderEngine;
-  effectManager: EffectManager;
   capture: Pick<
     WebcamCapture,
     'recording' | 'renderSourceFrameBuffer' | 'blitProcessedFrameToPreview'
@@ -39,20 +35,15 @@ interface PreviewRenderHost {
   camera: Pick<WebcamCamera, 'handlePreviewFpsSample'>;
   editor: Pick<
     VideoEditorSession,
-    'timeline' | 'exportSession' | 'transport' | 'visualFx'
+    'timeline' | 'exportSession' | 'transport' | 'visualFx' | 'timelineEffects'
   > | null;
-  faceDetectionEffect: Pick<
-    FaceDetection,
-    'flipH' | 'flipV' | 'rotationDeg'
-  > | null;
-  blobTrackingEffect: Pick<BlobTracking, 'boxColor' | 'connectionColor'> | null;
-  blinkDetectionEffect: Pick<BlinkDetection, 'setFeedbackColor'> | null;
+  detectors: Pick<
+    Detectors,
+    'manager' | 'blob' | 'face' | 'blink' | 'updateInfo'
+  >;
   getEffectiveFlipH(): boolean;
   isMobileViewport(): boolean;
   getCurrentPreviewQualityPreset(): PreviewQualityPreset;
-  syncVideoTimelineLookNow(): void;
-  syncVideoTimelineDetectors(): void;
-  updateEffectsInfo(): void;
   updateVisualFxLab?(): void;
 }
 
@@ -304,8 +295,8 @@ export class PreviewRenderer {
     try {
       if (this.host.videoEl.readyState >= 2) {
         if (this.host.sourceMode === 'video' && this.host.editor) {
-          this.host.syncVideoTimelineLookNow();
-          void this.host.syncVideoTimelineDetectors();
+          this.host.editor.timelineEffects?.syncLook();
+          void this.host.editor.timelineEffects?.syncDetectors();
           const { duration, trimEnd } = this.host.editor.timeline;
           const playableEnd = getVideoPlayableEnd(duration, trimEnd);
           if (
@@ -351,7 +342,7 @@ export class PreviewRenderer {
           this.frameCount = 0;
           this.lastFpsTime = now;
         }
-        this.host.updateEffectsInfo?.();
+        this.host.detectors?.updateInfo();
         this.host.editor?.transport?.update();
         this.host.updateVisualFxLab?.();
         if (this.host.sourceMode === 'video')
@@ -716,21 +707,21 @@ export class PreviewRenderer {
       );
     }
 
-    if (this.host.faceDetectionEffect) {
-      this.host.faceDetectionEffect.flipH = this.host.getEffectiveFlipH();
-      this.host.faceDetectionEffect.flipV = this.host.flipV;
-      this.host.faceDetectionEffect.rotationDeg = frameRotation;
+    if (this.host.detectors.face) {
+      this.host.detectors.face.flipH = this.host.getEffectiveFlipH();
+      this.host.detectors.face.flipV = this.host.flipV;
+      this.host.detectors.face.rotationDeg = frameRotation;
     }
 
-    if (this.host.blobTrackingEffect && this.host.blinkDetectionEffect) {
-      this.host.blinkDetectionEffect.setFeedbackColor(
-        this.host.blobTrackingEffect.boxColor,
+    if (this.host.detectors.blob && this.host.detectors.blink) {
+      this.host.detectors.blink.setFeedbackColor(
+        this.host.detectors.blob.boxColor,
       );
-      this.host.blobTrackingEffect.connectionColor =
-        this.host.blobTrackingEffect.boxColor;
+      this.host.detectors.blob.connectionColor =
+        this.host.detectors.blob.boxColor;
     }
 
-    this.host.effectManager.processFrame(
+    this.host.detectors.manager.processFrame(
       targetCtx,
       analysisCanvas,
       this.host.videoEl,
@@ -782,21 +773,21 @@ export class PreviewRenderer {
       );
     }
 
-    if (this.host.faceDetectionEffect) {
-      this.host.faceDetectionEffect.flipH = this.host.getEffectiveFlipH();
-      this.host.faceDetectionEffect.flipV = this.host.flipV;
-      this.host.faceDetectionEffect.rotationDeg = frameRotation;
+    if (this.host.detectors.face) {
+      this.host.detectors.face.flipH = this.host.getEffectiveFlipH();
+      this.host.detectors.face.flipV = this.host.flipV;
+      this.host.detectors.face.rotationDeg = frameRotation;
     }
 
-    if (this.host.blobTrackingEffect && this.host.blinkDetectionEffect) {
-      this.host.blinkDetectionEffect.setFeedbackColor(
-        this.host.blobTrackingEffect.boxColor,
+    if (this.host.detectors.blob && this.host.detectors.blink) {
+      this.host.detectors.blink.setFeedbackColor(
+        this.host.detectors.blob.boxColor,
       );
-      this.host.blobTrackingEffect.connectionColor =
-        this.host.blobTrackingEffect.boxColor;
+      this.host.detectors.blob.connectionColor =
+        this.host.detectors.blob.boxColor;
     }
 
-    this.host.effectManager.processFrame(
+    this.host.detectors.manager.processFrame(
       targetCtx,
       targetCanvas,
       this.host.videoEl,

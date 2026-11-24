@@ -12,10 +12,6 @@ import {
   DEFAULT_IMAGE_SETTINGS,
   DEFAULT_CAMERA_FPS,
   DEFAULT_PREVIEW_QUALITY,
-  MEDIAPIPE_FACE_MESH_VERSION,
-  MEDIAPIPE_FACE_MESH_BASE_URL,
-  MEDIAPIPE_FACE_MESH_SRC,
-  MEDIAPIPE_CONSOLE_NOISE_PATTERNS,
   DETECTOR_DEFAULT_BOX_COLOR,
   DEFAULT_QUICK_DETECTOR_SETTINGS,
   ADJUST_CONTEXT_HELP,
@@ -29,17 +25,28 @@ import {
   normalizePreviewQuality,
   normalizePerformanceMode,
 } from './constants.ts';
-import { EffectManager } from '../effects/effect-manager.ts';
 import { readAppDom } from './dom.ts';
-import { applyStorageMixin } from './settings.mjs';
+import {
+  WebcamPreferences,
+  getCurrentPreviewQualityPreset,
+  isMobileViewport,
+} from './webcam-preferences.ts';
+import {
+  clamp,
+  toFiniteInt,
+  normalizeFaceLabel,
+  normalizeHexColor,
+  normalizeCaptureTimerSeconds,
+} from './webcam-settings.ts';
+import { escapeHtml, toFiniteNumber } from './ui-helpers.ts';
 import { initializeWebcam } from './init.ts';
 import { applyEventsMixin } from './events.mjs';
 import { WebcamCamera } from './webcam-camera.ts';
-import { applyEffectsMixin } from './effects.mjs';
+import { Detectors } from './detectors.ts';
 import { PreviewRenderer } from './preview-renderer.ts';
 import { ColorPicker } from './color-pick.ts';
 import { applyEffectConfigUIMixin } from './effect-config.mjs';
-import { applyProfilesMixin } from './profiles.mjs';
+import { WebcamProfiles } from './webcam-profiles.ts';
 import { WebcamCapture } from './webcam-capture.ts';
 import { downloadBlob, hideStatus, showStatus } from './feedback.ts';
 import {
@@ -57,30 +64,30 @@ import { RenderEngine } from './render-engine.ts';
 export class AppController {
   constructor() {
     this.settingsStore = new SettingsStore({
-      onError: (err) => this.notifyStorageUnavailable(err),
+      onError: (err) => this.preferences.notifyStorageUnavailable(err),
     });
 
+    this.preferences = new WebcamPreferences(this);
+    this.profiles = new WebcamProfiles(this);
     this.camera = new WebcamCamera(this);
     this.isRunning = false;
-    this.webcamSessionState = null;
 
     this.renderEngine = new RenderEngine();
     this.renderer = new PreviewRenderer(this);
 
-    this.effectManager = new EffectManager();
-    this.blobTrackingEffect = null;
-    this.faceDetectionEffect = null;
-    this.blinkDetectionEffect = null;
-    this.faceMeshScriptLoadPromise = null;
-    this.mediaPipeConsoleFilterInstalled = false;
-    this.faceLoadRequestId = 0;
-    this.blinkLoadRequestId = 0;
+    this.detectors = new Detectors(this);
     this.quickDetectorSettings = { ...DEFAULT_QUICK_DETECTOR_SETTINGS };
-    this.saveQuickDetectorSettingsTimer = null;
-    this.saveEffectSettingsTimer = null;
 
     this.capture = new WebcamCapture(this);
     Object.assign(this, {
+      clamp,
+      toFiniteInt,
+      toFiniteNumber,
+      normalizeHexColor,
+      normalizeFaceLabel,
+      normalizeCaptureTimerSeconds,
+      isMobileViewport,
+      escapeHtml,
       downloadBlob,
       hideStatus,
       showStatus,
@@ -97,9 +104,6 @@ export class AppController {
     this.requestedSourceMode = 'camera';
     this.editor = null;
     this.editorLoadAttempt = 0;
-    this.videoPlaceholderLoading = false;
-    this.videoSourceFps = 30;
-    this.videoSourceAverageBitrate = 0;
     // Editor state is installed on first use by installVideoEditor(). Keep
     // only the inert defaults the webcam path may read.
     this.editorTool = 'select';
@@ -112,10 +116,6 @@ export class AppController {
     this.timelineClipboard = null;
     this.paletteDragState = null;
     this.timelineDragGhost = null;
-    this.appliedTimelineItemIds = {};
-    this.timelineDetectorSyncPromise = null;
-    this.timelineDetectorSyncForce = false;
-    this.videoBaseImageSettings = null;
     this.videoExportDiagnosis = null;
     this.videoExportPreflight = null;
     this.videoExportRecoveredSource = false;
@@ -125,21 +125,13 @@ export class AppController {
     this.flipH = false;
     this.flipV = false;
     this.rotation = 0;
-    this.mobileActivePreset = null;
     this.isPageVisible = document.visibilityState !== 'hidden';
-    this.saveImageSettingsTimer = null;
-    this.syncSelectedClipConfigTimer = null;
-    this.storageWarningShown = false;
 
     this.TIMELINE_EFFECT_META = TIMELINE_EFFECT_META;
     this.DEFAULT_TIMELINE_EFFECT_DURATION = DEFAULT_TIMELINE_EFFECT_DURATION;
     this.DEFAULT_IMAGE_SETTINGS = DEFAULT_IMAGE_SETTINGS;
     this.DEFAULT_CAMERA_FPS = DEFAULT_CAMERA_FPS;
     this.DEFAULT_PREVIEW_QUALITY = DEFAULT_PREVIEW_QUALITY;
-    this.MEDIAPIPE_FACE_MESH_VERSION = MEDIAPIPE_FACE_MESH_VERSION;
-    this.MEDIAPIPE_FACE_MESH_BASE_URL = MEDIAPIPE_FACE_MESH_BASE_URL;
-    this.MEDIAPIPE_FACE_MESH_SRC = MEDIAPIPE_FACE_MESH_SRC;
-    this.MEDIAPIPE_CONSOLE_NOISE_PATTERNS = MEDIAPIPE_CONSOLE_NOISE_PATTERNS;
     this.DETECTOR_DEFAULT_BOX_COLOR = DETECTOR_DEFAULT_BOX_COLOR;
     this.DEFAULT_QUICK_DETECTOR_SETTINGS = DEFAULT_QUICK_DETECTOR_SETTINGS;
     this.ADJUST_CONTEXT_HELP = ADJUST_CONTEXT_HELP;
@@ -194,7 +186,7 @@ export class AppController {
       )
         return;
     }
-    return this.applySourceMode?.(mode);
+    return this.editor?.sourceController?.setMode(mode);
   }
 
   async importVideoFile(file) {
@@ -202,7 +194,7 @@ export class AppController {
       await this.setSourceMode('video');
     }
     if (this.sourceMode !== 'video') return;
-    return this.loadVideoFile(file);
+    return this.editor.sourceController?.load(file);
   }
 
   async importEditorProjectFile(file) {
@@ -215,42 +207,76 @@ export class AppController {
 
   // Editor presentation hooks. The editor mixins replace these when the
   // editor chunk is installed; the webcam render loop can call them safely.
-  /** Detector toggles are shared by the webcam panel and the editor tracks. */
-  getTimelineDetectorCheckbox(type) {
-    if (type === 'blob') return this.chkBlobTracking || null;
-    if (type === 'face') return this.chkFaceDetection || null;
-    return this.chkBlinkDetection || null;
-  }
-
-  handleVideoDetectorToggle(type) {
+  handleVideoDetectorToggle(type, checked) {
     if (this.sourceMode === 'video') {
-      void this.syncVideoTimelineEffects(true);
+      void this.editor?.timelineEffects.sync(true);
       return;
     }
-    void this.toggleEffect(type);
+    void this.detectors.setEnabled(type, checked);
   }
 
   updateVideoEditorUI() {}
   updateVideoEffectInspector() {}
   updateTimelineHint() {}
-  syncVideoTimelineLookNow() {}
-  syncVideoTimelineDetectors() {}
-  syncVideoTimelineEffects() {}
+
+  enterVideoUI() {
+    this.mountVideoEffectsControls();
+    this.ensureVisualFxLab?.();
+    this.setEditorTool('select');
+    this.setInspectorTab('project');
+    this.applyTimelineZoom();
+    this.preferences.publishWebcamPanel();
+  }
+
+  leaveVideoUI() {
+    this.unmountVideoEffectsControls();
+    this.preferences.publishWebcamPanel();
+  }
+
+  resetVideoTimelineUI() {
+    this.updateEditorHistoryButtons();
+    this.timelineZoom = 1;
+    this.selectedVideoEffectId = '';
+    this.selectedVideoEffectIds = new Set();
+    this.timelineClipboard = null;
+    this.updateTimelineClipboardStatus();
+    this.clearTimelineItemElements();
+  }
+
+  prepareSourceUI(duration) {
+    for (const input of [
+      this.videoTrimStart,
+      this.videoTrimEnd,
+      this.videoEffectStart,
+      this.videoEffectEnd,
+    ]) {
+      if (input) input.max = String(duration);
+    }
+    if (this.videoTrimStart) this.videoTrimStart.value = '0';
+    if (this.videoTrimEnd) this.videoTrimEnd.value = duration.toFixed(2);
+    if (this.videoEffectStart) this.videoEffectStart.value = '0';
+    if (this.videoEffectEnd) this.videoEffectEnd.value = duration.toFixed(2);
+  }
+
+  getEffectiveFlipH() {
+    return this.flipH;
+  }
+
+  getCurrentPreviewQualityPreset() {
+    return getCurrentPreviewQualityPreset(this.imageSettings);
+  }
 
   async start() {
-    Object.assign(this, readAppDom());
+    this.dom = readAppDom();
+    Object.assign(this, this.dom);
     // Bind DOM events before the first await so a fast user (or a slow CI
     // worker) cannot lose clicks and file selections while settings load.
     // Init still publishes the initial UI state after this.
     this.bindEvents();
-    this.bindImageControlEvents();
-    this.initializeColorPalettes();
+    this.preferences.bindImageControlEvents();
     await initializeWebcam(this);
   }
 }
 
-applyStorageMixin(AppController.prototype);
 applyEventsMixin(AppController.prototype);
-applyEffectsMixin(AppController.prototype);
 applyEffectConfigUIMixin(AppController.prototype);
-applyProfilesMixin(AppController.prototype);

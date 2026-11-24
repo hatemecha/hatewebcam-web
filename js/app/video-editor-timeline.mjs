@@ -1,3 +1,4 @@
+import { ensureFaceMeshLoaded } from './face-mesh-loader.ts';
 import { VISUAL_SYSTEM_LABELS } from '../visual-fx/config.ts';
 import { isVisualFxClipType } from '../editor/timeline-clip-types.ts';
 import { translateCurrent } from '../../src/lib/i18n/translate.ts';
@@ -171,14 +172,14 @@ export function applyVideoEditorTimelineMixin(proto) {
       });
       if (type === 'face' || type === 'blink') {
         try {
-          await this.ensureFaceMeshLoaded();
+          await ensureFaceMeshLoaded();
         } catch (err) {
           console.warn('Detector preload failed:', err);
         }
       }
       if (isVisualFxClipType(type)) await this.editor.visualFx?.ensureEffect();
       this.selectVideoEffect(saved.id);
-      void this.syncVideoTimelineEffects(true);
+      void this.editor?.timelineEffects.sync(true);
       this.showStatus(
         this.videoEditorStatus,
         `${translateCurrent(this.TIMELINE_EFFECT_META[type].label)} ${translateCurrent('agregado.')}`,

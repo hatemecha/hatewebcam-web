@@ -534,6 +534,7 @@ export const englishMessages = {
   'No hay formato de video compatible': 'No compatible video format',
   'Video listo en vista previa': 'Video ready in the preview',
   'Video listo': 'Video ready',
+  'Video listo.': 'Video ready.',
   'Captura descartada': 'Capture discarded',
   'Primero activá "Detectar objetos por color"':
     'Enable "Detect objects by color" first',
@@ -600,6 +601,8 @@ export const englishMessages = {
   'WebCodecs no disponible': 'WebCodecs unavailable',
   'Proyecto restaurado con el video reimportado':
     'Project restored with the imported video',
+  'Proyecto restaurado con el video reimportado.':
+    'Project restored with the imported video.',
   'No se pudo cargar el proyecto.': 'The project could not be loaded.',
   'No se pudo abrir el editor. Volvé a intentarlo.':
     'The editor could not be opened. Try again.',

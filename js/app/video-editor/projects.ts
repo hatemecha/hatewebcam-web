@@ -201,7 +201,6 @@ export function normalizeEditorProject(input: unknown): EditorProject {
 
 export interface ProjectOptions {
   video: HTMLVideoElement;
-  getSourceFps: () => number;
   getImageSettings: () => ImageSettings;
   showStatus: (message: MessageKey, type: StatusType) => void;
   onRestore: () => void;
@@ -244,7 +243,7 @@ export class EditorProjects {
         duration: this.session.timeline.duration,
         width,
         height,
-        fps: this.options.getSourceFps() || 30,
+        fps: this.session.source.fps || 30,
       },
       trim,
       timeline: { items, markers },

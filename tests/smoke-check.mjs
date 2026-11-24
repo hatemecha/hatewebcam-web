@@ -2,23 +2,25 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import ts from 'typescript';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-function listJavascriptFiles(dir = 'js') {
+function listRuntimeFiles(dir) {
   return readdirSync(resolve(rootDir, dir))
     .flatMap((entry) => {
       const relativePath = `${dir}/${entry}`;
       const absolutePath = resolve(rootDir, relativePath);
       return statSync(absolutePath).isDirectory()
-        ? listJavascriptFiles(relativePath)
+        ? listRuntimeFiles(relativePath)
         : relativePath;
     })
-    .filter((file) => /\.(mjs|js)$/.test(file))
+    .filter((file) => /\.(mjs|js|ts)$/.test(file))
     .sort();
 }
 
-const javascriptFiles = listJavascriptFiles();
+const runtimeFiles = [...listRuntimeFiles('js'), ...listRuntimeFiles('src')];
+const javascriptFiles = runtimeFiles.filter((file) => !file.endsWith('.ts'));
 const htmlTemplateFiles = [
   'src/lib/webcam/EffectsControls.svelte',
   'src/lib/webcam/CameraSourcePanel.svelte',
@@ -42,6 +44,7 @@ const htmlTemplateFiles = [
   'src/lib/editor/ExportPanel.svelte',
   'src/lib/editor/ClipInspector.svelte',
   'src/lib/editor/AdjustPanel.svelte',
+  'src/lib/editor/VisualFxInspector.svelte',
 ];
 
 const controllerConstantPattern =
@@ -101,7 +104,7 @@ const requiredHtmlFragments = [
   'id="chkMirror"',
   'id="chkFaceDetection"',
   'id="chkBlinkDetection"',
-  'js/app.js',
+  'js/app.ts',
 ];
 
 function fail(message) {
@@ -109,22 +112,30 @@ function fail(message) {
   process.exit(1);
 }
 
-for (const file of javascriptFiles) {
-  const result = spawnSync(
-    process.execPath,
-    ['--check', resolve(rootDir, file)],
-    {
-      cwd: rootDir,
-      encoding: 'utf8',
-    },
-  );
+for (const file of runtimeFiles) {
+  const path = resolve(rootDir, file);
+  const source = readFileSync(path, 'utf8');
+  if (file.endsWith('.ts')) {
+    const syntax = ts.createSourceFile(file, source, ts.ScriptTarget.Latest);
+    for (const diagnostic of syntax.parseDiagnostics) {
+      const message = ts.flattenDiagnosticMessageText(
+        diagnostic.messageText,
+        '\n',
+      );
+      fail(`${file} has a syntax error.\n${message}`);
+    }
+    continue;
+  }
+  const result = spawnSync(process.execPath, ['--check', path], {
+    cwd: rootDir,
+    encoding: 'utf8',
+  });
 
   if (result.status !== 0) {
     const output = [result.stdout, result.stderr].filter(Boolean).join('\n');
     fail(`${file} has a syntax error.\n${output}`);
   }
 
-  const source = readFileSync(resolve(rootDir, file), 'utf8');
   if (
     file.startsWith('js/app/') &&
     /(?<![.\w$])(?:clamp|escapeHtml)\s*\(/.test(source)
@@ -167,7 +178,7 @@ const forbiddenRuntimeFragments = [
   'https://cdnjs.cloudflare.com',
   'webm-muxer',
 ];
-for (const file of ['index.html', ...htmlTemplateFiles, ...javascriptFiles]) {
+for (const file of ['index.html', ...htmlTemplateFiles, ...runtimeFiles]) {
   const source =
     file === 'index.html' ? html : readFileSync(resolve(rootDir, file), 'utf8');
   for (const fragment of forbiddenRuntimeFragments) {
@@ -188,9 +199,11 @@ for (const fragment of [
     fail(`index.html is missing template mount ${fragment}`);
   }
 }
-const appJs = readFileSync(resolve(rootDir, 'js/app.js'), 'utf8');
-if (!appJs.includes("import { AppController } from './app/controller.mjs'")) {
-  fail('app.js must bootstrap AppController from ./app/controller.mjs');
+const appSource = readFileSync(resolve(rootDir, 'js/app.ts'), 'utf8');
+if (
+  !appSource.includes("import { AppController } from './app/controller.mjs'")
+) {
+  fail('app.ts must bootstrap AppController from ./app/controller.mjs');
 }
 const controllerJs = readFileSync(
   resolve(rootDir, 'js/app/controller.mjs'),
@@ -201,15 +214,6 @@ if (
   !controllerJs.includes("from './constants.ts'")
 ) {
   fail('controller.mjs must wire video export/constants modules');
-}
-const settingsJs = readFileSync(
-  resolve(rootDir, 'js/app/settings.mjs'),
-  'utf8',
-);
-if (settingsJs.includes('...DEFAULT_QUICK_DETECTOR_SETTINGS')) {
-  fail(
-    'settings.mjs must access DEFAULT_QUICK_DETECTOR_SETTINGS through the controller.',
-  );
 }
 const videoEditorJs = readFileSync(
   resolve(rootDir, 'js/app/video-editor.mjs'),

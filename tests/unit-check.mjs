@@ -61,8 +61,14 @@ import {
 } from '../src/lib/editor/editor-state.ts';
 import { SettingsStore } from '../js/app/settings-store.ts';
 import { loadWebcamSettings } from '../js/app/webcam-settings.ts';
-import { applyEffectsMixin } from '../js/app/effects.mjs';
+import { Detectors } from '../js/app/detectors.ts';
 import { WebcamCamera } from '../js/app/webcam-camera.ts';
+import {
+  TimelineEffects,
+  automationIntensity,
+  blendLook,
+} from '../js/app/video-editor/timeline-effects.ts';
+import { normalizeLookClipConfig } from '../js/app/video-editor/look-config.ts';
 import { VideoTransport } from '../js/app/video-editor/transport.ts';
 import { EditorProjects } from '../js/app/video-editor/projects.ts';
 import { PreviewRenderer } from '../js/app/preview-renderer.ts';
@@ -589,32 +595,18 @@ function checkBlinkDetectionUsesRefinedEyeLandmarks() {
 }
 
 async function checkBlinkCallbackClearsWhenBlobDisabled() {
-  const app = {
-    chkBlobTracking: { checked: false },
-    blobTrackingEffect: {},
-    blinkDetectionEffect: {
-      callback: () => {},
-      setBlinkCallback(callback) {
-        this.callback = callback;
-      },
+  const detectors = new Detectors({});
+  detectors.blob = {};
+  detectors.blink = {
+    callback: () => {},
+    setBlinkCallback(callback) {
+      this.callback = callback;
     },
-    effectManager: {
-      removeEffect(effect) {
-        assert.equal(effect, app.blobTrackingEffect);
-      },
-    },
-    effectsInfo: { textContent: '' },
-    colorPickSection: { classList: { add() {}, remove() {} } },
-    syncQuickDetectorSettingsFromEffects() {},
-    saveActiveEffectSettings() {},
-    renderEffectConfig() {},
-    updateEffectsInfo() {},
   };
-  applyEffectsMixin(app);
-  await app.toggleEffect('blob');
-  assert.equal(app.blobTrackingEffect, null);
+  await detectors.setEnabled('blob', false, { quiet: true });
+  assert.equal(detectors.blob, null);
   assert.equal(
-    app.blinkDetectionEffect.callback,
+    detectors.blink.callback,
     null,
     'blink must stop calling color tracking when color detector is disabled',
   );
@@ -990,14 +982,11 @@ function checkStableExportDefaults() {
 function checkEditorExportPresets() {
   const app = {
     imageSettings: { ...DEFAULT_IMAGE_SETTINGS },
-    updateImageControlsUI() {},
+    preferences: { updateImageControlsUI() {}, saveImageSettings() {} },
     updateVideoEditorUI() {},
-    saveImageSettings() {},
   };
   applyLocalvideoeditorMixin(app);
-  app.updateImageControlsUI = () => {};
   app.updateVideoEditorUI = () => {};
-  app.saveImageSettings = () => {};
   app.applyEditorExportPreset('experimental-mp4');
   assert.equal(app.imageSettings.editorExportPreset, 'experimental-mp4');
   assert.equal(app.imageSettings.experimentalExportFeatures, true);
@@ -1190,7 +1179,6 @@ function checkTimelineClipboardBasics() {
     updateEditorHistoryButtons() {},
     renderVideoTimeline() {},
     updateVideoEffectInspector() {},
-    syncVideoTimelineEffects() {},
     showStatus() {},
   };
   applyLocalvideoeditorMixin(app);
@@ -1223,7 +1211,6 @@ function checkTimelineClipboardPasteIsAtomic() {
     renderVideoTimeline() {},
     updateVideoEffectInspector() {},
     updateTimelineClipboardStatus() {},
-    syncVideoTimelineEffects() {},
     showStatus(_el, message) {
       statusMessage = message;
     },
@@ -1304,7 +1291,7 @@ function checkProjectJsonRoundTrip() {
   timeline.addMarker({ time: 3, kind: 'bar', source: 'edit-assist' });
   const app = {
     editor: {
-      source: { file: { name: 'clip.mp4', size: 1234 } },
+      source: { file: { name: 'clip.mp4', size: 1234 }, fps: 29.97 },
       timeline: timeline,
       editAssist: {
         toJSON: () => ({
@@ -1317,12 +1304,10 @@ function checkProjectJsonRoundTrip() {
       },
     },
     videoEl: { videoWidth: 1920, videoHeight: 1080 },
-    videoSourceFps: 29.97,
     imageSettings: { ...DEFAULT_IMAGE_SETTINGS, editorExportMode: 'webm' },
   };
   const projects = new EditorProjects(app.editor, {
     video: app.videoEl,
-    getSourceFps: () => app.videoSourceFps,
     getImageSettings: () => app.imageSettings,
   });
   const project = JSON.parse(JSON.stringify(projects.build()));
@@ -1354,41 +1339,38 @@ function checkBeatReactiveAutomation() {
     { time: 1, kind: 'beat', source: 'edit-assist' },
     { time: 2, kind: 'beat', source: 'edit-assist' },
   ]);
-  const app = {
-    editor: {
-      timeline: timeline,
-    },
-    DEFAULT_IMAGE_SETTINGS,
-    clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
-  };
-  applyLocalvideoeditorMixin(app);
   const clip = {
     startTime: 0,
     endTime: 4,
     config: { automation: 'beat-pulse' },
   };
-  assert.equal(app.getTimelineAutomationIntensity(clip, 1), 1);
-  assert.ok(app.getTimelineAutomationIntensity(clip, 1.22) < 0.001);
+  assert.equal(automationIntensity(timeline, clip, 1), 1);
+  assert.ok(automationIntensity(timeline, clip, 1.22) < 0.001);
   assert.equal(
-    app.getTimelineAutomationIntensity(
+    automationIntensity(
+      timeline,
       { ...clip, config: { automation: 'alternate-beat' } },
       2.1,
     ),
     0,
   );
   assert.equal(
-    app.getTimelineAutomationIntensity(
+    automationIntensity(
+      timeline,
       { ...clip, config: { automation: 'fade-in' } },
       2,
     ),
     0.5,
   );
   assert.equal(
-    app.applyLookAutomation(
-      { ...DEFAULT_IMAGE_SETTINGS, contrast: 100 },
-      { contrast: 180, automation: 'fade-in' },
-      { startTime: 0, endTime: 4, config: { automation: 'fade-in' } },
-      2,
+    blendLook(
+      DEFAULT_IMAGE_SETTINGS,
+      normalizeLookClipConfig({ contrast: 180, automation: 'fade-in' }),
+      automationIntensity(
+        timeline,
+        { ...clip, config: { automation: 'fade-in' } },
+        2,
+      ),
     ).contrast,
     140,
   );
@@ -1415,7 +1397,6 @@ function checkSplitAllEffectsAtMarkers() {
     updateVideoEffectInspector() {},
     updateAdjustmentsPanelState() {},
     updateEffectTrackHighlight() {},
-    syncVideoTimelineEffects() {},
     showStatus() {},
     hideStatus() {},
   };
@@ -1684,8 +1665,6 @@ function checkPausedVideoPreviewUsesAnimationFrame() {
       fpsInfo: { textContent: '' },
     };
     const renderer = new PreviewRenderer(app);
-    app.syncVideoTimelineLookNow = () => {};
-    app.syncVideoTimelineDetectors = () => {};
     renderer.syncPreviewCanvasMetrics = () => {};
     renderer.renderProcessedFrame = () => {};
     renderer.scheduleRenderLoop();
@@ -1845,32 +1824,13 @@ async function checkExportPlaybackRateRestores() {
 
 async function checkExportTimelineDetectorToggleIsQuiet() {
   const calls = [];
-  const effect = {};
   const app = {
     editor: {
       exportSession: { active: true },
     },
-    chkBlobTracking: { checked: true },
-    chkFaceDetection: { checked: false },
-    chkBlinkDetection: { checked: false },
-    blobTrackingEffect: effect,
-    blinkDetectionEffect: {
-      setBlinkCallback: () => calls.push('blink-callback'),
-    },
-    effectManager: {
-      removeEffect(removed) {
-        assert.equal(removed, effect);
-        calls.push('remove');
-      },
-    },
-    colorPickSection: {
-      classList: {
-        add() {
-          calls.push('color-ui');
-        },
-        remove() {},
-      },
-    },
+    settingsStore: new SettingsStore({ storage: null }),
+    quickDetectorSettings: { blobBoxColor: '#ff2222' },
+    camera: { applyDetectorPerformanceProfile() {} },
     syncQuickDetectorSettingsFromEffects() {
       calls.push('sync-settings');
     },
@@ -1884,14 +1844,29 @@ async function checkExportTimelineDetectorToggleIsQuiet() {
       calls.push('effects-info');
     },
   };
-  applyEffectsMixin(app);
-  applyLocalvideoeditorMixin(app);
-  await app.setTimelineDetector('blob', null);
-  assert.equal(app.chkBlobTracking.checked, false);
-  assert.equal(app.blobTrackingEffect, null);
+  const detectors = new Detectors(app);
+  app.detectors = detectors;
+  const restoreDocument = mockGlobal('document', {
+    createElement: () => ({ getContext: () => null }),
+  });
+  try {
+    await detectors.setEnabled('blob', true, { quiet: true });
+  } finally {
+    restoreDocument();
+  }
+  const effect = detectors.blob;
+  detectors.manager.removeEffect = (removed) => {
+    assert.equal(removed, effect);
+    calls.push('remove');
+  };
+  detectors.blink = { setBlinkCallback: () => calls.push('blink-callback') };
+  const timelineEffects = new TimelineEffects(app.editor, app);
+  await timelineEffects.setDetector('blob', null);
+  assert.equal(detectors.selection.blob, false);
+  assert.equal(detectors.blob, null);
   assert.deepEqual(
     calls,
-    ['remove', 'blink-callback', 'color-ui'],
+    ['remove', 'blink-callback'],
     'export detector toggles must skip storage and heavy UI refresh',
   );
 }
@@ -2087,10 +2062,12 @@ function checkAutoPerformanceDowngrade() {
   const app = {
     sourceMode: 'camera',
     imageSettings: { performanceMode: 'auto', previewQuality: 'balanced' },
-    blobTrackingEffect: { processScale: 0.45, processIntervalMs: 33 },
-    faceDetectionEffect: { processIntervalMs: 30 },
-    blinkDetectionEffect: { processIntervalMs: 30 },
-    updateImageControlsUI() {},
+    detectors: {
+      blob: { processScale: 0.45, processIntervalMs: 33 },
+      face: { processIntervalMs: 30 },
+      blink: { processIntervalMs: 30 },
+    },
+    preferences: { updateImageControlsUI() {} },
     renderer: { requestPreviewRefresh() {} },
     renderEffectConfig() {},
     showStatus() {},
@@ -2113,10 +2090,10 @@ function checkAutoPerformanceDowngrade() {
     fps: 30,
   });
   assert.equal(app.imageSettings.previewQuality, 'draft');
-  assert.equal(app.blobTrackingEffect.processScale, 0.35);
-  assert.equal(app.blobTrackingEffect.processIntervalMs, 120);
-  assert.equal(app.faceDetectionEffect.processIntervalMs, 120);
-  assert.equal(app.blinkDetectionEffect.processIntervalMs, 120);
+  assert.equal(app.detectors.blob.processScale, 0.35);
+  assert.equal(app.detectors.blob.processIntervalMs, 120);
+  assert.equal(app.detectors.face.processIntervalMs, 120);
+  assert.equal(app.detectors.blink.processIntervalMs, 120);
 }
 
 async function checkVideoExportDiagnostics() {
@@ -2341,10 +2318,7 @@ async function checkEffectsOnlyExportSkipsBaseRender() {
         'effects-only export should seek to trim start for frame zero',
       );
     },
-    applyVideoTimelineLook() {
-      this.lookCalls += 1;
-    },
-    syncVideoTimelineDetectorsAt: async () => {},
+
     capture: {
       ensureRecordingCanvas() {},
       renderSourceFrameBuffer() {
@@ -2359,6 +2333,12 @@ async function checkEffectsOnlyExportSkipsBaseRender() {
     },
   };
   applyLocalvideoeditorMixin(app);
+  app.editor.timelineEffects = {
+    applyLook() {
+      app.lookCalls += 1;
+    },
+    syncDetectorsAt: async () => {},
+  };
   app.seekVideoForExport = async (time) => {
     assert.equal(
       time,
@@ -2397,8 +2377,7 @@ async function checkExportFrameProgressThrottlesInnerStages() {
     updateVideoExportProgress(done, total, fps, meta) {
       calls.push(meta);
     },
-    applyVideoTimelineLook() {},
-    syncVideoTimelineDetectorsAt: async () => {},
+
     capture: { renderSourceFrameBuffer() {} },
   };
   applyLocalvideoeditorMixin(app);
@@ -2406,6 +2385,10 @@ async function checkExportFrameProgressThrottlesInnerStages() {
     calls.push(meta);
   };
   app.advanceVideoForExport = async () => {};
+  app.editor.timelineEffects = {
+    applyLook() {},
+    syncDetectorsAt: async () => {},
+  };
   await app.renderVideoExportFrame(1, 30, { mode: 'full' });
   const byStage = Object.fromEntries(calls.map((meta) => [meta.stage, meta]));
   assert.equal(
@@ -3136,7 +3119,6 @@ async function checkSubjectClipAwaitsEffectBeforeAnalyzer() {
     selectVideoEffect() {
       assert.equal(effectLoaded, true);
     },
-    syncVideoTimelineEffects() {},
     showStatus() {},
     hideStatus() {},
     setInspectorTab() {},

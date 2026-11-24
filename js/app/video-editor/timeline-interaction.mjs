@@ -257,7 +257,7 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
         this.showStatus(this.videoEditorStatus, err.message, 'error');
       }
       this.selectVideoEffect(item.id);
-      void this.syncVideoTimelineEffects(true);
+      void this.editor?.timelineEffects.sync(true);
     };
     document.addEventListener('pointermove', move);
     document.addEventListener('pointerup', end, { once: true });
@@ -276,7 +276,7 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
       this.updateVideoEffectInspector();
       this.updateAdjustmentsPanelState();
       this.updateEffectTrackHighlight();
-      void this.syncVideoTimelineEffects(true);
+      void this.editor?.timelineEffects.sync(true);
     } catch (err) {
       this.showStatus(this.videoEditorStatus, err.message, 'error');
     }
@@ -363,7 +363,7 @@ export function applyVideoEditorTimelineInteractionMixin(proto) {
       this.updateVideoEffectInspector();
       this.updateAdjustmentsPanelState();
       this.updateEffectTrackHighlight();
-      void this.syncVideoTimelineEffects(true);
+      void this.editor?.timelineEffects.sync(true);
       this.showStatus(
         this.videoEditorStatus,
         `Cortes creados: ${cuts}.`,

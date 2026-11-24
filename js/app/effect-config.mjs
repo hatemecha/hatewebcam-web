@@ -5,7 +5,7 @@ function bindDetectorSliders(app) {
   return (element, input, label, apply) => {
     bindSlider(element, input, label, (value) => {
       apply(value);
-      app.scheduleSaveActiveEffectSettings();
+      app.preferences.scheduleSaveActiveEffectSettings();
     });
   };
 }
@@ -15,17 +15,17 @@ export function applyEffectConfigUIMixin(proto) {
   proto.renderEffectConfig = function () {
     if (this.effectConfigBlob) {
       this.effectConfigBlob.innerHTML = '';
-      if (this.blobTrackingEffect)
+      if (this.detectors.blob)
         this.effectConfigBlob.appendChild(this.buildBlobConfig());
     }
     if (this.effectConfigFace) {
       this.effectConfigFace.innerHTML = '';
-      if (this.faceDetectionEffect)
+      if (this.detectors.face)
         this.effectConfigFace.appendChild(this.buildFaceConfig());
     }
     if (this.effectConfigBlink) {
       this.effectConfigBlink.innerHTML = '';
-      if (this.blinkDetectionEffect)
+      if (this.detectors.blink)
         this.effectConfigBlink.appendChild(this.buildBlinkConfig());
     }
   };
@@ -33,7 +33,7 @@ export function applyEffectConfigUIMixin(proto) {
   // --- Blob Tracking Config ---
   proto.buildBlobConfig = function () {
     const bindConfigSlider = bindDetectorSliders(this);
-    const bt = this.blobTrackingEffect;
+    const bt = this.detectors.blob;
     const boxColor = this.normalizeHexColor(
       bt.boxColor,
       this.DEFAULT_QUICK_DETECTOR_SETTINGS.blobBoxColor,
@@ -144,7 +144,7 @@ export function applyEffectConfigUIMixin(proto) {
             o.classList.remove('selected'),
           );
           e.target.closest('.radio-option').classList.add('selected');
-          this.scheduleSaveActiveEffectSettings();
+          this.preferences.scheduleSaveActiveEffectSettings();
         });
       });
 
@@ -168,7 +168,7 @@ export function applyEffectConfigUIMixin(proto) {
         targetSwatch.style.background = bt.targetColor;
         targetValue.textContent = bt.targetColor.toUpperCase();
         this.showStatus(targetStatus, 'Color objetivo actualizado.', 'success');
-        this.scheduleSaveActiveEffectSettings();
+        this.preferences.scheduleSaveActiveEffectSettings();
       });
       el.querySelector('#btnPickTargetColor').addEventListener('click', () =>
         this.colorPicker.start(targetStatus),
@@ -220,18 +220,18 @@ export function applyEffectConfigUIMixin(proto) {
         bt.boxColor = e.target.value;
         this.quickDetectorSettings.blobBoxColor = e.target.value;
         swatch.style.background = e.target.value;
-        this.updateQuickDetectorControlsUI();
-        this.scheduleSaveQuickDetectorSettings();
-        this.scheduleSaveActiveEffectSettings();
+        this.preferences.updateQuickDetectorControlsUI();
+        this.preferences.scheduleSaveQuickDetectorSettings();
+        this.preferences.scheduleSaveActiveEffectSettings();
       });
 
       el.querySelector('#chkShowCoords').addEventListener('change', (e) => {
         bt.showCoordinates = e.target.checked;
-        this.scheduleSaveActiveEffectSettings();
+        this.preferences.scheduleSaveActiveEffectSettings();
       });
       el.querySelector('#chkShowCentroid').addEventListener('change', (e) => {
         bt.showCentroid = e.target.checked;
-        this.scheduleSaveActiveEffectSettings();
+        this.preferences.scheduleSaveActiveEffectSettings();
       });
     });
 
@@ -241,7 +241,7 @@ export function applyEffectConfigUIMixin(proto) {
   // --- Face Detection Config ---
   proto.buildFaceConfig = function () {
     const bindConfigSlider = bindDetectorSliders(this);
-    const fd = this.faceDetectionEffect;
+    const fd = this.detectors.face;
     const showBoxVisuals = fd.showBox !== false;
     const showPixelVisuals = !!fd.showBlur;
     const faceBoxColor = this.normalizeHexColor(
@@ -322,10 +322,10 @@ export function applyEffectConfigUIMixin(proto) {
         this.quickDetectorSettings.faceShowBox = showBox;
         this.quickDetectorSettings.faceShowBlur = showBlur;
         syncFaceModeUI();
-        this.updateQuickDetectorControlsUI();
-        this.updateEffectsInfo();
-        this.scheduleSaveQuickDetectorSettings();
-        this.scheduleSaveActiveEffectSettings();
+        this.preferences.updateQuickDetectorControlsUI();
+        this.detectors.updateInfo();
+        this.preferences.scheduleSaveQuickDetectorSettings();
+        this.preferences.scheduleSaveActiveEffectSettings();
       };
 
       if (chkAdvFaceShowBox)
@@ -344,12 +344,12 @@ export function applyEffectConfigUIMixin(proto) {
       bindConfigSlider(el, 'sldFacePixelation', 'valFacePixelation', (v) => {
         fd.pixelationCellSize = v;
         this.quickDetectorSettings.facePixelationCellSize = v;
-        this.scheduleSaveQuickDetectorSettings();
+        this.preferences.scheduleSaveQuickDetectorSettings();
       });
       bindConfigSlider(el, 'sldFacePadding', 'valFacePadding', (v) => {
         fd.censorPaddingPercent = v;
         this.quickDetectorSettings.faceCensorPaddingPercent = v;
-        this.scheduleSaveQuickDetectorSettings();
+        this.preferences.scheduleSaveQuickDetectorSettings();
       });
       bindConfigSlider(
         el,
@@ -387,17 +387,17 @@ export function applyEffectConfigUIMixin(proto) {
             this.inpFaceQuickLabel.value =
               this.quickDetectorSettings.faceLabelText;
           }
-          this.scheduleSaveQuickDetectorSettings();
-          this.scheduleSaveActiveEffectSettings();
+          this.preferences.scheduleSaveQuickDetectorSettings();
+          this.preferences.scheduleSaveActiveEffectSettings();
         });
         inpLabel.addEventListener('blur', (e) => {
           const normalized = this.normalizeFaceLabel(e.target.value);
           fd.labelText = normalized;
           this.quickDetectorSettings.faceLabelText = normalized;
           e.target.value = fd.labelText;
-          this.updateQuickDetectorControlsUI();
-          this.saveQuickDetectorSettings();
-          this.saveActiveEffectSettings();
+          this.preferences.updateQuickDetectorControlsUI();
+          this.preferences.saveQuickDetectorSettings();
+          this.preferences.saveActiveEffectSettings();
         });
       }
 
@@ -408,15 +408,15 @@ export function applyEffectConfigUIMixin(proto) {
           fd.boxColor = e.target.value;
           this.quickDetectorSettings.faceBoxColor = e.target.value;
           swatch.style.background = e.target.value;
-          this.updateQuickDetectorControlsUI();
-          this.scheduleSaveQuickDetectorSettings();
-          this.scheduleSaveActiveEffectSettings();
+          this.preferences.updateQuickDetectorControlsUI();
+          this.preferences.scheduleSaveQuickDetectorSettings();
+          this.preferences.scheduleSaveActiveEffectSettings();
         });
       }
 
       el.querySelector('#chkShowLandmarks').addEventListener('change', (e) => {
         fd.showLandmarks = e.target.checked;
-        this.scheduleSaveActiveEffectSettings();
+        this.preferences.scheduleSaveActiveEffectSettings();
       });
       syncFaceModeUI();
     });
@@ -427,7 +427,7 @@ export function applyEffectConfigUIMixin(proto) {
   // --- Blink Detection Config ---
   proto.buildBlinkConfig = function () {
     const bindConfigSlider = bindDetectorSliders(this);
-    const bd = this.blinkDetectionEffect;
+    const bd = this.detectors.blink;
     const el = createSection(
       'Detección de pestañeos',
       `
@@ -448,7 +448,7 @@ export function applyEffectConfigUIMixin(proto) {
       sld.addEventListener('input', (e) => {
         bd.eyeArThreshold = parseFloat(e.target.value);
         val.textContent = bd.eyeArThreshold.toFixed(2);
-        this.scheduleSaveActiveEffectSettings();
+        this.preferences.scheduleSaveActiveEffectSettings();
       });
       bindConfigSlider(el, 'sldBlinkInterval', 'valBlinkInterval', (v) => {
         bd.processIntervalMs = this.clamp(Math.round(v), 16, 120);

@@ -6,11 +6,34 @@ interface OpenVideo {
 
 export class VideoFileSource {
   private current: OpenVideo | null = null;
+  private metadata: { fps: number; averageBitrate: number } | null = null;
 
   constructor(private readonly video: HTMLVideoElement) {}
 
   get file(): File | null {
     return this.current?.file ?? null;
+  }
+
+  get loading(): boolean {
+    return this.current !== null && this.metadata === null;
+  }
+
+  get fps(): number {
+    return this.metadata?.fps ?? 30;
+  }
+
+  get averageBitrate(): number {
+    return this.metadata?.averageBitrate ?? 0;
+  }
+
+  finishLoading(
+    signal: AbortSignal,
+    fps: number,
+    averageBitrate: number,
+  ): void {
+    signal.throwIfAborted();
+    if (signal === this.current?.controller.signal)
+      this.metadata = { fps, averageBitrate };
   }
 
   open(file: File): { ready: Promise<void>; signal: AbortSignal } {
@@ -48,6 +71,7 @@ export class VideoFileSource {
     const source = this.current;
     if (!source) return;
     this.current = null;
+    this.metadata = null;
     source.controller.abort();
     this.video.pause();
     this.video.removeAttribute('src');

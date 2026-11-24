@@ -95,7 +95,10 @@ export class FaceDetection {
     }
   }
 
-  getDetectionSummary() {
+  getDetectionSummary(): {
+    status: 'error' | 'detected' | 'searching';
+    count: number;
+  } {
     if (this.initError) return { status: 'error', count: 0 };
     const now = performance.now();
     const count = this._faces.filter(

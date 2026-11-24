@@ -34,7 +34,7 @@ export function applyVideoEditorTimelineChromeMixin(proto) {
     this.applyVideoTrim(false);
     this.renderVideoTimeline();
     this.updateVideoEffectInspector();
-    void this.syncVideoTimelineEffects(true);
+    void this.editor?.timelineEffects.sync(true);
   };
 
   proto.redoTimelineEdit = function () {
@@ -44,7 +44,7 @@ export function applyVideoEditorTimelineChromeMixin(proto) {
     this.applyVideoTrim(false);
     this.renderVideoTimeline();
     this.updateVideoEffectInspector();
-    void this.syncVideoTimelineEffects(true);
+    void this.editor?.timelineEffects.sync(true);
   };
 
   proto.updateEditorHistoryButtons = function () {

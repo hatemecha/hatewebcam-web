@@ -1,3 +1,4 @@
+import type { WebcamPreferences } from './webcam-preferences.ts';
 import {
   getPlaceholderState,
   updatePlaceholderState,
@@ -24,11 +25,11 @@ import {
   type ImageSettings,
 } from './constants.ts';
 import type { SettingsStore } from './settings-store.ts';
+import type { Detectors } from './detectors.ts';
 import type { PreviewRenderer } from './preview-renderer.ts';
 import type { WebcamCapture } from './webcam-capture.ts';
 
 type PerformanceProfile = (typeof PERFORMANCE_MODE_PRESETS)[PerformanceMode];
-type DetectorTiming = { processIntervalMs: number };
 type Status = 'info' | 'warning' | 'error';
 
 interface WebcamCameraHost {
@@ -37,13 +38,12 @@ interface WebcamCameraHost {
   imageSettings: ImageSettings;
   videoEl: HTMLVideoElement;
   editor: {
-    source: { file: File | null };
+    source: { file: File | null; loading: boolean };
     visualFx: {
       activeEffect: { adaptPreviewQuality(fps: number): void } | null;
     };
   } | null;
   previewWrapper: HTMLElement | null;
-  videoPlaceholderLoading: boolean;
   isRunning: boolean;
   capture: Pick<
     WebcamCapture,
@@ -62,22 +62,18 @@ interface WebcamCameraHost {
     | 'requestPreviewRefresh'
     | 'resetCadence'
   >;
-  blobTrackingEffect: (DetectorTiming & { processScale: number }) | null;
-  faceDetectionEffect: DetectorTiming | null;
-  blinkDetectionEffect: DetectorTiming | null;
+  detectors: Pick<Detectors, 'blob' | 'face' | 'blink'>;
   captureStatus: HTMLElement | null;
   flipH: boolean;
   flipV: boolean;
   rotation: number;
-  chkMirror: HTMLInputElement;
-  chkFlipV: HTMLInputElement;
-  rotationSelect: HTMLSelectElement;
   renderEffectConfig(): void;
-  updateImageControlsUI(): void;
-  saveImageSettings(): void;
   showStatus(element: HTMLElement | null, message: string, type: Status): void;
   hideStatus(element: HTMLElement | null): void;
-  syncMirrorControls(): void;
+  preferences: Pick<
+    WebcamPreferences,
+    'syncMirrorControls' | 'updateImageControlsUI' | 'saveImageSettings'
+  >;
 }
 
 export class WebcamCamera {
@@ -134,7 +130,7 @@ export class WebcamCamera {
 
   updatePreviewPlaceholder() {
     const inVideoMode = this.host.sourceMode === 'video';
-    const isLoading = this.host.videoPlaceholderLoading;
+    const isLoading = this.host.editor?.source.loading;
     const showVideoPlaceholder =
       inVideoMode && (isLoading || !this.host.editor?.source.file);
     const cameraIdle = !inVideoMode && !this.host.isRunning;
@@ -158,7 +154,6 @@ export class WebcamCamera {
   showVideoPlaceholderLoading(
     message: MessageKey = 'Leyendo metadata del video...',
   ) {
-    this.host.videoPlaceholderLoading = true;
     updatePlaceholderState({ loadingMessage: message });
     this.updatePreviewPlaceholder();
   }
@@ -191,18 +186,15 @@ export class WebcamCamera {
   }
 
   applyDetectorPerformanceProfile(profile = this.getPerformanceModePreset()) {
-    if (this.host.blobTrackingEffect) {
-      this.host.blobTrackingEffect.processScale = profile.blobProcessScale;
-      this.host.blobTrackingEffect.processIntervalMs =
-        profile.detectorIntervalMs;
+    if (this.host.detectors.blob) {
+      this.host.detectors.blob.processScale = profile.blobProcessScale;
+      this.host.detectors.blob.processIntervalMs = profile.detectorIntervalMs;
     }
-    if (this.host.faceDetectionEffect) {
-      this.host.faceDetectionEffect.processIntervalMs =
-        profile.detectorIntervalMs;
+    if (this.host.detectors.face) {
+      this.host.detectors.face.processIntervalMs = profile.detectorIntervalMs;
     }
-    if (this.host.blinkDetectionEffect) {
-      this.host.blinkDetectionEffect.processIntervalMs =
-        profile.detectorIntervalMs;
+    if (this.host.detectors.blink) {
+      this.host.detectors.blink.processIntervalMs = profile.detectorIntervalMs;
     }
     this.host.renderEffectConfig();
   }
@@ -213,9 +205,9 @@ export class WebcamCamera {
   ) {
     this.host.imageSettings.previewQuality = profile.previewQuality;
     this.applyDetectorPerformanceProfile(profile);
-    this.host.updateImageControlsUI();
+    this.host.preferences.updateImageControlsUI();
     this.host.renderer.requestPreviewRefresh(true);
-    if (save) this.host.saveImageSettings();
+    if (save) this.host.preferences.saveImageSettings();
   }
 
   async applyPerformanceMode(
@@ -389,16 +381,19 @@ export class WebcamCamera {
     }
   }
 
-  onTransformChange() {
-    this.host.flipH = this.host.chkMirror.checked;
-    this.host.flipV = this.host.chkFlipV.checked;
-    this.host.rotation = parseInt(this.host.rotationSelect.value, 10);
+  setTransform(
+    transform: Partial<Pick<WebcamCameraHost, 'flipH' | 'flipV' | 'rotation'>>,
+  ) {
+    if (transform.flipH !== undefined) this.host.flipH = transform.flipH;
+    if (transform.flipV !== undefined) this.host.flipV = transform.flipV;
+    if (transform.rotation !== undefined)
+      this.host.rotation = transform.rotation;
     const cfg = this.host.settingsStore.loadObject(STORAGE_KEY);
     cfg.flipH = this.host.flipH;
     cfg.flipV = this.host.flipV;
     cfg.rotation = this.host.rotation;
     this.host.settingsStore.saveJson(STORAGE_KEY, cfg);
-    this.host.syncMirrorControls();
+    this.host.preferences.syncMirrorControls();
   }
 
   private renderCameraSelectOptions(

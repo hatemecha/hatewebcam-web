@@ -29,13 +29,13 @@ export function applyVideoEditorExportMixin(proto) {
       preset: this.imageSettings.editorExportPreset,
       width,
       height,
-      sourceFps: this.videoSourceFps,
+      sourceFps: this.editor.source.fps,
       duration: Math.max(
         0,
         (Number(this.editor.timeline?.trimEnd) || 0) -
           (Number(this.editor.timeline?.trimStart) || 0),
       ),
-      sourceBitrate: this.videoSourceAverageBitrate,
+      sourceBitrate: this.editor.source.averageBitrate,
       mode: this.imageSettings.editorExportMode,
       requestedFormat: this.imageSettings.editorExportFormat,
       copyAudio: this.imageSettings.editorCopyAudio,
@@ -51,7 +51,7 @@ export function applyVideoEditorExportMixin(proto) {
     return (
       this.videoExportPreflight?.fps ||
       this.getEffectiveVideoExportFps() ||
-      normalizeVideoFps(this.videoSourceFps) ||
+      normalizeVideoFps(this.editor.source.fps) ||
       this.DEFAULT_CAMERA_FPS
     );
   };
@@ -97,14 +97,9 @@ export function applyVideoEditorExportMixin(proto) {
     this.updateVideoEffectInspector();
     this.updateEditorExportControls();
     this.updateAdjustmentsPanelState();
-    this.updateInspectorWorkflow();
     this.updateEditorHistoryButtons();
     this.editor.editAssist?.updateUI();
     if (!loaded) {
-      if (this.videoFileMeta)
-        this.videoFileMeta.textContent = translateCurrent(
-          'Ningún archivo cargado',
-        );
       if (this.videoExportDetails)
         this.videoExportDetails.textContent = translateCurrent(
           'Importá un video para habilitar la exportación.',
@@ -118,7 +113,6 @@ export function applyVideoEditorExportMixin(proto) {
       return;
     }
     this.camera.updatePreviewPlaceholder();
-    this.updateVideoFileMeta?.();
     if (this.videoExportDetails) {
       const preflight = this.buildVideoExportPreflight();
       const modeLabel = translateCurrent(
@@ -262,9 +256,9 @@ export function applyVideoEditorExportMixin(proto) {
     Object.assign(this.imageSettings, presets[value], {
       editorExportPreset: value,
     });
-    this.updateImageControlsUI();
+    this.preferences.updateImageControlsUI();
     this.updateVideoEditorUI();
-    this.saveImageSettings();
+    this.preferences.saveImageSettings();
   };
 
   proto.formatVideoExportDiagnosis = function (diagnosis, bitrate) {
@@ -376,7 +370,7 @@ export function applyVideoEditorExportMixin(proto) {
         fps,
         { stage: 'look', time },
       );
-      this.applyVideoTimelineLook(time, { force: true });
+      this.editor.timelineEffects.applyLook(time, { force: true });
     }
     this.updateVideoExportProgress(
       frameIndex,
@@ -384,7 +378,7 @@ export function applyVideoEditorExportMixin(proto) {
       fps,
       { stage: 'detectors', time },
     );
-    await this.syncVideoTimelineDetectorsAt(time, false);
+    await this.editor.timelineEffects.syncDetectorsAt(time, false);
     await this.editor.visualFx?.syncAt(time);
     const visualFx = this.editor.visualFx?.activeEffect;
     if (visualFx) {
@@ -628,13 +622,8 @@ export function applyVideoEditorExportMixin(proto) {
         this.videoExportPreflight = null;
         return;
       }
-      this.flushPendingClipConfigSync();
-      this.appliedTimelineItemIds = {
-        look: '',
-        blob: '',
-        face: '',
-        blink: '',
-      };
+      this.preferences.flushPendingClipConfigSync();
+      this.editor.timelineEffects.resetApplied();
       this.editor.visualFx?.reset();
       this.videoExportRecoveredSource = false;
       this.editor.exportSession.start(0);

@@ -7,7 +7,15 @@ import {
 } from '../edit-assist-controller.ts';
 import { TimelineView } from '../timeline-view.ts';
 import { VideoExportSession } from '../video-export-session.ts';
+import {
+  EditorSourceController,
+  type SourceHost,
+} from './source-controller.ts';
 import { EditorProjects, type ProjectOptions } from './projects.ts';
+import {
+  TimelineEffects,
+  type TimelineEffectsHost,
+} from './timeline-effects.ts';
 import { VideoTransport, type TransportOptions } from './transport.ts';
 import { VideoFileSource } from './video-file-source.ts';
 import { VisualFxSession, type VisualFxOptions } from './visual-fx-session.ts';
@@ -22,6 +30,7 @@ interface VideoEditorSessionOptions {
   projects: Omit<ProjectOptions, 'video'>;
   transport: Omit<TransportOptions, 'video'>;
   visualFx: Omit<VisualFxOptions, 'getTimeline' | 'getTime' | 'seek'>;
+  sourceHost: SourceHost & TimelineEffectsHost;
 }
 
 export class VideoEditorSession {
@@ -34,6 +43,8 @@ export class VideoEditorSession {
   readonly projects: EditorProjects;
   readonly transport: VideoTransport;
   readonly visualFx: VisualFxSession;
+  readonly sourceController: EditorSourceController;
+  readonly timelineEffects: TimelineEffects;
   private unmountInspector: (() => void) | null = null;
 
   constructor({
@@ -43,6 +54,7 @@ export class VideoEditorSession {
     projects,
     transport,
     visualFx,
+    sourceHost,
   }: VideoEditorSessionOptions) {
     this.source = new VideoFileSource(video);
     this.timelineView = new TimelineView({ formatTime });
@@ -60,6 +72,8 @@ export class VideoEditorSession {
       getTime: () => video.currentTime,
       seek: (time) => this.transport.seek(time),
     });
+    this.timelineEffects = new TimelineEffects(this, sourceHost);
+    this.sourceController = new EditorSourceController(this, sourceHost);
   }
 
   mountInspector(host: HTMLElement | null): void {
