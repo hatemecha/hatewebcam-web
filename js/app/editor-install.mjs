@@ -24,6 +24,7 @@ export async function installVideoEditor(app) {
   const editor = new VideoEditorSession({
     video: app.videoEl,
     sourceHost: app,
+    exportHost: app,
     formatTime: (seconds) => app.formatDurationDetailed(seconds),
     editAssist: {
       updatePanel: updateEditAssistPanel,

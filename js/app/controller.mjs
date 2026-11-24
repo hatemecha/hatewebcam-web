@@ -116,10 +116,6 @@ export class AppController {
     this.timelineClipboard = null;
     this.paletteDragState = null;
     this.timelineDragGhost = null;
-    this.videoExportDiagnosis = null;
-    this.videoExportPreflight = null;
-    this.videoExportRecoveredSource = false;
-    this.videoExportPlayback = null;
 
     this.colorPicker = new ColorPicker(this);
     this.flipH = false;
@@ -215,7 +211,9 @@ export class AppController {
     void this.detectors.setEnabled(type, checked);
   }
 
-  updateVideoEditorUI() {}
+  updateVideoEditorUI() {
+    this.editor?.exporter.updateVideoEditorUI();
+  }
   updateVideoEffectInspector() {}
   updateTimelineHint() {}
 

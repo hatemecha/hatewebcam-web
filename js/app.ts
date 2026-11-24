@@ -34,9 +34,6 @@ import { hideStatus } from './app/feedback.ts';
 interface ShellCommands {
   _adjustClipStatusKey: string;
   openAdjustmentsForContext?(context: string): void;
-  startVideoExport?(): Promise<void>;
-  cancelVideoExport?(): void;
-  closeVideoExportModal?(): void;
   updateAdjustmentsContext?(): void;
   updateAdjustmentsClipStatus?(): void;
 }
@@ -77,7 +74,9 @@ try {
       saveProject: () =>
         whenControllerReady(() => controller.editor?.projects.save()),
       startExport: () =>
-        whenControllerReady(() => void controller.startVideoExport?.()),
+        whenControllerReady(
+          () => void controller.editor?.exporter.startVideoExport(),
+        ),
       setExportSetting: (setting, value) =>
         whenControllerReady(() =>
           controller.preferences.setExportSetting(setting, value),
@@ -113,7 +112,9 @@ try {
         whenControllerReady(() => controller.setSourceMode(mode));
       },
       startVideoExport: () => {
-        whenControllerReady(() => void controller.startVideoExport?.());
+        whenControllerReady(
+          () => void controller.editor?.exporter.startVideoExport(),
+        );
       },
       setLocale: (locale) => {
         setLocale(locale);
@@ -358,10 +359,14 @@ try {
     document.querySelector<HTMLElement>('#exportModalTemplateSlot'),
     {
       cancel: () => {
-        whenControllerReady(() => void controller.cancelVideoExport?.());
+        whenControllerReady(
+          () => void controller.editor?.exporter.cancelVideoExport(),
+        );
       },
       close: () => {
-        whenControllerReady(() => controller.closeVideoExportModal?.());
+        whenControllerReady(() =>
+          controller.editor?.exporter.closeVideoExportModal(),
+        );
       },
     },
   );

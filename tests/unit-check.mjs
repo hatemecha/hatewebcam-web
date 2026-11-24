@@ -72,6 +72,7 @@ import { normalizeLookClipConfig } from '../js/app/video-editor/look-config.ts';
 import { VideoTransport } from '../js/app/video-editor/transport.ts';
 import { EditorProjects } from '../js/app/video-editor/projects.ts';
 import { PreviewRenderer } from '../js/app/preview-renderer.ts';
+import { VideoExporter } from '../js/app/video-editor/export.ts';
 import { applyEditorExportPreset } from '../js/app/export-settings.ts';
 import { applyLocalvideoeditorMixin } from '../js/app/video-editor.mjs';
 import {
@@ -1426,22 +1427,23 @@ async function checkSequentialExportAdvance() {
     playCalls: 0,
     waitCalls: 0,
   };
-  applyLocalvideoeditorMixin(app);
-  app.seekVideoForExport = async () => {
+  const exporter = new VideoExporter(app.editor, app);
+  exporter.videoExportPlayback = app.videoExportPlayback;
+  exporter.seekVideoForExport = async () => {
     app.seekCalls += 1;
   };
-  app.waitForExportVideoFrame = async () => {
+  exporter.waitForExportVideoFrame = async () => {
     app.waitCalls += 1;
   };
-  app.playVideoUntilExportTime = async () => {
+  exporter.playVideoUntilExportTime = async () => {
     app.playCalls += 1;
   };
-  await app.advanceVideoForExport(0, 24, 0);
-  await app.advanceVideoForExport(1 / 24, 24, 1);
+  await exporter.advanceVideoForExport(0, 24, 0);
+  await exporter.advanceVideoForExport(1 / 24, 24, 1);
   app.videoEl.currentTime = 1 / 24;
-  await app.advanceVideoForExport(1 / 24, 24, 2);
+  await exporter.advanceVideoForExport(1 / 24, 24, 2);
   app.videoEl.currentTime = 0.2;
-  await app.advanceVideoForExport(2 / 24, 24, 3);
+  await exporter.advanceVideoForExport(2 / 24, 24, 3);
   assert.equal(
     app.seekCalls,
     1,
@@ -1459,7 +1461,7 @@ async function checkSequentialExportAdvance() {
     'overshot frames should be reused instead of forcing a late seek',
   );
   assert.equal(
-    app.videoExportPlayback.playbackRate,
+    exporter.videoExportPlayback.playbackRate,
     4,
     'overshot export playback must keep the accelerated rate for later frames',
   );
@@ -1494,8 +1496,9 @@ async function checkExportPlaybackPausesAtTarget() {
       removeEventListener() {},
     },
   };
-  applyLocalvideoeditorMixin(app);
-  await app.playVideoUntilExportTime(1, 0.01);
+  const exporter = new VideoExporter(app.editor, app);
+  exporter.videoExportPlayback = app.videoExportPlayback;
+  await exporter.playVideoUntilExportTime(1, 0.01);
   assert.equal(
     pauseCalls,
     1,
@@ -1527,11 +1530,11 @@ async function checkExportSeekFallsBackWhenSeekedIsMissing() {
     },
     clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
   };
-  applyLocalvideoeditorMixin(app);
-  app.waitForExportVideoFrame = async () => {
+  const exporter = new VideoExporter(app.editor, app);
+  exporter.waitForExportVideoFrame = async () => {
     waited = true;
   };
-  await app.seekVideoForExport(0);
+  await exporter.seekVideoForExport(0);
   assert.equal(currentTime, 0);
   assert.equal(
     fastSeekCalled,
@@ -1562,17 +1565,17 @@ async function checkExportPrepareRecoversDecodeFailure() {
     recoveredAt: null,
     updateVideoExportProgress() {},
   };
-  applyLocalvideoeditorMixin(app);
-  app.getVideoExportFps = () => 24;
-  app.seekVideoForExport = async () => {
+  const exporter = new VideoExporter(app.editor, app);
+  exporter.getVideoExportFps = () => 24;
+  exporter.seekVideoForExport = async () => {
     app.seekCalls += 1;
     if (app.seekCalls === 1) throw new Error('video_decode_failed');
   };
-  app.recoverVideoSourceForExport = async (time) => {
-    app.videoExportRecoveredSource = true;
+  exporter.recoverVideoSourceForExport = async (time) => {
+    exporter.videoExportRecoveredSource = true;
     app.recoveredAt = time;
   };
-  await app.prepareSequentialVideoExport(2);
+  await exporter.prepareSequentialVideoExport(2);
   assert.equal(app.seekCalls, 2);
   assert.equal(app.recoveredAt, 2);
   assert.equal(app.videoEl.playbackRate, 4);
@@ -1795,16 +1798,17 @@ async function checkExportPlaybackRateRestores() {
     updateVideoEditorUI() {},
     waitForExportVideoFrame: async () => {},
   };
-  applyLocalvideoeditorMixin(app);
-  app.updateVideoEditorUI = () => {};
-  await app.prepareSequentialVideoExport(0);
+  const exporter = new VideoExporter(app.editor, app);
+  exporter.waitForExportVideoFrame = app.waitForExportVideoFrame;
+  exporter.updateVideoEditorUI = () => {};
+  await exporter.prepareSequentialVideoExport(0);
   assert.equal(
     app.videoEl.playbackRate,
     4,
     'sequential export should decode faster than realtime',
   );
   assert.equal(app.videoEl.muted, true);
-  app.cleanupVideoExport(false);
+  exporter.cleanupVideoExport(false);
   assert.equal(
     app.videoEl.playbackRate,
     1.25,
@@ -2323,21 +2327,22 @@ async function checkEffectsOnlyExportSkipsBaseRender() {
       },
     },
   };
-  applyLocalvideoeditorMixin(app);
+  const exporter = new VideoExporter(app.editor, app);
+  exporter.updateVideoExportProgress = app.updateVideoExportProgress.bind(app);
   app.editor.timelineEffects = {
     applyLook() {
       app.lookCalls += 1;
     },
     syncDetectorsAt: async () => {},
   };
-  app.seekVideoForExport = async (time) => {
+  exporter.seekVideoForExport = async (time) => {
     assert.equal(
       time,
       2,
       'effects-only export should seek to trim start for frame zero',
     );
   };
-  await app.renderVideoExportFrame(0, 30, {
+  await exporter.renderVideoExportFrame(0, 30, {
     mode: 'effects-chroma',
     chromaColor: '#00ff00',
   });
@@ -2371,16 +2376,16 @@ async function checkExportFrameProgressThrottlesInnerStages() {
 
     capture: { renderSourceFrameBuffer() {} },
   };
-  applyLocalvideoeditorMixin(app);
-  app.updateVideoExportProgress = (done, total, fps, meta) => {
+  const exporter = new VideoExporter(app.editor, app);
+  exporter.updateVideoExportProgress = (done, total, fps, meta) => {
     calls.push(meta);
   };
-  app.advanceVideoForExport = async () => {};
+  exporter.advanceVideoForExport = async () => {};
   app.editor.timelineEffects = {
     applyLook() {},
     syncDetectorsAt: async () => {},
   };
-  await app.renderVideoExportFrame(1, 30, { mode: 'full' });
+  await exporter.renderVideoExportFrame(1, 30, { mode: 'full' });
   const byStage = Object.fromEntries(calls.map((meta) => [meta.stage, meta]));
   assert.equal(
     byStage.decode.force,

@@ -59,7 +59,6 @@ export interface SourceHost {
   updateVideoEditorUI(): void;
   renderVideoTimeline(): void;
   applyTimelineZoom(): void;
-  cancelVideoExport(): void;
 }
 
 const projectMessages = {
@@ -157,7 +156,8 @@ export class EditorSourceController {
   }
 
   private clear(): void {
-    if (this.editor.exportSession.active) this.host.cancelVideoExport();
+    if (this.editor.exportSession.active)
+      void this.editor.exporter.cancelVideoExport();
     this.editor.source.dispose();
     this.host.renderer.cancelRenderLoop();
     this.host.isRunning = false;

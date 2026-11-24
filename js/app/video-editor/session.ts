@@ -19,6 +19,7 @@ import {
 import { VideoTransport, type TransportOptions } from './transport.ts';
 import { VideoFileSource } from './video-file-source.ts';
 import { VisualFxSession, type VisualFxOptions } from './visual-fx-session.ts';
+import { VideoExporter, type ExportHost } from './export.ts';
 
 interface VideoEditorSessionOptions {
   video: HTMLVideoElement;
@@ -31,6 +32,7 @@ interface VideoEditorSessionOptions {
   transport: Omit<TransportOptions, 'video'>;
   visualFx: Omit<VisualFxOptions, 'getTimeline' | 'getTime' | 'seek'>;
   sourceHost: SourceHost & TimelineEffectsHost;
+  exportHost: ExportHost;
 }
 
 export class VideoEditorSession {
@@ -38,6 +40,7 @@ export class VideoEditorSession {
   timeline = new VideoTimeline();
   readonly history = new EditorHistory();
   readonly exportSession = new VideoExportSession();
+  readonly exporter: VideoExporter;
   readonly timelineView: TimelineView;
   readonly editAssist: EditAssistController;
   readonly projects: EditorProjects;
@@ -55,8 +58,10 @@ export class VideoEditorSession {
     transport,
     visualFx,
     sourceHost,
+    exportHost,
   }: VideoEditorSessionOptions) {
     this.source = new VideoFileSource(video);
+    this.exporter = new VideoExporter(this, exportHost);
     this.timelineView = new TimelineView({ formatTime });
     this.editAssist = new EditAssistController({
       ...editAssist,
@@ -82,8 +87,7 @@ export class VideoEditorSession {
   }
 
   dispose(): void {
-    this.exportSession.stop();
-    void this.exportSession.releaseWakeLock();
+    this.exporter.dispose();
     this.transport.dispose();
     this.source.dispose();
     this.visualFx.dispose();

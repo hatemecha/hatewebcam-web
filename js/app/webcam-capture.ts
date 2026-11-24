@@ -65,7 +65,6 @@ interface CaptureHost {
   imageSettings: ImageSettings;
   camera: Pick<WebcamCamera, 'getStreamSettings'>;
   renderEngine: RenderEngine;
-  videoExportPreflight: { width: number; height: number; fps: number } | null;
   renderer: Pick<
     PreviewRenderer,
     | 'getSourceFrameDimensions'
@@ -74,7 +73,7 @@ interface CaptureHost {
     | 'applySharpenFilter'
   >;
   normalizeCaptureTimerSeconds(value: unknown): number;
-  editor: Pick<VideoEditorSession, 'visualFx'> | null;
+  editor: Pick<VideoEditorSession, 'visualFx' | 'exportSession'> | null;
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -413,13 +412,10 @@ export class WebcamCapture {
       this.host.renderer.getSourceFrameDimensions();
     let { width: recordingWidth, height: recordingHeight } =
       this.host.renderer.getEffectiveFrameDimensions(sourceWidth, sourceHeight);
-    if (
-      this.host.sourceMode === 'video' &&
-      this.host.videoExportPreflight?.width &&
-      this.host.videoExportPreflight?.height
-    ) {
-      recordingWidth = this.host.videoExportPreflight.width;
-      recordingHeight = this.host.videoExportPreflight.height;
+    const preflight = this.host.editor?.exportSession.preflight;
+    if (this.host.sourceMode === 'video' && preflight) {
+      recordingWidth = preflight.width;
+      recordingHeight = preflight.height;
     }
     return this.host.renderEngine.ensureRecordingCanvas(
       recordingWidth,

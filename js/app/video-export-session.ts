@@ -1,3 +1,5 @@
+import type { buildEditorExportPreflight } from '../video-export.ts';
+
 export interface VideoExportSessionOptions {
   now?: () => number;
 }
@@ -12,6 +14,7 @@ export class VideoExportSession {
   seekFallback = false;
   skippedFrames = 0;
   fileName = '';
+  preflight: ReturnType<typeof buildEditorExportPreflight> | null = null;
   wakeLock: WakeLockSentinel | null = null;
 
   constructor({
@@ -43,10 +46,12 @@ export class VideoExportSession {
     this.seekFallback = false;
     this.skippedFrames = 0;
     this.fileName = '';
+    this.preflight = null;
   }
 
   async releaseWakeLock(): Promise<void> {
-    if (this.wakeLock) await this.wakeLock.release().catch(() => {});
+    const wakeLock = this.wakeLock;
     this.wakeLock = null;
+    if (wakeLock) await wakeLock.release().catch(() => {});
   }
 }

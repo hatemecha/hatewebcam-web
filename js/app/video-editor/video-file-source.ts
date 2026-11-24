@@ -14,6 +14,10 @@ export class VideoFileSource {
     return this.current?.file ?? null;
   }
 
+  get signal(): AbortSignal | undefined {
+    return this.current?.controller.signal;
+  }
+
   get loading(): boolean {
     return this.current !== null && this.metadata === null;
   }
@@ -48,13 +52,17 @@ export class VideoFileSource {
     return { ready: this.loadMetadata(source.url, signal), signal };
   }
 
-  async reload(timeoutMs: number): Promise<void> {
+  async reload(timeoutMs: number, exportSignal?: AbortSignal): Promise<void> {
     const source = this.current;
     if (!source) throw new Error('video_decode_failed');
+    const signal = exportSignal
+      ? AbortSignal.any([source.controller.signal, exportSignal])
+      : source.controller.signal;
+    signal.throwIfAborted();
     const nextUrl = URL.createObjectURL(source.file);
     try {
-      await this.loadMetadata(nextUrl, source.controller.signal, timeoutMs);
-      source.controller.signal.throwIfAborted();
+      await this.loadMetadata(nextUrl, signal, timeoutMs);
+      signal.throwIfAborted();
       URL.revokeObjectURL(source.url);
       source.url = nextUrl;
     } catch (error) {
@@ -96,7 +104,11 @@ export class VideoFileSource {
       };
       const cleanup = new AbortController();
       const onAbort = () =>
-        finish(new DOMException('Video source released', 'AbortError'));
+        finish(
+          signal.reason instanceof Error
+            ? signal.reason
+            : new DOMException('Video source released', 'AbortError'),
+        );
       const timer =
         timeoutMs === undefined
           ? undefined
