@@ -1,17 +1,7 @@
 import js from '@eslint/js';
+import svelte from 'eslint-plugin-svelte';
 import globals from 'globals';
-
-const browserGlobals = {
-  ...globals.browser,
-  BlobTracking: 'readonly',
-  BlinkDetection: 'readonly',
-  CameraManager: 'readonly',
-  EditorHistory: 'readonly',
-  EffectManager: 'readonly',
-  FaceDetection: 'readonly',
-  FaceMesh: 'readonly',
-  VideoTimeline: 'readonly',
-};
+import tseslint from 'typescript-eslint';
 
 const baseRules = {
   eqeqeq: ['error', 'always', { null: 'ignore' }],
@@ -35,30 +25,47 @@ export default [
       'vendor/**',
       'coverage/**',
       'playwright-report/**',
+      'test-results/**',
       '.impeccable/**',
     ],
   },
   js.configs.recommended,
+  ...svelte.configs['flat/recommended'].map((config) =>
+    config.name === 'svelte:recommended:rules'
+      ? { ...config, files: ['**/*.svelte'] }
+      : config,
+  ),
+  ...tseslint.configs.recommended.map((config) => ({
+    ...config,
+    files: config.files ?? ['**/*.ts', '**/*.mts'],
+  })),
   {
-    files: ['js/**/*.{js,mjs}'],
+    files: ['**/*.svelte'],
     languageOptions: {
-      ecmaVersion: 'latest',
-      sourceType: 'module',
-      globals: browserGlobals,
-    },
-    rules: baseRules,
-  },
-  {
-    files: ['js/workers/**/*.js'],
-    languageOptions: {
-      ecmaVersion: 'latest',
-      sourceType: 'script',
-      globals: {
-        ...globals.worker,
-        FaceMesh: 'readonly',
+      globals: globals.browser,
+      parserOptions: {
+        parser: tseslint.parser,
       },
     },
-    rules: baseRules,
+    rules: {
+      'no-undef': 'off',
+      'no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+          ignoreRestSiblings: true,
+          varsIgnorePattern: '^_',
+        },
+      ],
+    },
+  },
+  {
+    files: ['src/**/*.{ts,svelte}', 'js/**/*.ts'],
+    rules: {
+      eqeqeq: baseRules.eqeqeq,
+      'no-console': ['error', { allow: ['warn', 'error'] }],
+    },
   },
   {
     files: ['tests/**/*.mjs', 'scripts/**/*.mjs', 'playwright.config.mjs'],
@@ -67,7 +74,7 @@ export default [
       sourceType: 'module',
       globals: {
         ...globals.node,
-        ...browserGlobals,
+        ...globals.browser,
       },
     },
     rules: {

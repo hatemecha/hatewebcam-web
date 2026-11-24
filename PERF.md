@@ -2,6 +2,15 @@
 
 Notas de ingeniería sobre decisiones de rendimiento. Para reproducir números, usar `scripts/recording-benchmark.mjs` contra un build de producción (`npm run build` + servir `dist/`).
 
+## Carga inicial y editor diferido
+
+El bootstrap webcam no importa el motor del editor. `js/app/editor-install.mjs`
+(timeline, Edit Assist, sesión de exportación y Visual FX) se solicita con `import()`
+en el primer cambio a Video. Referencia del build de producción sin comprimir:
+~312 kB de JS inicial principal + ~45 kB de chunks compartidos, y ~119 kB en el chunk
+diferido del editor. La prueba `webcam boot defers the editor chunk until video mode`
+falla si el editor se descarga antes de entrar a Video.
+
 ## Detector en tiempo real
 
 La grabación reutiliza la última detección del worker cuando está ocupado; no repite lectura de píxeles ni análisis síncrono en la UI. La exportación sigue usando análisis exacto por fotograma.

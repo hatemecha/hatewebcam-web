@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
-import { applyRenderLoopMixin } from '../../js/app/render.mjs';
-import { DEFAULT_IMAGE_SETTINGS } from '../../js/app/constants.mjs';
+import { PreviewRenderer } from '../../js/app/preview-renderer.ts';
+import { DEFAULT_IMAGE_SETTINGS } from '../../js/app/constants.ts';
 
 async function openWebcam(page) {
   await page.goto('/');
@@ -57,6 +57,7 @@ test('permission denied is explained and recoverable in the preview', async ({
   );
   await expect(page.locator('#cameraStateHint')).toContainText('permisos');
   await expect(page.locator('#btnCameraStateAction')).toHaveText(/Reintentar/);
+  await expect(page.locator('#btnCameraStateAction')).toBeFocused();
   await expect(page.locator('#previewPlaceholderCamera')).toHaveAttribute(
     'role',
     'status',
@@ -84,6 +85,42 @@ test('retry starts the camera after a transient error', async ({ page }) => {
   );
   await page.locator('#btnCameraStateAction').click();
   await waitForCamera(page);
+});
+
+test('switching to video releases a camera stream acquired after the mode change', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const devices = navigator.mediaDevices;
+    const acquire = devices.getUserMedia.bind(devices);
+    devices.getUserMedia = async (constraints) => {
+      const stream = await acquire(constraints);
+      window.delayedCameraStream = stream;
+      await new Promise((resolve) => {
+        window.releaseCameraRequest = resolve;
+      });
+      return stream;
+    };
+  });
+  await openWebcam(page);
+  await expect
+    .poll(() => page.evaluate(() => !!window.releaseCameraRequest))
+    .toBe(true);
+  await page.locator('#btnVideoMode').click();
+  await expect(page.locator('body')).toHaveClass(/video-mode/);
+  await page.evaluate(() => window.releaseCameraRequest());
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.delayedCameraStream
+          .getVideoTracks()
+          .every((track) => track.readyState === 'ended'),
+      ),
+    )
+    .toBe(true);
+  expect(
+    await page.locator('#videoElement').evaluate((video) => video.srcObject),
+  ).toBeNull();
 });
 
 test('mirror is quick, accessible and persisted', async ({ page }) => {
@@ -324,17 +361,16 @@ test('black and white recording keeps moving and produces a playable video', asy
 
 test('simplified recording filters preserve pixel colors', async ({ page }) => {
   const app = { imageSettings: { ...DEFAULT_IMAGE_SETTINGS } };
-  applyRenderLoopMixin(app);
-  app.clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+  const renderer = new PreviewRenderer(app);
   const filters = [];
   for (const blackAndWhite of [false, true]) {
     for (const exposure of [0, 30, -40]) {
       for (const contrast of [100, 140]) {
         Object.assign(app.imageSettings, { blackAndWhite, exposure, contrast });
-        const values = app.getBaseFilterValues();
+        const values = renderer.getBaseFilterValues();
         filters.push({
           original: `brightness(${values.exposureBoost}%) contrast(${values.contrastPercent}%) saturate(${values.saturationPercent}%) grayscale(${values.grayscalePercent}%)`,
-          optimized: app.buildCanvasFilter(),
+          optimized: renderer.buildCanvasFilter(),
         });
       }
     }

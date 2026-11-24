@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 const SUBJECT_VIDEO_FIXTURE = fileURLToPath(
@@ -31,6 +32,115 @@ test('video editor shell loads without fatal errors', async ({ page }) => {
   expect(fatalMessages).toEqual([]);
 });
 
+test('webcam boot defers the editor chunk until video mode', async ({
+  page,
+}) => {
+  const editorChunks = [];
+  page.on('request', (request) => {
+    if (/\/assets\/editor-install-/.test(request.url())) {
+      editorChunks.push(request.url());
+    }
+  });
+
+  await page.goto('/');
+  // Observable app readiness: the fake camera is running before any editor
+  // request may be asserted.
+  await expect(page.locator('#previewPlaceholder')).toHaveClass(/hidden/);
+  expect(editorChunks).toEqual([]);
+
+  await page.getByRole('tab', { name: /video/i }).click();
+  await expect(page.locator('#btnPreviewImportVideo')).toBeVisible();
+  expect(editorChunks.length).toBeGreaterThan(0);
+
+  // Switching back and forth keeps a single mounted editor shell.
+  await page.locator('#videoFileInput').setInputFiles(SUBJECT_VIDEO_FIXTURE);
+  await expect(page.locator('#videoTimelineShell')).toBeVisible();
+  const chunkRequests = editorChunks.length;
+  await page.getByRole('tab', { name: /webcam/i }).click();
+  await expect(page.locator('#videoTimelineShell')).toBeHidden();
+  await page.getByRole('tab', { name: /video/i }).click();
+  await expect(page.locator('#btnPreviewImportVideo')).toBeVisible();
+  expect(editorChunks.length).toBe(chunkRequests);
+  await expect(page.locator('#videoFileInput')).toHaveCount(1);
+  await expect(page.locator('#videoTimeline')).toHaveCount(1);
+});
+
+test('an import requested while startup reads settings reaches the editor', async ({
+  page,
+}) => {
+  const video = await readFile(SUBJECT_VIDEO_FIXTURE, 'base64');
+  await page.addInitScript((encoded) => {
+    const getItem = Storage.prototype.getItem;
+    Storage.prototype.getItem = function (key) {
+      if (key === 'hatewebcam_config') {
+        Storage.prototype.getItem = getItem;
+        document.querySelector('#btnVideoMode').click();
+        const input = document.querySelector('#videoFileInput');
+        const transfer = new DataTransfer();
+        const bytes = Uint8Array.from(atob(encoded), (byte) =>
+          byte.charCodeAt(0),
+        );
+        transfer.items.add(
+          new File([bytes], 'inicio.webm', { type: 'video/webm' }),
+        );
+        input.files = transfer.files;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      return getItem.call(this, key);
+    };
+  }, video);
+  await page.goto('/');
+  await expect(page.locator('#videoTimelineShell')).toBeVisible();
+  await expect(page.locator('#videoFileMeta')).toContainText('inicio.webm');
+  await expect(page.locator('#videoFileInput')).toHaveValue('');
+});
+
+test('a pending editor load honors the most recent mode choice', async ({
+  page,
+}) => {
+  let resolveRequest;
+  const requested = new Promise((resolve) => {
+    resolveRequest = resolve;
+  });
+  let release;
+  const unblocked = new Promise((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/assets/editor-install-*.js', async (route) => {
+    resolveRequest();
+    await unblocked;
+    await route.continue();
+  });
+  await page.goto('/');
+  const webcam = page.getByRole('tab', { name: /webcam/i });
+  const video = page.getByRole('tab', { name: /video/i });
+  await video.click();
+  await requested;
+  await webcam.click();
+  const editorResponse = page.waitForResponse('**/assets/editor-install-*.js');
+  release();
+  await (await editorResponse).finished();
+  await expect(webcam).toHaveAttribute('aria-selected', 'true');
+  await video.click();
+  await expect(page.locator('#btnPreviewImportVideo')).toBeVisible();
+});
+
+test('the editor can retry after its lazy chunk fails to load', async ({
+  page,
+}) => {
+  await page.route('**/assets/editor-install-*.js', (route) => route.abort(), {
+    times: 1,
+  });
+  await page.goto('/');
+  const videoTab = page.getByRole('tab', { name: /video/i });
+  await videoTab.click();
+  await expect(page.locator('#captureStatus')).toContainText(
+    'No se pudo abrir el editor',
+  );
+  await videoTab.click();
+  await expect(page.locator('#btnPreviewImportVideo')).toBeVisible();
+});
+
 test('video empty state stays usable on a narrow screen', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
@@ -59,6 +169,33 @@ test('video empty state stays usable on a narrow screen', async ({ page }) => {
   expect(layout.inspectorTop).toBeGreaterThanOrEqual(layout.previewBottom);
 });
 
+test('header export follows source mode and video availability', async ({
+  page,
+}) => {
+  await page.goto('/');
+
+  await expect(page.locator('#btnWebcamMode')).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(page.locator('#btnHeaderExportVideo')).toBeHidden();
+
+  await page.getByRole('tab', { name: /video/i }).click();
+  await expect(page.locator('#btnVideoMode')).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(page.locator('#btnHeaderExportVideo')).toBeVisible();
+  await expect(page.locator('#btnHeaderExportVideo')).toBeDisabled();
+
+  await page.locator('#videoFileInput').setInputFiles(SUBJECT_VIDEO_FIXTURE);
+  await expect(page.locator('#videoTimelineShell')).toBeVisible();
+  await expect(page.locator('#btnHeaderExportVideo')).toBeEnabled();
+
+  await page.getByRole('tab', { name: /webcam/i }).click();
+  await expect(page.locator('#btnHeaderExportVideo')).toBeHidden();
+});
+
 test('specific-color detection exposes an editable target color', async ({
   page,
 }) => {
@@ -74,10 +211,33 @@ test('specific-color detection exposes an editable target color', async ({
   await expect(page.locator('#cfgTargetColorStatus')).toContainText(
     'Color objetivo actualizado.',
   );
+  await page.locator('#btnAdvancedHsv').click();
+  await page.locator('#sldHMin').fill('20');
+  await expect(page.locator('#valHMin')).toHaveText('20');
+  await page.locator('input[name="detMode"][value="lights"]').check();
+  await expect(targetColor).toBeHidden();
+  await page.locator('input[name="detMode"][value="manual"]').check();
+  await expect(targetColor).toHaveValue('#2a7fff');
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const settings = JSON.parse(localStorage.getItem('hatewebcam_config'));
+        return settings?.effectSettings?.blob?.hsvMin?.[0];
+      }),
+    )
+    .toBe(20);
 });
 
-test('template boot failure shows a visible error', async ({ page }) => {
-  await page.route('**/templates/video-editor.html', (route) => route.abort());
+test('boot failure shows a visible error', async ({ page }) => {
+  // Simulate a broken document contract: the controller cannot start without
+  // its base preview elements and must render the recoverable boot error.
+  await page.addInitScript(() => {
+    const querySelector = Document.prototype.querySelector;
+    Document.prototype.querySelector = function (selector) {
+      if (selector === '#previewCanvas') return null;
+      return querySelector.call(this, selector);
+    };
+  });
 
   await page.goto('/');
 
@@ -255,4 +415,31 @@ test('language follows the browser and a discreet persisted override', async ({
   await expect(spanishPage.locator('#languageSelect')).toHaveValue('es');
   await expect(spanishPage.locator('html')).toHaveAttribute('lang', 'es');
   await spanishContext.close();
+});
+
+test('language can change while the camera is running', async ({ browser }) => {
+  const context = await browser.newContext({ locale: 'es-AR' });
+  const page = await context.newPage();
+  await page.goto('/');
+  await expect(page.locator('#previewPlaceholder')).toHaveClass(/hidden/);
+  await expect(page.locator('#btnMirrorQuick')).toHaveAttribute(
+    'title',
+    'Espejo horizontal en vista y captura',
+  );
+  await page.locator('#languageSelect').selectOption('en');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await expect(page.locator('#btnMirrorQuick')).toHaveAttribute(
+    'title',
+    'Horizontal mirror for preview and capture',
+  );
+  await expect(page.locator('#btnToggleCamera')).toContainText('Turn off');
+  await page.locator('#btnRecord').click();
+  await expect(page.locator('#captureStatus')).toContainText(
+    /Recording started/i,
+  );
+  await page.locator('#btnRecord').click();
+  await expect(page.locator('#captureStatus')).toContainText(
+    /Recording stopped|Video ready/i,
+  );
+  await context.close();
 });

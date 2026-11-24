@@ -6,16 +6,16 @@ adapters. Creative configurations have their own version (4).
 
 ## Architecture
 
-`js/visual-fx/gl.mjs` is a minimal WebGL2/WebGL1 toolkit (context creation, FBOs,
+`js/visual-fx/gl.ts` is a minimal WebGL2/WebGL1 toolkit (context creation, FBOs,
 ping-pong render targets, a shared fullscreen quad). Every pass shares one GLSL ES
 1.00 source set, so it compiles unchanged under either context - WebGL2 is preferred
 and gives float render targets for the signal buffers below; WebGL1 falls back to
 `UNSIGNED_BYTE` automatically when the extension or framebuffer completeness check
-fails. `js/visual-fx/glsl.mjs` holds the shared function library (hash/value-noise/
-fbm/curl field, luma, palette mapping, dither). `js/visual-fx/passes.mjs` and
-`js/visual-fx/systems.mjs` hold the actual pass shaders.
+fails. `js/visual-fx/glsl.ts` holds the shared function library (hash/value-noise/
+fbm/curl field, luma, palette mapping, dither). `js/visual-fx/passes.ts` and
+`js/visual-fx/systems.ts` hold the actual pass shaders.
 
-`js/visual-fx/pipeline.mjs` runs six passes per frame, entirely at a low internal
+`js/visual-fx/pipeline.ts` runs six passes per frame, entirely at a low internal
 "pixel space" resolution (96-256px wide depending on system and the `grain` tuning
 value), before one full-resolution blend at the end:
 
@@ -29,14 +29,14 @@ PALETTE + SOURCE --(nearest upscale + intensity blend)--> screen
 ```
 
 `INGEST`, `CONTROL FIELD`, `DRIFT FIELD` and `HISTORY` are ping-pong pairs (see
-`PingPong` in `gl.mjs`): each pass reads its own previous output as an input, which
+`PingPong` in `gl.ts`): each pass reads its own previous output as an input, which
 is what makes this real feedback rather than `mix(currentFrame, previousFrame)`.
 Quantization only ever happens in the palette pass, on the way to the screen - the
 stored history stays continuous so error never compounds into mud over hundreds of
-frames. `js/visual-fx/renderer.mjs` owns the pipeline's lifetime and GPU resource
-cleanup; `js/visual-fx/effect.mjs` owns activation, optional person/background
+frames. `js/visual-fx/renderer.ts` owns the pipeline's lifetime and GPU resource
+cleanup; `js/visual-fx/effect.ts` owns activation, optional person/background
 analysis and final mask compositing (unchanged from before - the mask is applied
-after image processing and history, not baked into the renderer). `fallback.mjs`
+after image processing and history, not baked into the renderer). `fallback.ts`
 supplies a bounded CPU approximation (grid quantize + a rotated/scaled trail) for
 browsers without WebGL.
 
@@ -49,7 +49,7 @@ partially desaturates its own history - material flowing and dissolving), `pixel
 the control field, so active cells refresh while static ones hold - pixel as
 material, not a pixelate filter) and `trace` (edges/frame-difference are the actual
 material fed into a decay-then-stamp afterimage buffer, so structure can outlive the
-source). `js/visual-fx/systems.mjs` maps four macros (`intensity`, `memory`,
+source). `js/visual-fx/systems.ts` maps four macros (`intensity`, `memory`,
 `structure`, `movement`, all 0..1) plus a small per-system tuning set (2-3 extra
 values, always including `grain` and `palette`) onto the actual pass uniforms with
 curated, non-linear curves - a macro is a mapped control, never a 1:1 alias of a
@@ -57,9 +57,9 @@ single shader uniform.
 
 ## Palette
 
-Colour is curated, not a colour picker. `PALETTE_OPTIONS` in `config.mjs` is a fixed
+Colour is curated, not a colour picker. `PALETTE_OPTIONS` in `config.ts` is a fixed
 list (source-restrained, monochrome, warm monochrome, cold monochrome, duotone) with
-per-system default tones defined in `systems.mjs`. Quantization levels, contrast
+per-system default tones defined in `systems.ts`. Quantization levels, contrast
 curve and dither amount all follow the `structure` macro.
 
 ## Targeting
@@ -81,7 +81,7 @@ This is the part that matters most for the instrument to feel alive:
 - **STATE-SAFE** (never reset the running simulation): any macro, the `target`
   (Todo/Persona/Fondo), and any non-topology tuning value (e.g. `spin`,
   `turbulence`, `jitter`, `persistBias`, `palette`). `visualConfigTopologyKey()` in
-  `config.mjs` is the single source of truth for what counts as topology.
+  `config.ts` is the single source of truth for what counts as topology.
 - **STATE-BREAKING** (resets): switching `system`, a topology-flagged tuning value
   (`grain`, i.e. internal resolution), source/seek/clip changes, and an
   incompatible render size (preview/export switch, output resize).

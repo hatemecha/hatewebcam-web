@@ -22,6 +22,7 @@ Antes de enviar un pull request:
 ```bash
 npm run format:check
 npm run lint
+npm run typecheck
 npm test
 npm run build
 npm run test:browser

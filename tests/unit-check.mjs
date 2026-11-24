@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   getProcessingFrameDimensions,
   getPreviewFrameDimensions,
-} from '../js/preview-metrics.mjs';
+} from '../js/preview-metrics.ts';
 import {
   calculateExportBitrate,
   calculateFrameDurationUs,
@@ -20,60 +22,117 @@ import {
   buildEditorExportPreflight,
   snapFrameRate,
   shouldAppendFinalFrame,
-} from '../js/video-export.mjs';
-import { CameraManager } from '../js/core/camera-manager.mjs';
-import { VideoTimeline } from '../js/editor/video-timeline.mjs';
-import { EditorHistory } from '../js/editor/editor-history.mjs';
-import { BlobTracking } from '../js/effects/blob-tracking.mjs';
-import { BlinkDetection } from '../js/effects/blink-detection.mjs';
-import { FaceDetection } from '../js/effects/face-detection.mjs';
-import { RENDER_PROFILES } from '../js/app/render-engine.mjs';
-import { calculateTimelineTickInterval } from '../js/app/timeline-view.mjs';
+} from '../js/video-export.ts';
+import { CameraManager } from '../js/core/camera-manager.ts';
+import { createFaceMesh } from '../js/effects/face-mesh-client.ts';
+import {
+  classifyCameraError,
+  getCameraStatePresentation,
+} from '../js/app/camera-state.ts';
+import {
+  formatBytes,
+  formatDuration,
+  formatDurationDetailed,
+  formatVideoBitrate,
+  formatVideoFps,
+  getRecommendedVideoBitrate,
+  normalizeVideoFps,
+  pickSupportedMimeType,
+  snapVideoSourceFps,
+  timestamp,
+} from '../js/app/media-format.ts';
+import { VideoTimeline } from '../js/editor/video-timeline.ts';
+import { EditorHistory } from '../js/editor/editor-history.ts';
+import { BlobTracking } from '../js/effects/blob-tracking.ts';
+import { BlinkDetection } from '../js/effects/blink-detection.ts';
+import { FaceDetection } from '../js/effects/face-detection.ts';
+import { RENDER_PROFILES } from '../js/app/render-engine.ts';
+import { calculateTimelineTickInterval } from '../js/app/timeline-view.ts';
 import {
   DEFAULT_IMAGE_SETTINGS,
   PERFORMANCE_MODE_PRESETS,
   TIMELINE_TRACK_COUNT,
-  normalizePerformanceMode,
-} from '../js/app/constants.mjs';
-import { EditAssistController } from '../js/app/edit-assist-controller.mjs';
-import { SettingsStore } from '../js/app/settings-store.mjs';
-import { applyEffectsMixin } from '../js/app/effects.mjs';
-import { applyCameraMixin } from '../js/app/camera.mjs';
-import { applyRenderLoopMixin } from '../js/app/render.mjs';
-import { applyLocalvideoeditorMixin } from '../js/app/video-editor.mjs';
+} from '../js/app/constants.ts';
+import { EditAssistController } from '../js/app/edit-assist-controller.ts';
+import {
+  getEditorUiState,
+  subscribeEditorUiState,
+  updateEditorUiState,
+} from '../src/lib/editor/editor-state.ts';
+import { SettingsStore } from '../js/app/settings-store.ts';
+import { loadWebcamSettings } from '../js/app/webcam-settings.ts';
+import { Detectors } from '../js/app/detectors.ts';
+import { WebcamCamera } from '../js/app/webcam-camera.ts';
+import {
+  TimelineEffects,
+  automationIntensity,
+  blendLook,
+} from '../js/app/video-editor/timeline-effects.ts';
+import { normalizeLookClipConfig } from '../js/app/video-editor/look-config.ts';
+import { VideoTransport } from '../js/app/video-editor/transport.ts';
+import { EditorProjects } from '../js/app/video-editor/projects.ts';
+import { PreviewRenderer } from '../js/app/preview-renderer.ts';
+import { VideoExporter } from '../js/app/video-editor/export.ts';
+import { applyEditorExportPreset } from '../js/app/export-settings.ts';
+import { EditorWorkspace } from '../js/app/video-editor/workspace.ts';
 import {
   createDefaultVisualConfig,
   migrateProjectToV2,
   normalizeVisualConfig,
-} from '../js/visual-fx/config.mjs';
-import { SubjectMotionAnalyzer } from '../js/subject/subject-motion.mjs';
-import { createSeededRandom, seededInt } from '../js/subject/subject-prng.mjs';
-import { applyVisualFxIntegrationMixin } from '../js/app/visual-fx-integration.mjs';
+} from '../js/visual-fx/config.ts';
+import { SubjectMotionAnalyzer } from '../js/subject/subject-motion.ts';
+import { createSeededRandom, seededInt } from '../js/subject/subject-prng.ts';
+import { VisualFxSession } from '../js/app/video-editor/visual-fx-session.ts';
 import {
   SubjectMask,
   normalizeMaskBuffer,
   smoothMaskTemporal,
-} from '../js/subject/subject-mask.mjs';
+} from '../js/subject/subject-mask.ts';
 import {
   buildLocalMotionRegions,
   getMotionAt,
   getStrongestMotionRegion,
-} from '../js/subject/subject-local-motion.mjs';
+} from '../js/subject/subject-local-motion.ts';
 import {
   mapNormToCanvas,
   mapNormToSubjectSpace,
   getVideoDrawMetrics,
-} from '../js/subject/subject-frame-map.mjs';
-import { SubjectAnalysisCache } from '../js/subject/subject-cache.mjs';
+} from '../js/subject/subject-frame-map.ts';
+import { SubjectAnalysisCache } from '../js/subject/subject-cache.ts';
 import {
   SUBJECT_ANALYSIS_STATUS,
   SubjectAnalyzer,
-} from '../js/subject/subject-analyzer.mjs';
-import { resolveSubjectAssetUrls } from '../js/subject/mediapipe-paths.mjs';
+} from '../js/subject/subject-analyzer.ts';
+import { resolveSubjectAssetUrls } from '../js/subject/mediapipe-paths.ts';
 import {
   estimateTempoFromSamples,
   extractMediaAudioSamples,
-} from '../js/audio-tempo-analyzer.mjs';
+} from '../js/audio-tempo-analyzer.ts';
+import {
+  getShellState,
+  subscribeShellState,
+  updateShellState,
+} from '../src/lib/shell/shell-bridge.ts';
+import {
+  getDetectorChips,
+  subscribeDetectorChips,
+  updateDetectorChip,
+} from '../src/lib/preview/preview-bridge.ts';
+import {
+  getCameraSourceState,
+  resetCameraSourceState,
+  resolveCameraDeviceSelection,
+  subscribeCameraSourceState,
+  updateCameraSourceState,
+} from '../src/lib/webcam/camera-source-bridge.ts';
+import { deriveDetectorExtras } from '../src/lib/webcam/panel-state.ts';
+import { englishMessages } from '../src/lib/i18n/catalog.ts';
+import { setLocale } from '../src/lib/i18n/locale-state.ts';
+import { translate } from '../src/lib/i18n/translate.ts';
+import {
+  PhotoCountdown,
+  RecordingSession,
+} from '../src/lib/capture/media-sessions.ts';
 
 function mockGlobal(name, value) {
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, name);
@@ -105,6 +164,46 @@ function checkSettingsStoreRejectsNonObjectState() {
     storage: { getItem: () => JSON.stringify(saved) },
   });
   assert.deepEqual(store.loadObject('settings'), saved);
+}
+
+function checkWebcamSettingsMigrateOnce() {
+  let saved = {
+    flipH: true,
+    quickDetectorSettings: {
+      faceVisualMode: 'pixelate',
+      faceLabelText: 'TEST',
+    },
+    imageSettings: { previewQuality: 'high', exposure: 12 },
+    effectSettings: { blob: { targetColor: '#112233' } },
+  };
+  let writes = 0;
+  const store = new SettingsStore({
+    storage: {
+      getItem: () => JSON.stringify(saved),
+      setItem: (_key, value) => {
+        writes += 1;
+        saved = JSON.parse(value);
+      },
+    },
+  });
+  const migrated = loadWebcamSettings(store);
+  assert.equal(migrated.flipH, false);
+  assert.equal(migrated.quickDetectorSettings.faceShowBox, true);
+  assert.equal(migrated.quickDetectorSettings.faceShowBlur, false);
+  assert.equal(migrated.quickDetectorSettings.faceLabelText, 'TEST');
+  assert.deepEqual(migrated.imageSettings, {
+    previewQuality: 'balanced',
+    exposure: 12,
+  });
+  assert.equal(migrated.effectSettings.blob.targetColor, '#112233');
+  assert.equal(writes, 4);
+
+  saved.flipH = true;
+  saved.imageSettings.previewQuality = 'high';
+  const restarted = loadWebcamSettings(store);
+  assert.equal(restarted.flipH, true);
+  assert.equal(restarted.imageSettings.previewQuality, 'high');
+  assert.equal(writes, 4);
 }
 
 async function checkCameraStreamCleanup() {
@@ -181,6 +280,64 @@ function checkCameraPreservesSupportedFps() {
     30,
     'an explicit camera FPS should be preserved',
   );
+}
+
+async function checkFaceMeshFallsBackAfterClassicWorkerFailure() {
+  let workerTerminated = false;
+  let fallbackInitialized = false;
+  let fallbackImage = null;
+  class ClassicWorker {
+    constructor(url, options) {
+      assert.match(url.pathname, /face-mesh-worker\.ts$/);
+      assert.equal(options, undefined);
+    }
+    postMessage(message) {
+      assert.equal(message.type, 'init');
+      queueMicrotask(() =>
+        this.onmessage({
+          data: { id: message.id, error: 'worker_init_failed' },
+        }),
+      );
+    }
+    terminate() {
+      workerTerminated = true;
+    }
+  }
+  class FaceMeshFallback {
+    setOptions() {}
+    onResults() {}
+    async initialize() {
+      fallbackInitialized = true;
+    }
+    async send({ image }) {
+      fallbackImage = image;
+    }
+    async close() {}
+  }
+  const restore = [
+    mockGlobal('document', { baseURI: 'http://localhost/' }),
+    mockGlobal('Worker', ClassicWorker),
+    mockGlobal('OffscreenCanvas', class {}),
+    mockGlobal('createImageBitmap', () => {
+      throw new Error('Fallback should receive the original image');
+    }),
+    mockGlobal('HATEWEBCAM_FACE_MESH_WORKER', true),
+    mockGlobal('FaceMesh', FaceMeshFallback),
+  ];
+  try {
+    const mesh = createFaceMesh({
+      locateFile: (file) => 'vendor/face_mesh/' + file,
+    });
+    await mesh.initialize();
+    assert.equal(workerTerminated, true);
+    assert.equal(fallbackInitialized, true);
+    const image = {};
+    await mesh.send({ image });
+    assert.equal(fallbackImage, image);
+    await mesh.close();
+  } finally {
+    for (const restoreGlobal of restore.reverse()) restoreGlobal();
+  }
 }
 
 function checkReusableMorphologyBuffers() {
@@ -440,32 +597,18 @@ function checkBlinkDetectionUsesRefinedEyeLandmarks() {
 }
 
 async function checkBlinkCallbackClearsWhenBlobDisabled() {
-  const app = {
-    chkBlobTracking: { checked: false },
-    blobTrackingEffect: {},
-    blinkDetectionEffect: {
-      callback: () => {},
-      setBlinkCallback(callback) {
-        this.callback = callback;
-      },
+  const detectors = new Detectors({});
+  detectors.blob = {};
+  detectors.blink = {
+    callback: () => {},
+    setBlinkCallback(callback) {
+      this.callback = callback;
     },
-    effectManager: {
-      removeEffect(effect) {
-        assert.equal(effect, app.blobTrackingEffect);
-      },
-    },
-    effectsInfo: { textContent: '' },
-    colorPickSection: { classList: { add() {}, remove() {} } },
-    syncQuickDetectorSettingsFromEffects() {},
-    saveActiveEffectSettings() {},
-    renderEffectConfig() {},
-    updateEffectsInfo() {},
   };
-  applyEffectsMixin(app);
-  await app.toggleEffect('blob');
-  assert.equal(app.blobTrackingEffect, null);
+  await detectors.setEnabled('blob', false, { quiet: true });
+  assert.equal(detectors.blob, null);
   assert.equal(
-    app.blinkDetectionEffect.callback,
+    detectors.blink.callback,
     null,
     'blink must stop calling color tracking when color detector is disabled',
   );
@@ -719,7 +862,6 @@ function checkEditAssistManualControls() {
     getSourceFile: () => ({}),
     getTimeline: () => timeline,
     isExporting: () => false,
-    getElements: () => ({}),
     pushHistory() {},
     renderTimeline() {},
     updateTimelineHint() {},
@@ -751,6 +893,21 @@ function checkEditAssistManualControls() {
   controller.clearMarkers();
   assert.equal(timeline.getMarkersBySource('edit-assist').length, 0);
   assert.equal(timeline.getMarkersBySource('user').length, 1);
+}
+
+async function checkEditAssistDiscardsAnalysisAfterSourceReset() {
+  let resolveAnalysis;
+  const controller = new EditAssistController(
+    { getSourceFile: () => ({}) },
+    () => new Promise((resolve) => (resolveAnalysis = resolve)),
+  );
+  const analysis = controller.analyze();
+  assert.equal(controller.isAnalyzing, true);
+  controller.reset();
+  resolveAnalysis({ bpm: 120, confidence: 0.8, beats: [] });
+  await analysis;
+  assert.equal(controller.result, null);
+  assert.equal(controller.isAnalyzing, false);
 }
 
 async function checkMediaAudioExtraction() {
@@ -825,38 +982,31 @@ function checkStableExportDefaults() {
 }
 
 function checkEditorExportPresets() {
-  const app = {
-    imageSettings: { ...DEFAULT_IMAGE_SETTINGS },
-    updateImageControlsUI() {},
-    updateVideoEditorUI() {},
-    saveImageSettings() {},
-  };
-  applyLocalvideoeditorMixin(app);
-  app.updateImageControlsUI = () => {};
-  app.updateVideoEditorUI = () => {};
-  app.saveImageSettings = () => {};
-  app.applyEditorExportPreset('experimental-mp4');
-  assert.equal(app.imageSettings.editorExportPreset, 'experimental-mp4');
-  assert.equal(app.imageSettings.experimentalExportFeatures, true);
-  assert.equal(app.imageSettings.editorExportFormat, 'mp4');
-  assert.equal(app.imageSettings.editorCopyAudio, true);
+  const imageSettings = { ...DEFAULT_IMAGE_SETTINGS };
+  applyEditorExportPreset(imageSettings, 'experimental-mp4');
+  assert.equal(imageSettings.editorExportPreset, 'experimental-mp4');
+  assert.equal(imageSettings.experimentalExportFeatures, true);
+  assert.equal(imageSettings.editorExportFormat, 'mp4');
+  assert.equal(imageSettings.editorCopyAudio, true);
 
-  app.applyEditorExportPreset('chroma');
-  assert.equal(app.imageSettings.editorExportMode, 'effects-chroma');
-  assert.equal(app.imageSettings.editorExportFormat, 'webm');
-  assert.equal(app.imageSettings.editorCopyAudio, false);
+  applyEditorExportPreset(imageSettings, 'chroma');
+  assert.equal(imageSettings.editorExportMode, 'effects-chroma');
+  assert.equal(imageSettings.editorExportFormat, 'webm');
+  assert.equal(imageSettings.editorCopyAudio, false);
 }
 
 function checkTimelineClipSnappingHelper() {
   const app = {
-    videoTimeline: {
-      trimStart: 0,
-      trimEnd: 10,
-      duration: 10,
-      markers: [{ id: 'm1', time: 2.5 }],
-      items: [{ id: 'a', type: 'blob', startTime: 1, endTime: 4 }],
-      getSnapPoints() {
-        return [this.trimStart, this.trimEnd, this.markers[0].time, 1, 4];
+    editor: {
+      timeline: {
+        trimStart: 0,
+        trimEnd: 10,
+        duration: 10,
+        markers: [{ id: 'm1', time: 2.5 }],
+        items: [{ id: 'a', type: 'blob', startTime: 1, endTime: 4 }],
+        getSnapPoints() {
+          return [this.trimStart, this.trimEnd, this.markers[0].time, 1, 4];
+        },
       },
     },
     videoEl: { currentTime: 6 },
@@ -864,9 +1014,9 @@ function checkTimelineClipSnappingHelper() {
     timelineZoom: 1,
     clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
   };
-  applyLocalvideoeditorMixin(app);
+  const workspace = new EditorWorkspace(app.editor, app, app);
   assert.deepEqual(
-    app.resolveTimelineClipTimes({
+    workspace.resolveTimelineClipTimes({
       type: 'blob',
       startTime: 4.04,
       endTime: 7.04,
@@ -875,7 +1025,7 @@ function checkTimelineClipSnappingHelper() {
     'new clips must snap to the nearest same-track edge',
   );
   assert.deepEqual(
-    app.resolveTimelineClipTimes({
+    workspace.resolveTimelineClipTimes({
       type: 'face',
       startTime: 5.9,
       endTime: 7.9,
@@ -884,22 +1034,22 @@ function checkTimelineClipSnappingHelper() {
     'new clips must snap to the playhead when it is closer',
   );
   assert.equal(
-    app.snapTimelineTime(2.46),
+    workspace.snapTimelineTime(2.46),
     2.5,
     'timeline cursor must snap to markers',
   );
   assert.equal(
-    app.getTimelineTrackCount(),
+    workspace.getTimelineTrackCount(),
     6,
     'timeline layout must include the video row plus every effect track',
   );
   assert.deepEqual(
-    app.getTimelineRowStyle(2),
+    workspace.getTimelineRowStyle(2),
     { top: 'calc(2 * 100% / 6)', height: 'calc(100% / 6)' },
     'timeline clips must fill one of the six track rows',
   );
   assert.deepEqual(
-    app.getTimelineRowStyle(4),
+    workspace.getTimelineRowStyle(4),
     { top: 'calc(4 * 100% / 6)', height: 'calc(100% / 6)' },
     'face clips must sit in the faces row, not the eyes row',
   );
@@ -924,7 +1074,9 @@ function checkTimelineClipsMountInTheirTrack() {
     },
   };
   const app = {
-    videoTimeline: { duration: 10 },
+    editor: {
+      timeline: { duration: 10 },
+    },
     clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
     timelineItems: { innerHTML: 'stale', appendChild() {} },
     timelineTrackArea: {
@@ -938,7 +1090,7 @@ function checkTimelineClipsMountInTheirTrack() {
       },
     },
   };
-  applyLocalvideoeditorMixin(app);
+  const workspace = new EditorWorkspace(app.editor, app, app);
   const faceEl = {
     style: {},
     parent: null,
@@ -953,10 +1105,10 @@ function checkTimelineClipsMountInTheirTrack() {
       return selector === '.timeline-track-effects' ? this.parent : null;
     },
   };
-  app.appendTimelineClip(faceEl, 'face');
-  app.appendTimelineClip(blobEl, 'blob');
-  app.positionTimelineRowElement(faceEl, 0, 2, 4);
-  app.positionTimelineRowElement(blobEl, 0, 2, 3);
+  workspace.appendTimelineClip(faceEl, 'face');
+  workspace.appendTimelineClip(blobEl, 'blob');
+  workspace.positionTimelineRowElement(faceEl, 0, 2, 4);
+  workspace.positionTimelineRowElement(blobEl, 0, 2, 3);
   assert.equal(
     faceTrack.child,
     faceEl,
@@ -985,16 +1137,18 @@ function checkTimelineMarkerIntervalsForInsertion() {
     { time: 2, kind: 'beat', source: 'edit-assist' },
   ]);
   const app = {
-    videoTimeline: timeline,
+    editor: {
+      timeline: timeline,
+    },
     videoEl: { currentTime: 0 },
     chkTimelineSnap: { checked: true },
     timelineZoom: 1,
     DEFAULT_TIMELINE_EFFECT_DURATION: 3,
     clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
   };
-  applyLocalvideoeditorMixin(app);
+  const workspace = new EditorWorkspace(app.editor, app, app);
   assert.deepEqual(
-    app.resolveTimelineInsertionTimes({
+    workspace.resolveTimelineInsertionTimes({
       type: 'blob',
       anchorTime: 1.2,
       duration: 3,
@@ -1008,23 +1162,27 @@ function checkTimelineClipboardBasics() {
   const timeline = new VideoTimeline(10);
   const look = timeline.add('look', 1, 2, { contrast: 120 });
   const app = {
-    videoTimeline: timeline,
-    videoSourceFile: {},
+    editor: {
+      timeline: timeline,
+      source: { file: {} },
+      history: { push() {} },
+    },
     videoEl: { currentTime: 5 },
     selectedVideoEffectId: look.id,
     selectedVideoEffectIds: new Set([look.id]),
     timelineHistorySuspended: false,
-    editorHistory: { push() {} },
     clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
     updateEditorHistoryButtons() {},
     renderVideoTimeline() {},
     updateVideoEffectInspector() {},
-    syncVideoTimelineEffects() {},
     showStatus() {},
   };
-  applyLocalvideoeditorMixin(app);
-  app.copySelectedVideoEffects(false);
-  app.pasteVideoEffects(false);
+  const workspace = new EditorWorkspace(app.editor, app, app);
+  workspace.selectedVideoEffectId = look.id;
+  workspace.selectedVideoEffectIds = new Set([look.id]);
+  app.editor.timelineEffects = { sync: async () => {} };
+  workspace.copySelectedVideoEffects(false);
+  workspace.pasteVideoEffects(false);
   assert.equal(timeline.items.length, 2, 'paste should add a copied clip');
   assert.equal(timeline.items[1].startTime, 5);
   assert.equal(timeline.items[1].endTime, 6);
@@ -1036,29 +1194,32 @@ function checkTimelineClipboardPasteIsAtomic() {
   const look = timeline.add('look', 0, 1, {});
   const blob = timeline.add('blob', 1, 2, {});
   const editorHistory = new EditorHistory();
-  let statusMessage = '';
   const app = {
-    videoTimeline: timeline,
-    videoSourceFile: {},
+    editor: {
+      timeline: timeline,
+      source: { file: {} },
+      history: editorHistory,
+    },
     videoEl: { currentTime: 9 },
     selectedVideoEffectId: look.id,
     selectedVideoEffectIds: new Set([look.id, blob.id]),
     timelineHistorySuspended: false,
-    editorHistory,
     clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
     updateEditorHistoryButtons() {},
     renderVideoTimeline() {},
     updateVideoEffectInspector() {},
     updateTimelineClipboardStatus() {},
-    syncVideoTimelineEffects() {},
-    showStatus(_el, message) {
-      statusMessage = message;
+    videoEditorStatus: {
+      textContent: '',
+      classList: { add() {}, remove() {} },
     },
   };
-  applyLocalvideoeditorMixin(app);
-  app.copySelectedVideoEffects(false);
+  const workspace = new EditorWorkspace(app.editor, app, app);
+  workspace.selectedVideoEffectId = look.id;
+  workspace.selectedVideoEffectIds = new Set([look.id, blob.id]);
+  workspace.copySelectedVideoEffects(false);
   // Look fits at 9-10, the blob that follows would end past the trim.
-  app.pasteVideoEffects(false);
+  workspace.pasteVideoEffects(false);
   assert.equal(
     timeline.items.length,
     2,
@@ -1070,7 +1231,7 @@ function checkTimelineClipboardPasteIsAtomic() {
     'a paste that fails midway must not push an undo entry',
   );
   assert.match(
-    statusMessage,
+    app.videoEditorStatus.textContent,
     /recorte/i,
     'a paste that fails midway should report the trim error',
   );
@@ -1081,22 +1242,24 @@ function checkTimelineRectSelectionUsesEveryTrackRow() {
   const look = timeline.add('look', 0, 10, {});
   const blob = timeline.add('blob', 0, 10, {});
   const app = {
-    videoTimeline: timeline,
+    editor: {
+      timeline: timeline,
+    },
     TIMELINE_EFFECT_META: { look: { row: 1 }, blob: { row: 3 } },
     selectedVideoEffectIds: new Set(),
     selectedVideoEffectId: '',
   };
-  applyLocalvideoeditorMixin(app);
-  app.getTimelineTrackCount = () => 6;
-  app.renderVideoTimeline = () => {};
-  app.updateVideoEffectInspector = () => {};
-  app.updateAdjustmentsPanelState = () => {};
-  app.updateEffectTrackHighlight = () => {};
-  app.setInspectorTab = () => {};
+  const workspace = new EditorWorkspace(app.editor, app, app);
+  workspace.getTimelineTrackCount = () => 6;
+  workspace.renderVideoTimeline = () => {};
+  workspace.updateVideoEffectInspector = () => {};
+  workspace.updateAdjustmentsPanelState = () => {};
+  workspace.updateEffectTrackHighlight = () => {};
+  workspace.setInspectorTab = () => {};
 
   const bounds = { width: 100, height: 600 };
   const rowHeight = bounds.height / 6;
-  app.selectVideoEffectsInRect(
+  workspace.selectVideoEffectsInRect(
     0,
     100,
     rowHeight + 5,
@@ -1104,11 +1267,11 @@ function checkTimelineRectSelectionUsesEveryTrackRow() {
     bounds,
   );
   assert.deepEqual(
-    [...app.selectedVideoEffectIds],
+    [...workspace.selectedVideoEffectIds],
     [look.id],
     'rect selection should only hit the LOOK row',
   );
-  app.selectVideoEffectsInRect(
+  workspace.selectVideoEffectsInRect(
     0,
     100,
     rowHeight * 3 + 5,
@@ -1116,7 +1279,7 @@ function checkTimelineRectSelectionUsesEveryTrackRow() {
     bounds,
   );
   assert.deepEqual(
-    [...app.selectedVideoEffectIds],
+    [...workspace.selectedVideoEffectIds],
     [blob.id],
     'rect selection should only hit the COLOR row',
   );
@@ -1128,23 +1291,27 @@ function checkProjectJsonRoundTrip() {
   timeline.add('look', 2, 4, { contrast: 120 });
   timeline.addMarker({ time: 3, kind: 'bar', source: 'edit-assist' });
   const app = {
-    videoSourceFile: { name: 'clip.mp4', size: 1234 },
-    videoTimeline: timeline,
-    videoEl: { videoWidth: 1920, videoHeight: 1080 },
-    videoSourceFps: 29.97,
-    imageSettings: { ...DEFAULT_IMAGE_SETTINGS, editorExportMode: 'webm' },
-    editAssist: {
-      toJSON: () => ({
-        bpm: 128,
-        confidence: 0.72,
-        offset: 0.184,
-        markerStep: 4,
-        generatedAt: 1,
-      }),
+    editor: {
+      source: { file: { name: 'clip.mp4', size: 1234 }, fps: 29.97 },
+      timeline: timeline,
+      editAssist: {
+        toJSON: () => ({
+          bpm: 128,
+          confidence: 0.72,
+          offset: 0.184,
+          markerStep: 4,
+          generatedAt: 1,
+        }),
+      },
     },
+    videoEl: { videoWidth: 1920, videoHeight: 1080 },
+    imageSettings: { ...DEFAULT_IMAGE_SETTINGS, editorExportMode: 'webm' },
   };
-  applyLocalvideoeditorMixin(app);
-  const project = JSON.parse(JSON.stringify(app.buildEditorProjectData()));
+  const projects = new EditorProjects(app.editor, {
+    video: app.videoEl,
+    getImageSettings: () => app.imageSettings,
+  });
+  const project = JSON.parse(JSON.stringify(projects.build()));
   assert.equal(project.version, 2);
   assert.equal(project.source.name, 'clip.mp4');
   assert.equal(project.trim.start, 1);
@@ -1173,39 +1340,38 @@ function checkBeatReactiveAutomation() {
     { time: 1, kind: 'beat', source: 'edit-assist' },
     { time: 2, kind: 'beat', source: 'edit-assist' },
   ]);
-  const app = {
-    videoTimeline: timeline,
-    DEFAULT_IMAGE_SETTINGS,
-    clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
-  };
-  applyLocalvideoeditorMixin(app);
   const clip = {
     startTime: 0,
     endTime: 4,
     config: { automation: 'beat-pulse' },
   };
-  assert.equal(app.getTimelineAutomationIntensity(clip, 1), 1);
-  assert.ok(app.getTimelineAutomationIntensity(clip, 1.22) < 0.001);
+  assert.equal(automationIntensity(timeline, clip, 1), 1);
+  assert.ok(automationIntensity(timeline, clip, 1.22) < 0.001);
   assert.equal(
-    app.getTimelineAutomationIntensity(
+    automationIntensity(
+      timeline,
       { ...clip, config: { automation: 'alternate-beat' } },
       2.1,
     ),
     0,
   );
   assert.equal(
-    app.getTimelineAutomationIntensity(
+    automationIntensity(
+      timeline,
       { ...clip, config: { automation: 'fade-in' } },
       2,
     ),
     0.5,
   );
   assert.equal(
-    app.applyLookAutomation(
-      { ...DEFAULT_IMAGE_SETTINGS, contrast: 100 },
-      { contrast: 180, automation: 'fade-in' },
-      { startTime: 0, endTime: 4, config: { automation: 'fade-in' } },
-      2,
+    blendLook(
+      DEFAULT_IMAGE_SETTINGS,
+      normalizeLookClipConfig({ contrast: 180, automation: 'fade-in' }),
+      automationIntensity(
+        timeline,
+        { ...clip, config: { automation: 'fade-in' } },
+        2,
+      ),
     ).contrast,
     140,
   );
@@ -1218,24 +1384,26 @@ function checkSplitAllEffectsAtMarkers() {
   timeline.addMarker({ time: 3 });
   timeline.addMarker({ time: 6 });
   const app = {
-    videoTimeline: timeline,
-    videoSourceFile: {},
-    isVideoExporting: false,
+    editor: {
+      timeline: timeline,
+      source: { file: {} },
+      exportSession: { active: false },
+      history: { push() {} },
+    },
     selectedVideoEffectId: '',
     selectedVideoEffectIds: new Set(),
     timelineHistorySuspended: false,
-    editorHistory: { push() {} },
     updateEditorHistoryButtons() {},
     renderVideoTimeline() {},
     updateVideoEffectInspector() {},
     updateAdjustmentsPanelState() {},
     updateEffectTrackHighlight() {},
-    syncVideoTimelineEffects() {},
     showStatus() {},
     hideStatus() {},
   };
-  applyLocalvideoeditorMixin(app);
-  app.splitAllEffectsAtMarkers();
+  const workspace = new EditorWorkspace(app.editor, app, app);
+  app.editor.timelineEffects = { sync: async () => {} };
+  workspace.splitAllEffectsAtMarkers();
   assert.equal(timeline.items.length, 6);
   assert.deepEqual(
     Array.from(
@@ -1258,27 +1426,30 @@ async function checkSequentialExportAdvance() {
         pauseCalls += 1;
       },
     },
-    isVideoExporting: true,
+    editor: {
+      exportSession: { active: true },
+    },
     seekCalls: 0,
     playCalls: 0,
     waitCalls: 0,
   };
-  applyLocalvideoeditorMixin(app);
-  app.seekVideoForExport = async () => {
+  const exporter = new VideoExporter(app.editor, app);
+  exporter.videoExportPlayback = app.videoExportPlayback;
+  exporter.seekVideoForExport = async () => {
     app.seekCalls += 1;
   };
-  app.waitForExportVideoFrame = async () => {
+  exporter.waitForExportVideoFrame = async () => {
     app.waitCalls += 1;
   };
-  app.playVideoUntilExportTime = async () => {
+  exporter.playVideoUntilExportTime = async () => {
     app.playCalls += 1;
   };
-  await app.advanceVideoForExport(0, 24, 0);
-  await app.advanceVideoForExport(1 / 24, 24, 1);
+  await exporter.advanceVideoForExport(0, 24, 0);
+  await exporter.advanceVideoForExport(1 / 24, 24, 1);
   app.videoEl.currentTime = 1 / 24;
-  await app.advanceVideoForExport(1 / 24, 24, 2);
+  await exporter.advanceVideoForExport(1 / 24, 24, 2);
   app.videoEl.currentTime = 0.2;
-  await app.advanceVideoForExport(2 / 24, 24, 3);
+  await exporter.advanceVideoForExport(2 / 24, 24, 3);
   assert.equal(
     app.seekCalls,
     1,
@@ -1291,12 +1462,12 @@ async function checkSequentialExportAdvance() {
     'sequential export should not wait for an extra frame after every step',
   );
   assert.equal(
-    app.videoExportSkippedFrames,
+    app.editor.exportSession.skippedFrames,
     1,
     'overshot frames should be reused instead of forcing a late seek',
   );
   assert.equal(
-    app.videoExportPlayback.playbackRate,
+    exporter.videoExportPlayback.playbackRate,
     4,
     'overshot export playback must keep the accelerated rate for later frames',
   );
@@ -1315,7 +1486,9 @@ async function checkSequentialExportAdvance() {
 async function checkExportPlaybackPausesAtTarget() {
   let pauseCalls = 0;
   const app = {
-    isVideoExporting: true,
+    editor: {
+      exportSession: { active: true },
+    },
     videoExportPlayback: { playbackRate: 4 },
     videoEl: {
       currentTime: 1,
@@ -1329,8 +1502,9 @@ async function checkExportPlaybackPausesAtTarget() {
       removeEventListener() {},
     },
   };
-  applyLocalvideoeditorMixin(app);
-  await app.playVideoUntilExportTime(1, 0.01);
+  const exporter = new VideoExporter(app.editor, app);
+  exporter.videoExportPlayback = app.videoExportPlayback;
+  await exporter.playVideoUntilExportTime(1, 0.01);
   assert.equal(
     pauseCalls,
     1,
@@ -1343,7 +1517,9 @@ async function checkExportSeekFallsBackWhenSeekedIsMissing() {
   let waited = false;
   let fastSeekCalled = false;
   const app = {
-    videoTimeline: { duration: 10 },
+    editor: {
+      timeline: { duration: 10 },
+    },
     videoEl: {
       readyState: 2,
       get currentTime() {
@@ -1360,11 +1536,11 @@ async function checkExportSeekFallsBackWhenSeekedIsMissing() {
     },
     clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
   };
-  applyLocalvideoeditorMixin(app);
-  app.waitForExportVideoFrame = async () => {
+  const exporter = new VideoExporter(app.editor, app);
+  exporter.waitForExportVideoFrame = async () => {
     waited = true;
   };
-  await app.seekVideoForExport(0);
+  await exporter.seekVideoForExport(0);
   assert.equal(currentTime, 0);
   assert.equal(
     fastSeekCalled,
@@ -1380,8 +1556,10 @@ async function checkExportSeekFallsBackWhenSeekedIsMissing() {
 
 async function checkExportPrepareRecoversDecodeFailure() {
   const app = {
-    videoSourceFile: {},
-    videoExportTotalFrames: 10,
+    editor: {
+      source: { file: {} },
+      exportSession: { totalFrames: 10 },
+    },
     videoExportRecoveredSource: false,
     videoEl: {
       currentTime: 0,
@@ -1391,19 +1569,19 @@ async function checkExportPrepareRecoversDecodeFailure() {
     },
     seekCalls: 0,
     recoveredAt: null,
-    getVideoExportFps: () => 24,
     updateVideoExportProgress() {},
   };
-  applyLocalvideoeditorMixin(app);
-  app.seekVideoForExport = async () => {
+  const exporter = new VideoExporter(app.editor, app);
+  exporter.getVideoExportFps = () => 24;
+  exporter.seekVideoForExport = async () => {
     app.seekCalls += 1;
     if (app.seekCalls === 1) throw new Error('video_decode_failed');
   };
-  app.recoverVideoSourceForExport = async (time) => {
-    app.videoExportRecoveredSource = true;
+  exporter.recoverVideoSourceForExport = async (time) => {
+    exporter.videoExportRecoveredSource = true;
     app.recoveredAt = time;
   };
-  await app.prepareSequentialVideoExport(2);
+  await exporter.prepareSequentialVideoExport(2);
   assert.equal(app.seekCalls, 2);
   assert.equal(app.recoveredAt, 2);
   assert.equal(app.videoEl.playbackRate, 4);
@@ -1414,9 +1592,11 @@ function checkVideoSeekAvoidsExactDuration() {
   let currentTime = 0;
   let scheduled = 0;
   const app = {
-    videoSourceFile: {},
-    isVideoExporting: false,
-    videoTimeline: { trimStart: 0, trimEnd: 10, duration: 10 },
+    editor: {
+      source: { file: {} },
+      exportSession: { active: false },
+      timeline: { trimStart: 0, trimEnd: 10, duration: 10 },
+    },
     videoEl: {
       duration: 10,
       get currentTime() {
@@ -1428,13 +1608,17 @@ function checkVideoSeekAvoidsExactDuration() {
     },
     animFrameId: null,
     clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
-    updateVideoTransport() {},
     scheduleRenderLoop() {
       scheduled += 1;
     },
   };
-  applyLocalvideoeditorMixin(app);
-  app.seekVideo(10);
+  const transport = new VideoTransport(app.editor, {
+    video: app.videoEl,
+    inVideoMode: () => true,
+    onSeek() {},
+    ensureRender: () => app.scheduleRenderLoop(),
+  });
+  transport.seek(10);
   assert.ok(
     currentTime < 10,
     'timeline-end seeks must avoid the exact media duration',
@@ -1451,7 +1635,9 @@ function checkPausedVideoPreviewUsesAnimationFrame() {
   const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
   let rafCalls = 0;
   let cancelled = 0;
-  globalThis.requestAnimationFrame = () => {
+  let runFrame;
+  globalThis.requestAnimationFrame = (callback) => {
+    runFrame = callback;
     rafCalls += 1;
     return 41;
   };
@@ -1465,10 +1651,12 @@ function checkPausedVideoPreviewUsesAnimationFrame() {
       frameCount: 0,
       isPageVisible: true,
       isRunning: true,
-      isVideoExporting: false,
+      editor: {
+        exportSession: { active: false },
+        timeline: { trimEnd: 10, duration: 10 },
+      },
       lastFpsTime: performance.now(),
       sourceMode: 'video',
-      videoTimeline: { trimEnd: 10, duration: 10 },
       videoEl: {
         currentTime: 0,
         paused: true,
@@ -1480,24 +1668,20 @@ function checkPausedVideoPreviewUsesAnimationFrame() {
       },
       fpsInfo: { textContent: '' },
     };
-    applyRenderLoopMixin(app);
-    app.syncVideoTimelineLookNow = () => {};
-    app.syncVideoTimelineDetectors = () => {};
-    app.syncPreviewCanvasMetrics = () => {};
-    app.renderProcessedFrame = () => {};
-    app.updateVideoTransport = () => {};
-    app.scheduleRenderLoop();
-    assert.equal(app.animFrameType, 'animation');
+    const renderer = new PreviewRenderer(app);
+    renderer.syncPreviewCanvasMetrics = () => {};
+    renderer.renderProcessedFrame = () => {};
+    renderer.scheduleRenderLoop();
+    assert.equal(renderer.hasPendingFrame, true);
     assert.equal(rafCalls, 1);
-    app.cancelRenderLoop();
+    renderer.cancelRenderLoop();
     assert.equal(cancelled, 41);
+    renderer.scheduleRenderLoop();
     rafCalls = 0;
-    app.animFrameId = 43;
-    app.animFrameType = 'animation';
-    app.refreshPausedVideoPreview();
+    renderer.refreshPausedVideoPreview();
     assert.equal(
       cancelled,
-      43,
+      41,
       'paused preview refresh must cancel stale renders after seeked',
     );
     assert.equal(
@@ -1505,21 +1689,16 @@ function checkPausedVideoPreviewUsesAnimationFrame() {
       1,
       'paused preview refresh must schedule one fresh render after seeked',
     );
-    let scheduled = 0;
-    app.animFrameId = 42;
-    app.animFrameType = 'animation';
-    app.scheduleRenderLoop = () => {
-      scheduled += 1;
-    };
+    rafCalls = 0;
     app.videoEl.currentTime = 10;
     let pauseCalls = 0;
     app.videoEl.pause = () => {
       pauseCalls += 1;
     };
-    app.renderLoop();
-    assert.equal(app.animFrameId, null);
+    runFrame();
+    assert.equal(renderer.hasPendingFrame, false);
     assert.equal(
-      scheduled,
+      rafCalls,
       0,
       'paused video preview should render once, not spin forever',
     );
@@ -1544,10 +1723,12 @@ async function checkVideoPlaybackRestartsFromEnd() {
   let cancelled = 0;
   let scheduled = 0;
   const app = {
-    videoSourceFile: {},
-    isVideoExporting: false,
+    editor: {
+      source: { file: {} },
+      exportSession: { active: false },
+      timeline: { trimStart: 0, trimEnd: 10, duration: 10 },
+    },
     animFrameId: 77,
-    videoTimeline: { trimStart: 0, trimEnd: 10, duration: 10 },
     videoEl: {
       paused: true,
       duration: 10,
@@ -1568,11 +1749,17 @@ async function checkVideoPlaybackRestartsFromEnd() {
       scheduled += 1;
       this.animFrameId = 78;
     },
-    updateVideoTransport() {},
     showStatus() {},
   };
-  applyLocalvideoeditorMixin(app);
-  await app.toggleVideoPlayback();
+  const transport = new VideoTransport(app.editor, {
+    video: app.videoEl,
+    inVideoMode: () => true,
+    cancelRender: () => app.cancelRenderLoop(),
+    ensureRender: () => {
+      if (app.animFrameId === null) app.scheduleRenderLoop();
+    },
+  });
+  await transport.toggle();
   assert.equal(
     cancelled,
     1,
@@ -1602,32 +1789,32 @@ async function checkExportPlaybackRateRestores() {
       addEventListener() {},
       removeEventListener() {},
     },
-    videoTimeline: { duration: 10 },
-    clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
-    videoExportSession: {
-      stop() {},
-      releaseWakeLock: async () => {},
+    editor: {
+      timeline: { duration: 10 },
+      exportSession: {
+        stop() {},
+        releaseWakeLock: async () => {},
+      },
+      source: { file: null },
     },
+    clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
     videoExportProgress: { value: 0 },
     videoExportModal: { classList: { add() {} } },
     isRunning: false,
-    videoSourceFile: null,
     updateVideoEditorUI() {},
-    updateVideoTransport() {},
-    deactivateModalFocusTrap() {},
     waitForExportVideoFrame: async () => {},
   };
-  applyLocalvideoeditorMixin(app);
-  app.updateVideoEditorUI = () => {};
-  app.updateVideoTransport = () => {};
-  await app.prepareSequentialVideoExport(0);
+  const exporter = new VideoExporter(app.editor, app);
+  exporter.waitForExportVideoFrame = app.waitForExportVideoFrame;
+  exporter.updateVideoEditorUI = () => {};
+  await exporter.prepareSequentialVideoExport(0);
   assert.equal(
     app.videoEl.playbackRate,
     4,
     'sequential export should decode faster than realtime',
   );
   assert.equal(app.videoEl.muted, true);
-  app.cleanupVideoExport(false);
+  exporter.cleanupVideoExport(false);
   assert.equal(
     app.videoEl.playbackRate,
     1.25,
@@ -1642,51 +1829,46 @@ async function checkExportPlaybackRateRestores() {
 
 async function checkExportTimelineDetectorToggleIsQuiet() {
   const calls = [];
-  const effect = {};
   const app = {
-    isVideoExporting: true,
-    chkBlobTracking: { checked: true },
-    chkFaceDetection: { checked: false },
-    chkBlinkDetection: { checked: false },
-    blobTrackingEffect: effect,
-    blinkDetectionEffect: {
-      setBlinkCallback: () => calls.push('blink-callback'),
+    editor: {
+      exportSession: { active: true },
     },
-    effectManager: {
-      removeEffect(removed) {
-        assert.equal(removed, effect);
-        calls.push('remove');
-      },
-    },
-    colorPickSection: {
-      classList: {
-        add() {
-          calls.push('color-ui');
-        },
-        remove() {},
-      },
-    },
+    settingsStore: new SettingsStore({ storage: null }),
+    quickDetectorSettings: { blobBoxColor: '#ff2222' },
+    camera: { applyDetectorPerformanceProfile() {} },
     syncQuickDetectorSettingsFromEffects() {
       calls.push('sync-settings');
     },
     saveActiveEffectSettings() {
       calls.push('save-settings');
     },
-    renderEffectConfig() {
-      calls.push('render-config');
-    },
     updateEffectsInfo() {
       calls.push('effects-info');
     },
   };
-  applyEffectsMixin(app);
-  applyLocalvideoeditorMixin(app);
-  await app.setTimelineDetector('blob', null);
-  assert.equal(app.chkBlobTracking.checked, false);
-  assert.equal(app.blobTrackingEffect, null);
+  const detectors = new Detectors(app);
+  app.detectors = detectors;
+  const restoreDocument = mockGlobal('document', {
+    createElement: () => ({ getContext: () => null }),
+  });
+  try {
+    await detectors.setEnabled('blob', true, { quiet: true });
+  } finally {
+    restoreDocument();
+  }
+  const effect = detectors.blob;
+  detectors.manager.removeEffect = (removed) => {
+    assert.equal(removed, effect);
+    calls.push('remove');
+  };
+  detectors.blink = { setBlinkCallback: () => calls.push('blink-callback') };
+  const timelineEffects = new TimelineEffects(app.editor, app);
+  await timelineEffects.setDetector('blob', null);
+  assert.equal(detectors.selection.blob, false);
+  assert.equal(detectors.blob, null);
   assert.deepEqual(
     calls,
-    ['remove', 'blink-callback', 'color-ui'],
+    ['remove', 'blink-callback'],
     'export detector toggles must skip storage and heavy UI refresh',
   );
 }
@@ -1880,35 +2062,39 @@ function checkVideoExportTimingAndQuality() {
 
 function checkAutoPerformanceDowngrade() {
   const app = {
+    sourceMode: 'camera',
     imageSettings: { performanceMode: 'auto', previewQuality: 'balanced' },
-    PERFORMANCE_MODE_PRESETS,
-    normalizePerformanceMode,
-    autoPerformanceDowngraded: false,
-    lowFpsSampleCount: 0,
-    blobTrackingEffect: { processScale: 0.45, processIntervalMs: 33 },
-    faceDetectionEffect: { processIntervalMs: 30 },
-    blinkDetectionEffect: { processIntervalMs: 30 },
-    updateImageControlsUI() {},
-    requestPreviewRefresh() {},
-    renderEffectConfig() {},
+    detectors: {
+      blob: { processScale: 0.45, processIntervalMs: 33 },
+      face: { processIntervalMs: 30 },
+      blink: { processIntervalMs: 30 },
+    },
+    preferences: { updateImageControlsUI() {} },
+    renderer: { requestPreviewRefresh() {} },
     showStatus() {},
   };
-  applyCameraMixin(app);
-  app.handlePreviewFpsSample(23);
-  app.handlePreviewFpsSample(23);
-  assert.equal(app.autoPerformanceDowngraded, false);
-  app.handlePreviewFpsSample(23);
-  assert.equal(app.autoPerformanceDowngraded, true);
+  const camera = new WebcamCamera(app);
+  camera.handlePreviewFpsSample(23);
+  camera.handlePreviewFpsSample(23);
+  assert.equal(
+    camera.getPerformanceModePreset(),
+    PERFORMANCE_MODE_PRESETS.normal,
+  );
+  camera.handlePreviewFpsSample(23);
+  assert.equal(
+    camera.getPerformanceModePreset(),
+    PERFORMANCE_MODE_PRESETS.performance,
+  );
   assert.deepEqual(PERFORMANCE_MODE_PRESETS.performance.camera, {
     width: 960,
     height: 540,
     fps: 30,
   });
   assert.equal(app.imageSettings.previewQuality, 'draft');
-  assert.equal(app.blobTrackingEffect.processScale, 0.35);
-  assert.equal(app.blobTrackingEffect.processIntervalMs, 120);
-  assert.equal(app.faceDetectionEffect.processIntervalMs, 120);
-  assert.equal(app.blinkDetectionEffect.processIntervalMs, 120);
+  assert.equal(app.detectors.blob.processScale, 0.35);
+  assert.equal(app.detectors.blob.processIntervalMs, 120);
+  assert.equal(app.detectors.face.processIntervalMs, 120);
+  assert.equal(app.detectors.blink.processIntervalMs, 120);
 }
 
 async function checkVideoExportDiagnostics() {
@@ -2079,22 +2265,25 @@ function checkPaletteDropUsesEffectTypeRow() {
       blob: { label: 'Color', trackLabel: 'COLOR', row: 2 },
       face: { label: 'Caras', trackLabel: 'CARAS', row: 3 },
     },
-    paletteDragState: { type: 'blob', chip, moved: true },
-    videoSourceFile: {},
+    editor: {
+      source: { file: {} },
+    },
     removeTimelineDragGhost() {},
     clearTimelineDropTargets() {},
     updateEffectTrackHighlight() {},
     showStatus() {},
     hideStatus() {},
   };
-  applyLocalvideoeditorMixin(app);
-  app.getTimelineRowFromClientY = () => 'face';
-  app.getTimelineTime = () => 4;
-  app.addTimelineEffectClip = (type, time) => {
+  const workspace = new EditorWorkspace(app.editor, app, app);
+  workspace.paletteDragState = { type: 'blob', chip, moved: true };
+  workspace.updateEffectTrackHighlight = () => {};
+  workspace.getTimelineRowFromClientY = () => 'face';
+  workspace.getTimelineTime = () => 4;
+  workspace.addTimelineEffectClip = (type, time) => {
     addedType = `${type}:${time}`;
   };
-  app.removeTimelineDragGhost = () => {};
-  app.finishPaletteDrag({ pointerId: 1, clientX: 100, clientY: 50 });
+  workspace.removeTimelineDragGhost = () => {};
+  workspace.finishPaletteDrag({ pointerId: 1, clientX: 100, clientY: 50 });
   assert.equal(
     addedType,
     'blob:4',
@@ -2104,15 +2293,19 @@ function checkPaletteDropUsesEffectTypeRow() {
 
 async function checkEffectsOnlyExportSkipsBaseRender() {
   const app = {
-    videoTimeline: { trimStart: 2 },
+    editor: {
+      timeline: { trimStart: 2 },
+      exportSession: { totalFrames: 1 },
+    },
     imageSettings: {
       editorExportMode: 'effects-chroma',
       effectsExportChroma: 'green',
       qualityEnhancer: true,
     },
-    videoExportTotalFrames: 1,
-    recordingCanvas: { width: 100, height: 100 },
-    recordingCtx: {},
+    renderEngine: {
+      recordingCanvas: { width: 100, height: 100 },
+      recordingCtx: {},
+    },
     progressCalls: [],
     lookCalls: 0,
     baseRenderCalls: 0,
@@ -2127,28 +2320,36 @@ async function checkEffectsOnlyExportSkipsBaseRender() {
         'effects-only export should seek to trim start for frame zero',
       );
     },
-    applyVideoTimelineLook() {
-      this.lookCalls += 1;
+
+    capture: {
+      ensureRecordingCanvas() {},
+      renderSourceFrameBuffer() {
+        app.baseRenderCalls += 1;
+      },
     },
-    syncVideoTimelineDetectorsAt: async () => {},
-    ensureRecordingCanvas() {},
-    renderSourceFrameBuffer() {
-      this.baseRenderCalls += 1;
-    },
-    renderEffectsOnlyFrame(canvas, ctx, chromaColor) {
-      assert.equal(chromaColor, '#00ff00');
-      this.effectsOnlyCalls += 1;
+    renderer: {
+      renderEffectsOnlyFrame(canvas, ctx, chromaColor) {
+        assert.equal(chromaColor, '#00ff00');
+        app.effectsOnlyCalls += 1;
+      },
     },
   };
-  applyLocalvideoeditorMixin(app);
-  app.seekVideoForExport = async (time) => {
+  const exporter = new VideoExporter(app.editor, app);
+  exporter.updateVideoExportProgress = app.updateVideoExportProgress.bind(app);
+  app.editor.timelineEffects = {
+    applyLook() {
+      app.lookCalls += 1;
+    },
+    syncDetectorsAt: async () => {},
+  };
+  exporter.seekVideoForExport = async (time) => {
     assert.equal(
       time,
       2,
       'effects-only export should seek to trim start for frame zero',
     );
   };
-  await app.renderVideoExportFrame(0, 30, {
+  await exporter.renderVideoExportFrame(0, 30, {
     mode: 'effects-chroma',
     chromaColor: '#00ff00',
   });
@@ -2168,25 +2369,30 @@ async function checkEffectsOnlyExportSkipsBaseRender() {
 async function checkExportFrameProgressThrottlesInnerStages() {
   const calls = [];
   const app = {
-    videoTimeline: { trimStart: 0 },
+    editor: {
+      timeline: { trimStart: 0 },
+      exportSession: { totalFrames: 10 },
+    },
     imageSettings: {
       editorExportMode: 'full',
       qualityEnhancer: false,
     },
-    videoExportTotalFrames: 10,
     updateVideoExportProgress(done, total, fps, meta) {
       calls.push(meta);
     },
-    applyVideoTimelineLook() {},
-    syncVideoTimelineDetectorsAt: async () => {},
-    renderSourceFrameBuffer() {},
+
+    capture: { renderSourceFrameBuffer() {} },
   };
-  applyLocalvideoeditorMixin(app);
-  app.updateVideoExportProgress = (done, total, fps, meta) => {
+  const exporter = new VideoExporter(app.editor, app);
+  exporter.updateVideoExportProgress = (done, total, fps, meta) => {
     calls.push(meta);
   };
-  app.advanceVideoForExport = async () => {};
-  await app.renderVideoExportFrame(1, 30, { mode: 'full' });
+  exporter.advanceVideoForExport = async () => {};
+  app.editor.timelineEffects = {
+    applyLook() {},
+    syncDetectorsAt: async () => {},
+  };
+  await exporter.renderVideoExportFrame(1, 30, { mode: 'full' });
   const byStage = Object.fromEntries(calls.map((meta) => [meta.stage, meta]));
   assert.equal(
     byStage.decode.force,
@@ -2531,18 +2737,19 @@ function checkSubjectFrameMap() {
 }
 
 function checkSubjectBypassToggle() {
-  const app = {
-    visualFxBypass: false,
-    btnVisualFxBypass: { checked: true, setAttribute() {} },
-    visualFxEffect: { setBypass() {}, resetTemporalState() {} },
-    syncVideoTimelineVisualFx() {},
-    renderVisualFxInspector() {},
-  };
-  applyVisualFxIntegrationMixin(app);
-  app.toggleVisualFxBypass();
-  assert.equal(app.visualFxBypass, true);
-  app.updateVisualFxBypassUI();
-  assert.equal(app.btnVisualFxBypass.checked, false);
+  const session = new VisualFxSession({
+    getSelection: () => null,
+    getTime: () => 0,
+    hasSource: () => false,
+    publishVisibility() {},
+    refreshPreview() {},
+  });
+  let panel;
+  const stop = session.inspector.subscribe((state) => (panel = state));
+  assert.equal(panel.bypass, false);
+  session.toggleBypass();
+  assert.equal(panel.bypass, true);
+  stop();
 }
 
 function checkSubjectVariationStep() {
@@ -2554,20 +2761,19 @@ function checkSubjectVariationStep() {
     endTime: 8,
     config: createDefaultVisualConfig('fragment'),
   });
-  const app = {
-    videoTimeline: timeline,
-    getSelectedVideoEffectItem: () => item,
-    pushTimelineHistory() {},
-    visualFxEffect: { setConfig() {} },
-    renderVisualFxInspector() {},
-    syncVideoTimelineVisualFx() {},
-  };
-  applyVisualFxIntegrationMixin(app);
+  const session = new VisualFxSession({
+    getTimeline: () => timeline,
+    getSelection: () => timeline.items[0],
+    getTime: () => 0,
+    hasSource: () => false,
+    pushHistory() {},
+    publishVisibility() {},
+  });
   const before = item.config.seed;
-  app.stepVisualFxVariation(1);
+  session.vary();
   const updated = timeline.items.find((entry) => entry.id === 'subject-1');
   assert.notEqual(updated.config.seed, before);
-  app.stepVisualFxVariation(1);
+  session.vary();
   const again = timeline.items.find((entry) => entry.id === 'subject-1');
   assert.notEqual(again.config.seed, updated.config.seed);
 }
@@ -2888,6 +3094,7 @@ async function checkSubjectAnalyzerDiscardsSupersededResults() {
 }
 
 async function checkSubjectClipAwaitsEffectBeforeAnalyzer() {
+  let effectLoaded = false;
   let readyCalls = 0;
   const saved = {
     id: 'subject-async',
@@ -2897,34 +3104,40 @@ async function checkSubjectClipAwaitsEffectBeforeAnalyzer() {
     config: createDefaultVisualConfig('anatomy'),
   };
   const app = {
-    videoSourceFile: {},
+    editor: {
+      source: { file: {} },
+      timeline: { upsert: () => saved },
+      visualFx: {
+        ensureEffect: async () => {
+          await Promise.resolve();
+          effectLoaded = true;
+          return { analyzer: { ensureReady: async () => readyCalls++ } };
+        },
+      },
+    },
     TIMELINE_EFFECT_META: { 'visual-fx': { label: 'Visual FX' } },
     DEFAULT_TIMELINE_EFFECT_DURATION: 3,
-    videoTimeline: { upsert: () => saved },
     pushTimelineHistory() {},
     snapshotVideoEffectConfig: () => saved.config,
-    ensureVisualFxEffect: async () => {
-      await Promise.resolve();
-      return {
-        analyzer: {
-          ensureReady: async () => {
-            readyCalls += 1;
-            return true;
-          },
-        },
-      };
+    selectVideoEffect() {
+      assert.equal(effectLoaded, true);
     },
-    selectVideoEffect() {},
-    syncVideoTimelineEffects() {},
     showStatus() {},
     hideStatus() {},
     setInspectorTab() {},
   };
-  applyLocalvideoeditorMixin(app);
-  app.resolveTimelineInsertionTimes = () => ({ startTime: 0, endTime: 2 });
-  app.snapshotVideoEffectConfig = () => saved.config;
-  app.selectVideoEffect = () => {};
-  await app.addTimelineEffectClip('visual-fx', 0);
+  const workspace = new EditorWorkspace(app.editor, app, app);
+  app.editor.timelineEffects = { sync: async () => {} };
+  workspace.selectVideoEffect = () => assert.equal(effectLoaded, true);
+  workspace.setInspectorTab = () => {};
+  workspace.resolveTimelineInsertionTimes = () => ({
+    startTime: 0,
+    endTime: 2,
+  });
+  workspace.snapshotVideoEffectConfig = () => saved.config;
+  const result = await workspace.addTimelineEffectClip('visual-fx', 0);
+  assert.equal(result, saved);
+  assert.equal(effectLoaded, true);
   assert.equal(
     readyCalls,
     0,
@@ -2933,7 +3146,9 @@ async function checkSubjectClipAwaitsEffectBeforeAnalyzer() {
 }
 
 await checkCameraStreamCleanup();
+await checkFaceMeshFallsBackAfterClassicWorkerFailure();
 checkSettingsStoreRejectsNonObjectState();
+checkWebcamSettingsMigrateOnce();
 checkCameraPreservesSupportedFps();
 checkReusableMorphologyBuffers();
 checkBlinkDetectionUsesRefinedEyeLandmarks();
@@ -2961,6 +3176,7 @@ await checkSubjectAnalyzerDiscardsSupersededResults();
 await checkSubjectClipAwaitsEffectBeforeAnalyzer();
 checkAudioTempoAnalyzer();
 checkEditAssistManualControls();
+await checkEditAssistDiscardsAnalysisAfterSourceReset();
 await checkMediaAudioExtraction();
 checkStableExportDefaults();
 checkEditorExportPresets();
@@ -2997,25 +3213,452 @@ checkObservedExportProgressAndTimelineTicks();
 // frame into four full-resolution Canvas2D filter passes.
 {
   const app = { imageSettings: { ...DEFAULT_IMAGE_SETTINGS } };
-  applyRenderLoopMixin(app);
-  app.clamp = (value, min, max) => Math.max(min, Math.min(max, value));
-  assert.equal(app.buildCanvasFilter(), 'none');
+  const renderer = new PreviewRenderer(app);
+  assert.equal(renderer.buildCanvasFilter(), 'none');
   app.imageSettings.blackAndWhite = true;
-  assert.equal(app.buildCanvasFilter(), 'grayscale(100%)');
+  assert.equal(renderer.buildCanvasFilter(), 'grayscale(100%)');
   app.imageSettings.exposure = 30;
-  assert.equal(app.buildCanvasFilter(), 'brightness(124%) grayscale(100%)');
+  assert.equal(
+    renderer.buildCanvasFilter(),
+    'brightness(124%) grayscale(100%)',
+  );
   app.imageSettings.blackAndWhite = false;
   app.imageSettings.saturation = 120;
   app.imageSettings.contrast = 110;
   assert.equal(
-    app.buildCanvasFilter(),
+    renderer.buildCanvasFilter(),
     'brightness(124%) contrast(110%) saturate(120%)',
   );
   app.imageSettings.shadows = 35;
   app.imageSettings.sharpness = 40;
-  const look = app.getLookFilterValues();
+  const look = renderer.getLookFilterValues();
   assert.equal(look.shadows, 0.35);
   assert.ok(look.sharpen > 0, 'sharpness >= 8 must enable GPU sharpen');
+}
+
+function checkMediaFormatting() {
+  assert.equal(normalizeVideoFps('29.970'), 29.97);
+  assert.equal(normalizeVideoFps(0), null);
+  assert.equal(snapVideoSourceFps(29.97, [23.976, 24, 25, 29.97, 30]), 29.97);
+  assert.equal(formatVideoFps(29.97), '29.97');
+  assert.equal(formatVideoFps(30), '30');
+  assert.equal(formatVideoBitrate(12_000_000), '12.0 Mbps');
+  assert.equal(formatBytes(0), '0 B');
+  assert.equal(formatBytes(1536), '1.50 KB');
+  assert.equal(formatDurationDetailed(65), '01:05');
+  assert.equal(formatDurationDetailed(3665), '01:01:05');
+  assert.equal(formatDuration(65), '01:05');
+  assert.equal(
+    pickSupportedMimeType(['video/mp4', 'video/webm'], (type) =>
+      type.includes('webm'),
+    ),
+    'video/webm',
+  );
+  assert.equal(
+    getRecommendedVideoBitrate({
+      width: 1920,
+      height: 1080,
+      fps: 30,
+      qualityEnhancer: false,
+      sourceAverageBitrate: 0,
+    }),
+    11_197_440,
+  );
+  const date = new Date(2026, 10, 10, 9, 8, 7);
+  assert.equal(timestamp(date), '20261110-090807');
+}
+
+function checkCameraStatePresentation() {
+  assert.equal(classifyCameraError({ name: 'NotAllowedError' }), 'denied');
+  assert.equal(classifyCameraError({ name: 'NotFoundError' }), 'missing');
+  assert.equal(classifyCameraError({ name: 'NotReadableError' }), 'busy');
+  assert.equal(
+    classifyCameraError({ name: 'OverconstrainedError' }),
+    'unsupported',
+  );
+
+  const denied = getCameraStatePresentation('denied');
+  assert.equal(denied.title, 'Permiso de cámara denegado');
+  assert.equal(denied.action, 'Reintentar');
+  assert.equal(denied.state, 'denied');
+
+  const fallback = getCameraStatePresentation('not-a-state');
+  assert.equal(fallback.state, 'unknown');
+  assert.equal(fallback.title, 'No se pudo iniciar la cámara');
+}
+
+function checkShellStateBridge() {
+  const seen = [];
+  const unsubscribe = subscribeShellState((state) => {
+    seen.push({ ...state });
+  });
+  updateShellState({ mode: 'video', exportEnabled: true, locale: 'en' });
+  assert.deepEqual(getShellState(), {
+    mode: 'video',
+    exportEnabled: true,
+    locale: 'en',
+  });
+  assert.equal(seen.length, 2, 'subscribers receive initial and updated state');
+  unsubscribe();
+  updateShellState({ mode: 'camera' });
+  assert.equal(seen.length, 2, 'unsubscribed listeners stop receiving updates');
+  updateShellState({ mode: 'camera', exportEnabled: false, locale: 'es' });
+}
+
+function checkPreviewBridge() {
+  const seen = [];
+  const unsubscribe = subscribeDetectorChips((chips) => {
+    seen.push(chips.blob);
+  });
+  assert.equal(seen.length, 1, 'subscribers receive initial detector state');
+  assert.equal(
+    updateDetectorChip('blob', {
+      text: 'Color · buscando',
+      state: 'searching',
+    }),
+    true,
+  );
+  assert.equal(seen.length, 2);
+  assert.equal(
+    updateDetectorChip('blob', {
+      text: 'Color · buscando',
+      state: 'searching',
+    }),
+    false,
+    'identical detector state must not notify',
+  );
+  assert.equal(seen.length, 2);
+  assert.deepEqual(getDetectorChips().blob, {
+    text: 'Color · buscando',
+    state: 'searching',
+  });
+  unsubscribe();
+  updateDetectorChip('blob', { text: 'Color', state: 'off' });
+  assert.equal(seen.length, 2, 'unsubscribed listeners stop receiving updates');
+}
+
+function checkCameraSourceSelection() {
+  assert.deepEqual(resolveCameraDeviceSelection([], 'cam-a', 'cam-b'), {
+    devices: [],
+    devicesStatus: 'empty',
+    selectDisabled: true,
+    deviceId: '',
+  });
+  assert.deepEqual(
+    resolveCameraDeviceSelection(
+      [
+        { deviceId: 'cam-a', label: '' },
+        { deviceId: 'cam-b', label: 'Cámara B' },
+      ],
+      'missing',
+      '',
+    ),
+    {
+      devices: [
+        { id: 'cam-a', label: 'Cámara 1' },
+        { id: 'cam-b', label: 'Cámara B' },
+      ],
+      devicesStatus: 'ready',
+      selectDisabled: false,
+      deviceId: 'cam-a',
+    },
+  );
+  assert.equal(
+    resolveCameraDeviceSelection(
+      [{ deviceId: 'cam-b', label: 'Cámara B' }],
+      'cam-b',
+      'cam-a',
+    ).deviceId,
+    'cam-b',
+  );
+
+  resetCameraSourceState();
+  const seen = [];
+  const unsubscribe = subscribeCameraSourceState((state) => {
+    seen.push(state.performanceMode);
+  });
+  updateCameraSourceState({ performanceMode: 'quality' });
+  assert.equal(getCameraSourceState().performanceMode, 'quality');
+  assert.deepEqual(seen, ['normal', 'quality']);
+  unsubscribe();
+  resetCameraSourceState();
+  assert.deepEqual(
+    deriveDetectorExtras({
+      sourceMode: 'camera',
+      blobOn: true,
+      faceOn: false,
+      selectedEffect: 'face',
+      faceShowBox: true,
+    }),
+    {
+      showBlobExtras: true,
+      showFaceExtras: false,
+      showFaceBoxVisuals: true,
+    },
+  );
+  assert.equal(
+    deriveDetectorExtras({
+      sourceMode: 'video',
+      blobOn: false,
+      faceOn: false,
+      selectedEffect: 'blob',
+      faceShowBox: false,
+    }).showBlobExtras,
+    true,
+  );
+}
+
+checkMediaFormatting();
+checkCameraStatePresentation();
+checkShellStateBridge();
+checkPreviewBridge();
+checkCameraSourceSelection();
+checkCaptureSessions();
+checkEditorUiState();
+checkMessages();
+
+function checkCaptureSessions() {
+  const countdown = new PhotoCountdown();
+  let ticks = 0;
+  let done = false;
+  countdown.start(
+    2,
+    () => {
+      ticks += 1;
+    },
+    () => {
+      done = true;
+    },
+  );
+  assert.equal(countdown.active, true);
+  countdown.advance();
+  assert.equal(ticks, 1);
+  assert.equal(countdown.remaining, 1);
+  countdown.advance();
+  assert.equal(done, true);
+  assert.equal(countdown.active, false);
+
+  let stopped = null;
+  const chunks = [];
+  const recorder = {
+    state: 'inactive',
+    start() {
+      this.state = 'recording';
+    },
+    stop() {
+      this.state = 'inactive';
+      this.onstop?.();
+    },
+    ondataavailable: null,
+    onstop: null,
+  };
+  const session = new RecordingSession(() => recorder);
+  const stream = { getTracks: () => [{ stop() {} }] };
+  session.start({
+    stream,
+    mimeType: 'video/webm',
+    extension: 'webm',
+    videoBitsPerSecond: 1000,
+    tickMs: 60_000,
+    onTick() {},
+    onStopped(result) {
+      stopped = result;
+    },
+  });
+  recorder.ondataavailable?.({ data: new Blob(['demo']) });
+  chunks.push('kept');
+  session.stop(true);
+  assert.equal(stopped?.extension, 'webm');
+  assert.ok(stopped?.blob.size > 0);
+  assert.equal(chunks.length, 1);
+
+  const discarded = new RecordingSession(() => ({
+    state: 'recording',
+    start() {},
+    stop() {
+      this.state = 'inactive';
+      this.onstop?.();
+    },
+    ondataavailable: null,
+    onstop: null,
+  }));
+  let discardedResult = 'pending';
+  discarded.start({
+    stream,
+    mimeType: 'video/webm',
+    extension: 'webm',
+    videoBitsPerSecond: 1000,
+    tickMs: 60_000,
+    onTick() {},
+    onStopped(result) {
+      discardedResult = result;
+    },
+  });
+  discarded.mediaRecorder.ondataavailable?.({ data: new Blob(['no']) });
+  discarded.stop(false);
+  assert.equal(discardedResult, null);
+
+  let released = 0;
+  const failed = new RecordingSession(() => {
+    throw new Error('recorder unavailable');
+  });
+  assert.throws(
+    () =>
+      failed.start({
+        stream: { getTracks: () => [{ stop: () => released++ }] },
+        mimeType: 'video/webm',
+        extension: 'webm',
+        videoBitsPerSecond: 1000,
+        onTick() {},
+        onStopped() {},
+      }),
+    /recorder unavailable/,
+  );
+  assert.equal(released, 1);
+  assert.equal(failed.mediaStream, null);
+  assert.equal(failed.active, false);
+}
+
+function listSvelteFiles(dir) {
+  return readdirSync(resolve(dir))
+    .flatMap((entry) => {
+      const relative = `${dir}/${entry}`;
+      return statSync(resolve(relative)).isDirectory()
+        ? listSvelteFiles(relative)
+        : relative.endsWith('.svelte')
+          ? [relative]
+          : [];
+    })
+    .sort();
+}
+
+function stripSvelteExpressions(source) {
+  let out = '';
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index];
+    if (char !== '{') {
+      out += char;
+      continue;
+    }
+    let depth = 1;
+    let quote = '';
+    index += 1;
+    for (; index < source.length && depth > 0; index += 1) {
+      const next = source[index];
+      if (quote) {
+        if (next === '\\') index += 1;
+        else if (next === quote) quote = '';
+        continue;
+      }
+      if (next === "'" || next === '"' || next === '`') {
+        quote = next;
+      } else if (next === '{') {
+        depth += 1;
+      } else if (next === '}') {
+        depth -= 1;
+      }
+    }
+    index -= 1;
+  }
+  return out;
+}
+
+function visibleCopy(html) {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .split(/<[^>]+>/)
+    .map((line) => line.trim().replace(/\s+/g, ' '))
+    .filter((line) => /[áéíóúñÁÉÍÓÚÑ¿¡]/.test(line));
+}
+
+function visibleAttributes(html) {
+  return [...html.matchAll(/\b(?:aria-label|title|placeholder)="([^"]+)"/g)]
+    .map((match) => match[1])
+    .filter((line) => /[áéíóúñÁÉÍÓÚÑ¿¡]/.test(line));
+}
+
+function checkEditorUiState() {
+  updateEditorUiState({
+    mode: 'camera',
+    hasSource: false,
+    exporting: false,
+    canExport: false,
+    canUndo: false,
+    canRedo: false,
+    inspectorTab: 'project',
+  });
+  let notifications = 0;
+  const unsubscribe = subscribeEditorUiState(() => {
+    notifications += 1;
+  });
+  assert.equal(notifications, 1);
+  updateEditorUiState({ mode: 'camera' });
+  assert.equal(notifications, 1);
+  updateEditorUiState({ mode: 'video', hasSource: true });
+  assert.equal(notifications, 2);
+  assert.equal(getEditorUiState().mode, 'video');
+  assert.equal(getEditorUiState().hasSource, true);
+  unsubscribe();
+  updateEditorUiState({ mode: 'camera', hasSource: false });
+  assert.equal(notifications, 2);
+}
+
+function checkMessages() {
+  setLocale('en', { persist: false });
+  assert.equal(translate('en', 'Idioma'), 'Language');
+  assert.equal(
+    translate('en', 'Foto en {seconds} segundos', { seconds: 5 }),
+    'Photo in 5 seconds',
+  );
+  assert.equal(
+    translate(
+      'en',
+      'Exportando {percent}% · salida {fps} FPS · midiendo velocidad real',
+      {
+        percent: 10,
+        fps: '30',
+      },
+    ),
+    'Exporting 10% · output 30 FPS · measuring real speed',
+  );
+  const decomposed = 'Diagnóstico'.normalize('NFD');
+  const composed = 'Diagnóstico'.normalize('NFC');
+  setLocale('en', { persist: false });
+  assert.equal(translate('en', decomposed), translate('en', composed));
+  assert.equal(translate('en', composed), 'Diagnostics');
+  setLocale('es', { persist: false });
+  assert.equal(translate('es', 'Idioma'), 'Idioma');
+  assert.equal(englishMessages.Idioma, 'Language');
+  const missing = [];
+  const componentFiles = listSvelteFiles('src/lib').map((file) => file);
+  for (const file of ['index.html']) {
+    const html = readFileSync(file, 'utf8');
+    for (const line of [...visibleCopy(html), ...visibleAttributes(html)]) {
+      if (!Object.prototype.hasOwnProperty.call(englishMessages, line)) {
+        missing.push(`${file}: ${line}`);
+      }
+    }
+  }
+  for (const file of componentFiles) {
+    const source = readFileSync(file, 'utf8');
+    // Every UI string in a Svelte component must go through the typed
+    // catalog. Read keys from m('...') and reject any loose accent copy.
+    const keys = [...source.matchAll(/\bm\(\s*'((?:[^'\\]|\\.)*)'/g)].map(
+      (match) => match[1].replace(/\\'/g, "'"),
+    );
+    const withoutExpressions = stripSvelteExpressions(source);
+    const loose = [
+      ...visibleCopy(withoutExpressions),
+      ...visibleAttributes(withoutExpressions),
+    ];
+    for (const line of [...keys, ...loose]) {
+      if (!Object.prototype.hasOwnProperty.call(englishMessages, line)) {
+        missing.push(`${file}: ${line}`);
+      }
+    }
+  }
+  assert.deepEqual(missing, []);
 }
 
 console.log('Unit check passed.');

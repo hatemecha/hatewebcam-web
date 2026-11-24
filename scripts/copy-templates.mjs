@@ -1,7 +1,7 @@
 import { cpSync, existsSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const staticDirs = ['templates', 'vendor', 'css'];
+const staticDirs = ['vendor', 'css'];
 
 for (const dir of staticDirs) {
   const source = resolve(dir);

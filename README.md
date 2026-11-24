@@ -30,12 +30,17 @@ Requisitos: Node `^20.19.0` o `>=22.12.0`, cámara opcional para pruebas manuale
 
 ```bash
 npm ci
-npm run dev      # http://localhost:5173
+npm run dev        # http://localhost:5173
 npm test
 npm run lint
+npm run typecheck
 npm run test:browser
 npm run build
 ```
+
+La interfaz se está migrando a Svelte 5 + TypeScript por islas; el motor multimedia
+sigue en módulos ES y no depende del ciclo reactivo. Ver
+[docs/migration-svelte.md](docs/migration-svelte.md).
 
 CI en `main`: formato, lint, tests, Playwright y build; si pasa, despliega GitHub Pages desde el mismo artefacto.
 
@@ -56,6 +61,6 @@ Licencia [MIT](LICENSE) · terceros en [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTI
 
 **Try it:** [hatemecha.github.io/hatewebcam-web](https://hatemecha.github.io/hatewebcam-web/)
 
-**Develop:** `npm ci && npm run dev` → open `http://localhost:5173`. Run `npm test`, `npm run lint`, and `npm run test:browser` before pushing. See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/visual-fx.md](docs/visual-fx.md).
+**Develop:** `npm ci && npm run dev` → open `http://localhost:5173`. Run `npm test`, `npm run lint`, `npm run typecheck`, and `npm run test:browser` before pushing. See [CONTRIBUTING.md](CONTRIBUTING.md), [docs/visual-fx.md](docs/visual-fx.md), and [docs/migration-svelte.md](docs/migration-svelte.md).
 
 Processing stays on-device; formats depend on your browser’s `MediaRecorder` / WebCodecs support.
