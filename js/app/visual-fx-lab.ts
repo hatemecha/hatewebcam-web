@@ -1,3 +1,6 @@
+import { getPreviewMetrics } from '../../src/lib/preview/metrics-state.ts';
+import type { PreviewRenderer } from './preview-renderer.ts';
+import type { VisualFxSession } from './video-editor/visual-fx-session.ts';
 import { getStrongestMotionRegion } from '../subject/subject-local-motion.ts';
 import {
   mapNormToCanvas,
@@ -21,17 +24,31 @@ const BUFFER_SLOTS = [
   ['field', 'FIELD'],
   ['history', 'HISTORY'],
   ['output', 'OUTPUT'],
-];
+] as const;
 
 // Dev-only buffer inspector. Opt-in: ?fxlab=1 or localStorage hatewebcam-fxlab=1.
-/** @param {import('./controller.mjs').AppController} proto */
-export function applyVisualFxLabMixin(proto) {
-  proto.ensureVisualFxLab = function () {
-    if (!isFxLabEnabled() || this._visualFxLabReady) return;
-    this._visualFxLabReady = true;
-    this.visualFxLabMode = 'overlay';
+export class VisualFxLab {
+  private panel: HTMLDivElement | null = null;
+  private overlay: HTMLCanvasElement | null = null;
+  private output: HTMLElement | null = null;
+  private buffers: HTMLElement | null = null;
+  private mode: 'overlay' | 'buffers' | 'stats' = 'overlay';
+  private bufferReadTime = 0;
+  private mountEvents: AbortController | null = null;
 
+  constructor(
+    private readonly effects: VisualFxSession,
+    private readonly renderer: PreviewRenderer,
+    private readonly canvas: HTMLCanvasElement,
+    private readonly previewWrapper: HTMLElement | null,
+  ) {}
+
+  mount(): void {
+    if (!this.previewWrapper || this.panel || !isFxLabEnabled()) return;
+    this.mountEvents = new AbortController();
+    const { signal } = this.mountEvents;
     const panel = document.createElement('div');
+    this.panel = panel;
     panel.id = 'visualFxLabPanel';
     panel.className = 'visual-fx-lab';
     panel.innerHTML = `
@@ -51,43 +68,61 @@ export function applyVisualFxLabMixin(proto) {
       </div>
     `;
     this.previewWrapper?.appendChild(panel);
-    this.visualFxLabOutput = panel.querySelector('#visualFxLabOutput');
-    this.visualFxLabBuffers = panel.querySelector('#visualFxLabBuffers');
-    this.visualFxLabOverlay = document.createElement('canvas');
-    this.visualFxLabOverlay.className = 'visual-fx-lab-overlay hidden';
-    this.previewWrapper?.appendChild(this.visualFxLabOverlay);
+    this.output = panel.querySelector('#visualFxLabOutput');
+    this.buffers = panel.querySelector('#visualFxLabBuffers');
+    this.overlay = document.createElement('canvas');
+    this.overlay.className = 'visual-fx-lab-overlay hidden';
+    this.previewWrapper?.appendChild(this.overlay);
 
-    panel.querySelectorAll('[data-fxlab-mode]').forEach((button) => {
-      button.addEventListener('click', () => {
-        this.visualFxLabMode = button.dataset.fxlabMode;
-        panel.querySelectorAll('[data-fxlab-mode]').forEach((el) => {
-          el.classList.toggle('is-active', el === button);
-        });
+    panel
+      .querySelectorAll<HTMLButtonElement>('[data-fxlab-mode]')
+      .forEach((button) => {
+        button.addEventListener(
+          'click',
+          () => {
+            const mode = button.dataset.fxlabMode;
+            if (mode !== 'overlay' && mode !== 'buffers' && mode !== 'stats')
+              return;
+            this.mode = mode;
+            panel
+              .querySelectorAll<HTMLButtonElement>('[data-fxlab-mode]')
+              .forEach((el) => {
+                el.classList.toggle('is-active', el === button);
+              });
+          },
+          { signal },
+        );
       });
-    });
-    panel.querySelector('#btnFxLabCapture')?.addEventListener('click', () => {
-      if (!this.canvas) return;
-      const link = document.createElement('a');
-      link.download = `fxlab-${Date.now()}.png`;
-      link.href = this.canvas.toDataURL('image/png');
-      link.click();
-    });
-  };
+    panel.querySelector('#btnFxLabCapture')?.addEventListener(
+      'click',
+      () => {
+        if (!this.canvas) return;
+        const link = document.createElement('a');
+        link.download = `fxlab-${Date.now()}.png`;
+        link.href = this.canvas.toDataURL('image/png');
+        link.click();
+      },
+      { signal },
+    );
+  }
 
-  proto.updateVisualFxLabBuffers = function (effect) {
-    if (!this.visualFxLabBuffers) return;
+  private updateBuffers(effect: VisualFxSession['effect']) {
+    if (!this.buffers) return;
     // GPU readback is comparatively slow - only pay for it while this
     // specific dev panel is open, and no more than a few times a second.
     const now = performance.now();
-    if ((this._fxLabBufferTs || 0) + 200 > now) return;
-    this._fxLabBufferTs = now;
-    const buffers = effect?.renderer?.getDebugBuffers?.() || {};
+    if ((this.bufferReadTime || 0) + 200 > now) return;
+    this.bufferReadTime = now;
+    const buffers: Partial<
+      Record<(typeof BUFFER_SLOTS)[number][0], HTMLCanvasElement | null>
+    > = effect?.renderer?.getDebugBuffers?.() || {};
     const mask = effect?.analyzer?.lastMask;
     if (mask?.data?.length && !buffers.mask) {
       const canvas = document.createElement('canvas');
       canvas.width = mask.width;
       canvas.height = mask.height;
       const ctx = canvas.getContext('2d');
+      if (!ctx) return;
       const imageData = ctx.createImageData(mask.width, mask.height);
       for (let i = 0; i < mask.data.length; i++) {
         const v = mask.data[i];
@@ -100,58 +135,44 @@ export function applyVisualFxLabMixin(proto) {
       buffers.mask = canvas;
     }
     for (const [key] of BUFFER_SLOTS) {
-      const target = this.visualFxLabBuffers.querySelector(
+      const target = this.buffers.querySelector<HTMLCanvasElement>(
         `[data-buffer-slot="${key}"]`,
       );
       const source = buffers[key];
       if (!target || !source) continue;
       target.width = source.width;
       target.height = source.height;
-      target.getContext('2d').drawImage(source, 0, 0);
+      target.getContext('2d')?.drawImage(source, 0, 0);
     }
-  };
+  }
 
-  proto.updateVisualFxLab = function () {
-    if (!this._visualFxLabReady) return;
-    const effect = this.editor.visualFx.effect;
+  update(): void {
+    if (!this.panel || !this.overlay) return;
+    const effect = this.effects.effect;
     const frame = effect?.analyzer?.lastFrame;
     const mask = effect?.analyzer?.lastMask;
     const regions = frame?.regions || {};
     const strongest = getStrongestMotionRegion(regions);
-    const seg = effect?.analyzer?.segmentationSource || 'none';
-    const simplified = effect?.analyzer?.useSimplifiedMode
-      ? 'FALLBACK'
-      : 'AVAILABLE';
+    const seg = frame?.segmentationSource || 'none';
+    const simplified = frame?.simplified ? 'FALLBACK' : 'AVAILABLE';
 
-    this.visualFxLabBuffers?.classList.toggle(
-      'hidden',
-      this.visualFxLabMode !== 'buffers',
-    );
-    if (this.visualFxLabMode === 'buffers')
-      this.updateVisualFxLabBuffers(effect);
+    this.buffers?.classList.toggle('hidden', this.mode !== 'buffers');
+    if (this.mode === 'buffers') this.updateBuffers(effect);
 
-    if (
-      this.visualFxLabMode === 'overlay' &&
-      this.canvas &&
-      this.previewWrapper
-    ) {
-      this.visualFxLabOverlay.classList.remove('hidden');
+    if (this.mode === 'overlay' && this.canvas && this.previewWrapper) {
+      this.overlay.classList.remove('hidden');
       const rect = this.canvas.getBoundingClientRect();
       const wrapperRect = this.previewWrapper.getBoundingClientRect();
-      this.visualFxLabOverlay.width = this.canvas.width;
-      this.visualFxLabOverlay.height = this.canvas.height;
-      this.visualFxLabOverlay.style.width = `${rect.width}px`;
-      this.visualFxLabOverlay.style.height = `${rect.height}px`;
-      this.visualFxLabOverlay.style.left = `${rect.left - wrapperRect.left}px`;
-      this.visualFxLabOverlay.style.top = `${rect.top - wrapperRect.top}px`;
+      this.overlay.width = this.canvas.width;
+      this.overlay.height = this.canvas.height;
+      this.overlay.style.width = `${rect.width}px`;
+      this.overlay.style.height = `${rect.height}px`;
+      this.overlay.style.left = `${rect.left - wrapperRect.left}px`;
+      this.overlay.style.top = `${rect.top - wrapperRect.top}px`;
 
-      const octx = this.visualFxLabOverlay.getContext('2d');
-      octx.clearRect(
-        0,
-        0,
-        this.visualFxLabOverlay.width,
-        this.visualFxLabOverlay.height,
-      );
+      const octx = this.overlay.getContext('2d');
+      if (!octx) return;
+      octx.clearRect(0, 0, this.overlay.width, this.overlay.height);
       const drawMetrics = this.renderer?.getVideoDrawMetrics(
         this.canvas,
         'preview',
@@ -186,22 +207,33 @@ export function applyVisualFxLabMixin(proto) {
           });
         });
       }
-    } else if (this.visualFxLabOverlay) {
-      this.visualFxLabOverlay.classList.add('hidden');
+    } else if (this.overlay) {
+      this.overlay.classList.add('hidden');
     }
 
-    if (!this.visualFxLabOutput) return;
+    if (!this.output) return;
+    const config = effect?.getConfig();
     const lines = [
-      `system: ${effect?.config?.system || '-'}`,
-      `variation: ${((effect?.config?.seed || 0) % 999) + 1}`,
+      `system: ${config?.system || '-'}`,
+      `variation: ${((config?.seed || 0) % 999) + 1}`,
       `segmentation: ${seg} (${simplified})`,
       `motion: ${(frame?.motionEnergy || 0).toFixed(3)}`,
       `strongest: ${strongest?.name || '-'} (${(strongest?.speed || 0).toFixed(3)})`,
       `mask cov: ${mask ? (mask.getMaskCoverage?.() || 0).toFixed(3) : '-'}`,
       `status: ${effect?.analyzer?.status || '-'}`,
       `renderer: ${effect?.renderer?.failed ? 'CPU fallback' : 'GPU'}`,
-      `preview fps: ${effect?.previewFps ?? '-'}`,
+      `preview fps: ${getPreviewMetrics().fps}`,
     ];
-    this.visualFxLabOutput.textContent = lines.join('\n');
-  };
+    this.output.textContent = lines.join('\n');
+  }
+  dispose(): void {
+    this.mountEvents?.abort();
+    this.mountEvents = null;
+    this.panel?.remove();
+    this.overlay?.remove();
+    this.panel = null;
+    this.overlay = null;
+    this.output = null;
+    this.buffers = null;
+  }
 }

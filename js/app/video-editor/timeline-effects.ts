@@ -67,7 +67,6 @@ export interface TimelineEffectsHost {
   imageSettings: ImageSettings;
   detectors: Detectors;
   preferences: Pick<WebcamPreferences, 'updateImageControlsUI'>;
-  updateAdjustmentsClipStatus(): void;
 }
 
 export class TimelineEffects {
@@ -192,7 +191,7 @@ export class TimelineEffects {
       .then(() => {
         if (revision !== this.revision) return;
         this.host.detectors.updateInfo();
-        this.host.updateAdjustmentsClipStatus();
+        this.editor.workspace.updateAdjustmentsClipStatus();
       })
       .finally(() => {
         if (revision !== this.revision) return;

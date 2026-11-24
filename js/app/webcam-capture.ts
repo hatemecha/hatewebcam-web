@@ -17,6 +17,7 @@ import {
   RecordingSession,
 } from '../../src/lib/capture/media-sessions.ts';
 import { DEFAULT_CAMERA_FPS, type ImageSettings } from './constants.ts';
+import { normalizeCaptureTimerSeconds } from './webcam-settings.ts';
 import { downloadBlob, hideStatus, showStatus } from './feedback.ts';
 import type { VideoEditorSession } from './video-editor/session.ts';
 import type { Detectors } from './detectors.ts';
@@ -72,7 +73,6 @@ interface CaptureHost {
     | 'renderProcessedFrame'
     | 'applySharpenFilter'
   >;
-  normalizeCaptureTimerSeconds(value: unknown): number;
   editor: Pick<VideoEditorSession, 'visualFx' | 'exportSession'> | null;
 }
 
@@ -379,7 +379,7 @@ export class WebcamCapture {
       return;
     }
 
-    const timerSeconds = this.host.normalizeCaptureTimerSeconds(
+    const timerSeconds = normalizeCaptureTimerSeconds(
       this.host.imageSettings.captureTimerSeconds,
     );
     if (timerSeconds > 0) {

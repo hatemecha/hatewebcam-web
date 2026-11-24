@@ -4,7 +4,10 @@ import { WebGLFilterRenderer } from './webgl-filter-renderer.ts';
 import { getVideoDrawMetrics as calculateVideoDrawMetrics } from '../subject/subject-frame-map.ts';
 import { perfDev } from './perf-dev.ts';
 
-import type { PreviewQualityPreset } from '../preview-metrics.ts';
+import {
+  getCurrentPreviewQualityPreset,
+  isMobileViewport,
+} from './webcam-preferences.ts';
 import type { VideoEditorSession } from './video-editor/session.ts';
 import type { Detectors } from './detectors.ts';
 import type { WebcamCamera } from './webcam-camera.ts';
@@ -24,6 +27,7 @@ interface PreviewRenderHost {
   imageSettings: ImageSettings;
   sourceMode: 'camera' | 'video';
   rotation: number;
+  flipH: boolean;
   flipV: boolean;
   isRunning: boolean;
   isPageVisible: boolean;
@@ -35,16 +39,17 @@ interface PreviewRenderHost {
   camera: Pick<WebcamCamera, 'handlePreviewFpsSample'>;
   editor: Pick<
     VideoEditorSession,
-    'timeline' | 'exportSession' | 'transport' | 'visualFx' | 'timelineEffects'
+    | 'timeline'
+    | 'exportSession'
+    | 'transport'
+    | 'visualFx'
+    | 'timelineEffects'
+    | 'lab'
   > | null;
   detectors: Pick<
     Detectors,
     'manager' | 'blob' | 'face' | 'blink' | 'updateInfo'
   >;
-  getEffectiveFlipH(): boolean;
-  isMobileViewport(): boolean;
-  getCurrentPreviewQualityPreset(): PreviewQualityPreset;
-  updateVisualFxLab?(): void;
 }
 
 interface WebGLDrawMetrics {
@@ -110,13 +115,12 @@ export class PreviewRenderer {
   }
 
   getMobileAutoRotationDegrees(sourceWidth: number, sourceHeight: number) {
-    const shouldAutoRotate =
-      this.host.isMobileViewport() && sourceWidth > sourceHeight;
+    const shouldAutoRotate = isMobileViewport() && sourceWidth > sourceHeight;
     return shouldAutoRotate ? 90 : 0;
   }
 
   getEffectiveRotationDegrees(sourceWidth: number, sourceHeight: number) {
-    if (this.host.sourceMode === 'camera' && this.host.isMobileViewport()) {
+    if (this.host.sourceMode === 'camera' && isMobileViewport()) {
       return this.normalizeRotationDegrees(
         this.getMobileAutoRotationDegrees(sourceWidth, sourceHeight),
       );
@@ -140,7 +144,9 @@ export class PreviewRenderer {
   getPreviewFrameDimensions(sourceWidth: number, sourceHeight: number) {
     const { width: effectiveWidth, height: effectiveHeight } =
       this.getEffectiveFrameDimensions(sourceWidth, sourceHeight);
-    const previewPreset = this.host.getCurrentPreviewQualityPreset();
+    const previewPreset = getCurrentPreviewQualityPreset(
+      this.host.imageSettings,
+    );
     const sourcePixels = Math.max(1, effectiveWidth * effectiveHeight);
     const pixelScale =
       sourcePixels > previewPreset.maxPixels
@@ -170,7 +176,9 @@ export class PreviewRenderer {
     previewWidth: number,
     previewHeight: number,
   ) {
-    const previewLabel = this.host.getCurrentPreviewQualityPreset().label;
+    const previewLabel = getCurrentPreviewQualityPreset(
+      this.host.imageSettings,
+    ).label;
     if (sourceWidth === previewWidth && sourceHeight === previewHeight) {
       return `${sourceWidth}×${sourceHeight} · Vista previa ${previewLabel}`;
     }
@@ -178,7 +186,7 @@ export class PreviewRenderer {
   }
 
   getDesiredPreviewCanvasMetrics(sourceWidth: number, sourceHeight: number) {
-    if (this.host.isMobileViewport()) {
+    if (isMobileViewport()) {
       const wrapperWidth = Math.round(
         (this.host.previewWrapper && this.host.previewWrapper.clientWidth) ||
           window.innerWidth ||
@@ -344,7 +352,7 @@ export class PreviewRenderer {
         }
         this.host.detectors?.updateInfo();
         this.host.editor?.transport?.update();
-        this.host.updateVisualFxLab?.();
+        this.host.editor?.lab?.update();
         if (this.host.sourceMode === 'video')
           this.host.editor?.visualFx?.updatePosition();
       }
@@ -523,9 +531,9 @@ export class PreviewRenderer {
         sourceWidth,
         sourceHeight,
       ),
-      flipH: this.host.getEffectiveFlipH(),
+      flipH: this.host.flipH,
       flipV: this.host.flipV,
-      useCover: mode === 'preview' && this.host.isMobileViewport(),
+      useCover: mode === 'preview' && isMobileViewport(),
     });
   }
 
@@ -708,7 +716,7 @@ export class PreviewRenderer {
     }
 
     if (this.host.detectors.face) {
-      this.host.detectors.face.flipH = this.host.getEffectiveFlipH();
+      this.host.detectors.face.flipH = this.host.flipH;
       this.host.detectors.face.flipV = this.host.flipV;
       this.host.detectors.face.rotationDeg = frameRotation;
     }
@@ -753,7 +761,7 @@ export class PreviewRenderer {
     }
 
     const profileName =
-      mode === 'preview' && this.host.isMobileViewport() ? 'mobile' : mode;
+      mode === 'preview' && isMobileViewport() ? 'mobile' : mode;
     const renderProfile = this.host.renderEngine.getProfile(profileName);
 
     const visualFx = this.host.editor?.visualFx.activeEffect;
@@ -774,7 +782,7 @@ export class PreviewRenderer {
     }
 
     if (this.host.detectors.face) {
-      this.host.detectors.face.flipH = this.host.getEffectiveFlipH();
+      this.host.detectors.face.flipH = this.host.flipH;
       this.host.detectors.face.flipV = this.host.flipV;
       this.host.detectors.face.rotationDeg = frameRotation;
     }

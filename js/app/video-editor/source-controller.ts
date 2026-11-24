@@ -48,17 +48,10 @@ export interface SourceHost {
   colorPicker: ColorPicker;
   detectors: Detectors;
   renderer: PreviewRenderer;
-  enterVideoUI(): void;
-  leaveVideoUI(): void;
-  resetVideoTimelineUI(): void;
-  prepareSourceUI(duration: number): void;
   preferences: Pick<
     WebcamPreferences,
     'updateImageControlsUI' | 'updateQuickDetectorControlsUI'
   >;
-  updateVideoEditorUI(): void;
-  renderVideoTimeline(): void;
-  applyTimelineZoom(): void;
 }
 
 const projectMessages = {
@@ -93,13 +86,15 @@ export class EditorSourceController {
     updateEditorUiState({ mode });
     updateShellState({ mode });
     if (mode === 'video') {
-      this.host.enterVideoUI();
+      this.editor.workspace.enterVideo();
+      this.editor.lab.mount();
       this.host.renderer.clearPreviewCanvas();
       this.clearDetectors();
-      this.host.updateVideoEditorUI();
+      this.editor.exporter.updateVideoEditorUI();
     } else {
       delete document.body.dataset.editorTool;
-      this.host.leaveVideoUI();
+      this.editor.workspace.leaveVideo();
+      this.editor.lab.dispose();
       this.host.camera.setCameraPlaceholderMessage(
         'Iniciando cámara automáticamente...',
       );
@@ -166,7 +161,7 @@ export class EditorSourceController {
     this.editor.history.clear();
     this.editor.editAssist.reset();
     this.editor.timelineEffects.reset();
-    this.host.resetVideoTimelineUI();
+    this.editor.workspace.resetTimeline();
     this.editor.visualFx.reset(true);
     updateEditorUiState({
       sourceDetails: '',
@@ -225,7 +220,7 @@ export class EditorSourceController {
       this.editor.timelineEffects.initializeLook();
       this.host.isRunning = true;
       this.host.camera.updatePreviewPlaceholder();
-      this.host.prepareSourceUI(video.duration);
+      this.editor.workspace.prepareSource(video.duration);
       const restore = this.editor.projects.restorePending(file);
       updateEditorUiState({
         sourceDetails: `${file.name} · ${formatBytes(file.size)} · ${video.videoWidth}×${video.videoHeight} · ${formatDurationDetailed(video.duration)} · ${formatVideoFps(fps)} FPS · ${formatVideoBitrate(averageBitrate)}`,
@@ -237,11 +232,11 @@ export class EditorSourceController {
         true,
       );
       renderer.scheduleRenderLoop();
-      this.host.renderVideoTimeline();
+      this.editor.workspace.renderVideoTimeline();
       await this.editor.timelineEffects.sync(true);
       signal.throwIfAborted();
-      this.host.updateVideoEditorUI();
-      this.host.applyTimelineZoom();
+      this.editor.exporter.updateVideoEditorUI();
+      this.editor.workspace.applyTimelineZoom();
       showStatus(
         this.host.videoEditorStatus,
         projectMessages[restore],
@@ -261,7 +256,7 @@ export class EditorSourceController {
           : 'El navegador no puede decodificar este archivo.',
         'error',
       );
-      this.host.updateVideoEditorUI();
+      this.editor.exporter.updateVideoEditorUI();
     }
   }
 }

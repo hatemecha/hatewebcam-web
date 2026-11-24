@@ -1,5 +1,4 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import ts from 'typescript';
@@ -15,7 +14,7 @@ function listRuntimeFiles(dir) {
         ? listRuntimeFiles(relativePath)
         : relativePath;
     })
-    .filter((file) => /\.(mjs|js|ts)$/.test(file))
+    .filter((file) => /\.(?:[cm]?js|[cm]?ts)$/.test(file))
     .sort();
 }
 
@@ -23,6 +22,7 @@ const runtimeFiles = [...listRuntimeFiles('js'), ...listRuntimeFiles('src')];
 const javascriptFiles = runtimeFiles.filter((file) => !file.endsWith('.ts'));
 const htmlTemplateFiles = [
   'src/lib/webcam/EffectsControls.svelte',
+  'src/lib/webcam/AdvancedDetectorOptions.svelte',
   'src/lib/webcam/CameraSourcePanel.svelte',
   'src/lib/preview/PreviewMetrics.svelte',
   'src/lib/preview/PreviewPlaceholder.svelte',
@@ -46,18 +46,6 @@ const htmlTemplateFiles = [
   'src/lib/editor/AdjustPanel.svelte',
   'src/lib/editor/VisualFxInspector.svelte',
 ];
-
-const controllerConstantPattern =
-  /(?<![.\w$])(?:TIMELINE_EFFECT_META|DEFAULT_TIMELINE_EFFECT_DURATION|DEFAULT_IMAGE_SETTINGS|DEFAULT_CAMERA_FPS|DEFAULT_PREVIEW_QUALITY|MEDIAPIPE_FACE_MESH_VERSION|MEDIAPIPE_FACE_MESH_SRC|MEDIAPIPE_CONSOLE_NOISE_PATTERNS|DETECTOR_DEFAULT_BOX_COLOR|DEFAULT_QUICK_DETECTOR_SETTINGS|ADJUST_CONTEXT_HELP|STORAGE_KEY|PROFILES_KEY|COMMON_VIDEO_FPS)\b/;
-const controllerMethodNames = javascriptFiles
-  .filter((file) => file.startsWith('js/app/'))
-  .flatMap((file) =>
-    [
-      ...readFileSync(resolve(rootDir, file), 'utf8').matchAll(
-        /proto\.([\w$]+)\s*=/g,
-      ),
-    ].map((match) => match[1]),
-  );
 
 const requiredHtmlFragments = [
   'id="videoElement"',
@@ -112,55 +100,20 @@ function fail(message) {
   process.exit(1);
 }
 
+if (javascriptFiles.length) {
+  fail(`Runtime modules must use TypeScript: ${javascriptFiles.join(', ')}`);
+}
 for (const file of runtimeFiles) {
-  const path = resolve(rootDir, file);
-  const source = readFileSync(path, 'utf8');
-  if (file.endsWith('.ts')) {
-    const syntax = ts.createSourceFile(file, source, ts.ScriptTarget.Latest);
-    for (const diagnostic of syntax.parseDiagnostics) {
-      const message = ts.flattenDiagnosticMessageText(
-        diagnostic.messageText,
-        '\n',
-      );
-      fail(`${file} has a syntax error.\n${message}`);
-    }
-    continue;
-  }
-  const result = spawnSync(process.execPath, ['--check', path], {
-    cwd: rootDir,
-    encoding: 'utf8',
-  });
-
-  if (result.status !== 0) {
-    const output = [result.stdout, result.stderr].filter(Boolean).join('\n');
-    fail(`${file} has a syntax error.\n${output}`);
-  }
-
-  if (
-    file.startsWith('js/app/') &&
-    /(?<![.\w$])(?:clamp|escapeHtml)\s*\(/.test(source)
-  ) {
-    fail(`${file} calls a controller helper without this.`);
-  }
-  if (file !== 'js/app/dom.ts' && /(?<![.\w$])\$\s*\(/.test(source)) {
-    fail(`${file} uses the DOM helper outside dom.ts.`);
-  }
-  if (
-    file.startsWith('js/app/') &&
-    !['js/app/constants.ts', 'js/app/controller.mjs'].includes(file) &&
-    controllerConstantPattern.test(source)
-  ) {
-    fail(`${file} accesses a controller constant without this.`);
-  }
-  for (const methodName of controllerMethodNames) {
-    const bareCallbackPattern = new RegExp(
-      `(?:addEventListener\\([^,]+,|requestAnimationFrame\\(|requestVideoFrameCallback\\()\\s*${methodName}\\b`,
+  const source = readFileSync(resolve(rootDir, file), 'utf8');
+  const syntax = ts.createSourceFile(file, source, ts.ScriptTarget.Latest);
+  for (const diagnostic of syntax.parseDiagnostics) {
+    const message = ts.flattenDiagnosticMessageText(
+      diagnostic.messageText,
+      '\n',
     );
-    if (bareCallbackPattern.test(source))
-      fail(`${file} passes ${methodName} without binding the controller.`);
+    fail(`${file} has a syntax error.\n${message}`);
   }
 }
-
 const html = readFileSync(resolve(rootDir, 'index.html'), 'utf8');
 const htmlBundle = [
   html,
@@ -201,28 +154,21 @@ for (const fragment of [
 }
 const appSource = readFileSync(resolve(rootDir, 'js/app.ts'), 'utf8');
 if (
-  !appSource.includes("import { AppController } from './app/controller.mjs'")
+  !appSource.includes(
+    "import { WebcamApplication } from './app/application.ts'",
+  )
 ) {
-  fail('app.ts must bootstrap AppController from ./app/controller.mjs');
+  fail('app.ts must start the typed webcam application');
 }
-const controllerJs = readFileSync(
-  resolve(rootDir, 'js/app/controller.mjs'),
+const applicationSource = readFileSync(
+  resolve(rootDir, 'js/app/application.ts'),
   'utf8',
 );
 if (
-  !controllerJs.includes("from '../video-export.ts'") &&
-  !controllerJs.includes("from './constants.ts'")
+  !applicationSource.includes("from 'virtual:editor-entry-url'") ||
+  !applicationSource.includes('import(/* @vite-ignore */ entry.href)')
 ) {
-  fail('controller.mjs must wire video export/constants modules');
-}
-const videoEditorJs = readFileSync(
-  resolve(rootDir, 'js/app/video-editor.mjs'),
-  'utf8',
-);
-if (videoEditorJs.includes("import('./video-export.ts')")) {
-  fail(
-    'video-editor.mjs must import video-export.ts from its parent directory.',
-  );
+  fail('the editor entry must load only on demand');
 }
 for (const fragment of requiredHtmlFragments) {
   if (!htmlBundle.includes(fragment)) {

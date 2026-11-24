@@ -30,7 +30,6 @@ import { translateCurrent } from '../../../src/lib/i18n/translate.ts';
 import {
   updateEditorUiState,
   type SourceMode,
-  type InspectorTab,
 } from '../../../src/lib/editor/editor-state.ts';
 
 const VIDEO_EXPORT_PLAYBACK_RATE = 4;
@@ -72,11 +71,6 @@ export interface ExportHost {
   >;
   preferences: Pick<WebcamPreferences, 'flushPendingClipConfigSync'>;
   camera: Pick<WebcamCamera, 'updatePreviewPlaceholder'>;
-  setInspectorTab(tab: InspectorTab): void;
-  updateVideoEffectInspector(): void;
-  updateAdjustmentsPanelState(): void;
-  updateEditorHistoryButtons(): void;
-  updateTimelineHint(): void;
 }
 
 export class VideoExporter {
@@ -154,7 +148,7 @@ export class VideoExporter {
   updateVideoEditorUI() {
     const loaded = !!this.editor.source?.file;
     document.body.classList.toggle('video-has-source', loaded);
-    if (!loaded) this.host.setInspectorTab('project');
+    if (!loaded) this.editor.workspace.setInspectorTab('project');
     const canExport =
       loaded &&
       typeof VideoEncoder !== 'undefined' &&
@@ -167,9 +161,9 @@ export class VideoExporter {
     updateShellState({
       exportEnabled: canExport && !this.editor.exportSession?.active,
     });
-    this.host.updateVideoEffectInspector();
-    this.host.updateAdjustmentsPanelState();
-    this.host.updateEditorHistoryButtons();
+    this.editor.workspace.updateVideoEffectInspector();
+    this.editor.workspace.updateAdjustmentsPanelState();
+    this.editor.workspace.updateEditorHistoryButtons();
     this.editor.editAssist?.updateUI();
     if (!loaded) {
       ++this.exportDiagnosticsRequest;
@@ -177,7 +171,7 @@ export class VideoExporter {
       if (this.host.sourceMode === 'video') {
         this.host.camera.updatePreviewPlaceholder();
       }
-      this.host.updateTimelineHint();
+      this.editor.workspace.updateTimelineHint();
       return;
     }
     this.host.camera.updatePreviewPlaceholder();
@@ -211,7 +205,7 @@ export class VideoExporter {
       });
     }
     void this.refreshVideoExportDiagnostics();
-    this.host.updateTimelineHint();
+    this.editor.workspace.updateTimelineHint();
   }
 
   formatVideoExportDiagnosis(diagnosis: VideoExportDiagnosis, bitrate: number) {

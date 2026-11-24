@@ -74,7 +74,7 @@ import { EditorProjects } from '../js/app/video-editor/projects.ts';
 import { PreviewRenderer } from '../js/app/preview-renderer.ts';
 import { VideoExporter } from '../js/app/video-editor/export.ts';
 import { applyEditorExportPreset } from '../js/app/export-settings.ts';
-import { applyLocalvideoeditorMixin } from '../js/app/video-editor.mjs';
+import { EditorWorkspace } from '../js/app/video-editor/workspace.ts';
 import {
   createDefaultVisualConfig,
   migrateProjectToV2,
@@ -1014,9 +1014,9 @@ function checkTimelineClipSnappingHelper() {
     timelineZoom: 1,
     clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
   };
-  applyLocalvideoeditorMixin(app);
+  const workspace = new EditorWorkspace(app.editor, app, app);
   assert.deepEqual(
-    app.resolveTimelineClipTimes({
+    workspace.resolveTimelineClipTimes({
       type: 'blob',
       startTime: 4.04,
       endTime: 7.04,
@@ -1025,7 +1025,7 @@ function checkTimelineClipSnappingHelper() {
     'new clips must snap to the nearest same-track edge',
   );
   assert.deepEqual(
-    app.resolveTimelineClipTimes({
+    workspace.resolveTimelineClipTimes({
       type: 'face',
       startTime: 5.9,
       endTime: 7.9,
@@ -1034,22 +1034,22 @@ function checkTimelineClipSnappingHelper() {
     'new clips must snap to the playhead when it is closer',
   );
   assert.equal(
-    app.snapTimelineTime(2.46),
+    workspace.snapTimelineTime(2.46),
     2.5,
     'timeline cursor must snap to markers',
   );
   assert.equal(
-    app.getTimelineTrackCount(),
+    workspace.getTimelineTrackCount(),
     6,
     'timeline layout must include the video row plus every effect track',
   );
   assert.deepEqual(
-    app.getTimelineRowStyle(2),
+    workspace.getTimelineRowStyle(2),
     { top: 'calc(2 * 100% / 6)', height: 'calc(100% / 6)' },
     'timeline clips must fill one of the six track rows',
   );
   assert.deepEqual(
-    app.getTimelineRowStyle(4),
+    workspace.getTimelineRowStyle(4),
     { top: 'calc(4 * 100% / 6)', height: 'calc(100% / 6)' },
     'face clips must sit in the faces row, not the eyes row',
   );
@@ -1090,7 +1090,7 @@ function checkTimelineClipsMountInTheirTrack() {
       },
     },
   };
-  applyLocalvideoeditorMixin(app);
+  const workspace = new EditorWorkspace(app.editor, app, app);
   const faceEl = {
     style: {},
     parent: null,
@@ -1105,10 +1105,10 @@ function checkTimelineClipsMountInTheirTrack() {
       return selector === '.timeline-track-effects' ? this.parent : null;
     },
   };
-  app.appendTimelineClip(faceEl, 'face');
-  app.appendTimelineClip(blobEl, 'blob');
-  app.positionTimelineRowElement(faceEl, 0, 2, 4);
-  app.positionTimelineRowElement(blobEl, 0, 2, 3);
+  workspace.appendTimelineClip(faceEl, 'face');
+  workspace.appendTimelineClip(blobEl, 'blob');
+  workspace.positionTimelineRowElement(faceEl, 0, 2, 4);
+  workspace.positionTimelineRowElement(blobEl, 0, 2, 3);
   assert.equal(
     faceTrack.child,
     faceEl,
@@ -1146,9 +1146,9 @@ function checkTimelineMarkerIntervalsForInsertion() {
     DEFAULT_TIMELINE_EFFECT_DURATION: 3,
     clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
   };
-  applyLocalvideoeditorMixin(app);
+  const workspace = new EditorWorkspace(app.editor, app, app);
   assert.deepEqual(
-    app.resolveTimelineInsertionTimes({
+    workspace.resolveTimelineInsertionTimes({
       type: 'blob',
       anchorTime: 1.2,
       duration: 3,
@@ -1177,9 +1177,12 @@ function checkTimelineClipboardBasics() {
     updateVideoEffectInspector() {},
     showStatus() {},
   };
-  applyLocalvideoeditorMixin(app);
-  app.copySelectedVideoEffects(false);
-  app.pasteVideoEffects(false);
+  const workspace = new EditorWorkspace(app.editor, app, app);
+  workspace.selectedVideoEffectId = look.id;
+  workspace.selectedVideoEffectIds = new Set([look.id]);
+  app.editor.timelineEffects = { sync: async () => {} };
+  workspace.copySelectedVideoEffects(false);
+  workspace.pasteVideoEffects(false);
   assert.equal(timeline.items.length, 2, 'paste should add a copied clip');
   assert.equal(timeline.items[1].startTime, 5);
   assert.equal(timeline.items[1].endTime, 6);
@@ -1191,7 +1194,6 @@ function checkTimelineClipboardPasteIsAtomic() {
   const look = timeline.add('look', 0, 1, {});
   const blob = timeline.add('blob', 1, 2, {});
   const editorHistory = new EditorHistory();
-  let statusMessage = '';
   const app = {
     editor: {
       timeline: timeline,
@@ -1207,14 +1209,17 @@ function checkTimelineClipboardPasteIsAtomic() {
     renderVideoTimeline() {},
     updateVideoEffectInspector() {},
     updateTimelineClipboardStatus() {},
-    showStatus(_el, message) {
-      statusMessage = message;
+    videoEditorStatus: {
+      textContent: '',
+      classList: { add() {}, remove() {} },
     },
   };
-  applyLocalvideoeditorMixin(app);
-  app.copySelectedVideoEffects(false);
+  const workspace = new EditorWorkspace(app.editor, app, app);
+  workspace.selectedVideoEffectId = look.id;
+  workspace.selectedVideoEffectIds = new Set([look.id, blob.id]);
+  workspace.copySelectedVideoEffects(false);
   // Look fits at 9-10, the blob that follows would end past the trim.
-  app.pasteVideoEffects(false);
+  workspace.pasteVideoEffects(false);
   assert.equal(
     timeline.items.length,
     2,
@@ -1226,7 +1231,7 @@ function checkTimelineClipboardPasteIsAtomic() {
     'a paste that fails midway must not push an undo entry',
   );
   assert.match(
-    statusMessage,
+    app.videoEditorStatus.textContent,
     /recorte/i,
     'a paste that fails midway should report the trim error',
   );
@@ -1244,17 +1249,17 @@ function checkTimelineRectSelectionUsesEveryTrackRow() {
     selectedVideoEffectIds: new Set(),
     selectedVideoEffectId: '',
   };
-  applyLocalvideoeditorMixin(app);
-  app.getTimelineTrackCount = () => 6;
-  app.renderVideoTimeline = () => {};
-  app.updateVideoEffectInspector = () => {};
-  app.updateAdjustmentsPanelState = () => {};
-  app.updateEffectTrackHighlight = () => {};
-  app.setInspectorTab = () => {};
+  const workspace = new EditorWorkspace(app.editor, app, app);
+  workspace.getTimelineTrackCount = () => 6;
+  workspace.renderVideoTimeline = () => {};
+  workspace.updateVideoEffectInspector = () => {};
+  workspace.updateAdjustmentsPanelState = () => {};
+  workspace.updateEffectTrackHighlight = () => {};
+  workspace.setInspectorTab = () => {};
 
   const bounds = { width: 100, height: 600 };
   const rowHeight = bounds.height / 6;
-  app.selectVideoEffectsInRect(
+  workspace.selectVideoEffectsInRect(
     0,
     100,
     rowHeight + 5,
@@ -1262,11 +1267,11 @@ function checkTimelineRectSelectionUsesEveryTrackRow() {
     bounds,
   );
   assert.deepEqual(
-    [...app.selectedVideoEffectIds],
+    [...workspace.selectedVideoEffectIds],
     [look.id],
     'rect selection should only hit the LOOK row',
   );
-  app.selectVideoEffectsInRect(
+  workspace.selectVideoEffectsInRect(
     0,
     100,
     rowHeight * 3 + 5,
@@ -1274,7 +1279,7 @@ function checkTimelineRectSelectionUsesEveryTrackRow() {
     bounds,
   );
   assert.deepEqual(
-    [...app.selectedVideoEffectIds],
+    [...workspace.selectedVideoEffectIds],
     [blob.id],
     'rect selection should only hit the COLOR row',
   );
@@ -1396,8 +1401,9 @@ function checkSplitAllEffectsAtMarkers() {
     showStatus() {},
     hideStatus() {},
   };
-  applyLocalvideoeditorMixin(app);
-  app.splitAllEffectsAtMarkers();
+  const workspace = new EditorWorkspace(app.editor, app, app);
+  app.editor.timelineEffects = { sync: async () => {} };
+  workspace.splitAllEffectsAtMarkers();
   assert.equal(timeline.items.length, 6);
   assert.deepEqual(
     Array.from(
@@ -2259,7 +2265,6 @@ function checkPaletteDropUsesEffectTypeRow() {
       blob: { label: 'Color', trackLabel: 'COLOR', row: 2 },
       face: { label: 'Caras', trackLabel: 'CARAS', row: 3 },
     },
-    paletteDragState: { type: 'blob', chip, moved: true },
     editor: {
       source: { file: {} },
     },
@@ -2269,14 +2274,16 @@ function checkPaletteDropUsesEffectTypeRow() {
     showStatus() {},
     hideStatus() {},
   };
-  applyLocalvideoeditorMixin(app);
-  app.getTimelineRowFromClientY = () => 'face';
-  app.getTimelineTime = () => 4;
-  app.addTimelineEffectClip = (type, time) => {
+  const workspace = new EditorWorkspace(app.editor, app, app);
+  workspace.paletteDragState = { type: 'blob', chip, moved: true };
+  workspace.updateEffectTrackHighlight = () => {};
+  workspace.getTimelineRowFromClientY = () => 'face';
+  workspace.getTimelineTime = () => 4;
+  workspace.addTimelineEffectClip = (type, time) => {
     addedType = `${type}:${time}`;
   };
-  app.removeTimelineDragGhost = () => {};
-  app.finishPaletteDrag({ pointerId: 1, clientX: 100, clientY: 50 });
+  workspace.removeTimelineDragGhost = () => {};
+  workspace.finishPaletteDrag({ pointerId: 1, clientX: 100, clientY: 50 });
   assert.equal(
     addedType,
     'blob:4',
@@ -3119,10 +3126,18 @@ async function checkSubjectClipAwaitsEffectBeforeAnalyzer() {
     hideStatus() {},
     setInspectorTab() {},
   };
-  applyLocalvideoeditorMixin(app);
-  app.resolveTimelineInsertionTimes = () => ({ startTime: 0, endTime: 2 });
-  app.snapshotVideoEffectConfig = () => saved.config;
-  await app.addTimelineEffectClip('visual-fx', 0);
+  const workspace = new EditorWorkspace(app.editor, app, app);
+  app.editor.timelineEffects = { sync: async () => {} };
+  workspace.selectVideoEffect = () => assert.equal(effectLoaded, true);
+  workspace.setInspectorTab = () => {};
+  workspace.resolveTimelineInsertionTimes = () => ({
+    startTime: 0,
+    endTime: 2,
+  });
+  workspace.snapshotVideoEffectConfig = () => saved.config;
+  const result = await workspace.addTimelineEffectClip('visual-fx', 0);
+  assert.equal(result, saved);
+  assert.equal(effectLoaded, true);
   assert.equal(
     readyCalls,
     0,

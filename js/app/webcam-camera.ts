@@ -1,3 +1,4 @@
+import { hideStatus, showStatus } from './feedback.ts';
 import type { WebcamPreferences } from './webcam-preferences.ts';
 import {
   getPlaceholderState,
@@ -30,7 +31,6 @@ import type { PreviewRenderer } from './preview-renderer.ts';
 import type { WebcamCapture } from './webcam-capture.ts';
 
 type PerformanceProfile = (typeof PERFORMANCE_MODE_PRESETS)[PerformanceMode];
-type Status = 'info' | 'warning' | 'error';
 
 interface WebcamCameraHost {
   sourceMode: 'camera' | 'video';
@@ -67,8 +67,6 @@ interface WebcamCameraHost {
   flipH: boolean;
   flipV: boolean;
   rotation: number;
-  showStatus(element: HTMLElement | null, message: string, type: Status): void;
-  hideStatus(element: HTMLElement | null): void;
   preferences: Pick<
     WebcamPreferences,
     'syncMirrorControls' | 'updateImageControlsUI' | 'saveImageSettings'
@@ -119,7 +117,7 @@ export class WebcamCamera {
       state !== 'starting' &&
       this.host.captureStatus
     ) {
-      this.host.hideStatus(this.host.captureStatus);
+      hideStatus(this.host.captureStatus);
     }
   }
 
@@ -221,12 +219,12 @@ export class WebcamCamera {
       save,
     });
     if (notify) {
-      this.host.showStatus(
+      showStatus(
         this.host.captureStatus,
         `Modo ${PERFORMANCE_MODE_PRESETS[normalized].label} aplicado.`,
         'info',
       );
-      setTimeout(() => this.host.hideStatus(this.host.captureStatus), 1600);
+      setTimeout(() => hideStatus(this.host.captureStatus), 1600);
     }
     if (
       restartCamera &&
@@ -257,7 +255,7 @@ export class WebcamCamera {
     this.applyPerformanceProfileSettings(PERFORMANCE_MODE_PRESETS.performance, {
       save: false,
     });
-    this.host.showStatus(
+    showStatus(
       this.host.captureStatus,
       'FPS bajo detectado. Se bajó la preview y el tracking.',
       'warning',
@@ -366,12 +364,12 @@ export class WebcamCamera {
       if (request !== this.request) return;
       console.error('Error switching camera:', err);
       this.setCameraState(classifyCameraError(err), err, { focus: true });
-      this.host.showStatus(
+      showStatus(
         this.host.captureStatus,
         'No se pudo cambiar de cámara',
         'error',
       );
-      setTimeout(() => this.host.hideStatus(this.host.captureStatus), 2200);
+      setTimeout(() => hideStatus(this.host.captureStatus), 2200);
     } finally {
       if (request === this.request && this.host.sourceMode === 'camera') {
         updateCameraSourceState({ selectDisabled: false });

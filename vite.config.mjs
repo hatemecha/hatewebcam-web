@@ -5,7 +5,7 @@ import { fileURLToPath, URL } from 'node:url';
 function editorEntryUrl() {
   const name = 'virtual:editor-entry-url';
   const id = `\0${name}`;
-  const source = '/js/app/editor-install.mjs';
+  const source = '/js/app/editor-install.ts';
   let building = false;
 
   return {

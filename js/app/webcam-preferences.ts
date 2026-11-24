@@ -38,7 +38,6 @@ import type {
   FaceVisualKind,
 } from '../../src/lib/webcam/types.ts';
 import { setColorPickFeedback } from '../../src/lib/webcam/color-pick-feedback.ts';
-import type { TimelineItem } from '../editor/video-timeline.ts';
 import type { Detectors } from './detectors.ts';
 import type { readAppDom } from './dom.ts';
 import type { PreviewRenderer } from './preview-renderer.ts';
@@ -150,21 +149,12 @@ interface PreferencesHost {
   capture: WebcamCapture;
   detectors: Detectors;
   editor: VideoEditorSession | null;
-  selectedVideoEffectId: string;
-  adjustClipStatusText?: string;
-  adjustClipVisible?: boolean;
-  adjustmentsContext: string;
   profiles: Pick<WebcamProfiles, 'names' | 'selected'>;
   flipH: boolean;
   flipV: boolean;
   rotation: number;
   isRunning: boolean;
   mobileFxOpen: boolean;
-  updateVideoEffectInspector(): void;
-  updateVideoEditorUI(): void;
-  getSelectedVideoEffectItem?(): TimelineItem | null;
-  snapshotVideoEffectConfig?(type: string): Record<string, unknown>;
-  syncLookClipConfigNow?(): void;
 }
 
 export function isMobileViewport(): boolean {
@@ -199,7 +189,8 @@ export class WebcamPreferences {
     const faceFlags = normalizeFaceVisualFlags(quick);
     const selectedEffect =
       this.host.sourceMode === 'video'
-        ? (this.host.getSelectedVideoEffectItem?.()?.type ?? null)
+        ? (this.host.editor?.workspace.getSelectedVideoEffectItem()?.type ??
+          null)
         : null;
     const extras = deriveDetectorExtras({
       sourceMode: this.host.sourceMode === 'video' ? 'video' : 'camera',
@@ -214,10 +205,10 @@ export class WebcamPreferences {
         !!this.host.dom.effectsControlsSlot?.classList.contains(
           'is-contextual',
         ),
-      adjustContext: this.host.adjustmentsContext || 'look',
+      adjustContext: this.host.editor?.workspace.adjustmentsContext || 'look',
       adjustHelp: this.host.dom.adjustContextHelp?.textContent || '',
-      adjustClipStatus: this.host.adjustClipStatusText || '',
-      adjustClipVisible: !!this.host.adjustClipVisible,
+      adjustClipStatus: this.host.editor?.workspace.adjustClipStatusText || '',
+      adjustClipVisible: !!this.host.editor?.workspace.adjustClipVisible,
       advancedOpen: !!this.advancedOptionsOpen,
       activePreset: this.mobileActivePreset || null,
       detectors: {
@@ -397,8 +388,8 @@ export class WebcamPreferences {
     this.host.quickDetectorSettings.faceShowBox = faceFlags.showBox;
     this.host.quickDetectorSettings.faceShowBlur = faceFlags.showBlur;
     this.host.capture.updateCaptureButtons();
-    this.host.updateVideoEffectInspector();
-    this.host.updateVideoEditorUI();
+    this.host.editor?.workspace.updateVideoEffectInspector();
+    this.host.editor?.exporter.updateVideoEditorUI();
     this.publishWebcamPanel();
   }
 
@@ -482,22 +473,14 @@ export class WebcamPreferences {
   }
 
   syncSelectedClipConfig() {
-    const { editor, snapshotVideoEffectConfig } = this.host;
-    if (
-      !editor ||
-      !snapshotVideoEffectConfig ||
-      this.host.sourceMode !== 'video' ||
-      !this.host.selectedVideoEffectId
-    )
-      return;
-    const item = editor.timeline.items.find(
-      (candidate) => candidate.id === this.host.selectedVideoEffectId,
-    );
+    const editor = this.host.editor;
+    if (!editor || this.host.sourceMode !== 'video') return;
+    const item = editor.workspace.getSelectedVideoEffectItem();
     if (!item) return;
     try {
       editor.timeline.upsert({
         ...item,
-        config: snapshotVideoEffectConfig.call(this.host, item.type),
+        config: editor.workspace.snapshotVideoEffectConfig(item.type),
       });
       if (item.type === 'look') {
         this.host.editor?.timelineEffects.syncLook({ force: true });
@@ -523,12 +506,15 @@ export class WebcamPreferences {
       clearTimeout(this.syncSelectedClipConfigTimer);
       this.syncSelectedClipConfigTimer = null;
     }
-    this.host.syncLookClipConfigNow?.();
+    this.host.editor?.workspace.syncLookClipConfigNow();
     this.syncSelectedClipConfig();
   }
 
   scheduleSyncSelectedClipConfig() {
-    if (this.host.sourceMode !== 'video' || !this.host.selectedVideoEffectId)
+    if (
+      this.host.sourceMode !== 'video' ||
+      !this.host.editor?.workspace.selectedVideoEffectId
+    )
       return;
     if (this.syncSelectedClipConfigTimer)
       clearTimeout(this.syncSelectedClipConfigTimer);
@@ -549,7 +535,7 @@ export class WebcamPreferences {
   }
 
   scheduleSaveImageSettings() {
-    this.host.syncLookClipConfigNow?.();
+    this.host.editor?.workspace.syncLookClipConfigNow();
     this.host.renderer?.refreshPausedVideoPreview();
     if (this.saveImageSettingsTimer) clearTimeout(this.saveImageSettingsTimer);
     this.saveImageSettingsTimer = setTimeout(() => {
@@ -752,7 +738,7 @@ export class WebcamPreferences {
       image.editorCopyAudio = false;
     }
     this.updateImageControlsUI();
-    this.host.updateVideoEditorUI();
+    this.host.editor?.exporter.updateVideoEditorUI();
     this.saveImageSettings();
   }
 

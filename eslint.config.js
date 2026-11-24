@@ -3,18 +3,6 @@ import svelte from 'eslint-plugin-svelte';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
-const browserGlobals = {
-  ...globals.browser,
-  BlobTracking: 'readonly',
-  BlinkDetection: 'readonly',
-  CameraManager: 'readonly',
-  EditorHistory: 'readonly',
-  EffectManager: 'readonly',
-  FaceDetection: 'readonly',
-  FaceMesh: 'readonly',
-  VideoTimeline: 'readonly',
-};
-
 const baseRules = {
   eqeqeq: ['error', 'always', { null: 'ignore' }],
   'no-console': ['error', { allow: ['warn', 'error'] }],
@@ -54,7 +42,7 @@ export default [
   {
     files: ['**/*.svelte'],
     languageOptions: {
-      globals: browserGlobals,
+      globals: globals.browser,
       parserOptions: {
         parser: tseslint.parser,
       },
@@ -75,17 +63,9 @@ export default [
   {
     files: ['src/**/*.{ts,svelte}', 'js/**/*.ts'],
     rules: {
+      eqeqeq: baseRules.eqeqeq,
       'no-console': ['error', { allow: ['warn', 'error'] }],
     },
-  },
-  {
-    files: ['js/**/*.{js,mjs}'],
-    languageOptions: {
-      ecmaVersion: 'latest',
-      sourceType: 'module',
-      globals: browserGlobals,
-    },
-    rules: baseRules,
   },
   {
     files: ['tests/**/*.mjs', 'scripts/**/*.mjs', 'playwright.config.mjs'],
@@ -94,7 +74,7 @@ export default [
       sourceType: 'module',
       globals: {
         ...globals.node,
-        ...browserGlobals,
+        ...globals.browser,
       },
     },
     rules: {

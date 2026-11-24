@@ -1,7 +1,7 @@
 /**
  * HateWebcam Web — application entry point.
  */
-import { AppController } from './app/controller.mjs';
+import { WebcamApplication } from './app/application.ts';
 import {
   getLocale,
   initializeI18n,
@@ -31,33 +31,26 @@ import { mountVideoEditor } from '../src/lib/editor/mount.ts';
 
 import { hideStatus } from './app/feedback.ts';
 
-interface ShellCommands {
-  _adjustClipStatusKey: string;
-  openAdjustmentsForContext?(context: string): void;
-  updateAdjustmentsContext?(): void;
-  updateAdjustmentsClipStatus?(): void;
-}
-
 initializeI18n();
-const controller = new AppController() as AppController & ShellCommands;
-let controllerReady = false;
-const pendingControllerActions: (() => void)[] = [];
+let app: WebcamApplication;
+let appReady = false;
+const pendingActions: (() => void)[] = [];
 
 /**
  * Run a controller action now, or as soon as startup finishes. Interactions
  * that land while settings load must not be silently discarded.
  */
-function whenControllerReady(action: () => void) {
-  if (controllerReady) {
+function whenAppReady(action: () => void) {
+  if (appReady) {
     action();
     return;
   }
-  pendingControllerActions.push(action);
+  pendingActions.push(action);
 }
 
-function markControllerReady() {
-  controllerReady = true;
-  for (const action of pendingControllerActions.splice(0)) action();
+function markAppReady() {
+  appReady = true;
+  for (const action of pendingActions.splice(0)) action();
 }
 
 try {
@@ -65,56 +58,43 @@ try {
   mountVideoEditor(
     document.querySelector<HTMLElement>('#videoEditorTemplateSlot'),
     {
-      loadVideo: (file) =>
-        whenControllerReady(() => void controller.importVideoFile(file)),
+      loadVideo: (file) => whenAppReady(() => void app.importVideoFile(file)),
       loadProject: (file) =>
-        whenControllerReady(
-          () => void controller.importEditorProjectFile(file),
-        ),
-      saveProject: () =>
-        whenControllerReady(() => controller.editor?.projects.save()),
+        whenAppReady(() => void app.importEditorProjectFile(file)),
+      saveProject: () => whenAppReady(() => app.editor?.projects.save()),
       startExport: () =>
-        whenControllerReady(
-          () => void controller.editor?.exporter.startVideoExport(),
-        ),
+        whenAppReady(() => void app.editor?.exporter.startVideoExport()),
       setExportSetting: (setting, value) =>
-        whenControllerReady(() =>
-          controller.preferences.setExportSetting(setting, value),
-        ),
+        whenAppReady(() => app.preferences.setExportSetting(setting, value)),
     },
   );
   mountPreviewPlaceholder(
     document.querySelector<HTMLElement>('#previewPlaceholderMount'),
     {
-      startCamera: () =>
-        whenControllerReady(() => void controller.camera.toggleCamera(true)),
+      startCamera: () => whenAppReady(() => void app.camera.toggleCamera(true)),
       chooseVideo: () =>
         document.querySelector<HTMLInputElement>('#videoFileInput')?.click(),
     },
   );
   mountCaptureBar(document.querySelector<HTMLElement>('#captureBarMount'), {
     takePhoto: () => {
-      whenControllerReady(() => controller.capture.requestPhotoCapture());
+      whenAppReady(() => app.capture.requestPhotoCapture());
     },
     toggleRecording: () => {
-      whenControllerReady(() => controller.capture.toggleRecording());
+      whenAppReady(() => app.capture.toggleRecording());
     },
     setCaptureTimer: (seconds) => {
-      whenControllerReady(() =>
-        controller.preferences.setCaptureTimerSeconds(seconds),
-      );
+      whenAppReady(() => app.preferences.setCaptureTimerSeconds(seconds));
     },
   });
   mountAppHeader(
     document.querySelector<HTMLElement>('#appHeaderMount'),
     {
       setSourceMode: (mode) => {
-        whenControllerReady(() => controller.setSourceMode(mode));
+        whenAppReady(() => app.setSourceMode(mode));
       },
       startVideoExport: () => {
-        whenControllerReady(
-          () => void controller.editor?.exporter.startVideoExport(),
-        );
+        whenAppReady(() => void app.editor?.exporter.startVideoExport());
       },
       setLocale: (locale) => {
         setLocale(locale);
@@ -125,21 +105,21 @@ try {
   );
   mountCameraSource(document.querySelector<HTMLElement>('#cameraSourceMount'), {
     toggleCamera: () => {
-      whenControllerReady(() => void controller.camera.toggleCamera());
+      whenAppReady(() => void app.camera.toggleCamera());
     },
     selectCamera: (deviceId) => {
-      whenControllerReady(() => void controller.camera.selectCamera(deviceId));
+      whenAppReady(() => void app.camera.selectCamera(deviceId));
     },
     setPerformanceMode: (mode) => {
-      whenControllerReady(() => {
-        void controller.camera.applyPerformanceMode(mode, {
+      whenAppReady(() => {
+        void app.camera.applyPerformanceMode(mode, {
           restartCamera: true,
           notify: true,
         });
       });
     },
     toggleMirror: () => {
-      whenControllerReady(() => controller.preferences.toggleMirrorQuick());
+      whenAppReady(() => app.preferences.toggleMirrorQuick());
     },
   });
   mountPreviewMetrics(
@@ -149,110 +129,80 @@ try {
     document.querySelector<HTMLElement>('#effectsControlsSlot'),
     {
       toggleDetector: (type, checked) => {
-        whenControllerReady(() => {
-          controller.handleVideoDetectorToggle(type, checked);
+        whenAppReady(() => {
+          app.handleDetectorToggle(type, checked);
         });
       },
       setBlobColor: (color) => {
-        whenControllerReady(() =>
-          controller.preferences.setQuickBlobColor(color),
-        );
+        whenAppReady(() => app.preferences.setQuickBlobColor(color));
       },
       setFaceColor: (color) => {
-        whenControllerReady(() =>
-          controller.preferences.setQuickFaceColor(color),
-        );
+        whenAppReady(() => app.preferences.setQuickFaceColor(color));
       },
       setFaceLabel: (value) => {
-        whenControllerReady(() =>
-          controller.preferences.setQuickFaceLabel(value),
-        );
+        whenAppReady(() => app.preferences.setQuickFaceLabel(value));
       },
       commitFaceLabel: (value) => {
-        whenControllerReady(() =>
-          controller.preferences.commitQuickFaceLabel(value),
-        );
+        whenAppReady(() => app.preferences.commitQuickFaceLabel(value));
       },
       setFaceVisual: (kind, checked) => {
-        whenControllerReady(() =>
-          controller.preferences.setFaceVisualChecked(kind, checked),
-        );
+        whenAppReady(() => app.preferences.setFaceVisualChecked(kind, checked));
       },
       pickColor: (target) => {
-        whenControllerReady(() => controller.colorPicker.start(target));
+        whenAppReady(() => app.colorPicker.start(target));
       },
       setDetectorOptions: (...update) =>
-        whenControllerReady(() =>
-          controller.preferences.setDetectorOptions(...update),
-        ),
+        whenAppReady(() => app.preferences.setDetectorOptions(...update)),
       setTargetColor: (color) =>
-        whenControllerReady(() => controller.preferences.setTargetColor(color)),
+        whenAppReady(() => app.preferences.setTargetColor(color)),
       toggleAdvanced: () => {
-        whenControllerReady(() =>
-          controller.preferences.toggleAdvancedOptions(),
-        );
+        whenAppReady(() => app.preferences.toggleAdvancedOptions());
       },
       setImageNumber: (key, value) => {
-        whenControllerReady(() =>
-          controller.preferences.setPanelImageNumber(key, value),
-        );
+        whenAppReady(() => app.preferences.setPanelImageNumber(key, value));
       },
       setBlackAndWhite: (checked) => {
-        whenControllerReady(() =>
-          controller.preferences.setPanelBlackAndWhite(checked),
-        );
+        whenAppReady(() => app.preferences.setPanelBlackAndWhite(checked));
       },
       setVideoFormat: (format) => {
-        whenControllerReady(() =>
-          controller.preferences.setPanelVideoFormat(format),
-        );
+        whenAppReady(() => app.preferences.setPanelVideoFormat(format));
       },
       setQualityEnhancer: (checked) => {
-        whenControllerReady(() =>
-          controller.preferences.setPanelQualityEnhancer(checked),
-        );
+        whenAppReady(() => app.preferences.setPanelQualityEnhancer(checked));
       },
       setShutterSound: (checked) => {
-        whenControllerReady(() =>
-          controller.preferences.setPanelShutterSound(checked),
-        );
+        whenAppReady(() => app.preferences.setPanelShutterSound(checked));
       },
       setFlipH: (flipH) =>
-        whenControllerReady(() => controller.camera.setTransform({ flipH })),
+        whenAppReady(() => app.camera.setTransform({ flipH })),
       setFlipV: (flipV) =>
-        whenControllerReady(() => controller.camera.setTransform({ flipV })),
+        whenAppReady(() => app.camera.setTransform({ flipV })),
       setRotation: (rotation) =>
-        whenControllerReady(() => controller.camera.setTransform({ rotation })),
+        whenAppReady(() => app.camera.setTransform({ rotation })),
       applyPreset: (name) => {
-        whenControllerReady(() =>
-          controller.preferences.applyImagePreset(name),
-        );
+        whenAppReady(() => app.preferences.applyImagePreset(name));
       },
       resetImage: () => {
-        whenControllerReady(() =>
-          controller.preferences.resetImageAdjustments(),
-        );
+        whenAppReady(() => app.preferences.resetImageAdjustments());
       },
       saveProfile: () => {
-        whenControllerReady(() => controller.profiles.saveCurrent());
+        whenAppReady(() => app.profiles.saveCurrent());
       },
       deleteProfile: () => {
-        whenControllerReady(() => controller.profiles.deleteSelected());
+        whenAppReady(() => app.profiles.deleteSelected());
       },
       deleteAllProfiles: () => {
-        whenControllerReady(() => controller.profiles.deleteAll());
+        whenAppReady(() => app.profiles.deleteAll());
       },
       selectProfile: (name) => {
-        whenControllerReady(() => void controller.profiles.select(name));
+        whenAppReady(() => void app.profiles.select(name));
       },
       resetWebcam: () => {
-        whenControllerReady(
-          () => void controller.preferences.resetWebcamConfiguration(),
-        );
+        whenAppReady(() => void app.preferences.resetWebcamConfiguration());
       },
       openAdjustContext: (context) => {
-        whenControllerReady(() =>
-          controller.openAdjustmentsForContext?.(context),
+        whenAppReady(() =>
+          app.editor?.workspace.openAdjustmentsForContext(context),
         );
       },
     },
@@ -262,75 +212,61 @@ try {
   );
   mountMobileHud(document.querySelector<HTMLElement>('#mobileHudMount'), {
     toggleEffects: () => {
-      whenControllerReady(() =>
-        controller.preferences.setMobileFxPanelVisible(
-          !controller.preferences.isMobileFxPanelVisible(),
+      whenAppReady(() =>
+        app.preferences.setMobileFxPanelVisible(
+          !app.preferences.isMobileFxPanelVisible(),
         ),
       );
     },
     closeEffects: () => {
-      whenControllerReady(() =>
-        controller.preferences.setMobileFxPanelVisible(false),
-      );
+      whenAppReady(() => app.preferences.setMobileFxPanelVisible(false));
     },
     toggleMirror: () => {
-      whenControllerReady(() => controller.preferences.toggleMirrorQuick());
+      whenAppReady(() => app.preferences.toggleMirrorQuick());
     },
     takePhoto: () => {
-      whenControllerReady(() => {
-        controller.preferences.setMobileFxPanelVisible(false);
-        controller.capture.requestPhotoCapture();
+      whenAppReady(() => {
+        app.preferences.setMobileFxPanelVisible(false);
+        app.capture.requestPhotoCapture();
       });
     },
     toggleRecording: () => {
-      whenControllerReady(() => {
-        controller.preferences.setMobileFxPanelVisible(false);
-        controller.capture.toggleRecording();
+      whenAppReady(() => {
+        app.preferences.setMobileFxPanelVisible(false);
+        app.capture.toggleRecording();
       });
     },
     toggleDetector: (type, checked) => {
-      whenControllerReady(() => {
-        controller.handleVideoDetectorToggle(type, checked);
+      whenAppReady(() => {
+        app.handleDetectorToggle(type, checked);
       });
     },
     pickColor: () => {
-      whenControllerReady(() => {
-        controller.colorPicker.start();
-        controller.preferences.setMobileFxPanelVisible(false);
+      whenAppReady(() => {
+        app.colorPicker.start();
+        app.preferences.setMobileFxPanelVisible(false);
       });
     },
     setBlobColor: (color) => {
-      whenControllerReady(() =>
-        controller.preferences.setQuickBlobColor(color),
-      );
+      whenAppReady(() => app.preferences.setQuickBlobColor(color));
     },
     setFaceColor: (color) => {
-      whenControllerReady(() =>
-        controller.preferences.setQuickFaceColor(color),
-      );
+      whenAppReady(() => app.preferences.setQuickFaceColor(color));
     },
     setFaceVisual: (kind, checked) => {
-      whenControllerReady(() =>
-        controller.preferences.setFaceVisualChecked(kind, checked),
-      );
+      whenAppReady(() => app.preferences.setFaceVisualChecked(kind, checked));
     },
     setFaceLabel: (value) => {
-      whenControllerReady(() =>
-        controller.preferences.setQuickFaceLabel(value),
-      );
+      whenAppReady(() => app.preferences.setQuickFaceLabel(value));
     },
     commitFaceLabel: (value) => {
-      whenControllerReady(() =>
-        controller.preferences.commitQuickFaceLabel(value),
-      );
+      whenAppReady(() => app.preferences.commitQuickFaceLabel(value));
     },
     applyPreset: (name) => {
-      whenControllerReady(() => controller.preferences.applyImagePreset(name));
+      whenAppReady(() => app.preferences.applyImagePreset(name));
     },
     setCaptureTimer: (seconds) => {
-      whenControllerReady(() =>
-        controller.preferences.setCaptureTimerSeconds(seconds),
-      );
+      whenAppReady(() => app.preferences.setCaptureTimerSeconds(seconds));
     },
   });
   mountDetectorChips(document.querySelector<HTMLElement>('#effectsInfo'));
@@ -338,19 +274,17 @@ try {
     document.querySelector<HTMLElement>('#captureModalTemplateSlot'),
     {
       download: () => {
-        whenControllerReady(() => controller.capture.downloadPendingCapture());
+        whenAppReady(() => app.capture.downloadPendingCapture());
       },
       discard: () => {
-        whenControllerReady(() => controller.capture.closeCapturePreview(true));
+        whenAppReady(() => app.capture.closeCapturePreview(true));
       },
       setEnhancer: (enabled) => {
-        whenControllerReady(() =>
-          controller.capture.onPreviewPhotoEnhancerToggle(enabled),
-        );
+        whenAppReady(() => app.capture.onPreviewPhotoEnhancerToggle(enabled));
       },
       setEnhancerStrength: (strength) => {
-        whenControllerReady(() =>
-          controller.capture.onPreviewPhotoEnhancerStrengthInput(strength),
+        whenAppReady(() =>
+          app.capture.onPreviewPhotoEnhancerStrengthInput(strength),
         );
       },
     },
@@ -359,32 +293,26 @@ try {
     document.querySelector<HTMLElement>('#exportModalTemplateSlot'),
     {
       cancel: () => {
-        whenControllerReady(
-          () => void controller.editor?.exporter.cancelVideoExport(),
-        );
+        whenAppReady(() => void app.editor?.exporter.cancelVideoExport());
       },
       close: () => {
-        whenControllerReady(() =>
-          controller.editor?.exporter.closeVideoExportModal(),
-        );
+        whenAppReady(() => app.editor?.exporter.closeVideoExportModal());
       },
     },
   );
-  const lifecycle = await controller.start();
-  markControllerReady();
+  app = new WebcamApplication();
+  const lifecycle = await app.start();
+  markAppReady();
   const refreshLocalizedUi = () => {
     if (lifecycle.signal.aborted) return;
-    controller.detectors.updateInfo?.(true);
-    controller.updateVideoEditorUI?.();
-    controller._adjustClipStatusKey = '';
-    controller.updateAdjustmentsContext?.();
-    controller.updateAdjustmentsClipStatus?.();
-    controller.updateTimelineHint?.();
-    hideStatus(controller.dom?.videoEditorStatus);
-    controller.preferences?.publishWebcamPanel();
-    controller.capture?.updateCaptureButtons();
-    controller.capture?.publishCapturePreview();
-    controller.capture?.publishCaptureChrome();
+    app.detectors.updateInfo(true);
+    app.editor?.exporter.updateVideoEditorUI();
+    app.editor?.workspace.refreshLocale();
+    hideStatus(app.dom.videoEditorStatus);
+    app.preferences.publishWebcamPanel();
+    app.capture.updateCaptureButtons();
+    app.capture.publishCapturePreview();
+    app.capture.publishCaptureChrome();
     updateShellState({ locale: getLocale() });
   };
   const unsubscribeLocale = subscribeLocale(() => {

@@ -1,33 +1,14 @@
 /** Lightweight undo/redo stack for the local video editor timeline. */
 
-export interface TimelineItemLike {
-  id: string;
-  type: string;
-  startTime: number;
-  endTime: number;
-  config: unknown;
-  [key: string]: unknown;
-}
+import type { TimelineItem, VideoTimeline } from './video-timeline.ts';
 
-export interface TimelineMarkerLike {
-  [key: string]: unknown;
-}
+type TimelineLike = Pick<
+  VideoTimeline,
+  'trimStart' | 'trimEnd' | 'items' | 'markers'
+>;
+export type TimelineSnapshot = TimelineLike;
 
-export interface TimelineLike {
-  trimStart: number;
-  trimEnd: number;
-  markers: TimelineMarkerLike[];
-  items: TimelineItemLike[];
-}
-
-export interface TimelineSnapshot {
-  trimStart: number;
-  trimEnd: number;
-  markers: TimelineMarkerLike[];
-  items: TimelineItemLike[];
-}
-
-function cloneConfig(config: unknown): unknown {
+function cloneConfig(config: TimelineItem['config']): TimelineItem['config'] {
   return typeof structuredClone === 'function'
     ? structuredClone(config)
     : JSON.parse(JSON.stringify(config || {}));
