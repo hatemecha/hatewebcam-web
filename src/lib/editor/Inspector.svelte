@@ -1,6 +1,6 @@
 <script lang="ts">
   import { m } from '../i18n/text.svelte';
-  import { editorState } from './editor-store';
+  import { editorActions, editorState } from './editor-store';
   import ProjectPanel from './ProjectPanel.svelte';
   import ClipInspector from './ClipInspector.svelte';
   import AdjustPanel from './AdjustPanel.svelte';
@@ -29,6 +29,7 @@
       aria-selected={$editorState.inspectorTab === 'project'}
       aria-controls="inspectorPanelProject"
       data-tab="project"
+      onclick={() => $editorActions?.setInspectorTab('project')}
     >
       {m('Proyecto')}
     </button>
@@ -41,6 +42,7 @@
       aria-selected={$editorState.inspectorTab === 'effect'}
       aria-controls="inspectorPanelEffect"
       data-tab="effect"
+      onclick={() => $editorActions?.setInspectorTab('effect')}
     >
       {m('Clip')}
     </button>
@@ -53,14 +55,18 @@
       aria-selected={$editorState.inspectorTab === 'adjust'}
       aria-controls="inspectorPanelAdjust"
       data-tab="adjust"
+      onclick={() => $editorActions?.setInspectorTab('adjust')}
     >
       {m('Ajustes')}
     </button>
   </div>
   <div
     class="inspector-clipboard-status mono"
+    class:is-active={Boolean($editorState.clipboardStatus)}
     id="timelineClipboardStatus"
-  ></div>
+  >
+    {$editorState.clipboardStatus}
+  </div>
   <div class="video-inspector-panels">
     <ProjectPanel {projects} />
     <div

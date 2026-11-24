@@ -142,7 +142,10 @@
       'adjust-clip-status',
       'mono',
       'video-only',
-      { hidden: !videoMode || !panel.adjustClipVisible },
+      {
+        hidden: !videoMode || !panel.adjustClipVisible,
+        'is-live': panel.adjustClipLive,
+      },
     ]}
     id="adjustClipStatus"
   >

@@ -11,6 +11,15 @@ import {
 
 export type SourceMode = 'camera' | 'video';
 export type InspectorTab = 'project' | 'effect' | 'adjust';
+export type EditorTool = 'select' | 'cut' | 'trim';
+
+export interface ClipReadout {
+  type: string;
+  label: string;
+  startTime: number;
+  endTime: number;
+  automation: string;
+}
 
 export interface ProjectActions {
   loadVideo(file: File): void;
@@ -55,6 +64,16 @@ export interface EditorUiState {
   canUndo: boolean;
   canRedo: boolean;
   inspectorTab: InspectorTab;
+  tool: EditorTool;
+  zoom: number;
+  snapEnabled: boolean;
+  trimStart: number;
+  trimEnd: number;
+  clip: ClipReadout | null;
+  timelineHint: MessageKey | '';
+  clipboardStatus: string;
+  targetTrack: string | null;
+  adjustTrack: string | null;
   visualFxSelected: boolean;
   visualFxStatus: MessageKey | '';
 }
@@ -71,6 +90,16 @@ let state: EditorUiState = {
   canUndo: false,
   canRedo: false,
   inspectorTab: 'project',
+  tool: 'select',
+  zoom: 1,
+  snapEnabled: true,
+  trimStart: 0,
+  trimEnd: 0,
+  clip: null,
+  timelineHint: '',
+  clipboardStatus: '',
+  targetTrack: null,
+  adjustTrack: null,
   visualFxSelected: false,
   visualFxStatus: '',
 };

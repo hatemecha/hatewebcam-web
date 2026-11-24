@@ -3,15 +3,6 @@ export function toFiniteNumber(value: unknown, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-export function escapeHtml(value: unknown) {
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
 export function isExportDebugVisible() {
   try {
     if (localStorage.getItem('hatewebcam-export-debug') === '1') return true;

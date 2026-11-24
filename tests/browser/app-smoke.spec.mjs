@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 const SUBJECT_VIDEO_FIXTURE = fileURLToPath(
@@ -62,6 +63,36 @@ test('webcam boot defers the editor chunk until video mode', async ({
   expect(editorChunks.length).toBe(chunkRequests);
   await expect(page.locator('#videoFileInput')).toHaveCount(1);
   await expect(page.locator('#videoTimeline')).toHaveCount(1);
+});
+
+test('an import requested while startup reads settings reaches the editor', async ({
+  page,
+}) => {
+  const video = await readFile(SUBJECT_VIDEO_FIXTURE, 'base64');
+  await page.addInitScript((encoded) => {
+    const getItem = Storage.prototype.getItem;
+    Storage.prototype.getItem = function (key) {
+      if (key === 'hatewebcam_config') {
+        Storage.prototype.getItem = getItem;
+        document.querySelector('#btnVideoMode').click();
+        const input = document.querySelector('#videoFileInput');
+        const transfer = new DataTransfer();
+        const bytes = Uint8Array.from(atob(encoded), (byte) =>
+          byte.charCodeAt(0),
+        );
+        transfer.items.add(
+          new File([bytes], 'inicio.webm', { type: 'video/webm' }),
+        );
+        input.files = transfer.files;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      return getItem.call(this, key);
+    };
+  }, video);
+  await page.goto('/');
+  await expect(page.locator('#videoTimelineShell')).toBeVisible();
+  await expect(page.locator('#videoFileMeta')).toContainText('inicio.webm');
+  await expect(page.locator('#videoFileInput')).toHaveValue('');
 });
 
 test('a pending editor load honors the most recent mode choice', async ({

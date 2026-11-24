@@ -1,6 +1,6 @@
 <script lang="ts">
   import { m } from '../i18n/text.svelte';
-  import { editorState } from './editor-store';
+  import { editorActions, editorState } from './editor-store';
 </script>
 
 <div
@@ -15,6 +15,7 @@
       type="button"
       class="timeline-palette-chip"
       data-effect-type="look"
+      onclick={() => $editorActions?.addPaletteClip('look')}
       draggable="true"
       disabled={!$editorState.hasSource || $editorState.exporting}
     >
@@ -25,6 +26,7 @@
       type="button"
       class="timeline-palette-chip"
       data-effect-type="visual-fx"
+      onclick={() => $editorActions?.addPaletteClip('visual-fx')}
       draggable="true"
       disabled={!$editorState.hasSource || $editorState.exporting}
     >
@@ -35,6 +37,7 @@
       type="button"
       class="timeline-palette-chip"
       data-effect-type="blob"
+      onclick={() => $editorActions?.addPaletteClip('blob')}
       draggable="true"
       disabled={!$editorState.hasSource || $editorState.exporting}
     >
@@ -45,6 +48,7 @@
       type="button"
       class="timeline-palette-chip"
       data-effect-type="face"
+      onclick={() => $editorActions?.addPaletteClip('face')}
       draggable="true"
       disabled={!$editorState.hasSource || $editorState.exporting}
     >
@@ -55,6 +59,7 @@
       type="button"
       class="timeline-palette-chip"
       data-effect-type="blink"
+      onclick={() => $editorActions?.addPaletteClip('blink')}
       draggable="true"
       disabled={!$editorState.hasSource || $editorState.exporting}
     >

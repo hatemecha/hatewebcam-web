@@ -1,3 +1,4 @@
+import { setEditorActions } from '../../../src/lib/editor/editor-store.ts';
 import { updateEditAssistPanel } from '../../../src/lib/editor/edit-assist-panel.ts';
 import { updateEditorUiState } from '../../../src/lib/editor/editor-state.ts';
 import { mountVisualFxInspector } from '../../../src/lib/editor/mount-visual-fx.ts';
@@ -76,8 +77,6 @@ export class VideoEditorSession {
       onRestore: () => {
         workspace.resetSelection();
         workspace.updateEditorHistoryButtons();
-        dom.videoTrimStart.value = String(this.timeline.trimStart);
-        dom.videoTrimEnd.value = String(this.timeline.trimEnd);
         host.preferences.updateImageControlsUI();
         workspace.renderVideoTimeline();
         this.exporter.updateVideoEditorUI();
@@ -126,6 +125,7 @@ export class VideoEditorSession {
   }
 
   start(inspector: HTMLElement | null): void {
+    setEditorActions(this.workspace);
     this.workspace.bindVideoEditorEvents();
     this.workspace.bindTimelinePaletteDrag();
     this.workspace.bindEditorSplitters();
@@ -138,6 +138,7 @@ export class VideoEditorSession {
 
   dispose(): void {
     this.exporter.dispose();
+    setEditorActions(null);
     this.workspace.dispose();
     this.lab.dispose();
     this.transport.dispose();

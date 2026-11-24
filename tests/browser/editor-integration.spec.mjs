@@ -29,6 +29,23 @@ test('timeline clips support add, undo, redo and delete', async ({ page }) => {
 
   await page.locator('.timeline-item').first().click();
   await expect(page.locator('#btnDeleteVideoEffect')).toBeVisible();
+  await page.locator('#btnTimelineZoomIn').click();
+  await expect(page.locator('#timelineZoom')).toHaveValue('1.5');
+  const clipStart = page.locator('#videoEffectStart');
+  await clipStart.fill('0.25');
+  await clipStart.press('Tab');
+  await expect(clipStart).toHaveValue('0.25');
+  await page.locator('#videoEffectAutomationSelect').selectOption('fade-in');
+  await page.locator('#btnOpenEffectAdjust').click();
+  await expect(page.locator('#tabInspectorAdjust')).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await page.locator('#tabInspectorEffect').click();
+  await expect(clipStart).toHaveValue('0.25');
+  await expect(page.locator('#videoEffectAutomationSelect')).toHaveValue(
+    'fade-in',
+  );
   await page.locator('#btnDeleteVideoEffect').click();
   await expect(page.locator('.timeline-item')).toHaveCount(0);
 });
@@ -110,6 +127,38 @@ test('leaving the editor cancels the source probe and revokes its URL', async ({
     ),
   ).toBe(true);
   await expect(page.locator('#videoTimelineShell')).toBeHidden();
+});
+
+test('closing the app releases the webcam and editor keyboard listeners', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const addEventListener = EventTarget.prototype.addEventListener;
+    window.testKeyboardSignals = [];
+    EventTarget.prototype.addEventListener = function (
+      name,
+      listener,
+      options,
+    ) {
+      if (
+        name === 'keydown' &&
+        (this === window || this === document) &&
+        options?.signal
+      ) {
+        window.testKeyboardSignals.push(options.signal);
+      }
+      return addEventListener.call(this, name, listener, options);
+    };
+  });
+  await openEditor(page);
+  const allReleased = await page.evaluate(() => {
+    const signals = window.testKeyboardSignals;
+    if (signals.length < 2 || signals.some((signal) => signal.aborted))
+      return false;
+    window.dispatchEvent(new Event('beforeunload'));
+    return signals.every((signal) => signal.aborted);
+  });
+  expect(allReleased).toBe(true);
 });
 
 test('a saved project restores its timeline when the original video is reimported', async ({

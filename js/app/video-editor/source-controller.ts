@@ -220,7 +220,6 @@ export class EditorSourceController {
       this.editor.timelineEffects.initializeLook();
       this.host.isRunning = true;
       this.host.camera.updatePreviewPlaceholder();
-      this.editor.workspace.prepareSource(video.duration);
       const restore = this.editor.projects.restorePending(file);
       updateEditorUiState({
         sourceDetails: `${file.name} · ${formatBytes(file.size)} · ${video.videoWidth}×${video.videoHeight} · ${formatDurationDetailed(video.duration)} · ${formatVideoFps(fps)} FPS · ${formatVideoBitrate(averageBitrate)}`,

@@ -6,6 +6,8 @@
   import Timeline from './Timeline.svelte';
   import Inspector from './Inspector.svelte';
   import type { ProjectActions } from './editor-state';
+  import { transportPosition } from './transport-store';
+  import { formatDurationDetailed } from '../../../js/app/media-format.ts';
 
   let { projects }: { projects: ProjectActions } = $props();
 </script>
@@ -33,8 +35,20 @@
   <EffectPalette />
   <Timeline />
   <div class="timeline-hint">
-    <span id="timelineHintText"></span>
-    <span class="mono" id="videoEffectRangeLabel"></span>
+    <span id="timelineHintText"
+      >{$editorState.timelineHint ? m($editorState.timelineHint) : ''}</span
+    >
+    <span class="mono" id="videoEffectRangeLabel"
+      >{#if $editorState.clip}
+        {formatDurationDetailed($editorState.clip.startTime)} - {formatDurationDetailed(
+          $editorState.clip.endTime,
+        )}
+      {:else}
+        {m('Cursor: {time}', {
+          time: formatDurationDetailed($transportPosition.currentTime),
+        })}
+      {/if}</span
+    >
   </div>
 </section>
 

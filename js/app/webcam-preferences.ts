@@ -206,9 +206,10 @@ export class WebcamPreferences {
           'is-contextual',
         ),
       adjustContext: this.host.editor?.workspace.adjustmentsContext || 'look',
-      adjustHelp: this.host.dom.adjustContextHelp?.textContent || '',
+      adjustHelp: this.host.editor?.workspace.adjustHelp || '',
       adjustClipStatus: this.host.editor?.workspace.adjustClipStatusText || '',
       adjustClipVisible: !!this.host.editor?.workspace.adjustClipVisible,
+      adjustClipLive: !!this.host.editor?.workspace.adjustClipLive,
       advancedOpen: !!this.advancedOptionsOpen,
       activePreset: this.mobileActivePreset || null,
       detectors: {

@@ -3,7 +3,11 @@
   import { editorState } from './editor-store';
 </script>
 
-<div class="panel-section inspector-adjust-empty" id="inspectorAdjustNoVideo">
+<div
+  class="panel-section inspector-adjust-empty"
+  class:hidden={$editorState.hasSource}
+  id="inspectorAdjustNoVideo"
+>
   <div class="help-text">
     {m(
       'Importá un video para empezar. Los ajustes aparecen cuando seleccionás un clip de efecto en la timeline.',
@@ -11,7 +15,8 @@
   </div>
 </div>
 <div
-  class="panel-section inspector-adjust-empty hidden"
+  class="panel-section inspector-adjust-empty"
+  class:hidden={!$editorState.hasSource || Boolean($editorState.clip)}
   id="inspectorAdjustNoClip"
 >
   <div class="help-text">
@@ -30,7 +35,11 @@
     {m('Los cambios se aplican al instante; no hace falta guardar nada.')}
   </div>
 </div>
-<div id="inspectorAdjustmentsHost" class="hidden">
+<div
+  id="inspectorAdjustmentsHost"
+  class:hidden={!$editorState.hasSource || !$editorState.clip}
+  class:is-visual-fx={$editorState.visualFxSelected}
+>
   <div
     id="visualFxInspectorHost"
     class="visual-fx-inspector"

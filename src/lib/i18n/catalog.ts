@@ -68,6 +68,7 @@ export const englishMessages = {
   'Color objetivo actualizado.': 'Target color updated.',
   'Color objetivo': 'Target color',
   Tolerancia: 'Tolerance',
+  'Cursor: {time}': 'Playhead: {time}',
   'Color a detectar': 'Color to detect',
   'Elegir en el video': 'Pick from video',
   'Si la detección es demasiado estricta, subí este valor. Si detecta demasiado, bajalo.':

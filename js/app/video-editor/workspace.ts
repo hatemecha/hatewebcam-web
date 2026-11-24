@@ -1,5 +1,6 @@
 import {
   updateEditorUiState,
+  type EditorTool,
   type InspectorTab,
   type SourceMode,
 } from '../../../src/lib/editor/editor-state.ts';
@@ -37,8 +38,8 @@ import {
   normalizeLookClipConfig,
 } from './look-config.ts';
 import type { VideoEditorSession } from './session.ts';
+import { TimelineInteraction } from './timeline-interaction.ts';
 
-type EditorTool = 'select' | 'cut' | 'trim';
 type SplitterAxis = 'horizontal' | 'vertical';
 type TimelineBounds = Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>;
 interface ClipPlacement {
@@ -54,8 +55,6 @@ interface ClipInsertion {
   duration?: number;
 }
 interface AdjustmentOptions {
-  syncEffectType?: boolean;
-  effectType?: string;
   syncTool?: boolean;
   tool?: 'trim' | 'effect';
 }
@@ -87,10 +86,11 @@ function visualEffectLabel(system: unknown): string {
 
 export class EditorWorkspace {
   private readonly lifetime = new AbortController();
-  private dragListeners: AbortController | null = null;
+  readonly interaction: TimelineInteraction;
   selectedVideoEffectId = '';
   selectedVideoEffectIds = new Set<string>();
   timelineZoom = 1;
+  snapEnabled = true;
   timelineHistorySuspended = false;
   timelineClipboard: {
     origin: number;
@@ -109,12 +109,16 @@ export class EditorWorkspace {
   _adjustClipStatusKey = '';
   adjustClipStatusText = '';
   adjustClipVisible = false;
+  adjustClipLive = false;
+  adjustHelp = '';
 
   constructor(
     private readonly editor: VideoEditorSession,
     private readonly dom: ReturnType<typeof readAppDom>,
     private readonly host: EditorWorkspaceHost,
-  ) {}
+  ) {
+    this.interaction = new TimelineInteraction(editor, dom, this);
+  }
 
   dispose() {
     this.lifetime.abort();
@@ -148,7 +152,7 @@ export class EditorWorkspace {
       end = clamp(end, start + minSpan, this.editor.timeline.trimEnd);
     }
 
-    if (this.dom.chkTimelineSnap?.checked) {
+    if (this.snapEnabled) {
       const threshold = 0.12 / Math.max(1, this.timelineZoom);
       const points = [
         this.editor.timeline.trimStart,
@@ -324,9 +328,6 @@ export class EditorWorkspace {
       (candidate) => candidate.id === this.selectedVideoEffectId,
     );
     if (item) {
-      this.dom.videoEffectType.value = item.type;
-      this.dom.videoEffectStart.value = item.startTime.toFixed(2);
-      this.dom.videoEffectEnd.value = item.endTime.toFixed(2);
       this.applyVideoEffectItemConfig(item);
       if (isVisualFxClipType(item.type)) {
         const t = this.dom.videoEl?.currentTime || 0;
@@ -346,7 +347,7 @@ export class EditorWorkspace {
   }
 
   snapTimelineTime(time: number) {
-    if (!this.dom.chkTimelineSnap?.checked) return time;
+    if (!this.snapEnabled) return time;
     const points = new Set([
       this.editor.timeline.trimStart,
       this.editor.timeline.trimEnd,
@@ -378,6 +379,8 @@ export class EditorWorkspace {
   }
 
   renderVideoTimeline() {
+    const { trimStart, trimEnd } = this.editor.timeline;
+    updateEditorUiState({ trimStart, trimEnd });
     if (
       !this.dom.timelineItems ||
       !this.dom.videoTimelineEl ||
@@ -420,31 +423,6 @@ export class EditorWorkspace {
       );
     }
 
-    const selectionStart = this.selectedVideoEffectId
-      ? clamp(
-          Number(this.dom.videoEffectStart.value) || 0,
-          this.editor.timeline.trimStart,
-          this.editor.timeline.trimEnd,
-        )
-      : this.dom.videoEl.currentTime || 0;
-    const selectionEnd = this.selectedVideoEffectId
-      ? clamp(
-          Number(this.dom.videoEffectEnd.value) || 0,
-          selectionStart,
-          this.editor.timeline.trimEnd,
-        )
-      : selectionStart;
-    if (this.selectedVideoEffectId) {
-      this.dom.videoEffectStart.value = selectionStart.toFixed(2);
-      this.dom.videoEffectEnd.value = selectionEnd.toFixed(2);
-    }
-    if (this.dom.videoEffectRangeLabel) {
-      if (this.selectedVideoEffectId) {
-        this.dom.videoEffectRangeLabel.textContent = `${formatDurationDetailed(selectionStart)} - ${formatDurationDetailed(selectionEnd)}`;
-      } else {
-        this.dom.videoEffectRangeLabel.textContent = `Cursor: ${formatDurationDetailed(this.dom.videoEl.currentTime || 0)}`;
-      }
-    }
     this.dom.timelinePlayhead.style.left = percent(
       this.dom.videoEl.currentTime || 0,
     );
@@ -497,7 +475,7 @@ export class EditorWorkspace {
         meta.row,
       );
       el.addEventListener('pointerdown', (event) =>
-        this.beginTimelineDrag(event, item, el),
+        this.interaction.beginTimelineDrag(event, item, el),
       );
     });
     this.renderTimelineRuler();
@@ -630,34 +608,42 @@ export class EditorWorkspace {
     }
   }
 
-  applyVideoTrim(resetSelection = true) {
-    if (!this.editor.source?.file) return;
+  applyVideoTrim(
+    start = this.editor.timeline.trimStart,
+    end = this.editor.timeline.trimEnd,
+  ): void {
+    if (!this.editor.source.file) return;
     try {
-      this.editor.timeline.setTrim(
-        this.dom.videoTrimStart.value,
-        this.dom.videoTrimEnd.value,
-      );
+      this.editor.timeline.setTrim(start, end);
       this.dom.videoEl.currentTime = clamp(
         this.dom.videoEl.currentTime,
         this.editor.timeline.trimStart,
         this.editor.timeline.trimEnd,
       );
-      if (resetSelection) {
-        this.dom.videoEffectStart.value =
-          this.editor.timeline.trimStart.toFixed(2);
-        this.dom.videoEffectEnd.value = this.editor.timeline.trimEnd.toFixed(2);
-      }
       this.renderVideoTimeline();
       this.editor.exporter.updateVideoEditorUI();
-    } catch (err) {
-      this.dom.videoTrimStart.value = this.editor.timeline.trimStart.toFixed(2);
-      this.dom.videoTrimEnd.value = this.editor.timeline.trimEnd.toFixed(2);
+    } catch (error) {
       showStatus(
         this.dom.videoEditorStatus,
-        err instanceof Error ? err.message : String(err),
+        error instanceof Error ? error.message : String(error),
         'error',
       );
     }
+  }
+
+  setTrimBoundary(
+    edge: 'start' | 'end',
+    time = this.dom.videoEl.currentTime,
+  ): number {
+    const { trimStart, trimEnd } = this.editor.timeline;
+    this.pushTimelineHistory();
+    this.applyVideoTrim(
+      edge === 'start' ? time : trimStart,
+      edge === 'end' ? time : trimEnd,
+    );
+    return edge === 'start'
+      ? this.editor.timeline.trimStart
+      : this.editor.timeline.trimEnd;
   }
 
   getSelectedVideoEffectItem() {
@@ -718,75 +704,38 @@ export class EditorWorkspace {
   }
 
   updateAdjustmentsClipStatus() {
-    if (!this.dom.adjustClipStatus || this.host.sourceMode !== 'video') return;
+    if (this.host.sourceMode !== 'video') return;
     const item = this.getSelectedVideoEffectItem();
-    if (!item) {
-      if (this._adjustClipStatusKey !== 'empty') {
-        this._adjustClipStatusKey = 'empty';
-        this.dom.adjustClipStatus.classList.add('hidden');
-        this.dom.adjustClipStatus.classList.remove('is-live');
-        this.adjustClipStatusText = '';
-        this.adjustClipVisible = false;
-        this.host.preferences?.publishWebcamPanel();
-      }
-      return;
-    }
     const active = this.isPlayheadInSelectedClip();
-    // This runs every render tick while a clip is selected; the underlying
-    // state (item id + in/out-of-clip) only actually changes occasionally,
-    // so skip the textContent/classList writes otherwise.
-    const key = `${item.id}:${item.startTime}:${item.endTime}:${active}`;
+    const key = item
+      ? `${item.id}:${item.startTime}:${item.endTime}:${active}`
+      : 'empty';
     if (this._adjustClipStatusKey === key) return;
     this._adjustClipStatusKey = key;
-    this.adjustClipStatusText = active
-      ? `${translateCurrent('Tramo')} ${formatDurationDetailed(item.startTime)} - ${formatDurationDetailed(item.endTime)} · ${translateCurrent('Vista previa activa')}`
-      : `${translateCurrent('Tramo')} ${formatDurationDetailed(item.startTime)} - ${formatDurationDetailed(item.endTime)} · ${translateCurrent('Mové el cursor al clip para previsualizar')}`;
-    this.adjustClipVisible = true;
-    this.dom.adjustClipStatus.textContent = this.adjustClipStatusText;
-    this.dom.adjustClipStatus.classList.toggle('is-live', active);
-    this.dom.adjustClipStatus.classList.remove('hidden');
-    this.host.preferences?.publishWebcamPanel();
+    this.adjustClipVisible = Boolean(item);
+    this.adjustClipLive = active;
+    this.adjustClipStatusText = item
+      ? `${translateCurrent('Tramo')} ${formatDurationDetailed(item.startTime)} - ${formatDurationDetailed(item.endTime)} · ${translateCurrent(active ? 'Vista previa activa' : 'Mové el cursor al clip para previsualizar')}`
+      : '';
+    this.host.preferences.publishWebcamPanel();
   }
 
   updateAdjustmentsPanelState() {
-    const hasVideo = !!this.editor.source?.file;
     const item = this.getSelectedVideoEffectItem();
-    const hasSelection = !!item;
-    const isVisualFx = isVisualFxClipType(item?.type ?? '');
-    if (this.dom.inspectorAdjustNoVideo)
-      this.dom.inspectorAdjustNoVideo.classList.toggle('hidden', hasVideo);
-    if (this.dom.inspectorAdjustNoClip)
-      this.dom.inspectorAdjustNoClip.classList.toggle(
-        'hidden',
-        !hasVideo || hasSelection,
-      );
-    if (this.dom.inspectorAdjustmentsHost) {
-      this.dom.inspectorAdjustmentsHost.classList.toggle(
-        'hidden',
-        !hasSelection,
-      );
-      this.dom.inspectorAdjustmentsHost.classList.toggle(
-        'is-visual-fx',
-        isVisualFx,
-      );
+    if (item) {
+      this.updateAdjustmentsContext();
+      if (isVisualFxClipType(item.type))
+        this.editor.visualFx?.updateInspector();
+    } else {
+      updateEditorUiState({ adjustTrack: null });
+      this.updateAdjustmentsClipStatus();
     }
-    if (this.dom.adjustContextNav)
-      this.dom.adjustContextNav.classList.toggle(
-        'hidden',
-        !hasSelection || isVisualFx,
-      );
-    if (this.dom.effectsControlsSlot)
-      this.dom.effectsControlsSlot.classList.toggle('hidden', isVisualFx);
-    if (this.dom.adjustContextHelp)
-      this.dom.adjustContextHelp.classList.toggle('hidden', isVisualFx);
-    if (this.dom.adjustClipStatus)
-      this.dom.adjustClipStatus.classList.toggle('hidden', isVisualFx);
-    if (hasSelection) this.updateAdjustmentsContext();
-    if (isVisualFx) this.editor.visualFx?.updateInspector();
   }
 
   getSelectedAutomationMode() {
-    return normalizeClipAutomation(this.dom.videoEffectAutomationSelect?.value);
+    return normalizeClipAutomation(
+      this.getSelectedVideoEffectItem()?.config.automation,
+    );
   }
 
   syncLookClipConfigNow() {
@@ -881,37 +830,39 @@ export class EditorWorkspace {
     this.host.preferences.updateQuickDetectorControlsUI();
   }
 
-  commitSelectedEffectTiming(options: { pushHistory?: boolean } = {}) {
-    if (!this.selectedVideoEffectId) return;
-    const item = this.editor.timeline.items.find(
-      (candidate) => candidate.id === this.selectedVideoEffectId,
-    );
-    if (!item) return;
+  commitSelectedEffectTiming(edge: 'start' | 'end', value: number): number {
+    const item = this.getSelectedVideoEffectItem();
+    if (!item) return 0;
+    const { trimStart, trimEnd } = this.editor.timeline;
     const minSpan = 0.05;
     const startTime = clamp(
-      Number(this.dom.videoEffectStart.value) || 0,
-      this.editor.timeline.trimStart,
-      this.editor.timeline.trimEnd - minSpan,
+      edge === 'start' ? value || 0 : item.startTime,
+      trimStart,
+      trimEnd - minSpan,
     );
     const endTime = clamp(
-      Number(this.dom.videoEffectEnd.value) || 0,
+      edge === 'end' ? value || 0 : item.endTime,
       startTime + minSpan,
-      this.editor.timeline.trimEnd,
+      trimEnd,
     );
-    this.dom.videoEffectStart.value = startTime.toFixed(2);
-    this.dom.videoEffectEnd.value = endTime.toFixed(2);
     try {
-      if (options.pushHistory) this.pushTimelineHistory();
-      this.editor.timeline.upsert({ ...item, startTime, endTime });
-      this.renderVideoTimeline();
-      void this.editor?.timelineEffects.sync(true);
-    } catch (err) {
+      this.pushTimelineHistory();
+      const updated = this.editor.timeline.upsert({
+        ...item,
+        startTime,
+        endTime,
+      });
+      this.selectVideoEffect(updated.id);
+      void this.editor.timelineEffects.sync(true);
+      return edge === 'start' ? updated.startTime : updated.endTime;
+    } catch (error) {
       showStatus(
         this.dom.videoEditorStatus,
-        err instanceof Error ? err.message : String(err),
+        error instanceof Error ? error.message : String(error),
         'error',
       );
-      this.selectVideoEffect(item.id);
+      this.updateVideoEffectInspector();
+      return edge === 'start' ? item.startTime : item.endTime;
     }
   }
 
@@ -1023,30 +974,25 @@ export class EditorWorkspace {
     void this.addTimelineEffectClip(type, this.getTimelineTime(event.clientX));
   }
 
+  addPaletteClip(type: string): void {
+    if (
+      this.suppressPaletteClick ||
+      !this.editor.source.file ||
+      this.editor.exportSession.active
+    )
+      return;
+    void this.addTimelineEffectClip(
+      type,
+      this.dom.videoEl.currentTime || this.editor.timeline.trimStart,
+    );
+  }
+
   bindTimelinePaletteDrag() {
     const { signal } = this.lifetime;
     if (!this.dom.timelineEffectPalette) return;
     this.dom.timelineEffectPalette
       .querySelectorAll<HTMLButtonElement>('.timeline-palette-chip')
       .forEach((chip) => {
-        chip.addEventListener(
-          'click',
-          (event) => {
-            if (
-              this.suppressPaletteClick ||
-              !this.editor.source?.file ||
-              this.editor.exportSession?.active ||
-              chip.disabled
-            )
-              return;
-            event.preventDefault();
-            void this.addTimelineEffectClip(
-              chip.dataset.effectType,
-              this.dom.videoEl.currentTime || this.editor.timeline.trimStart,
-            );
-          },
-          { signal },
-        );
         chip.addEventListener(
           'pointerdown',
           (event) => {
@@ -1138,16 +1084,6 @@ export class EditorWorkspace {
     this.selectedVideoEffectId = this.selectedVideoEffectIds.has(id)
       ? id
       : this.selectedVideoEffectIds.values().next().value || '';
-    if (this.selectedVideoEffectId) {
-      const item = this.editor.timeline.items.find(
-        (candidate) => candidate.id === this.selectedVideoEffectId,
-      );
-      if (item) {
-        this.dom.videoEffectType.value = item.type;
-        this.dom.videoEffectStart.value = item.startTime.toFixed(2);
-        this.dom.videoEffectEnd.value = item.endTime.toFixed(2);
-      }
-    }
     this.renderVideoTimeline();
     this.updateVideoEffectInspector();
     this.updateAdjustmentsPanelState();
@@ -1164,9 +1100,6 @@ export class EditorWorkspace {
     this.selectedVideoEffectId = ids[0];
     const item = this.getSelectedVideoEffectItem();
     if (item) {
-      this.dom.videoEffectType.value = item.type;
-      this.dom.videoEffectStart.value = item.startTime.toFixed(2);
-      this.dom.videoEffectEnd.value = item.endTime.toFixed(2);
       this.applyVideoEffectItemConfig(item);
     }
     this.renderVideoTimeline();
@@ -1187,60 +1120,53 @@ export class EditorWorkspace {
     this.updateEffectTrackHighlight();
   }
 
+  publishClip(
+    item: TimelineItem | null,
+    startTime = item?.startTime ?? 0,
+    endTime = item?.endTime ?? 0,
+  ): void {
+    const meta = effectMeta(item?.type);
+    updateEditorUiState({
+      clip: item
+        ? {
+            type: item.type,
+            label: `${meta?.trackLabel || item.type} · ${meta?.label || item.type}`,
+            startTime,
+            endTime,
+            automation: normalizeClipAutomation(item.config.automation),
+          }
+        : null,
+    });
+  }
+
   updateVideoEffectInspector() {
-    const hasVideo = !!this.editor.source?.file;
-    const item = this.editor.timeline.items.find(
-      (candidate) => candidate.id === this.selectedVideoEffectId,
-    );
-    const editing = !!item;
-    if (this.dom.videoEffectEmptyNoVideo)
-      this.dom.videoEffectEmptyNoVideo.classList.toggle('hidden', hasVideo);
-    if (this.dom.videoEffectEmptyHint)
-      this.dom.videoEffectEmptyHint.classList.toggle(
-        'hidden',
-        !hasVideo || editing,
-      );
-    if (this.dom.videoEffectClipMeta)
-      this.dom.videoEffectClipMeta.classList.toggle('hidden', !editing);
-    if (item && this.dom.videoEffectTypeLabel) {
-      this.dom.videoEffectTypeLabel.textContent = `${effectMeta(item.type)?.trackLabel || item.type} · ${effectMeta(item.type)?.label || item.type}`;
-    }
-    if (item && this.dom.videoEffectDurationLabel) {
-      const duration = Math.max(0, item.endTime - item.startTime);
-      this.dom.videoEffectDurationLabel.textContent = `${translateCurrent('Duración')}: ${duration.toFixed(2)} s`;
-    }
-    if (this.dom.videoEffectAutomationSelect) {
-      this.dom.videoEffectAutomationSelect.disabled = !editing;
-      this.dom.videoEffectAutomationSelect.value = normalizeClipAutomation(
-        item?.config?.automation,
-      );
-    }
-    if (this.dom.btnDeleteVideoEffect)
-      this.dom.btnDeleteVideoEffect.disabled = !editing;
-    if (this.dom.btnOpenEffectAdjust)
-      this.dom.btnOpenEffectAdjust.disabled = !editing;
+    this.publishClip(this.getSelectedVideoEffectItem());
     this.editor.visualFx?.updateInspector();
   }
 
-  commitSelectedEffectAutomation() {
+  commitSelectedEffectAutomation(value: string) {
     const item = this.getSelectedVideoEffectItem();
     if (!item) return;
     this.pushTimelineHistory();
     this.editor.timeline.upsert({
       ...item,
       config: {
-        ...(item.config || {}),
-        automation: this.getSelectedAutomationMode(),
+        ...item.config,
+        automation: normalizeClipAutomation(value),
       },
     });
     this.renderVideoTimeline();
-    void this.editor?.timelineEffects.sync(true);
+    this.updateVideoEffectInspector();
+    void this.editor.timelineEffects.sync(true);
+  }
+
+  openSelectedClipAdjustments(): void {
+    const item = this.getSelectedVideoEffectItem();
+    if (item) this.openAdjustmentsForContext(item.type);
   }
 
   updateTimelineClipboardStatus(message = '') {
-    if (!this.dom.timelineClipboardStatus) return;
-    this.dom.timelineClipboardStatus.textContent = message;
-    this.dom.timelineClipboardStatus.classList.toggle('is-active', !!message);
+    updateEditorUiState({ clipboardStatus: message });
   }
 
   mountVideoEffectsControls() {
@@ -1264,20 +1190,7 @@ export class EditorWorkspace {
     if (!this.dom.effectsControlsSlot || !this.dom.controlPanel) return;
     this.dom.effectsControlsSlot.classList.remove('is-contextual');
     this.host.preferences?.publishWebcamPanel();
-    delete this.dom.effectsControlsSlot.dataset.adjustContext;
-    this.dom.adjustContextNav?.classList.add('hidden');
-    this.dom.effectsControlsSlot
-      .querySelectorAll<HTMLElement>('.adjust-context-group')
-      .forEach((group) => {
-        group.classList.remove('is-active');
-      });
-    this.dom.videoTimelineEl
-      ?.querySelectorAll<HTMLElement>(
-        '.timeline-track-label[data-adjust-context]',
-      )
-      .forEach((label) => {
-        label.classList.remove('is-active');
-      });
+    updateEditorUiState({ adjustTrack: null });
     const cfg = this.host.preferences.loadConfig();
     this.host.preferences.setAdvancedOptionsVisible(!!cfg.showAdvancedOptions);
     const sourceSection = this.dom.controlPanel.querySelector('#sourcePanel');
@@ -1307,59 +1220,15 @@ export class EditorWorkspace {
     if (!context || !Object.hasOwn(ADJUST_CONTEXT_HELP, context)) return;
     const contextKey = context as keyof typeof ADJUST_CONTEXT_HELP;
     this.adjustmentsContext = context;
-    if (this.dom.effectsControlsSlot) {
-      this.dom.effectsControlsSlot.dataset.adjustContext = context;
-    }
-    this.dom.adjustContextNav
-      ?.querySelectorAll<HTMLElement>('.adjust-context-tab')
-      .forEach((tab) => {
-        const active = tab.dataset.adjustContext === context;
-        tab.classList.toggle('is-active', active);
-        tab.setAttribute('aria-selected', String(active));
-      });
-    this.dom.effectsControlsSlot
-      ?.querySelectorAll<HTMLElement>('.adjust-context-group')
-      .forEach((group) => {
-        group.classList.toggle(
-          'is-active',
-          group.dataset.adjustContext === context,
-        );
-      });
-    this.dom.videoTimelineEl
-      ?.querySelectorAll<HTMLElement>(
-        '.timeline-track-label[data-adjust-context]',
-      )
-      .forEach((label) => {
-        label.classList.toggle(
-          'is-active',
-          label.dataset.adjustContext === context,
-        );
-      });
-    if (this.dom.adjustContextHelp) {
-      const help =
-        ADJUST_CONTEXT_VIDEO_HELP[contextKey] ||
-        ADJUST_CONTEXT_HELP[contextKey];
-      this.dom.adjustContextHelp.textContent = translateCurrent(help);
-    }
+    this.adjustHelp = translateCurrent(
+      ADJUST_CONTEXT_VIDEO_HELP[contextKey] || ADJUST_CONTEXT_HELP[contextKey],
+    );
+    updateEditorUiState({ adjustTrack: context });
     this.updateAdjustmentsClipStatus();
-    this.host.preferences?.publishWebcamPanel();
-    if (options.syncEffectType && this.dom.videoEffectType) {
-      this.dom.videoEffectType.value = options.effectType || context;
-      this.updateEffectTrackHighlight();
-      this.updateTimelineHint();
-    }
+    this.host.preferences.publishWebcamPanel();
     if (options.syncTool) {
-      if (options.tool === 'trim') {
-        this.setEditorTool('trim');
-      } else if (options.tool === 'effect') {
-        this.setEditorTool('select');
-        if (this.dom.videoEffectType) {
-          this.dom.videoEffectType.value =
-            options.effectType || (context === 'look' ? 'look' : context);
-        }
-        this.updateEffectTrackHighlight();
-        this.updateTimelineHint();
-      }
+      if (options.tool === 'trim') this.setEditorTool('trim');
+      else if (options.tool === 'effect') this.setEditorTool('select');
     }
   }
 
@@ -1381,21 +1250,27 @@ export class EditorWorkspace {
     this.setInspectorTab('adjust');
   }
 
+  openTrack(
+    context: string,
+    type?: string,
+    tool?: 'trim' | 'effect',
+    extendSelection = false,
+  ): void {
+    if (type && !extendSelection) this.selectVideoEffectsByType(type);
+    this.openAdjustmentsForContext(context, {
+      syncTool: Boolean(tool),
+      tool,
+    });
+  }
+
   updateEffectTrackHighlight(activeType: string | null = null) {
-    if (!this.dom.videoTimelineEl) return;
-    const selected = this.editor.timeline.items.find(
-      (item) => item.id === this.selectedVideoEffectId,
-    );
-    const type =
-      activeType || this.paletteDragState?.type || selected?.type || null;
-    this.dom.videoTimelineEl
-      .querySelectorAll<HTMLElement>('.timeline-track-effects')
-      .forEach((track) => {
-        track.classList.toggle(
-          'is-target-track',
-          !!type && track.dataset.track === type,
-        );
-      });
+    updateEditorUiState({
+      targetTrack:
+        activeType ||
+        this.paletteDragState?.type ||
+        this.getSelectedVideoEffectItem()?.type ||
+        null,
+    });
   }
 
   setInspectorTab(tabName: InspectorTab) {
@@ -1409,35 +1284,35 @@ export class EditorWorkspace {
   setEditorTool(tool: EditorTool) {
     this.editorTool = tool;
     document.body.dataset.editorTool = tool;
-    if (this.dom.videoTimelineEl)
-      this.dom.videoTimelineEl.dataset.editorTool = tool;
-    [this.dom.btnToolSelect, this.dom.btnToolTrim].forEach((button) => {
-      if (!button) return;
-      button.classList.toggle('is-active', button.dataset.tool === tool);
-    });
+    updateEditorUiState({ tool });
     this.updateTimelineHint();
     this.updateEffectTrackHighlight();
-    if (tool !== 'cut') this.hideTimelineCutGuide();
+    if (tool !== 'cut') this.interaction.hideTimelineCutGuide();
     if (this.host.sourceMode === 'video' && this.inspectorTab === 'adjust') {
       this.updateAdjustmentsPanelState();
     }
   }
 
+  setSnapEnabled(enabled: boolean): void {
+    this.snapEnabled = enabled;
+    updateEditorUiState({ snapEnabled: enabled });
+  }
+
+  setTimelineZoom(value: number): void {
+    this.timelineZoom = clamp(Number(value) || 1, 1, 8);
+    this.applyTimelineZoom();
+  }
+
   updateTimelineHint() {
-    if (!this.dom.timelineHintText) return;
-    if (!this.editor.source?.file) {
-      this.dom.timelineHintText.textContent = '';
-      return;
-    }
     const hints = {
       select:
         'Arrastrá para seleccionar varios, mové clips o presioná M para marcar.',
       cut: 'La línea roja marca el corte. Click sobre un clip de efecto.',
       trim: 'Arrastrá los bordes rojos en VIDEO.',
-    };
-    this.dom.timelineHintText.textContent = translateCurrent(
-      hints[this.editorTool] || hints.select,
-    );
+    } as const;
+    updateEditorUiState({
+      timelineHint: this.editor.source?.file ? hints[this.editorTool] : '',
+    });
   }
 
   pushTimelineHistory() {
@@ -1467,7 +1342,7 @@ export class EditorWorkspace {
     if (!this.editor.history?.undo(this.editor.timeline)) return;
     this.selectedVideoEffectId = '';
     this.selectedVideoEffectIds = new Set();
-    this.applyVideoTrim(false);
+    this.applyVideoTrim();
     this.renderVideoTimeline();
     this.updateVideoEffectInspector();
     void this.editor?.timelineEffects.sync(true);
@@ -1477,7 +1352,7 @@ export class EditorWorkspace {
     if (!this.editor.history?.redo(this.editor.timeline)) return;
     this.selectedVideoEffectId = '';
     this.selectedVideoEffectIds = new Set();
-    this.applyVideoTrim(false);
+    this.applyVideoTrim();
     this.renderVideoTimeline();
     this.updateVideoEffectInspector();
     void this.editor?.timelineEffects.sync(true);
@@ -1500,8 +1375,7 @@ export class EditorWorkspace {
       : 800;
     const width = Math.max(baseWidth, baseWidth * this.timelineZoom);
     this.dom.timelineScroll.style.width = `${width + 72}px`;
-    if (this.dom.timelineZoomInput)
-      this.dom.timelineZoomInput.value = String(this.timelineZoom);
+    updateEditorUiState({ zoom: this.timelineZoom });
     this.renderVideoTimeline();
     this.renderTimelineRuler();
   }
@@ -1627,78 +1501,6 @@ export class EditorWorkspace {
     return ratio * this.editor.timeline.duration;
   }
 
-  beginTimelineSelection(event: PointerEvent) {
-    if (
-      !this.editor.source?.file ||
-      this.editor.exportSession?.active ||
-      event.button !== 0
-    )
-      return;
-    if (
-      targetElement(event)?.closest(
-        '.timeline-item, .timeline-item-handle, .timeline-trim-handle, .timeline-playhead-handle',
-      )
-    )
-      return;
-    event.preventDefault();
-
-    if (this.editorTool === 'trim') {
-      this.editor.transport.seek(this.getTimelineTime(event.clientX));
-      return;
-    }
-
-    if (
-      this.editorTool === 'select' &&
-      targetElement(event)?.closest('.timeline-track-effects') &&
-      !targetElement(event)?.closest('.timeline-item')
-    ) {
-      this.beginTimelineBoxSelection(event);
-      return;
-    }
-
-    this.editor.transport.seek(this.getTimelineTime(event.clientX));
-  }
-
-  beginTimelineBoxSelection(event: PointerEvent) {
-    const bounds = this.getTimelineTrackAreaBounds();
-    const originX = clamp(event.clientX - bounds.left, 0, bounds.width);
-    const originY = clamp(event.clientY - bounds.top, 0, bounds.height);
-    let dragged = false;
-
-    const draw = (moveEvent: PointerEvent) => {
-      const x = clamp(moveEvent.clientX - bounds.left, 0, bounds.width);
-      const y = clamp(moveEvent.clientY - bounds.top, 0, bounds.height);
-      if (Math.abs(x - originX) > 4 || Math.abs(y - originY) > 4)
-        dragged = true;
-      if (!dragged || !this.dom.timelineSelection) return;
-      this.dom.timelineSelection.classList.add('is-active');
-      this.dom.timelineSelection.style.left = `${Math.min(originX, x)}px`;
-      this.dom.timelineSelection.style.top = `${Math.min(originY, y)}px`;
-      this.dom.timelineSelection.style.width = `${Math.abs(x - originX)}px`;
-      this.dom.timelineSelection.style.height = `${Math.abs(y - originY)}px`;
-    };
-
-    const end = (upEvent: PointerEvent) => {
-      this.dom.timelineSelection?.classList.remove('is-active');
-      if (!dragged) {
-        this.editor.transport.seek(this.getTimelineTime(event.clientX));
-        this.selectVideoEffect('');
-        return;
-      }
-      const endX = clamp(upEvent.clientX - bounds.left, 0, bounds.width);
-      const endY = clamp(upEvent.clientY - bounds.top, 0, bounds.height);
-      this.selectVideoEffectsInRect(
-        Math.min(originX, endX),
-        Math.max(originX, endX),
-        Math.min(originY, endY),
-        Math.max(originY, endY),
-        bounds,
-      );
-    };
-
-    this.bindDrag(draw, end);
-  }
-
   selectVideoEffectsInRect(
     left: number,
     right: number,
@@ -1733,169 +1535,6 @@ export class EditorWorkspace {
     if (ids.length) this.setInspectorTab('effect');
   }
 
-  beginTrimDrag(event: PointerEvent, edge: 'start' | 'end') {
-    if (
-      !this.editor.source?.file ||
-      this.editor.exportSession?.active ||
-      this.editorTool !== 'trim'
-    )
-      return;
-    event.preventDefault();
-    event.stopPropagation();
-    // Snapshot now and commit it only if the trim actually moved, so clicking
-    // a handle does not add an empty undo step.
-    const snapshot =
-      this.editor.history?.snapshot?.(this.editor.timeline) || null;
-    const itemStarts = this.editor.timeline.items.map((item) => item.startTime);
-    const itemEnds = this.editor.timeline.items.map((item) => item.endTime);
-    const minEnd = itemEnds.length ? Math.max(...itemEnds) : 0.05;
-    const maxStart = itemStarts.length
-      ? Math.min(...itemStarts)
-      : this.editor.timeline.duration - 0.05;
-
-    const move = (moveEvent: PointerEvent) => {
-      const time = this.getTimelineTime(moveEvent.clientX);
-      if (edge === 'start') {
-        this.dom.videoTrimStart.value = clamp(
-          time,
-          0,
-          Math.min(maxStart, this.editor.timeline.trimEnd - 0.05),
-        ).toFixed(2);
-      } else {
-        this.dom.videoTrimEnd.value = clamp(
-          time,
-          Math.max(minEnd, this.editor.timeline.trimStart + 0.05),
-          this.editor.timeline.duration,
-        ).toFixed(2);
-      }
-      this.applyVideoTrim(false);
-    };
-    const end = () => {
-      if (
-        snapshot &&
-        (snapshot.trimStart !== this.editor.timeline.trimStart ||
-          snapshot.trimEnd !== this.editor.timeline.trimEnd)
-      ) {
-        this.pushTimelineHistorySnapshot(snapshot);
-      }
-    };
-    this.bindDrag(move, end);
-  }
-
-  beginTimelineDrag(
-    event: PointerEvent,
-    item: TimelineItem,
-    element: HTMLElement,
-  ) {
-    if (
-      !this.editor.source?.file ||
-      this.editor.exportSession?.active ||
-      event.button !== 0
-    )
-      return;
-    event.preventDefault();
-    event.stopPropagation();
-    if (this.editorTool === 'cut') {
-      this.splitTimelineEffectClipAtEvent(event, item);
-      return;
-    }
-    if (this.editorTool !== 'select') this.setEditorTool('select');
-    if (event.shiftKey) {
-      this.toggleVideoEffectSelection(item.id);
-      return;
-    }
-    if (!this.selectedVideoEffectIds?.has(item.id)) {
-      this.selectedVideoEffectIds = new Set([item.id]);
-    }
-    this.selectedVideoEffectId = item.id;
-    this.dom.videoEffectType.value = item.type;
-    this.dom.videoEffectStart.value = item.startTime.toFixed(2);
-    this.dom.videoEffectEnd.value = item.endTime.toFixed(2);
-    this.getTimelineItemElements().forEach((candidate) => {
-      candidate.classList.toggle(
-        'is-selected',
-        this.selectedVideoEffectIds.has(candidate.dataset.id ?? ''),
-      );
-    });
-    this.updateVideoEffectInspector();
-    this.setInspectorTab('effect');
-    const bounds = this.getTimelineTrackAreaBounds();
-    const originX = event.clientX;
-    const original = { ...item };
-    const snapshot =
-      this.editor.history?.snapshot?.(this.editor.timeline) || null;
-    const handleStart = targetElement(event)?.closest(
-      '.timeline-item-handle.start',
-    );
-    const handleEnd = targetElement(event)?.closest(
-      '.timeline-item-handle.end',
-    );
-    let edge: ClipPlacement['edge'] = 'move';
-    if (handleStart) edge = 'start';
-    else if (handleEnd) edge = 'end';
-    element.classList.add('is-dragging');
-
-    const move = (moveEvent: PointerEvent) => {
-      const delta =
-        ((moveEvent.clientX - originX) / bounds.width) *
-        this.editor.timeline.duration;
-      let startTime = original.startTime;
-      let endTime = original.endTime;
-      if (edge === 'start') startTime = original.startTime + delta;
-      else if (edge === 'end') endTime = original.endTime + delta;
-      else {
-        const length = original.endTime - original.startTime;
-        startTime = original.startTime + delta;
-        endTime = startTime + length;
-      }
-      ({ startTime, endTime } = this.resolveTimelineClipTimes({
-        type: item.type,
-        startTime,
-        endTime,
-        edge,
-        itemId: item.id,
-      }));
-      this.dom.videoEffectStart.value = startTime.toFixed(2);
-      this.dom.videoEffectEnd.value = endTime.toFixed(2);
-      this.positionTimelineRowElement(
-        element,
-        startTime,
-        endTime,
-        effectMeta(item.type)?.row || 1,
-      );
-      if (this.dom.videoEffectRangeLabel) {
-        this.dom.videoEffectRangeLabel.textContent = `${formatDurationDetailed(startTime)} - ${formatDurationDetailed(endTime)}`;
-      }
-      if (this.dom.videoEffectDurationLabel) {
-        this.dom.videoEffectDurationLabel.textContent = `${translateCurrent('Duración')}: ${Math.max(0, endTime - startTime).toFixed(2)} s`;
-      }
-    };
-    const end = () => {
-      element.classList.remove('is-dragging');
-      try {
-        const startTime = Number(this.dom.videoEffectStart.value);
-        const endTime = Number(this.dom.videoEffectEnd.value);
-        this.editor.timeline.upsert({
-          ...item,
-          startTime,
-          endTime,
-        });
-        if (startTime !== original.startTime || endTime !== original.endTime) {
-          this.pushTimelineHistorySnapshot(snapshot);
-        }
-      } catch (err) {
-        showStatus(
-          this.dom.videoEditorStatus,
-          err instanceof Error ? err.message : String(err),
-          'error',
-        );
-      }
-      this.selectVideoEffect(item.id);
-      void this.editor?.timelineEffects.sync(true);
-    };
-    this.bindDrag(move, end);
-  }
-
   splitTimelineEffectClipAtEvent(
     event: PointerEvent | MouseEvent,
     item: TimelineItem,
@@ -1920,26 +1559,6 @@ export class EditorWorkspace {
         'error',
       );
     }
-  }
-
-  updateTimelineCutGuide(event: PointerEvent) {
-    if (
-      this.editorTool !== 'cut' ||
-      !this.editor.source?.file ||
-      this.editor.exportSession?.active ||
-      !this.dom.timelineCutGuide
-    ) {
-      this.hideTimelineCutGuide();
-      return;
-    }
-    const bounds = this.getTimelineTrackAreaBounds();
-    const x = clamp(event.clientX - bounds.left, 0, bounds.width);
-    this.dom.timelineCutGuide.style.left = `${x}px`;
-    this.dom.timelineCutGuide.classList.add('is-active');
-  }
-
-  hideTimelineCutGuide() {
-    this.dom.timelineCutGuide?.classList.remove('is-active');
   }
 
   splitAllEffectsAtMarkers() {
@@ -2019,21 +1638,6 @@ export class EditorWorkspace {
     }
   }
 
-  beginPlayheadDrag(event: PointerEvent) {
-    if (
-      !this.editor.source?.file ||
-      this.editor.exportSession?.active ||
-      event.button !== 0
-    )
-      return;
-    event.preventDefault();
-    event.stopPropagation();
-    this.editor.transport.seek(this.getTimelineTime(event.clientX));
-    const move = (moveEvent: PointerEvent) =>
-      this.editor.transport.seek(this.getTimelineTime(moveEvent.clientX));
-    this.bindDrag(move);
-  }
-
   handleVideoEditorKeydown(event: KeyboardEvent) {
     if (this.host.sourceMode !== 'video' || this.editor.exportSession?.active)
       return;
@@ -2096,17 +1700,13 @@ export class EditorWorkspace {
     }
     if (event.key.toLowerCase() === 'i') {
       event.preventDefault();
-      this.dom.videoTrimStart.value = String(this.dom.videoEl.currentTime || 0);
-      this.pushTimelineHistory();
-      this.applyVideoTrim();
+      this.setTrimBoundary('start');
       this.setEditorTool('trim');
       return;
     }
     if (event.key.toLowerCase() === 'o') {
       event.preventDefault();
-      this.dom.videoTrimEnd.value = String(this.dom.videoEl.currentTime || 0);
-      this.pushTimelineHistory();
-      this.applyVideoTrim();
+      this.setTrimBoundary('end');
       this.setEditorTool('trim');
       return;
     }
@@ -2131,39 +1731,19 @@ export class EditorWorkspace {
     }
   }
   cancelInteraction(): void {
-    this.dragListeners?.abort();
-    this.dragListeners = null;
+    const gestureInProgress = this.interaction.cancel();
     this.paletteDragState?.chip.classList.remove('is-dragging');
     this.paletteDragState = null;
     this.removeTimelineDragGhost();
     this.clearTimelineDropTargets();
-    this.dom.timelineSelection?.classList.add('hidden');
+    this.dom.timelineSelection?.classList.remove('is-active');
     this.dom.timelineTrackArea
       ?.querySelectorAll('.is-dragging')
       .forEach((element) => element.classList.remove('is-dragging'));
-  }
-
-  private bindDrag(
-    move: (event: PointerEvent) => void,
-    end?: (event: PointerEvent) => void,
-  ): void {
-    this.dragListeners?.abort();
-    const controller = new AbortController();
-    this.dragListeners = controller;
-    const { signal } = controller;
-    document.addEventListener('pointermove', move, { signal });
-    document.addEventListener(
-      'pointerup',
-      (event) => {
-        controller.abort();
-        this.dragListeners = null;
-        end?.(event);
-      },
-      { signal },
-    );
-    document.addEventListener('pointercancel', () => this.cancelInteraction(), {
-      signal,
-    });
+    if (gestureInProgress && this.editor.source.file) {
+      this.renderVideoTimeline();
+      this.updateVideoEffectInspector();
+    }
   }
 
   enterVideo(): void {
@@ -2191,24 +1771,15 @@ export class EditorWorkspace {
     this.cancelInteraction();
     this.updateEditorHistoryButtons();
     this.timelineZoom = 1;
+    updateEditorUiState({
+      zoom: 1,
+      trimStart: 0,
+      trimEnd: 0,
+      clip: null,
+      targetTrack: null,
+    });
     this.resetSelection();
     this.clearTimelineItemElements();
-  }
-
-  prepareSource(duration: number): void {
-    const { videoTrimStart, videoTrimEnd, videoEffectStart, videoEffectEnd } =
-      this.dom;
-    for (const input of [
-      videoTrimStart,
-      videoTrimEnd,
-      videoEffectStart,
-      videoEffectEnd,
-    ])
-      input.max = String(duration);
-    videoTrimStart.value = '0';
-    videoTrimEnd.value = duration.toFixed(2);
-    videoEffectStart.value = '0';
-    videoEffectEnd.value = duration.toFixed(2);
   }
 
   refreshLocale(): void {
@@ -2340,226 +1911,19 @@ export class EditorWorkspace {
   // Editor-only listeners are attached when the lazy editor chunk loads.
   bindVideoEditorEvents() {
     const { signal } = this.lifetime;
-    if (this.dom.videoEffectType) {
-      this.dom.videoEffectType.addEventListener(
-        'change',
-        () => {
-          this.updateEffectTrackHighlight();
-          this.updateTimelineHint();
-          if (
-            this.host.sourceMode === 'video' &&
-            this.inspectorTab === 'adjust'
-          ) {
-            this.setAdjustmentsContext(this.dom.videoEffectType.value);
-          }
-        },
-        { signal },
-      );
-    }
-    this.dom.videoTrimStart.addEventListener(
-      'change',
-      () => {
-        this.pushTimelineHistory();
-        this.applyVideoTrim();
-      },
-      { signal },
-    );
-    this.dom.videoTrimEnd.addEventListener(
-      'change',
-      () => {
-        this.pushTimelineHistory();
-        this.applyVideoTrim();
-      },
-      { signal },
-    );
-    this.dom.btnSetTrimFromPlayhead?.addEventListener(
-      'click',
-      () => {
-        this.dom.videoTrimStart.value = String(
-          this.dom.videoEl.currentTime || 0,
-        );
-        this.pushTimelineHistory();
-        this.applyVideoTrim();
-      },
-      { signal },
-    );
-    this.dom.btnSetTrimEndFromPlayhead?.addEventListener(
-      'click',
-      () => {
-        this.dom.videoTrimEnd.value = String(this.dom.videoEl.currentTime || 0);
-        this.pushTimelineHistory();
-        this.applyVideoTrim();
-      },
-      { signal },
-    );
-    if (this.dom.btnOpenEffectAdjust) {
-      this.dom.btnOpenEffectAdjust.addEventListener(
-        'click',
-        () => {
-          const item = this.editor.timeline.items.find(
-            (candidate) => candidate.id === this.selectedVideoEffectId,
-          );
-          if (item) this.openAdjustmentsForContext(item.type);
-        },
-        { signal },
-      );
-    }
-    if (this.dom.videoEffectStart) {
-      this.dom.videoEffectStart.addEventListener(
-        'change',
-        () => this.commitSelectedEffectTiming({ pushHistory: true }),
-        { signal },
-      );
-    }
-    if (this.dom.videoEffectEnd) {
-      this.dom.videoEffectEnd.addEventListener(
-        'change',
-        () => this.commitSelectedEffectTiming({ pushHistory: true }),
-        { signal },
-      );
-    }
-    if (this.dom.videoEffectAutomationSelect) {
-      this.dom.videoEffectAutomationSelect.addEventListener(
-        'change',
-        () => this.commitSelectedEffectAutomation(),
-        { signal },
-      );
-    }
-    this.dom.btnDeleteVideoEffect?.addEventListener(
-      'click',
-      this.deleteSelectedVideoEffect.bind(this),
-      { signal },
-    );
-    if (this.dom.btnToolSelect)
-      this.dom.btnToolSelect.addEventListener(
-        'click',
-        () => this.setEditorTool('select'),
-        { signal },
-      );
-    if (this.dom.btnToolTrim)
-      this.dom.btnToolTrim.addEventListener(
-        'click',
-        () => this.setEditorTool('cut'),
-        { signal },
-      );
-    if (this.dom.btnCutAtMarkers)
-      this.dom.btnCutAtMarkers.addEventListener(
-        'click',
-        this.splitAllEffectsAtMarkers.bind(this),
-        { signal },
-      );
-    if (this.dom.btnTimelineZoomIn)
-      this.dom.btnTimelineZoomIn.addEventListener(
-        'click',
-        () => {
-          this.timelineZoom = clamp(this.timelineZoom + 0.5, 1, 8);
-          this.applyTimelineZoom();
-        },
-        { signal },
-      );
-    if (this.dom.btnTimelineZoomOut)
-      this.dom.btnTimelineZoomOut.addEventListener(
-        'click',
-        () => {
-          this.timelineZoom = clamp(this.timelineZoom - 0.5, 1, 8);
-          this.applyTimelineZoom();
-        },
-        { signal },
-      );
-    if (this.dom.timelineZoomInput)
-      this.dom.timelineZoomInput.addEventListener(
-        'input',
-        () => {
-          this.timelineZoom = clamp(
-            Number(this.dom.timelineZoomInput?.value) || 1,
-            1,
-            8,
-          );
-          this.applyTimelineZoom();
-        },
-        { signal },
-      );
     if (this.dom.timelineViewport) {
       this.dom.timelineViewport.addEventListener(
         'wheel',
         (event) => {
           if (!event.ctrlKey || this.host.sourceMode !== 'video') return;
           event.preventDefault();
-          this.timelineZoom = clamp(
+          this.setTimelineZoom(
             this.timelineZoom + (event.deltaY < 0 ? 0.25 : -0.25),
-            1,
-            8,
           );
-          this.applyTimelineZoom();
         },
-        { ...{ passive: false }, signal },
+        { passive: false, signal },
       );
     }
-    if (this.dom.btnEditorUndo)
-      this.dom.btnEditorUndo.addEventListener(
-        'click',
-        this.undoTimelineEdit.bind(this),
-        { signal },
-      );
-    if (this.dom.btnEditorRedo)
-      this.dom.btnEditorRedo.addEventListener(
-        'click',
-        this.redoTimelineEdit.bind(this),
-        { signal },
-      );
-    this.dom.inspectorTabs.forEach((tab) => {
-      tab.addEventListener(
-        'click',
-        () =>
-          this.setInspectorTab(
-            tab.dataset.tab === 'adjust'
-              ? 'adjust'
-              : tab.dataset.tab === 'effect'
-                ? 'effect'
-                : 'project',
-          ),
-        { signal },
-      );
-    });
-    this.dom.adjustContextNav
-      ?.querySelectorAll<HTMLElement>('.adjust-context-tab')
-      .forEach((tab) => {
-        tab.addEventListener(
-          'click',
-          () => {
-            this.openAdjustmentsForContext(tab.dataset.adjustContext);
-          },
-          { signal },
-        );
-      });
-    this.dom.videoTimelineEl
-      ?.querySelectorAll<HTMLElement>(
-        '.timeline-track-label[data-adjust-context]',
-      )
-      .forEach((label) => {
-        label.addEventListener(
-          'click',
-          (event) => {
-            const context = label.dataset.adjustContext;
-            const options: AdjustmentOptions = {};
-            if (label.dataset.syncTool === 'trim') {
-              options.syncTool = true;
-              options.tool = 'trim';
-            } else if (label.dataset.syncTool === 'effect') {
-              options.syncTool = true;
-              options.tool = 'effect';
-              options.syncEffectType = true;
-              if (label.dataset.effectType)
-                options.effectType = label.dataset.effectType;
-            }
-            if (label.dataset.effectType && !event.shiftKey) {
-              this.selectVideoEffectsByType(label.dataset.effectType);
-            }
-            this.openAdjustmentsForContext(context, options);
-          },
-          { signal },
-        );
-      });
     document.addEventListener(
       'keydown',
       this.handleVideoEditorKeydown.bind(this),
@@ -2572,37 +1936,6 @@ export class EditorWorkspace {
       },
       { signal },
     );
-    if (this.dom.timelinePlayheadHandle)
-      this.dom.timelinePlayheadHandle.addEventListener(
-        'pointerdown',
-        this.beginPlayheadDrag.bind(this),
-        { signal },
-      );
-    if (this.dom.timelineTrackArea)
-      this.dom.timelineTrackArea?.addEventListener(
-        'pointerdown',
-        this.beginTimelineSelection.bind(this),
-        { signal },
-      );
-    this.dom.timelineTrackArea?.addEventListener(
-      'pointermove',
-      this.updateTimelineCutGuide.bind(this),
-      { signal },
-    );
-    this.dom.timelineTrackArea?.addEventListener(
-      'pointerleave',
-      () => this.hideTimelineCutGuide(),
-      { signal },
-    );
-    this.dom.timelineTrimStartHandle.addEventListener(
-      'pointerdown',
-      (event) => this.beginTrimDrag(event, 'start'),
-      { signal },
-    );
-    this.dom.timelineTrimEndHandle.addEventListener(
-      'pointerdown',
-      (event) => this.beginTrimDrag(event, 'end'),
-      { signal },
-    );
+    this.interaction.bind(signal);
   }
 }

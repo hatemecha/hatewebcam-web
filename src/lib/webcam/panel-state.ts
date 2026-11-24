@@ -28,6 +28,7 @@ export interface WebcamPanelState {
   adjustHelp: string;
   adjustClipStatus: string;
   adjustClipVisible: boolean;
+  adjustClipLive: boolean;
   advancedOpen: boolean;
   activePreset: ImagePresetName | null;
   detectors: {
@@ -90,6 +91,7 @@ const initialState: WebcamPanelState = {
   adjustHelp: '',
   adjustClipStatus: '',
   adjustClipVisible: false,
+  adjustClipLive: false,
   advancedOpen: false,
   activePreset: 'natural',
   detectors: {
